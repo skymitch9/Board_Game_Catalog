@@ -24,6 +24,13 @@ export interface Env {
   BGG_API_TOKEN?: string;
 
   /**
+   * Anthropic API key for the research pipeline. Set as a secret
+   * (`wrangler secret put ANTHROPIC_API_KEY`), never in wrangler.toml — that
+   * file is committed.
+   */
+  ANTHROPIC_API_KEY?: string;
+
+  /**
    * Local development only. Ignored unless ENVIRONMENT is "development", so a
    * stray value in production vars can never bypass Access.
    */
