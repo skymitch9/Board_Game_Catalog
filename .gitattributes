@@ -1,0 +1,9 @@
+# Normalize line endings to LF in the repository. Without this, editing on
+# Windows produces CRLF churn in every diff.
+* text=auto eol=lf
+
+# Binary / generated
+*.png binary
+*.jpg binary
+*.ico binary
+package-lock.json -diff

@@ -1,0 +1,38 @@
+name = "board-game-catalog"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# The built React PWA. Static files are served directly; anything that isn't a
+# file falls through to the Worker, which serves index.html for SPA routes.
+# Run `npm run build` at the repo root before `wrangler dev` or `deploy`.
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "board-game-catalog"
+# Created 2026-08-04 in region WNAM.
+database_id = "7dd22702-f0e2-4fc7-b201-d16d60176efa"
+# Migrations live at the repo root so the CLI can reach them too.
+migrations_dir = "../../migrations"
+
+[vars]
+APP_VERSION = "0.1.0"
+ENVIRONMENT = "production"
+
+# Leave this empty. Ownership is claimed by whoever signs in first, which is you
+# right after deploying. This is only a recovery hatch: if you ever lock
+# yourself out, put an email here and redeploy to force it back to `owner`.
+OWNER_EMAILS = ""
+
+# Cloudflare Access. Both values come from the "This Worker URL requires Access
+# sign-in" dialog shown when you set a Worker URL to Restricted.
+#
+# CF_ACCESS_AUD is a comma-separated list because Cloudflare mints a separate
+# Access application per URL: the first audience below is the production URL,
+# the second is the preview (*-board-game-catalog) URL.
+CF_ACCESS_TEAM_DOMAIN = "wispy-snowflake-2801.cloudflareaccess.com"
+CF_ACCESS_AUD = "65e61dbe36fd4482fab983072ad4365d1d4cabe4492e29cfb492b1f67d5f14c6,bd08ade937830541f55725ecf12ae2d02d88c5d647851b6b6a50f1d4239add2b"

@@ -1,0 +1,9 @@
+# Copy to `.dev.vars` (gitignored) for local development.
+#
+# ENVIRONMENT must not be "production" or DEV_EMAIL is ignored — that guard is
+# what stops a stray value from bypassing Cloudflare Access on the real site.
+ENVIRONMENT = "development"
+
+# Stands in for the Google identity that Access would supply. The first identity
+# to hit an empty database becomes owner, so locally that's whoever this is.
+DEV_EMAIL = "you@example.com"

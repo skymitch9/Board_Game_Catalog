@@ -1,0 +1,30 @@
+{
+  "name": "board-game-catalog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Private catalog of our board game collection — games, editions, expansions, KS exclusives and accessories.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n worker,web -c blue,green \"npm:dev:worker\" \"npm:dev:web\"",
+    "dev:worker": "npm run dev --workspace @bgc/worker",
+    "dev:web": "npm run dev --workspace @bgc/web",
+    "build": "npm run build --workspace @bgc/web",
+    "deploy": "npm run build && npm run deploy --workspace @bgc/worker",
+    "db:create": "wrangler d1 create board-game-catalog",
+    "db:migrate:local": "npm run db:migrate:local --workspace @bgc/worker",
+    "db:migrate": "npm run db:migrate --workspace @bgc/worker",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
