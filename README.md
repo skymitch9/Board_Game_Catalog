@@ -8,7 +8,12 @@ to fill in the details no single database has.
   pipeline, build plan
 - **[docs/SETUP.md](docs/SETUP.md)** — deploy it
 
-**Status:** phase 0 complete (scaffold, database, auth). Phase 1 next.
+**Status:** phases 0–1 complete and deployed. Phase 2 (BoardGameGeek lookup) next.
+
+- **Phase 0** — scaffold, D1 schema, Cloudflare Access auth, first-sign-in-claims-ownership
+- **Phase 1** — the manual catalog: add/edit items and copies, base-game-rooted
+  browsing with expansions and accessories nested underneath, search and
+  filters, location/purchase/condition, per-person ratings
 
 ## Quick start
 

@@ -8,6 +8,7 @@
 import { Hono } from 'hono';
 import type { AppBindings } from './env.js';
 import { requireAuth } from './middleware/auth.js';
+import { catalogRoutes } from './routes/catalog.js';
 import { healthRoutes } from './routes/health.js';
 import { userRoutes } from './routes/users.js';
 
@@ -19,6 +20,7 @@ app.route('/api/health', healthRoutes);
 // Everything else behind identity.
 app.use('/api/*', requireAuth());
 app.route('/api', userRoutes);
+app.route('/api', catalogRoutes);
 
 app.notFound(async (c) => {
   // Unmatched /api/* is a genuine 404; anything else is an SPA route, so hand
