@@ -131,6 +131,7 @@ Worker routes HTTP and the CLI parses argv, and both delegate.
 |---|---|---|
 | Runtime | Cloudflare Workers | Free tier, no cold starts, one deploy command |
 | Router | Hono | Tiny, Workers-native, good TypeScript |
+| Game data | BoardGameGeek XML API2 | Canonical board game database. **Requires a free application token since July 2025** — see §9 |
 | Database | Cloudflare D1 (SQLite) | Free 5 GB, SQL, `wrangler d1 migrations` built in |
 | Cache | Workers KV | Cheap TTL cache for BGG + fetched pages |
 | Front-end | React + Vite (or Preact) | SPA needed for offline + camera access |
@@ -560,7 +561,8 @@ game count before it submits.
 
 | Risk | Mitigation |
 |---|---|
-| BGG API rate limits / 202-queued responses | Throttle to ~1 req/s, retry-on-202, KV cache for a week |
+| **BGG now requires an application token** (changed July 2025; this design originally assumed an open API) | Registration is free but manual and needs approval. The client sends `Authorization: Bearer`; without `BGG_API_TOKEN` every lookup route answers 502 with an explanation and the rest of the app is unaffected |
+| BGG API rate limits / 202-queued responses | Throttle to ~1 req/s, retry-on-202, edge cache for a week |
 | Barcode → game matching is unreliable | Falls back to name search; successful scans write back to `edition.barcode` so your own collection becomes the lookup table |
 | iOS Safari lacks `BarcodeDetector` | ZXing wasm fallback bundled |
 | LLM hallucinates contents or sleeve counts | Nothing auto-writes to the catalog; every claim carries a source URL you can click; sleeve data needs multi-source agreement to auto-accept |

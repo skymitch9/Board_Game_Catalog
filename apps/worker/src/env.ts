@@ -16,6 +16,14 @@ export interface Env {
   CF_ACCESS_AUD: string;
 
   /**
+   * BoardGameGeek application token. BGG began requiring registration and
+   * bearer tokens on its XML API in July 2025, so lookup is unavailable until
+   * this is set. Stored as a secret (`wrangler secret put BGG_API_TOKEN`),
+   * never in wrangler.toml.
+   */
+  BGG_API_TOKEN?: string;
+
+  /**
    * Local development only. Ignored unless ENVIRONMENT is "development", so a
    * stray value in production vars can never bypass Access.
    */

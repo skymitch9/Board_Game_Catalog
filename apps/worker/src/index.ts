@@ -8,6 +8,7 @@
 import { Hono } from 'hono';
 import type { AppBindings } from './env.js';
 import { requireAuth } from './middleware/auth.js';
+import { bggRoutes } from './routes/bgg.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { healthRoutes } from './routes/health.js';
 import { userRoutes } from './routes/users.js';
@@ -21,6 +22,7 @@ app.route('/api/health', healthRoutes);
 app.use('/api/*', requireAuth());
 app.route('/api', userRoutes);
 app.route('/api', catalogRoutes);
+app.route('/api/bgg', bggRoutes);
 
 app.notFound(async (c) => {
   // Unmatched /api/* is a genuine 404; anything else is an SPA route, so hand
