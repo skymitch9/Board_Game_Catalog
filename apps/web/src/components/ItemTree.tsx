@@ -1,4 +1,4 @@
-import { formatMoney, summarizeTree, type Copy, type ItemNode } from '@bgc/core';
+import { formatMoney, ownedCount, summarizeTree, type Copy, type ItemNode } from '@bgc/core';
 import { Link } from '../router';
 import { Badge } from './ui';
 
@@ -19,11 +19,15 @@ const STATUS_TONE: Record<Copy['status'], 'owned' | 'wanted' | 'lent' | 'sold' |
 };
 
 /** Condensed copy state for a row: "2 owned · Shelf A". */
-function copySummary(copies: Copy[]): { tone: Copy['status'] | null; text: string } {
-  if (copies.length === 0) return { tone: null, text: 'not catalogued' };
+function copySummary(copies: Copy[]): {
+  tone: Copy['status'] | null;
+  text: string;
+  duplicated: boolean;
+} {
+  if (copies.length === 0) return { tone: null, text: 'not catalogued', duplicated: false };
 
   const counts = new Map<Copy['status'], number>();
-  for (const c of copies) counts.set(c.status, (counts.get(c.status) ?? 0) + 1);
+  for (const c of copies) counts.set(c.status, (counts.get(c.status) ?? 0) + (c.quantity || 1));
 
   const order: Copy['status'][] = ['owned', 'lent', 'preordered', 'wanted', 'sold'];
   const primary = order.find((s) => counts.has(s)) ?? copies[0]!.status;
@@ -35,7 +39,7 @@ function copySummary(copies: Copy[]): { tone: Copy['status'] | null; text: strin
   const locations = [...new Set(copies.map((c) => c.location).filter(Boolean))];
   if (locations.length > 0) parts.push(locations.join(', ') as string);
 
-  return { tone: primary, text: parts.join(' · ') };
+  return { tone: primary, text: parts.join(' · '), duplicated: ownedCount(copies) > 1 };
 }
 
 function ChildRow({ node, depth }: { node: ItemNode; depth: number }) {
@@ -46,6 +50,7 @@ function ChildRow({ node, depth }: { node: ItemNode; depth: number }) {
         <span className="child-kind">{KIND_LABEL[node.kind]}</span>
         <span className="child-name">{node.name}</span>
         <span className={summary.tone ? `child-status tone-${STATUS_TONE[summary.tone]}` : 'child-status muted'}>
+          {summary.duplicated && <span className="dupe-flag" title="More than one">×{ownedCount(node.copies)}</span>}
           {summary.text}
         </span>
       </Link>
@@ -93,6 +98,16 @@ export function ItemCard({ node }: { node: ItemNode }) {
           )}
         </span>
       </Link>
+
+      {stats.duplicates.length > 0 && (
+        <div className="dupe-strip" title="You hold more than one of these">
+          {stats.duplicates.map((d) => (
+            <span key={d.id}>
+              {d.count} × {d.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       {node.children.length > 0 && (
         <div className="children">

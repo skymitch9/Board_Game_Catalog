@@ -284,6 +284,39 @@ textarea { resize: vertical; }
 .rating-score { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); }
 .rating-why { color: var(--muted); font-style: italic; }
 
+/* --- duplicates, quick add, export -------------------------------------- */
+
+.dupe-flag {
+  display: inline-block;
+  background: var(--info-bg); color: var(--info);
+  border-radius: 4px; padding: 0 0.3em; margin-right: 0.4em;
+  font-weight: 700; font-size: 0.9em;
+}
+.dupe-strip {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  padding: 0.4rem 1rem; border-top: 1px solid var(--line);
+  background: var(--info-bg); color: var(--info);
+  font-size: 0.78rem; font-weight: 600;
+}
+
+.linklike {
+  background: none; border: none; padding: 0; font: inherit;
+  color: var(--accent); cursor: pointer; text-decoration: underline;
+}
+
+.quickadd { border-color: var(--accent); }
+.quickadd-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; align-items: end; }
+.quickadd-row .check-inline { padding-bottom: 0.75rem; }
+@media (max-width: 640px) { .quickadd-row { grid-template-columns: 1fr 1fr; } }
+.quickadd-recent {
+  list-style: none; margin: 0.75rem 0 0; padding: 0.6rem 0 0;
+  border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.83rem;
+}
+
+.export-links { margin-left: auto; display: inline-flex; gap: 0.85rem; }
+.result-count { display: flex; align-items: center; }
+
 /* --- people ------------------------------------------------------------- */
 
 .topbar-right { display: flex; align-items: center; gap: 1rem; min-width: 0; }

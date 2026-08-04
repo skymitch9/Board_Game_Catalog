@@ -4,14 +4,17 @@ import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
 import { Link } from '../router';
 import { ItemCard, KIND_LABEL } from '../components/ItemTree';
+import { ExportLinks, QuickAdd } from '../components/QuickAdd';
 import { EmptyState, ErrorBox, Spinner } from '../components/ui';
 
 export function CollectionPage({ me }: { me: MeResponse }) {
+  const [quickAdding, setQuickAdding] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [location, setLocation] = useState('');
   const [kind, setKind] = useState('');
   const [uncatalogued, setUncatalogued] = useState(false);
+  const [duplicates, setDuplicates] = useState(false);
 
   const debouncedSearch = useDebounced(search);
 
@@ -21,19 +24,30 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     ...(location ? { location } : {}),
     ...(kind ? { kind: kind as ItemQuery['kind'] } : {}),
     ...(uncatalogued ? { uncatalogued: true } : {}),
+    ...(duplicates ? { duplicates: true } : {}),
   };
 
-  const [meta] = useAsync(() => api.meta(), []);
+  const [reloads, setReloads] = useState(0);
+  const [meta, refreshMeta] = useAsync(() => api.meta(), [reloads]);
   const [items] = useAsync(() => api.items(query), [
     debouncedSearch,
     status,
     location,
     kind,
     uncatalogued,
+    duplicates,
+    reloads,
   ]);
 
+  const reload = () => {
+    setReloads((n) => n + 1);
+    refreshMeta();
+  };
+
   const canEdit = me.capabilities.includes('editCatalog');
-  const filtersActive = Boolean(debouncedSearch || status || location || kind || uncatalogued);
+  const filtersActive = Boolean(
+    debouncedSearch || status || location || kind || uncatalogued || duplicates,
+  );
 
   return (
     <>
@@ -46,15 +60,44 @@ export function CollectionPage({ me }: { me: MeResponse }) {
               {meta.data.stats.ownedCopies} owned
               {meta.data.stats.wantedCopies > 0 && ` · ${meta.data.stats.wantedCopies} wanted`}
               {meta.data.stats.spentCents > 0 && ` · ${formatMoney(meta.data.stats.spentCents)}`}
+              {meta.data.stats.duplicatedItems > 0 && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    className="linklike"
+                    onClick={() => setDuplicates(true)}
+                  >
+                    {meta.data.stats.duplicatedItems} owned 2+
+                  </button>
+                </>
+              )}
             </p>
           )}
         </div>
         {canEdit && (
-          <Link to="/items/new" className="btn btn-primary">
-            + Add game
-          </Link>
+          <div className="head-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setQuickAdding((q) => !q)}
+            >
+              Quick add
+            </button>
+            <Link to="/items/new" className="btn btn-primary">
+              + Add game
+            </Link>
+          </div>
         )}
       </header>
+
+      {canEdit && quickAdding && (
+        <QuickAdd
+          locations={meta.state === 'ok' ? meta.data.locations : []}
+          onAdded={reload}
+          onClose={() => setQuickAdding(false)}
+        />
+      )}
 
       <div className="filters card">
         <input
@@ -107,6 +150,15 @@ export function CollectionPage({ me }: { me: MeResponse }) {
             Nothing recorded yet
           </label>
 
+          <label className="check-inline">
+            <input
+              type="checkbox"
+              checked={duplicates}
+              onChange={(e) => setDuplicates(e.target.checked)}
+            />
+            We own 2+
+          </label>
+
           {filtersActive && (
             <button
               type="button"
@@ -117,6 +169,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
                 setLocation('');
                 setKind('');
                 setUncatalogued(false);
+                setDuplicates(false);
               }}
             >
               Clear
@@ -147,6 +200,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
           <p className="result-count muted">
             {items.data.items.length} game{items.data.items.length === 1 ? '' : 's'}
             {filtersActive && ' matching'}
+            {canEdit && <ExportLinks />}
           </p>
           <div className="item-list">
             {items.data.items.map((node) => (

@@ -20,6 +20,7 @@ const CONDITION_LABEL: Record<Condition, string> = {
 };
 
 interface FormState {
+  quantity: string;
   status: CopyStatus;
   location: string;
   acquiredOn: string;
@@ -35,6 +36,7 @@ interface FormState {
 
 function toForm(copy?: Copy): FormState {
   return {
+    quantity: String(copy?.quantity ?? 1),
     status: copy?.status ?? 'owned',
     location: copy?.location ?? '',
     acquiredOn: copy?.acquiredOn ?? '',
@@ -76,6 +78,7 @@ export function CopyForm({
     try {
       const dollars = form.priceDollars.trim();
       const payload = {
+        quantity: Math.max(1, Number(form.quantity) || 1),
         status: form.status,
         location: form.location.trim() || null,
         acquiredOn: form.acquiredOn || null,
@@ -105,6 +108,15 @@ export function CopyForm({
       {error ? <ErrorBox error={error} what="Could not save this copy" /> : null}
 
       <div className="row-3">
+        <Field label="How many" hint="Identical copies">
+          <input
+            type="number"
+            min="1"
+            value={form.quantity}
+            onChange={(e) => set('quantity', e.target.value)}
+          />
+        </Field>
+
         <Field label="Status">
           <select value={form.status} onChange={(e) => set('status', e.target.value as CopyStatus)}>
             {COPY_STATUSES.map((s) => (
@@ -255,7 +267,9 @@ export function CopyRow({
 
   return (
     <li className="copy">
-      <Badge tone={STATUS_TONE[copy.status]}>{copy.status}</Badge>
+      <Badge tone={STATUS_TONE[copy.status]}>
+        {copy.quantity > 1 ? `${copy.quantity} × ${copy.status}` : copy.status}
+      </Badge>
       <span className="copy-facts">{facts.join(' · ') || 'no details'}</span>
       {(copy.completenessNotes || copy.notes) && (
         <span className="copy-notes">{[copy.completenessNotes, copy.notes].filter(Boolean).join(' — ')}</span>

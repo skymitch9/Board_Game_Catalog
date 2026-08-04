@@ -102,6 +102,17 @@ function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } 
                     WHERE i3.root_game_id = i2.root_game_id)`,
     );
   }
+  if (query.duplicates) {
+    // Anything in this tree we hold more than one of, counting both several
+    // rows for the same item and a single row with quantity > 1.
+    where.push(
+      `EXISTS (SELECT 1 FROM item i4 JOIN copy c4 ON c4.item_id = i4.id
+                WHERE i4.root_game_id = i2.root_game_id
+                  AND c4.status IN ('owned','lent')
+                GROUP BY i4.id
+               HAVING SUM(c4.quantity) > 1)`,
+    );
+  }
 
   const sql = `SELECT DISTINCT i2.root_game_id
                  FROM item i2
@@ -376,15 +387,21 @@ export async function collectionStats(db: D1Database): Promise<{
   ownedCopies: number;
   wantedCopies: number;
   spentCents: number;
+  duplicatedItems: number;
 }> {
   const row = await db
     .prepare(
       `SELECT
-         (SELECT COUNT(*) FROM item WHERE kind = 'base')                              AS base_games,
-         (SELECT COUNT(*) FROM item)                                                  AS total_items,
-         (SELECT COUNT(*) FROM copy WHERE status IN ('owned','lent'))                 AS owned_copies,
-         (SELECT COUNT(*) FROM copy WHERE status IN ('wanted','preordered'))          AS wanted_copies,
-         (SELECT COALESCE(SUM(price_paid_cents), 0) FROM copy)                        AS spent_cents`,
+         (SELECT COUNT(*) FROM item WHERE kind = 'base')                     AS base_games,
+         (SELECT COUNT(*) FROM item)                                         AS total_items,
+         (SELECT COALESCE(SUM(quantity), 0) FROM copy
+           WHERE status IN ('owned','lent'))                                 AS owned_copies,
+         (SELECT COALESCE(SUM(quantity), 0) FROM copy
+           WHERE status IN ('wanted','preordered'))                          AS wanted_copies,
+         (SELECT COALESCE(SUM(price_paid_cents), 0) FROM copy)               AS spent_cents,
+         (SELECT COUNT(*) FROM (
+            SELECT item_id FROM copy WHERE status IN ('owned','lent')
+             GROUP BY item_id HAVING SUM(quantity) > 1))                     AS duplicated_items`,
     )
     .first<{
       base_games: number;
@@ -392,6 +409,7 @@ export async function collectionStats(db: D1Database): Promise<{
       owned_copies: number;
       wanted_copies: number;
       spent_cents: number;
+      duplicated_items: number;
     }>();
 
   return {
@@ -400,6 +418,7 @@ export async function collectionStats(db: D1Database): Promise<{
     ownedCopies: row?.owned_copies ?? 0,
     wantedCopies: row?.wanted_copies ?? 0,
     spentCents: row?.spent_cents ?? 0,
+    duplicatedItems: row?.duplicated_items ?? 0,
   };
 }
 

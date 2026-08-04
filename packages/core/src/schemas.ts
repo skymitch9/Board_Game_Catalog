@@ -61,6 +61,8 @@ export type UpdateItemInput = z.infer<typeof updateItemSchema>;
 const copyFields = z.object({
   editionId: z.number().int().positive().nullable().optional(),
   appliesToCopyId: z.number().int().positive().nullable().optional(),
+  /** How many identical copies this row stands for. */
+  quantity: z.number().int().min(1).max(999).default(1),
   status: copyStatusSchema.default('owned'),
   location: nullableString(120),
   acquiredOn: isoDate,
@@ -105,6 +107,8 @@ export const itemQuerySchema = z.object({
   kind: itemKindSchema.optional(),
   /** Only base games with no copies recorded anywhere in their tree. */
   uncatalogued: z.coerce.boolean().optional(),
+  /** Only trees containing something we hold more than one of. */
+  duplicates: z.coerce.boolean().optional(),
 });
 
 export type ItemQuery = z.infer<typeof itemQuerySchema>;
@@ -140,6 +144,7 @@ export interface Copy {
   itemId: number;
   editionId: number | null;
   appliesToCopyId: number | null;
+  quantity: number;
   status: (typeof COPY_STATUSES)[number];
   location: string | null;
   acquiredOn: string | null;
@@ -176,6 +181,13 @@ export interface ItemDetail extends Item {
   parent: Item | null;
 }
 
+/** How many of this item we hold, counting quantities across all its copies. */
+export function ownedCount(copies: Copy[]): number {
+  return copies
+    .filter((c) => c.status === 'owned' || c.status === 'lent')
+    .reduce((sum, c) => sum + (c.quantity || 1), 0);
+}
+
 /** Aggregate shown on a collapsed base-game card. */
 export function summarizeTree(node: ItemNode): {
   owned: number;
@@ -183,26 +195,41 @@ export function summarizeTree(node: ItemNode): {
   totalItems: number;
   locations: string[];
   spentCents: number;
+  /** Items in this tree we hold more than one of. */
+  duplicates: { id: number; name: string; count: number }[];
 } {
   let owned = 0;
   let wanted = 0;
   let totalItems = 0;
   let spentCents = 0;
   const locations = new Set<string>();
+  const duplicates: { id: number; name: string; count: number }[] = [];
 
   const walk = (n: ItemNode) => {
     totalItems += 1;
+    const held = ownedCount(n.copies);
+    owned += held;
+    if (held > 1) duplicates.push({ id: n.id, name: n.name, count: held });
+
     for (const c of n.copies) {
-      if (c.status === 'owned' || c.status === 'lent') owned += 1;
-      if (c.status === 'wanted' || c.status === 'preordered') wanted += 1;
+      const q = c.quantity || 1;
+      if (c.status === 'wanted' || c.status === 'preordered') wanted += q;
       if (c.location) locations.add(c.location);
+      // Price is what that row cost in total, not per unit.
       if (c.pricePaidCents) spentCents += c.pricePaidCents;
     }
     n.children.forEach(walk);
   };
   walk(node);
 
-  return { owned, wanted, totalItems, locations: [...locations].sort(), spentCents };
+  return {
+    owned,
+    wanted,
+    totalItems,
+    locations: [...locations].sort(),
+    spentCents,
+    duplicates,
+  };
 }
 
 export function formatMoney(cents: number, currency = 'USD'): string {

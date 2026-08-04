@@ -67,6 +67,8 @@ export interface CollectionStats {
   ownedCopies: number;
   wantedCopies: number;
   spentCents: number;
+  /** Items we hold more than one of. */
+  duplicatedItems: number;
 }
 
 function toQueryString(query: ItemQuery): string {

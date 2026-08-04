@@ -5,6 +5,7 @@ export interface CopyRow {
   item_id: number;
   edition_id: number | null;
   applies_to_copy_id: number | null;
+  quantity: number;
   status: string;
   location: string | null;
   acquired_on: string | null;
@@ -25,6 +26,7 @@ export function mapCopyRow(r: CopyRow): Copy {
     itemId: r.item_id,
     editionId: r.edition_id,
     appliesToCopyId: r.applies_to_copy_id,
+    quantity: r.quantity ?? 1,
     status: r.status as Copy['status'],
     location: r.location,
     acquiredOn: r.acquired_on,
@@ -52,15 +54,16 @@ export async function createCopy(
 ): Promise<Copy> {
   const res = await db
     .prepare(
-      `INSERT INTO copy (item_id, edition_id, applies_to_copy_id, status, location, acquired_on,
-                         price_paid_cents, currency, vendor, condition, is_sleeved, is_punched,
-                         completeness_notes, lent_to, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO copy (item_id, edition_id, applies_to_copy_id, quantity, status, location,
+                         acquired_on, price_paid_cents, currency, vendor, condition,
+                         is_sleeved, is_punched, completeness_notes, lent_to, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       itemId,
       input.editionId ?? null,
       input.appliesToCopyId ?? null,
+      input.quantity,
       input.status,
       input.location || null,
       input.acquiredOn || null,
@@ -84,6 +87,7 @@ export async function createCopy(
 const UPDATABLE: Record<keyof UpdateCopyInput, string> = {
   editionId: 'edition_id',
   appliesToCopyId: 'applies_to_copy_id',
+  quantity: 'quantity',
   status: 'status',
   location: 'location',
   acquiredOn: 'acquired_on',
