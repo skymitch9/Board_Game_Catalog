@@ -1,4 +1,5 @@
 import type {
+  AppUser,
   Copy,
   CreateCopyInput,
   CreateItemInput,
@@ -97,6 +98,10 @@ export const api = {
   updateCopy: (id: number, data: UpdateCopyInput) =>
     patch(`/api/copies/${id}`, data) as Promise<{ copy: Copy }>,
   deleteCopy: (id: number) => del(`/api/copies/${id}`) as Promise<{ deleted: boolean }>,
+
+  users: () => req<{ users: AppUser[] }>('/api/users'),
+  setRole: (userId: number, role: AppUser['role']) =>
+    patch(`/api/users/${userId}/role`, { role }) as Promise<{ user: AppUser }>,
 
   rate: (itemId: number, data: UpsertRatingInput) =>
     put(`/api/items/${itemId}/rating`, data) as Promise<{ rating: Rating }>,

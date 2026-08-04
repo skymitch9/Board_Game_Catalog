@@ -6,6 +6,7 @@ import { SignIn } from './SignIn';
 import { NewItemPage } from './components/ItemForm';
 import { CollectionPage } from './pages/CollectionPage';
 import { ItemPage, NotFoundPage } from './pages/ItemPage';
+import { PeoplePage } from './pages/PeoplePage';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
 function Routes({ me }: { me: MeResponse }) {
@@ -20,6 +21,12 @@ function Routes({ me }: { me: MeResponse }) {
       return <ItemPage id={route.id} me={me} editing />;
     case 'newItem':
       return <NewItemPage parentId={route.parentId} />;
+    case 'people':
+      return me.capabilities.includes('manageUsers') ? (
+        <PeoplePage me={me} />
+      ) : (
+        <NotFoundPage />
+      );
     default:
       return <NotFoundPage />;
   }
@@ -64,9 +71,12 @@ export default function App() {
         <Link to="/" className="brand">
           Board Game Catalog
         </Link>
-        <span className="who" title={me.data.email}>
-          {me.data.displayName || me.data.email}
-          {me.data.role !== 'owner' && <span className="role-tag"> {me.data.role}</span>}
+        <span className="topbar-right">
+          {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
+          <span className="who" title={me.data.email}>
+            {me.data.displayName || me.data.email}
+            {me.data.role !== 'owner' && <span className="role-tag"> {me.data.role}</span>}
+          </span>
         </span>
       </nav>
       <Routes me={me.data} />

@@ -284,6 +284,26 @@ textarea { resize: vertical; }
 .rating-score { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); }
 .rating-why { color: var(--muted); font-style: italic; }
 
+/* --- people ------------------------------------------------------------- */
+
+.topbar-right { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+
+.pending-callout {
+  display: flex; flex-direction: column; gap: 0.2rem;
+  background: var(--warn-bg); border-color: var(--warn); color: var(--warn);
+}
+.pending-callout .muted { color: inherit; opacity: 0.85; font-size: 0.88rem; }
+
+.person-list { list-style: none; margin: 0; padding: 0; }
+.person {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.person-id { display: flex; flex-direction: column; flex: 1; min-width: 10rem; }
+.person-email { font-weight: 550; }
+.small { font-size: 0.78rem; }
+.person-actions { display: flex; gap: 0.4rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
+
 /* --- sign-in ------------------------------------------------------------ */
 
 .signin { max-width: 22rem; margin: 0 auto; padding: 5rem 1.25rem 2rem; text-align: center; }

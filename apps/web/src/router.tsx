@@ -13,12 +13,15 @@ export type Route =
   | { name: 'item'; id: number }
   | { name: 'newItem'; parentId: number | null }
   | { name: 'editItem'; id: number }
+  | { name: 'people' }
   | { name: 'notFound' };
 
 function parse(pathname: string, search: string): Route {
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
 
   if (parts.length === 0) return { name: 'collection' };
+
+  if (parts[0] === 'people' && parts.length === 1) return { name: 'people' };
 
   if (parts[0] === 'items') {
     if (parts[1] === 'new') {
