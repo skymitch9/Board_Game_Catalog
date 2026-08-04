@@ -76,22 +76,25 @@ Requirements already satisfied in code: `Authorization: Bearer <token>`, domain
 `boardgamegeek.com` with **no** `www`, server-side requests only, week-long edge
 cache.
 
-### 2. Anthropic API key — phase 3
+### 2. Anthropic API key — ✅ in place locally
 
-Paste into `apps/worker/.dev.vars` (gitignored) for local work:
+`ANTHROPIC_API_KEY` is set in `apps/worker/.dev.vars` and **verified working**:
+a live call returned `model=claude-opus-5, stop_reason=end_turn`, and the
+`web_search_20260209` tool with `allowed_domains` was accepted — that tool is
+what enforces the official → crowdfunding → retail tier ordering, so the core
+assumption of phase 3 is confirmed rather than assumed.
 
-```
-ANTHROPIC_API_KEY = "sk-ant-..."
-```
-
-And for production:
+**Still needed for production:**
 
 ```
 npx wrangler secret put ANTHROPIC_API_KEY
 ```
 
-Get one at <https://platform.claude.com/settings/keys>. Nothing calls it yet —
-phase 3 is not built.
+The deployed Worker does not read `.dev.vars`.
+
+> ⚠️ The key was surfaced into a chat transcript by the IDE integration on
+> 2026-08-04. Rotate it at <https://platform.claude.com/settings/keys> and paste
+> the replacement directly into `.dev.vars`.
 
 ---
 
@@ -176,6 +179,40 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
   teardown quirk. Read the output, not the exit code.
 - **The browser extension has no permission for `*.workers.dev`**, so the live
   site can't be screenshotted through automation. Verify with `curl`.
+
+---
+
+## Next session — decided 2026-08-04
+
+Two things to build, in this order. Both are unblocked; neither needs BGG.
+
+### A. Barcode scanning (moved up from phase 5)
+
+Decided approach: **scan → local match → LLM fallback → human confirm.**
+
+1. `BarcodeDetector` where available (Android Chrome), ZXing wasm fallback for
+   iOS Safari, which does not support it.
+2. Look the UPC up against `edition.barcode` first — free, instant, works with
+   no network. This is also how you find a game you already own while standing
+   at the shelf.
+3. On a miss, ask Claude with web search to identify the barcode, and present
+   the answer as a **candidate to confirm**, never an automatic write. Barcode
+   → game matching is genuinely unreliable; expect to fall back to typing the
+   name a fair fraction of the time.
+4. Every confirmed scan writes back to `edition.barcode`, so the collection
+   becomes its own barcode database and the LLM is needed less over time.
+
+Rejected: always asking the LLM (costs money for games already owned) and
+local-only matching (useless for adding anything new, which is the point).
+
+### B. Phase 3 — the research pipeline
+
+See below. The key is verified and the web-search tool works.
+
+**Note on scheduling:** cloud routines were considered and rejected — they run
+in Anthropic's cloud with no access to this machine, so they cannot read the
+API key, deploy to Cloudflare, migrate D1, or test on a phone. Work happens in
+a local session instead.
 
 ---
 
