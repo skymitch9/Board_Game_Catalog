@@ -17,7 +17,19 @@ export interface ItemRelation {
 
 /**
  * All items related to this one, in either direction.
- * If A works_with B, querying either A or B returns the other.
+ *
+ * `same_family` is treated as transitive, and the others are not. Family is a
+ * statement about what a game *is* — link Starfarers to Catan and New Energies
+ * to Catan, and all three are Catans, so opening any one of them should show
+ * the other two. Making a person link every pair by hand to express that is
+ * asking them to maintain a fact the data already implies.
+ *
+ * The rest stay direct. "Works with" is a claim about two specific boxes, and
+ * A-works-with-B plus B-works-with-C does not make A work with C.
+ *
+ * Members reached through the family rather than by a link of their own carry
+ * `relationId: null` — there is no single row to point at, which is exactly why
+ * unlinking lives on the edit form and works on the links you actually made.
  */
 export async function getRelatedItems(
   db: D1Database,
@@ -25,15 +37,33 @@ export async function getRelatedItems(
 ): Promise<RelatedItemRef[]> {
   const { results } = await db
     .prepare(
-      `SELECT r.id AS relation_id, i.id AS item_id, i.name, i.kind, i.thumbnail_url, r.relation
-       FROM item_relation r
-       JOIN item i ON i.id = CASE WHEN r.from_item_id = ?1 THEN r.to_item_id ELSE r.from_item_id END
-       WHERE r.from_item_id = ?1 OR r.to_item_id = ?1
-       ORDER BY i.name`,
+      `WITH RECURSIVE family(id) AS (
+         SELECT ?1
+         UNION
+         SELECT CASE WHEN r.from_item_id = f.id THEN r.to_item_id ELSE r.from_item_id END
+           FROM item_relation r
+           JOIN family f ON r.from_item_id = f.id OR r.to_item_id = f.id
+          WHERE r.relation = 'same_family'
+       ),
+       direct AS (
+         SELECT r.id AS relation_id,
+                CASE WHEN r.from_item_id = ?1 THEN r.to_item_id ELSE r.from_item_id END AS item_id,
+                r.relation
+           FROM item_relation r
+          WHERE r.from_item_id = ?1 OR r.to_item_id = ?1
+       )
+       SELECT i.id AS item_id, i.name, i.kind, i.thumbnail_url,
+              d.relation_id AS relation_id,
+              COALESCE(d.relation, 'same_family') AS relation
+         FROM item i
+         LEFT JOIN direct d ON d.item_id = i.id
+        WHERE i.id != ?1
+          AND (i.id IN (SELECT id FROM family) OR d.item_id IS NOT NULL)
+        ORDER BY i.sort_name`,
     )
     .bind(itemId)
     .all<{
-      relation_id: number;
+      relation_id: number | null;
       item_id: number;
       name: string;
       kind: string;

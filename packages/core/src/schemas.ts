@@ -211,7 +211,14 @@ export interface ItemDetail extends Item {
 
 /** A game linked via item_relation — standalone but connected. */
 export interface RelatedItemRef {
-  relationId: number;
+  /**
+   * The link that says so, or null when this game is family by implication.
+   *
+   * Link Starfarers to Catan and New Energies to Catan, and Starfarers and New
+   * Energies are family too — with no row between them. Only a real link can be
+   * removed, which is why unlinking lives on the edit form.
+   */
+  relationId: number | null;
   itemId: number;
   name: string;
   kind: string;

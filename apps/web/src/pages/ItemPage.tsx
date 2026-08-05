@@ -48,13 +48,19 @@ export function ItemPage({
 
   if (editing) {
     return (
-      <ItemForm
-        existing={item}
-        parentId={item.parentItemId}
-        parentName={item.parent?.name ?? null}
-        onSaved={() => navigate(`/items/${item.id}`)}
-        onCancel={() => navigate(`/items/${item.id}`)}
-      />
+      <>
+        <ItemForm
+          existing={item}
+          parentId={item.parentItemId}
+          parentName={item.parent?.name ?? null}
+          onSaved={() => navigate(`/items/${item.id}`)}
+          onCancel={() => navigate(`/items/${item.id}`)}
+        />
+        {/* Unlinking lives here rather than beside the links themselves, so
+            breaking a connection takes a deliberate trip to the edit screen
+            while making one stays a single tap. */}
+        <LinkEditor itemId={item.id} related={item.relatedItems} onChanged={reload} />
+      </>
     );
   }
 
@@ -410,6 +416,76 @@ function LookupDetails({
   );
 }
 
+/**
+ * Removing links, on the edit screen.
+ *
+ * Only links this game actually holds can be removed. A family member reached
+ * through another game — Starfarers and New Energies are both Catans, without a
+ * row between them — has no link of its own to break, and is shown greyed with
+ * the reason rather than silently omitted, so the list matches what the game
+ * page displays.
+ */
+function LinkEditor({
+  itemId,
+  related,
+  onChanged,
+}: {
+  itemId: number;
+  related: RelatedItemRef[];
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  if (related.length === 0) return null;
+
+  async function unlink(relationId: number) {
+    setBusy(relationId);
+    setError(null);
+    try {
+      await api.removeRelation(relationId);
+      onChanged();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="card">
+      <h2>Linked games</h2>
+      <p className="muted small">
+        Links are added from a game&rsquo;s page or the related games screen. This is
+        where they come off.
+      </p>
+
+      {error != null && <ErrorBox error={error} what="Could not unlink" />}
+
+      <ul className="child-list">
+        {related.map((rel) => (
+          <li key={rel.itemId}>
+            <Link to={`/items/${rel.itemId}`} className="child-link">
+              <span className="child-name">{rel.name}</span>
+              <Badge tone="kind">{RELATION_LABEL[rel.relation]}</Badge>
+            </Link>
+            {rel.relationId === null ? (
+              <span className="muted small">via the family</span>
+            ) : (
+              <ConfirmButton
+                confirmLabel={busy === rel.relationId ? 'Unlinking…' : 'Really unlink?'}
+                onConfirm={() => void unlink(rel.relationId!)}
+              >
+                Unlink
+              </ConfirmButton>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export const RELATION_LABEL: Record<RelationType, string> = {
   same_family: 'Same family',
   works_with: 'Works with',
@@ -515,24 +591,19 @@ function RelatedGames({
           No linked games{canEdit ? ' — link standalone games that play together.' : '.'}
         </p>
       ) : (
+        /* No unlink button here on purpose. Easy to add, hard to break: a
+           stray tap on a × beside a game you were about to open should not
+           quietly sever a link, and half of these rows are family by
+           implication anyway and have no single row to remove. Unlinking lives
+           on the edit form, where you have already said you are editing. */
         <ul className="child-list">
           {relatedItems.map((rel) => (
-            <li key={rel.relationId}>
+            <li key={rel.itemId}>
               <Link to={`/items/${rel.itemId}`} className="child-link">
                 {rel.thumbnailUrl && <img className="thumb thumb-sm" src={rel.thumbnailUrl} alt="" />}
                 <span className="child-name">{rel.name}</span>
                 <Badge tone="kind">{RELATION_LABEL[rel.relation]}</Badge>
               </Link>
-              {canEdit && (
-                <button
-                  type="button"
-                  className="btn btn-quiet btn-xs"
-                  onClick={() => handleRemove(rel.relationId)}
-                  aria-label={`Unlink ${rel.name}`}
-                >
-                  ×
-                </button>
-              )}
             </li>
           ))}
         </ul>
