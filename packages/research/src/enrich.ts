@@ -83,11 +83,20 @@ Rules:
 - If you cannot confidently identify the game, set notFound to true and leave
   every field null. A wrong game's details are far worse than none: they get
   written into someone's catalog and look correct.
-- publisherUrl is the publisher's own website — their home page or the page for
-  this game on their site. Never a shop, a database, or a wiki. If you are not
-  confident of the publisher's real domain, leave it null; a guessed domain is
-  worse than an empty field, because a later step will search it as though it
-  were authoritative.
+- Report the **English edition**. Where a game was first published in another
+  language, name the publisher of the English-language edition, not the
+  original — "Stronghold Games", not "Edition Spielwiese (English edition by
+  Stronghold Games)"; "Catan Studio", not "Kosmos". Only name a non-English
+  publisher when there is no English edition at all.
+- publisher is a name and nothing else. No parenthetical parent company, no
+  edition history, no second publisher after a semicolon. It is a field someone
+  will filter and group by, so "Avalon Hill" and "Avalon Hill (Hasbro)" being
+  two different publishers is a real cost.
+- publisherUrl is that same publisher's own website — their home page or the
+  page for this game on their site. Never a shop, a database, or a wiki. If you
+  are not confident of the publisher's real domain, leave it null; a guessed
+  domain is worse than an empty field, because a later step will search it as
+  though it were authoritative.
 - Leave any individual field null rather than estimating it. Partial answers
   are expected and useful.
 - description is one or two plain sentences saying what the game is and how it
