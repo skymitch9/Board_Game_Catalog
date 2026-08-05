@@ -6,3 +6,5 @@ export * from './ratings.js';
 export * from './import.js';
 export * from './barcodes.js';
 export * from './cache.js';
+export * from './relations.js';
+export * from './scan-jobs.js';

@@ -1,8 +1,12 @@
-import { useCallback, useRef, useState } from 'react';
+﻿import { useCallback, useRef, useState } from 'react';
 import {
+  ITEM_KINDS,
   PHOTO_LONG_EDGE,
   SHELF_LONG_EDGE,
+  classifyShelfResults,
   type BarcodeCandidate,
+  type ClassifiedItem,
+  type ItemKind,
   type MeResponse,
   type ShelfMatch,
 } from '@bgc/core';
@@ -10,28 +14,36 @@ import { api, ApiError, type BarcodeLookup } from '../api';
 import { captureFrame, fileToPhoto, onceSteady } from '../lib/camera';
 import { preloadDecoder, startScanLoop } from '../lib/scanner';
 import { CameraStage } from '../components/CameraStage';
+import { QuickAdd } from '../components/QuickAdd';
+import { KIND_LABEL } from '../components/ItemTree';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
 import { Link, navigate } from '../router';
 
 /**
- * Scanning: barcode, one box, or a whole shelf.
+ * Adding a game: by barcode, by photo, by shelf, or by hand.
+ *
+ * This is the one way in. There used to be three â€” a Scan page, an Add page and
+ * a Quick add panel on the collection â€” which meant choosing a route before
+ * knowing which would work. Now the choice is a tab, and switching costs
+ * nothing.
  *
  * The ordering here reflects what things actually cost. A barcode lookup hits
  * the local table and two free services and comes back in about a second. A
  * photo takes three to five. Asking Claude about a *barcode number* takes one to
- * two minutes, so it is never automatic — it sits behind a button that says how
- * long it will take.
+ * two minutes, so it is never automatic â€” it sits behind a button that says how
+ * long it will take. Typing costs a person's time, which is why it is last.
  *
  * Photos are never stored. They are captured from a live frame, uploaded, read,
  * and dropped; nothing reaches the camera roll and nothing is kept server-side.
  */
 
-type Mode = 'barcode' | 'photo' | 'shelf';
+type Mode = 'barcode' | 'photo' | 'shelf' | 'manual';
 
 const MODES: { id: Mode; label: string; blurb: string }[] = [
   { id: 'barcode', label: 'Barcode', blurb: 'Fastest when the box has one. Free.' },
   { id: 'photo', label: 'One box', blurb: 'Reads the title off the cover. A few seconds.' },
   { id: 'shelf', label: 'Whole shelf', blurb: 'Reads every spine at once. Best for bulk.' },
+  { id: 'manual', label: 'Manually', blurb: 'Type the name. Looks the rest up as you go.' },
 ];
 
 export function ScanPage({ me }: { me: MeResponse }) {
@@ -49,7 +61,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
   const stopSteadyRef = useRef<(() => void) | null>(null);
   /**
    * Auto-capture fires when the phone stops moving. On by default because the
-   * alternative — reach for a button while holding a box steady one-handed — is
+   * alternative â€” reach for a button while holding a box steady one-handed â€” is
    * the awkward part of this screen.
    */
   const [autoCapture, setAutoCapture] = useState(true);
@@ -81,7 +93,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
         video,
         onScan: async ({ code }) => {
           stopEverything();
-          setBusy('Looking that barcode up…');
+          setBusy('Looking that barcode upâ€¦');
           try {
             setLookup(await api.barcode(code));
           } catch (err) {
@@ -100,7 +112,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
 
   const shoot = useCallback(
     async (video: HTMLVideoElement, which: 'photo' | 'shelf') => {
-      setBusy(which === 'photo' ? 'Reading the box…' : 'Reading the shelf…');
+      setBusy(which === 'photo' ? 'Reading the boxâ€¦' : 'Reading the shelfâ€¦');
       setError(null);
       try {
         const photo = await captureFrame(
@@ -140,6 +152,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
         onBarcodeReady(video);
         return;
       }
+      if (mode === 'manual') return; // no camera on this tab
       // Photo modes: shoot as soon as the phone settles, unless switched off.
       stopSteadyRef.current?.();
       stopSteadyRef.current = autoCapture
@@ -152,13 +165,13 @@ export function ScanPage({ me }: { me: MeResponse }) {
   // --- the slow rung -------------------------------------------------------
 
   const askClaude = useCallback(async (barcode: string) => {
-    setBusy('Searching the web. This usually takes a minute or two…');
+    setBusy('Searching the web. This usually takes a minute or twoâ€¦');
     setError(null);
     try {
       const res = await api.identifyBarcode(barcode);
       setCandidates(res.candidates);
       if (res.candidates.length === 0) {
-        setNote('Nothing found for that barcode. Try the photo mode instead — it reads the title.');
+        setNote('Nothing found for that barcode. Try the photo mode instead â€” it reads the title.');
       }
     } catch (err) {
       setError(err);
@@ -174,24 +187,26 @@ export function ScanPage({ me }: { me: MeResponse }) {
    *
    * `goToItem` is false for shelf mode. Navigating away after a single add threw
    * away every other title the photo found, which made a nine-game shelf photo
-   * strictly worse than typing nine names — the whole point is bulk intake.
+   * strictly worse than typing nine names â€” the whole point is bulk intake.
    */
   const addCandidate = useCallback(
     async (
       candidate: BarcodeCandidate,
       barcode: string | null,
       goToItem = true,
+      overrideKind?: ItemKind,
+      overrideParentId?: number | null,
     ): Promise<number | null> => {
-      if (goToItem) setBusy(`Adding ${candidate.name}…`);
+      if (goToItem) setBusy(`Adding ${candidate.name}â€¦`);
       setError(null);
       try {
-        // An expansion needs a parent, and we do not know it from a scan. Create
-        // it as its own entry and say so — nesting is a deliberate choice the
-        // user makes in the item editor.
-        const detectedNonBase = candidate.kind !== 'base';
+        const kind = overrideKind ?? 'base';
+        const parentItemId = kind === 'base' ? null : (overrideParentId ?? null);
+
         const { item } = await api.createItem({
           name: candidate.name,
-          kind: 'base',
+          kind,
+          parentItemId,
           bggId: candidate.bggId,
           yearPublished: candidate.yearPublished,
           publisher: candidate.publisher,
@@ -200,6 +215,14 @@ export function ScanPage({ me }: { me: MeResponse }) {
           maxPlayers: candidate.maxPlayers,
           playtimeMin: candidate.playtimeMin,
           description: candidate.description,
+        });
+
+        // Scanning a game means you own it â€” create a copy so it counts.
+        await api.createCopy(item.id, {
+          quantity: 1,
+          status: 'owned',
+          isSleeved: false,
+          isPunched: false,
         });
 
         if (barcode && canEdit) {
@@ -214,11 +237,6 @@ export function ScanPage({ me }: { me: MeResponse }) {
             .catch(() => undefined); // the game is added; a failed link is not fatal
         }
 
-        if (detectedNonBase) {
-          setNote(
-            `Added "${candidate.name}". It looks like a ${candidate.kind} — open it to nest it under its base game.`,
-          );
-        }
         if (goToItem) navigate(`/items/${item.id}`);
         return item.id;
       } catch (err) {
@@ -241,12 +259,14 @@ export function ScanPage({ me }: { me: MeResponse }) {
   return (
     <div className="scan-page">
       <header className="scan-header">
-        <h1>Scan</h1>
+        <h1>Add a game</h1>
         <Link to="/">Back to collection</Link>
       </header>
 
       <div className="scan-modes" role="tablist">
-        {MODES.map((m) => (
+        {/* Typing a game in needs write access, and so does the name lookup
+            behind it; offering the tab to a reader would only lead to a 403. */}
+        {MODES.filter((m) => m.id !== 'manual' || canEdit).map((m) => (
           <button
             key={m.id}
             role="tab"
@@ -264,12 +284,16 @@ export function ScanPage({ me }: { me: MeResponse }) {
         ))}
       </div>
 
-      {!showResults && (
+      {/* The typed path: the same Quick add that used to live on the collection
+          page, inline here so switching to it never loses the tab you were on. */}
+      {mode === 'manual' && <QuickAdd />}
+
+      {!showResults && mode !== 'manual' && (
         <CameraStage
           active={active}
           hint={
             mode === 'barcode'
-              ? 'Hold the barcode steady and fill the frame. No flash on iPhone — find good light.'
+              ? 'Hold the barcode steady and fill the frame. No flash on iPhone â€” find good light.'
               : mode === 'photo'
                 ? 'Fill the frame with the front of the box.'
                 : 'Stand back far enough to get a whole row of spines in frame.'
@@ -285,7 +309,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
             stopLoopRef.current = null;
           }}
         >
-          {mode !== 'barcode' && (
+          {(mode === 'photo' || mode === 'shelf') && (
             <div className="camera-stage__actions">
               <button
                 type="button"
@@ -329,7 +353,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
           mode={mode}
           disabled={busy != null}
           onPhoto={async (file) => {
-            setBusy('Reading…');
+            setBusy('Readingâ€¦');
             setError(null);
             try {
               const photo = await fileToPhoto(
@@ -373,7 +397,10 @@ export function ScanPage({ me }: { me: MeResponse }) {
       )}
 
       {shelf && (
-        <ShelfResult matches={shelf} onAdd={(c) => addCandidate(c, null, false)} />
+        <ShelfResult
+          matches={shelf}
+          onAdd={(c, kind, parentId) => addCandidate(c, null, false, kind, parentId)}
+        />
       )}
 
       {showResults && (
@@ -394,11 +421,11 @@ export function ScanPage({ me }: { me: MeResponse }) {
 /**
  * The `<input capture>` path.
  *
- * Verified not to write to the camera roll — Safari presents a picker whose
+ * Verified not to write to the camera roll â€” Safari presents a picker whose
  * result is handed to the page and discarded; saving would require the host app
  * to call `UIImageWriteToSavedPhotosAlbum`, and Safari never does.
  *
- * Kept because it works in contexts `getUserMedia` does not — notably in-app
+ * Kept because it works in contexts `getUserMedia` does not â€” notably in-app
  * browsers whose host app never wired up the media-capture delegate.
  *
  * `accept` is plain `image/*` on purpose: adding `image/heic` makes Safari 17+
@@ -413,10 +440,10 @@ function PhotoFallback({
   disabled: boolean;
   onPhoto: (file: File) => void;
 }) {
-  if (mode === 'barcode') return null;
+  if (mode === 'barcode' || mode === 'manual') return null;
   return (
     <label className="scan-fallback">
-      <span className="muted">Camera not working? Take a photo instead — it is not saved to your library.</span>
+      <span className="muted">Camera not working? Take a photo instead â€” it is not saved to your library.</span>
       <input
         type="file"
         accept="image/*"
@@ -459,7 +486,7 @@ function BarcodeResult({
     <div className="scan-result">
       <p className="muted">
         Barcode <code>{lookup.barcode}</code>
-        {lookup.verified && ' · community-verified match'}
+        {lookup.verified && ' Â· community-verified match'}
       </p>
 
       {lookup.candidates.length > 0 ? (
@@ -496,7 +523,7 @@ function BarcodeResult({
         <ul>
           {lookup.trace.map((t, i) => (
             <li key={i}>
-              <code>{t.source}</code> — {t.outcome}
+              <code>{t.source}</code> â€” {t.outcome}
             </li>
           ))}
         </ul>
@@ -520,7 +547,7 @@ function CandidateList({
           <div className="candidate__body">
             <strong>{c.name}</strong>
             <span className="muted">
-              {[c.publisher, c.yearPublished, c.editionName].filter(Boolean).join(' · ')}
+              {[c.publisher, c.yearPublished, c.editionName].filter(Boolean).join(' Â· ')}
             </span>
             <span className="candidate__meta">
               <Badge tone={c.confidence === 'high' ? 'owned' : c.confidence === 'low' ? 'wanted' : 'neutral'}>
@@ -541,35 +568,65 @@ function CandidateList({
 }
 
 /**
- * A shelf photo's results: tick what you want, add them all at once.
+ * A shelf photo's results: classify, review, then add.
  *
- * This is the whole point of shelf mode, and it was got wrong first time round —
- * each row had its own Add button that navigated to the new item, discarding
- * every other title the photo had found. A nine-game shelf could add one game.
- *
- * So: selection is local, adding is a batch, and nothing navigates. Rows report
- * their own outcome, because one failure in a batch of nine must not lose the
- * other eight.
+ * The flow is: scan -> classify (auto-detect expansions by title prefix) ->
+ * show a review screen where the user can adjust kind and parent -> batch add.
  */
 function ShelfResult({
   matches,
   onAdd,
 }: {
   matches: ShelfMatch[];
-  onAdd: (c: BarcodeCandidate) => Promise<number | null>;
+  onAdd: (
+    c: BarcodeCandidate,
+    kind?: ItemKind,
+    parentId?: number | null,
+  ) => Promise<number | null>;
 }) {
   const owned = matches.filter((m) => m.existingItemId != null);
-  const fresh = matches.map((m, i) => ({ m, i })).filter(({ m }) => m.existingItemId == null);
+  const fresh = matches.filter((m) => m.existingItemId == null);
 
-  // Everything not already owned starts ticked: the common case is "add this
-  // shelf", and unticking the odd one is less work than ticking eight.
-  const [selected, setSelected] = useState<Set<number>>(
-    () => new Set(fresh.map(({ i }) => i)),
-  );
+  const [existingItems, setExistingItems] = useState<{ id: number; name: string; kind: string }[]>([]);
+  const [classified, setClassified] = useState<ClassifiedItem[] | null>(null);
+  const [classifyRan, setClassifyRan] = useState(false);
+
+  // Run classification once on first render.
+  if (!classifyRan) {
+    setClassifyRan(true);
+    api.items().then((res) => {
+      const flat: { id: number; name: string; kind: string }[] = [];
+      function walk(nodes: typeof res.items) {
+        for (const n of nodes) {
+          flat.push({ id: n.id, name: n.name, kind: n.kind });
+          if (n.children) walk(n.children);
+        }
+      }
+      walk(res.items);
+      setExistingItems(flat);
+
+      const freshItems = fresh.map((m) => ({
+        name: m.resolvedName ?? m.title.text,
+        bggId: m.bggId,
+        thumbnailUrl: m.thumbnailUrl,
+      }));
+      setClassified(classifyShelfResults(freshItems, flat));
+    }).catch(() => {
+      const freshItems = fresh.map((m) => ({
+        name: m.resolvedName ?? m.title.text,
+        bggId: m.bggId,
+        thumbnailUrl: m.thumbnailUrl,
+      }));
+      setClassified(classifyShelfResults(freshItems, []));
+    });
+  }
+
+  const [kindOverrides, setKindOverrides] = useState<Record<number, ItemKind>>({});
+  const [parentOverrides, setParentOverrides] = useState<Record<number, number | null>>({});
+  const [selected, setSelected] = useState<Set<number>>(() => new Set(fresh.map((_, i) => i)));
   const [results, setResults] = useState<Record<number, { itemId: number } | { error: string }>>({});
   const [adding, setAdding] = useState(false);
-
-  const pending = fresh.filter(({ i }) => selected.has(i) && !results[i]);
+  const [batchIds, setBatchIds] = useState<Record<number, number>>({});
 
   const toggle = (i: number) =>
     setSelected((prev) => {
@@ -579,14 +636,58 @@ function ShelfResult({
       return next;
     });
 
+  const getKind = (i: number): ItemKind =>
+    kindOverrides[i] ?? classified?.[i]?.proposedKind ?? 'base';
+
+  const getParentId = (i: number): number | null =>
+    parentOverrides[i] !== undefined
+      ? (parentOverrides[i] ?? null)
+      : (classified?.[i]?.proposedParentId ?? null);
+
   async function addSelected() {
+    if (!classified) return;
     setAdding(true);
-    // Sequential, not parallel: each add is a write, and a burst of concurrent
-    // inserts makes the "already in the collection" conflict check race itself.
-    for (const { m, i } of pending) {
+
+    // Base games first so expansions can reference them.
+    const pending = [...selected]
+      .filter((i) => !results[i])
+      .sort((a, b) => (getKind(a) === 'base' ? 0 : 1) - (getKind(b) === 'base' ? 0 : 1));
+
+    for (const i of pending) {
+      const item = classified[i];
+      const m = fresh[i];
+      if (!item || !m) continue;
+
+      const kind = getKind(i);
+      let parentId = getParentId(i);
+
+      // Resolve batch parent references:
+      // - Negative IDs are pseudo-IDs for not-yet-added items (-(idx+1) -> idx)
+      // - Null with a proposedParentName means auto-classified batch sibling
+      if (kind !== 'base' && parentId != null && parentId < 0) {
+        const batchIdx = -(parentId + 1);
+        parentId = batchIds[batchIdx] ?? null;
+      } else if (kind !== 'base' && parentId == null && item.proposedParentName) {
+        const parentIdx = classified.findIndex(
+          (c) => c.proposedKind === 'base' && c.name === item.proposedParentName,
+        );
+        if (parentIdx >= 0 && batchIds[parentIdx]) {
+          parentId = batchIds[parentIdx]!;
+        }
+      }
+
+      // Expansion without a resolved parent -> add as base.
+      const effectiveKind = kind !== 'base' && !parentId ? 'base' : kind;
+
       try {
-        const itemId = await onAdd(toCandidate(m));
-        setResults((r) => ({ ...r, [i]: itemId ? { itemId } : { error: 'could not add' } }));
+        const candidate = toCandidate(m);
+        const itemId = await onAdd(candidate, effectiveKind, parentId);
+        if (itemId) {
+          setResults((r) => ({ ...r, [i]: { itemId } }));
+          setBatchIds((b) => ({ ...b, [i]: itemId }));
+        } else {
+          setResults((r) => ({ ...r, [i]: { error: 'could not add' } }));
+        }
       } catch (err) {
         setResults((r) => ({
           ...r,
@@ -598,13 +699,39 @@ function ShelfResult({
   }
 
   const addedCount = Object.values(results).filter((r) => 'itemId' in r).length;
+  const pendingCount = [...selected].filter((i) => !results[i]).length;
+
+  const parentOptions = [
+    ...existingItems.filter((it) => it.kind === 'base'),
+    ...Object.entries(batchIds).map(([idx, id]) => ({
+      id,
+      name: classified?.[Number(idx)]?.name ?? `Item ${id}`,
+      kind: 'base' as const,
+      isBatch: true,
+    })),
+    // Items in this scan classified as base but not yet added — available as
+    // parents so expansions can reference them before the add runs.
+    ...(classified ?? [])
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item, idx }) =>
+        (kindOverrides[idx] ?? item.proposedKind) === 'base' && !batchIds[idx],
+      )
+      .map(({ item, idx }) => ({
+        id: -(idx + 1), // negative pseudo-ID for not-yet-added batch items
+        name: item.name,
+        kind: 'base' as const,
+        isBatch: true,
+      })),
+  ];
+
+  if (!classified) return <Spinner label="Classifying..." />;
 
   return (
     <div className="scan-result">
       <p className="muted">
         Read {matches.length} title{matches.length === 1 ? '' : 's'}
-        {owned.length > 0 && ` · ${owned.length} already yours`}
-        {addedCount > 0 && ` · ${addedCount} added`}
+        {owned.length > 0 && ` \u00b7 ${owned.length} already yours`}
+        {addedCount > 0 && ` \u00b7 ${addedCount} added`}
       </p>
 
       {fresh.length > 0 && (
@@ -613,21 +740,21 @@ function ShelfResult({
             <button
               type="button"
               className="primary"
-              disabled={adding || pending.length === 0}
+              disabled={adding || pendingCount === 0}
               onClick={addSelected}
             >
               {adding
-                ? `Adding… ${addedCount}/${pending.length + addedCount}`
-                : pending.length === 0
-                  ? 'Nothing selected'
-                  : `Add ${pending.length} game${pending.length === 1 ? '' : 's'}`}
+                ? `Adding\u2026 ${addedCount}`
+                : pendingCount === 0
+                  ? 'All done'
+                  : `Add ${pendingCount} game${pendingCount === 1 ? '' : 's'}`}
             </button>
             <button
               type="button"
               disabled={adding}
               onClick={() =>
                 setSelected(
-                  selected.size === fresh.length ? new Set() : new Set(fresh.map(({ i }) => i)),
+                  selected.size === fresh.length ? new Set() : new Set(fresh.map((_, i) => i)),
                 )
               }
             >
@@ -635,14 +762,19 @@ function ShelfResult({
             </button>
           </div>
 
-          <ul className="candidate-list">
-            {fresh.map(({ m, i }) => {
+          <ul className="candidate-list shelf-classify">
+            {classified.map((item, i) => {
+              const m = fresh[i];
+              if (!m) return null;
               const result = results[i];
+              const kind = getKind(i);
+              const parentId = getParentId(i);
+
               return (
                 <li key={i} className="candidate">
                   {result ? (
                     <span className="shelf-outcome" aria-hidden="true">
-                      {'itemId' in result ? '✓' : '!'}
+                      {'itemId' in result ? '\u2713' : '!'}
                     </span>
                   ) : (
                     <input
@@ -651,26 +783,64 @@ function ShelfResult({
                       checked={selected.has(i)}
                       disabled={adding}
                       onChange={() => toggle(i)}
-                      aria-label={`Add ${m.resolvedName ?? m.title.text}`}
+                      aria-label={`Add ${item.name}`}
                     />
                   )}
 
-                  {m.thumbnailUrl && <img src={m.thumbnailUrl} alt="" className="candidate__thumb" />}
+                  {item.thumbnailUrl && (
+                    <img src={item.thumbnailUrl} alt="" className="candidate__thumb" />
+                  )}
 
                   <div className="candidate__body">
-                    <strong>{m.resolvedName ?? m.title.text}</strong>
+                    <strong>{item.name}</strong>
                     {m.resolvedName && m.resolvedName !== m.title.text && (
-                      <span className="muted">read as “{m.title.text}”</span>
+                      <span className="muted">read as &quot;{m.title.text}&quot;</span>
                     )}
-                    <span className="candidate__meta">
-                      <Badge tone={m.title.confidence === 'high' ? 'owned' : 'neutral'}>
-                        {m.title.confidence}
-                      </Badge>
-                      <span className="muted">position {m.title.position}</span>
-                    </span>
-                    {m.title.note && <span className="muted candidate__note">{m.title.note}</span>}
+
+                    {!result && (
+                      <div className="shelf-classify__controls">
+                        <select
+                          value={kind}
+                          onChange={(e) => {
+                            const newKind = e.target.value as ItemKind;
+                            setKindOverrides((o) => ({ ...o, [i]: newKind }));
+                            if (newKind === 'base') {
+                              setParentOverrides((o) => ({ ...o, [i]: null }));
+                            }
+                          }}
+                          disabled={adding}
+                          aria-label="Type"
+                        >
+                          {ITEM_KINDS.map((k) => (
+                            <option key={k} value={k}>{KIND_LABEL[k]}</option>
+                          ))}
+                        </select>
+
+                        {kind !== 'base' && (
+                          <select
+                            value={parentId ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value ? Number(e.target.value) : null;
+                              setParentOverrides((o) => ({ ...o, [i]: val }));
+                            }}
+                            disabled={adding}
+                            aria-label="Parent game"
+                          >
+                            <option value="">-- pick a parent --</option>
+                            {parentOptions.map((p) => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        )}
+
+                        {item.reason && (
+                          <span className="muted small">{item.reason}</span>
+                        )}
+                      </div>
+                    )}
+
                     {result && 'itemId' in result && (
-                      <Link to={`/items/${result.itemId}`}>Added — open it</Link>
+                      <Link to={`/items/${result.itemId}`}>Added -- open it</Link>
                     )}
                     {result && 'error' in result && (
                       <span className="muted candidate__note">{result.error}</span>
@@ -690,7 +860,7 @@ function ShelfResult({
             {owned.map((m, i) => (
               <li key={i}>
                 <Link to={`/items/${m.existingItemId}`}>{m.existingName}</Link>{' '}
-                <span className="muted">read as “{m.title.text}”</span>
+                <span className="muted">read as &quot;{m.title.text}&quot;</span>
               </li>
             ))}
           </ul>
@@ -710,7 +880,6 @@ function toCandidate(m: ShelfMatch): BarcodeCandidate {
     kind: 'base',
     editionName: null,
     thumbnailUrl: m.thumbnailUrl,
-    // A spine shows a title and nothing else.
     minPlayers: null,
     maxPlayers: null,
     playtimeMin: null,
@@ -723,3 +892,4 @@ function toCandidate(m: ShelfMatch): BarcodeCandidate {
 }
 
 export { ApiError };
+

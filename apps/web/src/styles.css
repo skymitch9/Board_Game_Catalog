@@ -308,6 +308,26 @@ textarea { resize: vertical; }
 .quickadd-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; align-items: end; }
 .quickadd-row .check-inline { padding-bottom: 0.75rem; }
 @media (max-width: 640px) { .quickadd-row { grid-template-columns: 1fr 1fr; } }
+
+/* The type-ahead suggestion. Sits *below* the name row on purpose: appearing
+   above it would shove the field you are typing in down the screen. */
+.quickadd-hint {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0.6rem; margin-bottom: 0.75rem;
+  background: var(--bg); border: 1px dashed var(--line); border-radius: 8px;
+}
+.quickadd-hint__thumb { width: 36px; height: 36px; object-fit: contain; border-radius: 4px; flex: none; }
+.quickadd-hint__body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.quickadd-hint__body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quickadd-hint .btn { flex: none; padding: 0.5rem 0.85rem; }
+
+.quickadd-more { border-top: 1px solid var(--line); padding-top: 0.6rem; margin-bottom: 0.5rem; }
+/* A thumb-sized target: this is the lid on the rest of the form. */
+.quickadd-more summary {
+  cursor: pointer; padding: 0.4rem 0;
+  font-size: 0.85rem; font-weight: 600; color: var(--accent);
+}
+.quickadd-more__body { padding-top: 0.5rem; }
 .quickadd-recent {
   list-style: none; margin: 0.75rem 0 0; padding: 0.6rem 0 0;
   border-top: 1px solid var(--line);
@@ -386,7 +406,10 @@ code {
 .scan-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 .scan-header h1 { margin: 0; }
 
-.scan-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+/* auto-fit, not a fixed count: the "Manually" tab is only there for people who
+   can write to the catalog, so the row is three wide or four depending on who
+   is looking. minmax(0, 1fr) keeps a long label from widening its column. */
+.scan-modes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.5rem; }
 .scan-mode {
   display: flex; flex-direction: column; gap: 0.15rem;
   padding: 0.6rem 0.5rem; text-align: left;
@@ -475,9 +498,12 @@ code {
 .scan-trace ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
 
 @media (max-width: 560px) {
-  /* Keep three across — stacking these is what pushed the shutter off-screen. */
-  .scan-modes { grid-template-columns: repeat(3, 1fr); gap: 0.35rem; }
-  .scan-mode { padding: 0.45rem 0.35rem; text-align: center; align-items: center; }
+  /* Keep one row — stacking these is what pushed the shutter off-screen. The
+     blurbs go and the labels shrink so four fit across a phone; "Whole shelf"
+     is the one that decides how small they have to be. */
+  .scan-modes { gap: 0.35rem; }
+  .scan-mode { padding: 0.45rem 0.25rem; text-align: center; align-items: center; }
+  .scan-mode strong { font-size: 0.78rem; }
   .scan-mode span { display: none; }
   .scan-header h1 { font-size: 1.25rem; }
 }
@@ -486,6 +512,29 @@ code {
 .shelf-actions button { flex: 1; padding: 0.7rem; }
 .shelf-check { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
 .shelf-outcome { width: 24px; text-align: center; font-weight: 700; flex: none; color: var(--good); }
+
+.shelf-classify .candidate__body { flex: 1; min-width: 0; }
+.shelf-classify__controls {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.3rem;
+}
+.shelf-classify__controls select { font-size: 0.85rem; padding: 0.25rem 0.4rem; }
+.shelf-classify__controls .small { font-size: 0.75rem; }
+
+/* --- filling in what's missing ------------------------------------------ */
+
+.lookup-fill { border-style: dashed; }
+.lookup-fill__row { display: flex; align-items: flex-start; gap: 0.75rem; }
+.lookup-fill p { margin: 0.2rem 0 0; }
+.lookup-fill .btn { flex: none; padding: 0.6rem 0.9rem; }
+.lookup-filled {
+  margin: 0 0 1rem; padding: 0.7rem 0.9rem;
+  background: var(--good-bg); color: var(--good);
+  border-radius: 8px; font-size: 0.9rem;
+}
+@media (max-width: 560px) {
+  /* Stack so the button keeps its full width to be tapped at. */
+  .lookup-fill__row { flex-direction: column; align-items: stretch; }
+}
 
 .external-links { display: flex; gap: 0.75rem; margin: 0.35rem 0 0; font-size: 0.85rem; }
 .external-links a { color: var(--accent); text-decoration: none; }
@@ -507,3 +556,45 @@ code {
   background: rgb(0 0 0 / 0.55); color: #fff; font-size: 0.85rem;
 }
 .auto-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* ---------------------------------------------------------------------------
+   Scan Jobs / Photo Queue
+   --------------------------------------------------------------------------- */
+
+.scan-jobs-page { max-width: 700px; margin: 0 auto; }
+
+.photo-uploader { padding: 0.5rem 0; }
+.upload-area {
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  padding: 2rem 1rem; border: 2px dashed var(--border); border-radius: 0.75rem;
+  cursor: pointer; text-align: center;
+  transition: border-color 0.15s;
+}
+.upload-area:hover { border-color: var(--accent); }
+.upload-area input[type="file"] { position: absolute; width: 0; height: 0; opacity: 0; }
+.upload-area__label { font-weight: 500; font-size: 1rem; }
+
+.job-list { list-style: none; padding: 0; margin: 0; }
+.job-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem; padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.job-row:last-child { border-bottom: none; }
+.job-row__info { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.job-row__time { font-size: 0.8rem; color: var(--muted); }
+.job-row__actions { display: flex; align-items: center; gap: 0.5rem; }
+
+/* --- Expansion picker --- */
+.expansion-picker { margin-bottom: 1rem; }
+.expansion-picker h3 { margin: 0 0 0.25rem; font-size: 1rem; }
+.expansion-picker__list {
+  display: flex; flex-direction: column; gap: 0.25rem; max-height: 240px; overflow-y: auto;
+}
+.expansion-picker__item {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem;
+  background: var(--card-bg); cursor: pointer; text-align: left;
+  font: inherit; transition: border-color 0.1s;
+}
+.expansion-picker__item:hover { border-color: var(--accent); }

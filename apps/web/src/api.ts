@@ -5,6 +5,7 @@ import type {
   Copy,
   CreateCopyInput,
   CreateItemInput,
+  CreateRelationInput,
   HealthResponse,
   Item,
   ItemDetail,
@@ -12,6 +13,7 @@ import type {
   ItemQuery,
   MeResponse,
   Rating,
+  RelatedItemRef,
   UpdateCopyInput,
   UpdateItemInput,
   UpsertRatingInput,
@@ -65,6 +67,8 @@ const del = send('DELETE');
 
 export interface CollectionStats {
   baseGames: number;
+  expansions: number;
+  accessories: number;
   totalItems: number;
   ownedCopies: number;
   wantedCopies: number;
@@ -120,6 +124,13 @@ export const api = {
     put(`/api/items/${itemId}/rating`, data) as Promise<{ rating: Rating }>,
   unrate: (itemId: number) => del(`/api/items/${itemId}/rating`) as Promise<{ deleted: boolean }>,
 
+  // --- Relations ------------------------------------------------------------
+
+  addRelation: (itemId: number, data: CreateRelationInput) =>
+    post(`/api/items/${itemId}/relations`, data) as Promise<{ relation: { id: number } }>,
+  removeRelation: (relationId: number) =>
+    del(`/api/relations/${relationId}`) as Promise<{ deleted: boolean }>,
+
   // --- Scanning -------------------------------------------------------------
   // The free rungs first; the paid ones are separate calls the user asks for.
 
@@ -158,12 +169,62 @@ export const api = {
       unreadable: boolean;
       usage: ResearchUsage;
     }>,
+
+  // --- Scan Jobs (photo queue) ----------------------------------------------
+
+  scanJobs: (status?: string) =>
+    req<{ jobs: ScanJob[] }>(`/api/scan-jobs${status ? `?status=${status}` : ''}`),
+
+  scanJob: (id: number) => req<{ job: ScanJob }>(`/api/scan-jobs/${id}`),
+
+  createScanJob: (data: { data: string; mediaType: string; mode: 'shelf' | 'single' }) =>
+    post('/api/scan-jobs', data) as Promise<{ job: ScanJob }>,
+
+  enrichScanJob: (id: number) =>
+    post(`/api/scan-jobs/${id}/enrich`, {}) as Promise<{ job: ScanJob }>,
+
+  completeScanJob: (id: number) =>
+    post(`/api/scan-jobs/${id}/done`, {}) as Promise<{ job: ScanJob }>,
+
+  deleteScanJob: (id: number) =>
+    del(`/api/scan-jobs/${id}`) as Promise<{ deleted: boolean }>,
 };
 
 export interface CacheStats {
   titles: number;
   barcodes: number;
   oldest: string | null;
+}
+
+export interface ScanJob {
+  id: number;
+  status: 'uploaded' | 'reading' | 'read' | 'enriching' | 'review' | 'done' | 'failed';
+  mode: 'shelf' | 'single';
+  photoKey: string;
+  rawTitles: string | null;
+  enriched: string | null;
+  error: string | null;
+  createdAt: string;
+  processedAt: string | null;
+  reviewedAt: string | null;
+}
+
+export interface EnrichedTitle {
+  title: string;
+  confidence: 'high' | 'medium' | 'low';
+  position: number;
+  alreadyOwned: boolean;
+  existingItemId: number | null;
+  existingName: string | null;
+  bggId: number | null;
+  resolvedName: string | null;
+  thumbnailUrl: string | null;
+  publisher: string | null;
+  yearPublished: number | null;
+  proposedKind: string | null;
+  proposedParentId: number | null;
+  proposedParentName: string | null;
+  reason: string | null;
 }
 
 export interface ResearchUsage {

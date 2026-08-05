@@ -4,11 +4,10 @@ import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
 import { Link } from '../router';
 import { ItemCard, KIND_LABEL } from '../components/ItemTree';
-import { ExportLinks, QuickAdd } from '../components/QuickAdd';
+import { ExportLinks } from '../components/QuickAdd';
 import { EmptyState, ErrorBox, Spinner } from '../components/ui';
 
 export function CollectionPage({ me }: { me: MeResponse }) {
-  const [quickAdding, setQuickAdding] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [kind, setKind] = useState('');
@@ -25,21 +24,16 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     ...(duplicates ? { duplicates: true } : {}),
   };
 
-  const [reloads, setReloads] = useState(0);
-  const [meta, refreshMeta] = useAsync(() => api.meta(), [reloads]);
+  // Nothing on this page writes any more — adding happens on /scan, editing on
+  // an item — so both loads are mount-and-filter, with no refresh to plumb.
+  const [meta] = useAsync(() => api.meta(), []);
   const [items] = useAsync(() => api.items(query), [
     debouncedSearch,
     status,
     kind,
     uncatalogued,
     duplicates,
-    reloads,
   ]);
-
-  const reload = () => {
-    setReloads((n) => n + 1);
-    refreshMeta();
-  };
 
   const canEdit = me.capabilities.includes('editCatalog');
   const filtersActive = Boolean(
@@ -53,8 +47,9 @@ export function CollectionPage({ me }: { me: MeResponse }) {
           <h1>Collection</h1>
           {meta.state === 'ok' && (
             <p className="subtitle">
-              {meta.data.stats.baseGames} games · {meta.data.stats.totalItems} items ·{' '}
-              {meta.data.stats.ownedCopies} owned
+              {meta.data.stats.baseGames} game{meta.data.stats.baseGames !== 1 ? 's' : ''}
+              {meta.data.stats.expansions > 0 && ` · ${meta.data.stats.expansions} expansion${meta.data.stats.expansions !== 1 ? 's' : ''}`}
+              {meta.data.stats.accessories > 0 && ` · ${meta.data.stats.accessories} accessor${meta.data.stats.accessories !== 1 ? 'ies' : 'y'}`}
               {meta.data.stats.wantedCopies > 0 && ` · ${meta.data.stats.wantedCopies} wanted`}
               {meta.data.stats.duplicatedItems > 0 && (
                 <>
@@ -73,23 +68,14 @@ export function CollectionPage({ me }: { me: MeResponse }) {
         </div>
         {canEdit && (
           <div className="head-actions">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setQuickAdding((q) => !q)}
-            >
-              Quick add
-            </button>
-            <Link to="/items/new" className="btn btn-primary">
-              + Add game
+            {/* Scan, photograph or type — all of it lives on /scan now, so this
+                page offers the door rather than one of the rooms behind it. */}
+            <Link to="/scan" className="btn btn-primary">
+              + Add
             </Link>
           </div>
         )}
       </header>
-
-      {canEdit && quickAdding && (
-        <QuickAdd onAdded={reload} onClose={() => setQuickAdding(false)} />
-      )}
 
       <div className="filters card">
         <input

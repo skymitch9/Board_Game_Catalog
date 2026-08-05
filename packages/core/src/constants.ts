@@ -26,3 +26,12 @@ export type CopyStatus = (typeof COPY_STATUSES)[number];
  */
 export const SOURCE_TIERS = ['official', 'crowdfunding', 'retail', 'community'] as const;
 export type SourceTier = (typeof SOURCE_TIERS)[number];
+
+/**
+ * How two standalone items relate to each other without nesting.
+ * - works_with: standalone games that combine (Dice Throne characters, Unmatched fighters)
+ * - reimplements: a newer standalone version of an older game
+ * - integrates_with: can be combined with another standalone game
+ */
+export const RELATION_TYPES = ['works_with', 'reimplements', 'integrates_with'] as const;
+export type RelationType = (typeof RELATION_TYPES)[number];

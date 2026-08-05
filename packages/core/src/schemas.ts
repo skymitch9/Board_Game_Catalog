@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { COPY_STATUSES, ITEM_KINDS } from './constants.js';
+import { COPY_STATUSES, ITEM_KINDS, RELATION_TYPES } from './constants.js';
 
 export const itemKindSchema = z.enum(ITEM_KINDS);
 export const copyStatusSchema = z.enum(COPY_STATUSES);
@@ -89,6 +89,19 @@ export const upsertRatingSchema = z.object({
 export type UpsertRatingInput = z.infer<typeof upsertRatingSchema>;
 
 // ---------------------------------------------------------------------------
+// Relations — standalone games that belong together
+// ---------------------------------------------------------------------------
+
+export const relationTypeSchema = z.enum(RELATION_TYPES);
+
+export const createRelationSchema = z.object({
+  toItemId: z.number().int().positive(),
+  relation: relationTypeSchema,
+});
+
+export type CreateRelationInput = z.infer<typeof createRelationSchema>;
+
+// ---------------------------------------------------------------------------
 // Browsing
 // ---------------------------------------------------------------------------
 
@@ -169,7 +182,18 @@ export interface ItemDetail extends Item {
   copies: Copy[];
   children: ItemNode[];
   ratings: Rating[];
+  relatedItems: RelatedItemRef[];
   parent: Item | null;
+}
+
+/** A game linked via item_relation — standalone but connected. */
+export interface RelatedItemRef {
+  relationId: number;
+  itemId: number;
+  name: string;
+  kind: string;
+  thumbnailUrl: string | null;
+  relation: (typeof RELATION_TYPES)[number];
 }
 
 /** How many of this item we hold, counting quantities across all its copies. */

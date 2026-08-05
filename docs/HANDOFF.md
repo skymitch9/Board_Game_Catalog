@@ -5,40 +5,45 @@ Everything needed to continue or finish this without Claude.
 Stable reference lives alongside this file and is not duplicated here:
 [`access/`](access/README.md) (endpoints, key names, quotas) and
 [`info/`](info/README.md) (how and why things work).
-**Last updated:** 2026-08-05, after scanning shipped and was tested on a real
-iPhone. Written while approaching a usage limit — read "In flight" first.
+**Last updated:** 2026-08-05, after photo queue pipeline shipped and full
+session of improvements. Database was cleared and collection restarted fresh.
 
 ---
 
-## ⚠️ In flight — read this before touching apps/web
+## ⚠️ Uncommitted — the "add" restructure is done but not landed
 
-**An agent was mid-task when this was written.** It was restructuring the "add"
-flows and its work was **not committed**. Check `git status` first:
+The four-part rework of the add flows is **finished in the working tree and not
+committed**. `npm run typecheck` and `npm run build` both pass. It wants a read
+on a phone and a commit; nothing is deployed.
 
-- **If the working tree is dirty** — that is its work. Run `npm run typecheck`
-  and `npm run build`. If both pass, review and commit. If they fail, the
-  cleanest recovery is `git checkout -- apps/web` and redo it by hand from the
-  spec below; nothing else depends on it.
-- **If the tree is clean** — it never landed. The spec below is what to build.
+Changed, all in `apps/web/src`: `App.tsx`, `pages/CollectionPage.tsx`,
+`pages/ItemPage.tsx`, `pages/ScanPage.tsx`, `components/ItemForm.tsx`,
+`components/QuickAdd.tsx`, `styles.css`.
 
-What it was asked to do, all in `apps/web/src`:
+1. **One "Add" entry point.** The nav link says **Add** and goes to `/scan`,
+   which gained a fourth tab, **Manually**, rendering `QuickAdd` inline. The
+   collection page's "Quick add" button and "+ Add game" link are gone, replaced
+   by one **+ Add** to `/scan`. `/items/new` is untouched and still routed —
+   item pages and item cards link to it for adding children.
+2. **"All fields" expander** in quick add. `ItemForm`'s inputs past name/type/
+   year now live in an exported `ItemDetailFields`, which both the full form and
+   the expander render — one set of controls, not two that drift.
+3. **"Look up details"** on `ItemPage`, shown only while something is missing.
+   Fills empty fields only, and refuses a candidate whose title is too unlike
+   ours (`titleSimilarity` < 0.34) rather than dressing a game in the wrong
+   cover. Reports what it filled and from which title.
+4. **Type-ahead in quick add** — debounced 550ms, 3+ characters, offered as an
+   explicit "Use this" below the name row. It never writes the name, never
+   focuses, never applies itself, and a failed lookup is silent.
 
-1. **One "Add" entry point.** Nav gets a single **Add** linking to `/scan`.
-   `/scan` gains a fourth tab, **Manually**, which shows `QuickAdd` inline
-   rather than navigating. `/items/new` must keep working — item pages link to
-   it for adding children.
-2. **"All fields" expander** inside quick add, revealing the rest of `ItemForm`
-   without a separate page.
-3. **"Look up details"** on `ItemPage` for games missing publisher / year /
-   players / playtime / description / cover. Calls `api.lookup(item.name)`,
-   fills **only empty fields**, never overwrites a human's entry.
-4. **Type-ahead lookup in quick add** — debounced (`useDebounced`, ~500ms, 3+
-   chars), offered as an explicit "Use this". **Must not** steal focus, rewrite
-   the name field, or auto-apply. Quick add exists for fast repeated entry along
-   a shelf; interrupting the keyboard is a regression.
+`GET /api/lookup?q=` was already committed (`apps/worker/src/routes/lookup.ts`,
+`api.lookup()` in `apps/web/src/api.ts`). It is free, cached a week, no model
+call — but it requires `editCatalog`, which is why the **Manually** tab is
+hidden from readers.
 
-`GET /api/lookup?q=` already exists and is committed (`apps/worker/src/routes/lookup.ts`,
-`api.lookup()` in `apps/web/src/api.ts`). It is free, cached a week, no model call.
+Worth a look on a phone: four tabs across a narrow screen is tight, so at
+≤560px the blurbs are hidden and the labels drop to 0.78rem ("Whole shelf" is
+the one that sets the size).
 
 ---
 
@@ -50,7 +55,8 @@ What it was asked to do, all in `apps/web/src`:
 | Deployed version | `2de9930f-4cf8-4de9-acd7-ad310365791b` — scanning, auto-capture, viewport fit |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
-| Migrations applied | `0001_init` … `0007_drop_photo_cache` (local **and** production) |
+| R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
+| Migrations applied | `0001_init` … `0009_scan_jobs` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -89,8 +95,9 @@ totals. `×N` flags, a duplicate strip per game, and a filter.
 
 **Quick add.** Game + copy in one submit, focus stays in the name field,
 status and quantity persist between entries. Built for working along a shelf.
+Now the **Manually** tab of `/scan` rather than a panel on the collection page.
 
-**Scanning — confirmed working on a real iPhone (2026-08-05).** Three modes at
+**Scanning — confirmed working on a real iPhone (2026-08-05).** Modes at
 `/scan`: **barcode** (wasm decode — `BarcodeDetector` does not work on iOS),
 **one box** (vision reads the title off the cover, 3–5s), **whole shelf** (reads
 every spine, returns a tick-list marking what you already own). Auto-capture
@@ -102,6 +109,39 @@ from the local table. The write-back loop works.
 
 **Exports.** `/api/export.json` (full fidelity) and `/api/export.csv` (one row
 per copy). Owner-only.
+
+**Item relations (2026-08-05).** Standalone games that belong together without
+nesting — Dice Throne characters, Unmatched fighters, standalone expansions.
+`item_relation` table with three types: `works_with`, `reimplements`,
+`integrates_with`. Bidirectional: linking A to B shows on both pages. UI on the
+item page: "Related games" section with "+ Link" button (by item ID).
+
+**Full field editing (2026-08-05).** The edit form exposes every field including
+`kind` (no longer locked after creation), `bggId`, and `publisherUrl`. Lets you
+fix a scanned game that came in as the wrong type.
+
+**Shelf scan classification (2026-08-05).** After a shelf photo reads titles,
+the results go through `classifyShelfResults` which splits titles on `:` / ` - `
+and matches the prefix against the collection. Expansions auto-propose their
+parent. A review UI shows kind/parent dropdowns per item before adding. Parent
+dropdown includes batch siblings (items in the same scan classified as base)
+so expansions can reference them before anything is saved.
+
+**Photo queue pipeline (2026-08-05).** Upload photos at `/scan-jobs` (multiple,
+from camera or gallery). Each photo becomes a job: vision reads titles →
+free lookups enrich (GameUPC, collection match, classification) → lands in
+"Ready for review" status. Review page shows the same kind/parent UI as the
+shelf scan. Jobs tracked in `scan_job` table; photos stored temporarily in R2
+(`bgc-photos` bucket) and deleted after review. No photo ever reaches the
+camera roll or persists beyond the review step.
+
+**Expansion picker (2026-08-05).** On the "Add to this game" page
+(`/items/new?parent=N`), shows known titles from the free lookup services for
+that parent game's name. Picking one pre-fills the form. When BGG token arrives,
+this will use BGG's expansion links for definitive results.
+
+**Header stats (2026-08-05).** Shows `N games · N expansions · N accessories`
+(only non-zero counts), replacing the old `games · items · owned`.
 
 ---
 
@@ -163,13 +203,14 @@ npm run secrets:push -- --dry # names and fingerprints only, sends nothing
 
 ```
 packages/core/    constants.ts (leaf) -> schemas.ts -> barcode.ts -> vision.ts -> index.ts
-packages/db/      users, health, items, copies, ratings, import, barcodes, cache
+packages/db/      users, health, items, copies, ratings, import, barcodes, cache, relations, scan-jobs
 packages/bgg/     BGG XML API2 client (throttled, retried, cached)
 packages/barcode/ free resolution: gameupc.ts, upcitemdb.ts, resolve.ts
 packages/research/ Claude calls: client.ts, barcode.ts (paid rung), vision.ts
-apps/worker/      Hono routes + Access JWT verification
+apps/worker/      Hono routes + Access JWT verification + R2 photo storage
 apps/web/         React SPA; lib/camera.ts + lib/scanner.ts hold the iOS work
-migrations/       0001 … 0007
+                  pages/ScanJobsPage.tsx is the photo queue UI
+migrations/       0001 … 0009
 ```
 
 Entry points stay thin: `apps/worker/src/index.ts` mounts routes and
@@ -196,6 +237,13 @@ exactly one implementation of anything that makes a decision.
 | POST | `/api/vision/identify` | runResearch — one box from a photo, ~3-5s |
 | POST | `/api/vision/shelf` | runResearch — many spines, matched locally + GameUPC |
 | GET/DELETE | `/api/cache` | manageUsers — cache stats and clearing |
+| GET/POST | `/api/items/:id/relations` | read / editCatalog — standalone-but-related links |
+| DELETE | `/api/relations/:id` | editCatalog |
+| GET/POST | `/api/scan-jobs` | editCatalog — photo queue list and upload |
+| GET | `/api/scan-jobs/:id` | editCatalog — single job detail |
+| POST | `/api/scan-jobs/:id/enrich` | editCatalog — retry enrichment |
+| POST | `/api/scan-jobs/:id/done` | editCatalog — mark reviewed, clean up photo |
+| DELETE | `/api/scan-jobs/:id` | editCatalog — delete job and photo |
 
 `GET /api/items` accepts `q`, `status`, `kind`, `uncatalogued`, `duplicates`.
 

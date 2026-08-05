@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import {
   createCopySchema,
   createItemSchema,
+  createRelationSchema,
   itemQuerySchema,
   updateCopySchema,
   updateItemSchema,
@@ -9,13 +10,17 @@ import {
 } from '@bgc/core';
 import {
   ItemError,
+  RelationError,
   collectionStats,
   createCopy,
   createItem,
+  createRelation,
   deleteCopy,
   deleteItem,
   deleteRating,
+  deleteRelation,
   getItemDetail,
+  getRelatedItems,
   listItemTrees,
   updateCopy,
   updateItem,
@@ -168,5 +173,40 @@ export const catalogRoutes = new Hono<AppBindings>()
     const id = idParam(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
     await deleteRating(c.env.DB, { itemId: id, userId: c.get('user').id });
+    return c.json({ deleted: true });
+  })
+
+  // ---- relations (standalone-but-related games) ----------------------------
+
+  .get('/items/:id/relations', async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+    return c.json({ relations: await getRelatedItems(c.env.DB, id) });
+  })
+
+  .post('/items/:id/relations', requireCapability('editCatalog'), async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const parsed = createRelationSchema.safeParse(await body(c));
+    if (!parsed.success) {
+      return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+    }
+    try {
+      const relation = await createRelation(c.env.DB, id, parsed.data.toItemId, parsed.data.relation);
+      return c.json({ relation }, 201);
+    } catch (err) {
+      if (err instanceof RelationError) {
+        return c.json({ error: 'bad_request', detail: err.message }, err.status as 400);
+      }
+      throw err;
+    }
+  })
+
+  .delete('/relations/:id', requireCapability('editCatalog'), async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+    const deleted = await deleteRelation(c.env.DB, id);
+    if (!deleted) return c.json({ error: 'not_found' }, 404);
     return c.json({ deleted: true });
   });

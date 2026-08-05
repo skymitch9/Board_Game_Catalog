@@ -8,6 +8,7 @@ import { CollectionPage } from './pages/CollectionPage';
 import { ItemPage, NotFoundPage } from './pages/ItemPage';
 import { PeoplePage } from './pages/PeoplePage';
 import { ScanPage } from './pages/ScanPage';
+import { ScanJobsPage, ScanJobReviewPage } from './pages/ScanJobsPage';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
 function Routes({ me }: { me: MeResponse }) {
@@ -16,14 +17,21 @@ function Routes({ me }: { me: MeResponse }) {
   switch (route.name) {
     case 'collection':
       return <CollectionPage me={me} />;
+    // Keyed by id: without it React reuses one ItemPage across every game you
+    // open, and page state — a half-open copy form, a report of what a lookup
+    // just filled in — follows you to the next one.
     case 'item':
-      return <ItemPage id={route.id} me={me} />;
+      return <ItemPage key={route.id} id={route.id} me={me} />;
     case 'editItem':
-      return <ItemPage id={route.id} me={me} editing />;
+      return <ItemPage key={route.id} id={route.id} me={me} editing />;
     case 'newItem':
       return <NewItemPage parentId={route.parentId} />;
     case 'scan':
       return <ScanPage me={me} />;
+    case 'scanJobs':
+      return <ScanJobsPage me={me} />;
+    case 'scanJobReview':
+      return <ScanJobReviewPage id={route.id} me={me} />;
     case 'people':
       return me.capabilities.includes('manageUsers') ? (
         <PeoplePage me={me} />
@@ -75,7 +83,10 @@ export default function App() {
           Board Game Catalog
         </Link>
         <span className="topbar-right">
-          <Link to="/scan">Scan</Link>
+          {/* One way in. Scanning, photographing and typing are all tabs on
+              the other side of this link, not competing entry points. */}
+          <Link to="/scan">Add</Link>
+          <Link to="/scan-jobs">Queue</Link>
           {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}

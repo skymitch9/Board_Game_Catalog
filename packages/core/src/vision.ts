@@ -92,6 +92,11 @@ export function normaliseTitle(raw: string): string {
  * the catalog does. The longest match wins, so "Catan: Seafarers" beats plain
  * "Catan" when the spine actually said Seafarers.
  *
+ * A containment match requires the shorter string to be at least 60% of the
+ * longer one's length — otherwise "Scythe" would falsely match "Scythe:
+ * Invaders from Afar". That threshold catches abbreviations and extra subtitles
+ * while rejecting base-game-inside-expansion matches.
+ *
  * Deliberately conservative: no fuzzy edit-distance matching. A wrong match
  * silently merges two different games, which is far worse than asking about one
  * the user already owns.
@@ -110,7 +115,16 @@ export function matchExistingTitle<T extends { id: number; name: string }>(
 
   return (
     indexed
-      .filter((e) => e.key.length > 2 && (e.key.includes(target) || target.includes(e.key)))
+      .filter((e) => {
+        if (e.key.length < 3) return false;
+        const contains = e.key.includes(target) || target.includes(e.key);
+        if (!contains) return false;
+        // Require the shorter string to be at least 60% of the longer one.
+        // This prevents "Scythe" matching "Scythe: Invaders from Afar".
+        const shorter = Math.min(e.key.length, target.length);
+        const longer = Math.max(e.key.length, target.length);
+        return shorter / longer >= 0.6;
+      })
       .sort((a, b) => b.key.length - a.key.length)[0]?.item ?? null
   );
 }
@@ -121,6 +135,155 @@ export function matchExistingTitle<T extends { id: number; name: string }>(
  * 2576px high-resolution ceiling, so nothing is re-scaled server-side.
  */
 export const SHELF_LONG_EDGE = 2400;
+
+// ---------------------------------------------------------------------------
+// Post-scan classification
+// ---------------------------------------------------------------------------
+
+export interface ClassifiedItem {
+  /** The original index in the shelf results array. */
+  index: number;
+  name: string;
+  /** Proposed kind based on name analysis. */
+  proposedKind: 'base' | 'expansion';
+  /** If classified as expansion, the existing item it likely belongs to. */
+  proposedParentId: number | null;
+  proposedParentName: string | null;
+  /** Why we think this is an expansion (for display). */
+  reason: string | null;
+  /** Original ShelfMatch data preserved for the add flow. */
+  bggId: number | null;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * Classify shelf scan results by matching title prefixes against the collection.
+ *
+ * Board game expansions almost always follow one of these patterns:
+ * - "Base Game: Expansion Name" (colon)
+ * - "Base Game - Expansion Name" (dash)
+ *
+ * If the part before the separator matches an existing base game in the
+ * collection, propose this as an expansion of that game. Also catches items
+ * being added in the *same batch* — if "Scythe" and "Scythe: Invaders" are
+ * both in the list, Invaders gets classified under Scythe even before Scythe
+ * is saved.
+ *
+ * This is a heuristic, not a certainty — the UI shows the proposal and lets
+ * the user override before anything is written.
+ */
+export function classifyShelfResults(
+  items: { name: string; bggId: number | null; thumbnailUrl: string | null }[],
+  existing: readonly { id: number; name: string; kind: string }[],
+): ClassifiedItem[] {
+  // Build a lookup of existing items by normalised name.
+  const existingByKey = new Map<string, { id: number; name: string }>();
+  for (const item of existing) {
+    existingByKey.set(normaliseTitle(item.name), { id: item.id, name: item.name });
+  }
+
+  // First pass: classify each item. We also track batch items (things being
+  // added in the same scan) so "Scythe: X" can find "Scythe" even if Scythe
+  // isn't saved yet.
+  const batchBases = new Map<string, { index: number; name: string }>();
+  const results: ClassifiedItem[] = [];
+
+  // Collect all base-looking items first (no separator).
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    const prefix = extractPrefix(item.name);
+    if (!prefix) {
+      // No separator — this is a base game candidate. Register it for batch matching.
+      batchBases.set(normaliseTitle(item.name), { index: i, name: item.name });
+    }
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    const { name, bggId, thumbnailUrl } = item;
+    const prefix = extractPrefix(name);
+
+    if (!prefix) {
+      results.push({
+        index: i,
+        name,
+        proposedKind: 'base',
+        proposedParentId: null,
+        proposedParentName: null,
+        reason: null,
+        bggId,
+        thumbnailUrl,
+      });
+      continue;
+    }
+
+    const normPrefix = normaliseTitle(prefix);
+
+    // Check existing collection first.
+    const existingMatch = existingByKey.get(normPrefix);
+    if (existingMatch) {
+      results.push({
+        index: i,
+        name,
+        proposedKind: 'expansion',
+        proposedParentId: existingMatch.id,
+        proposedParentName: existingMatch.name,
+        reason: `"${prefix}" is already in your collection`,
+        bggId,
+        thumbnailUrl,
+      });
+      continue;
+    }
+
+    // Check if the base game is in this same batch.
+    const batchMatch = batchBases.get(normPrefix);
+    if (batchMatch) {
+      results.push({
+        index: i,
+        name,
+        proposedKind: 'expansion',
+        proposedParentId: null, // No ID yet — it hasn't been saved
+        proposedParentName: batchMatch.name,
+        reason: `"${prefix}" is also in this scan`,
+        bggId,
+        thumbnailUrl,
+      });
+      continue;
+    }
+
+    // Has a separator but no match — might still be a standalone game with a
+    // subtitle (e.g. "Dice Throne: Mystic Brawler" where there's no "Dice Throne"
+    // base). Propose as base.
+    results.push({
+      index: i,
+      name,
+      proposedKind: 'base',
+      proposedParentId: null,
+      proposedParentName: null,
+      reason: null,
+      bggId,
+      thumbnailUrl,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Extract the part before the first `:` or ` - ` separator.
+ * Returns null if no separator is found (it's a standalone title).
+ */
+function extractPrefix(name: string): string | null {
+  // Colon first — "Scythe: Invaders from Afar"
+  const colonIdx = name.indexOf(':');
+  if (colonIdx > 2) return name.slice(0, colonIdx).trim();
+
+  // Spaced dash — "Catan - Traders & Barbarians" (not hyphens inside words)
+  const dashIdx = name.indexOf(' - ');
+  if (dashIdx > 2) return name.slice(0, dashIdx).trim();
+
+  return null;
+}
 
 /**
  * JPEG quality for the downscaled upload.

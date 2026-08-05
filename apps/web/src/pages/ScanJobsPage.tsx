@@ -1,0 +1,513 @@
+import { useCallback, useState } from 'react';
+import { ITEM_KINDS, SHELF_LONG_EDGE, PHOTO_LONG_EDGE, type ItemKind, type MeResponse } from '@bgc/core';
+import { api, type EnrichedTitle, type ScanJob } from '../api';
+import { useAsync } from '../hooks';
+import { fileToPhoto } from '../lib/camera';
+import { KIND_LABEL } from '../components/ItemTree';
+import { Badge, ErrorBox, Spinner } from '../components/ui';
+import { Link } from '../router';
+
+const STATUS_LABEL: Record<ScanJob['status'], string> = {
+  uploaded: 'Uploading',
+  reading: 'Reading photo',
+  read: 'Read',
+  enriching: 'Looking up games',
+  review: 'Ready for review',
+  done: 'Done',
+  failed: 'Failed',
+};
+
+const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
+  uploaded: 'neutral',
+  reading: 'neutral',
+  read: 'neutral',
+  enriching: 'neutral',
+  review: 'owned',
+  done: 'kind',
+  failed: 'wanted',
+};
+
+export function ScanJobsPage({ me }: { me: MeResponse }) {
+  const [jobs, refresh] = useAsync(() => api.scanJobs(), []);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [mode, setMode] = useState<'shelf' | 'single'>('shelf');
+
+  const upload = useCallback(async (data: string, mediaType: string) => {
+    setUploading(true);
+    setError(null);
+    try {
+      await api.createScanJob({ data, mediaType, mode });
+      refresh();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setUploading(false);
+    }
+  }, [mode, refresh]);
+
+  const canEdit = me.capabilities.includes('editCatalog');
+  if (!canEdit) {
+    return <p className="muted">Only editors can use scan jobs.</p>;
+  }
+
+  return (
+    <div className="scan-jobs-page">
+      <header className="page-head">
+        <div>
+          <h1>Photo Queue</h1>
+          <p className="subtitle">
+            Upload photos of shelves or boxes. They get read, looked up, and queued for your review.
+          </p>
+        </div>
+        <Link to="/" className="btn btn-quiet">Collection</Link>
+      </header>
+
+      {error != null && <ErrorBox error={error} what="Upload" />}
+
+      <section className="card">
+        <div className="section-head">
+          <h2>Upload photos</h2>
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value as 'shelf' | 'single')}
+            aria-label="Photo mode"
+          >
+            <option value="shelf">Shelf (many spines)</option>
+            <option value="single">Single box</option>
+          </select>
+        </div>
+
+        <PhotoUploader
+          mode={mode}
+          uploading={uploading}
+          onPhoto={upload}
+        />
+      </section>
+
+      <section className="card">
+        <div className="section-head">
+          <h2>Jobs</h2>
+          <button type="button" className="btn btn-quiet" onClick={refresh}>
+            Refresh
+          </button>
+        </div>
+
+        {jobs.state === 'loading' && <Spinner label="Loading jobs..." />}
+        {jobs.state === 'error' && <ErrorBox error={jobs.error} what="Could not load jobs" />}
+        {jobs.state === 'ok' && jobs.data.jobs.length === 0 && (
+          <p className="muted">No photos uploaded yet. Take some pictures of your shelves above.</p>
+        )}
+        {jobs.state === 'ok' && jobs.data.jobs.length > 0 && (
+          <ul className="job-list">
+            {jobs.data.jobs.map((job) => (
+              <JobRow key={job.id} job={job} onChanged={refresh} />
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function PhotoUploader({
+  mode,
+  uploading,
+  onPhoto,
+}: {
+  mode: 'shelf' | 'single';
+  uploading: boolean;
+  onPhoto: (data: string, mediaType: string) => void;
+}) {
+  const [count, setCount] = useState(0);
+
+  async function handleFiles(files: FileList) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file) continue;
+      const photo = await fileToPhoto(
+        file,
+        mode === 'shelf' ? SHELF_LONG_EDGE : PHOTO_LONG_EDGE,
+      );
+      onPhoto(photo.data, photo.mediaType);
+      setCount((c) => c + 1);
+    }
+  }
+
+  return (
+    <div className="photo-uploader">
+      <label className="upload-area">
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={uploading}
+          onChange={(e) => {
+            const files = e.target.files;
+            if (files && files.length > 0) void handleFiles(files);
+            e.target.value = '';
+          }}
+        />
+        <span className="upload-area__label">
+          {uploading ? 'Uploading...' : 'Tap to take photos or select from gallery'}
+        </span>
+        <span className="muted small">
+          Multiple photos welcome. Each becomes a separate job in the queue.
+        </span>
+      </label>
+      {count > 0 && (
+        <p className="muted">{count} photo{count === 1 ? '' : 's'} uploaded this session</p>
+      )}
+    </div>
+  );
+}
+
+function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
+  const isReviewable = job.status === 'review';
+  const isFailed = job.status === 'failed';
+  const isProcessing = ['uploaded', 'reading', 'enriching'].includes(job.status);
+
+  return (
+    <li className="job-row">
+      <div className="job-row__info">
+        <Badge tone={STATUS_TONE[job.status]}>{STATUS_LABEL[job.status]}</Badge>
+        <span className="job-row__time">
+          {new Date(job.createdAt).toLocaleString()}
+        </span>
+        <span className="muted">{job.mode === 'shelf' ? 'Shelf' : 'Single box'}</span>
+        {isProcessing && <Spinner label="" />}
+      </div>
+      <div className="job-row__actions">
+        {isReviewable && (
+          <Link to={`/scan-jobs/${job.id}`} className="btn btn-primary">
+            Review
+          </Link>
+        )}
+        {isFailed && (
+          <span className="muted small">{job.error ?? 'Unknown error'}</span>
+        )}
+        {job.status === 'done' && (
+          <span className="muted small">Reviewed</span>
+        )}
+        <button
+          type="button"
+          className="btn btn-quiet btn-xs"
+          onClick={async () => {
+            await api.deleteScanJob(job.id);
+            onChanged();
+          }}
+          aria-label="Delete job"
+        >
+          Delete
+        </button>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * Review page for a single scan job.
+ * Shows all enriched titles with proposed kinds, lets user adjust and add.
+ */
+export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
+  const [jobState, refresh] = useAsync(() => api.scanJob(id), [id]);
+  const [adding, setAdding] = useState(false);
+  const [results, setResults] = useState<Record<number, { itemId: number } | { error: string }>>({});
+  const [kindOverrides, setKindOverrides] = useState<Record<number, ItemKind>>({});
+  const [parentOverrides, setParentOverrides] = useState<Record<number, number | string | null>>({});
+  const [selected, setSelected] = useState<Set<number> | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  if (jobState.state === 'loading') return <Spinner />;
+  if (jobState.state === 'error') return <ErrorBox error={jobState.error} what="Could not load job" />;
+
+  const job = jobState.data.job;
+
+  if (job.status !== 'review' || !job.enriched) {
+    return (
+      <div className="card">
+        <h2>Job #{job.id}</h2>
+        <Badge tone={STATUS_TONE[job.status]}>{STATUS_LABEL[job.status]}</Badge>
+        {job.error && <p className="muted">{job.error}</p>}
+        <p><Link to="/scan-jobs">Back to queue</Link></p>
+      </div>
+    );
+  }
+
+  const titles: EnrichedTitle[] = JSON.parse(job.enriched);
+  const fresh = titles.filter((t) => !t.alreadyOwned);
+  const owned = titles.filter((t) => t.alreadyOwned);
+
+  // Initialise selection on first render.
+  if (selected === null) {
+    setSelected(new Set(fresh.map((_, i) => i)));
+    return <Spinner />;
+  }
+
+  // Parent options: existing collection items that were detected as parents,
+  // PLUS other items in this same batch that are classified as base games.
+  // Use a negative pseudo-ID for batch items (they don't have real IDs yet).
+  const parentOptions: { id: number | string; name: string; isBatch: boolean }[] = [];
+
+  // Existing collection parents detected during enrichment.
+  const seenIds = new Set<number>();
+  for (const t of titles) {
+    if (t.proposedParentId && t.proposedParentName && !seenIds.has(t.proposedParentId)) {
+      seenIds.add(t.proposedParentId);
+      parentOptions.push({ id: t.proposedParentId, name: t.proposedParentName, isBatch: false });
+    }
+  }
+
+  // Other items in this batch that are (or will be) base games — available as
+  // parents before they're actually saved. Use `batch:N` as a placeholder ID.
+  fresh.forEach((t, idx) => {
+    const k = kindOverrides[idx] ?? (t.proposedKind as ItemKind | null) ?? 'base';
+    if (k === 'base') {
+      parentOptions.push({
+        id: `batch:${idx}`,
+        name: t.resolvedName ?? t.title,
+        isBatch: true,
+      });
+    }
+  });
+
+  const getKind = (i: number): ItemKind =>
+    kindOverrides[i] ?? (fresh[i]?.proposedKind as ItemKind | null) ?? 'base';
+
+  const getParentId = (i: number): number | string | null =>
+    parentOverrides[i] !== undefined
+      ? (parentOverrides[i] ?? null)
+      : (fresh[i]?.proposedParentId ?? null);
+
+  const toggle = (i: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev!);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+
+  async function addSelected() {
+    setAdding(true);
+    setError(null);
+
+    // Base games first.
+    const pending = [...selected!]
+      .filter((i) => !results[i])
+      .sort((a, b) => (getKind(a) === 'base' ? 0 : 1) - (getKind(b) === 'base' ? 0 : 1));
+
+    const batchIds: Record<number, number> = {};
+
+    for (const i of pending) {
+      const t = fresh[i];
+      if (!t) continue;
+
+      const kind = getKind(i);
+      const rawParentId = getParentId(i);
+
+      // Resolve batch references: "batch:3" means "the item at index 3 in this batch".
+      let parentId: number | null = null;
+      if (typeof rawParentId === 'string' && rawParentId.startsWith('batch:')) {
+        const batchIdx = Number(rawParentId.slice(6));
+        parentId = batchIds[batchIdx] ?? null;
+      } else if (typeof rawParentId === 'number') {
+        parentId = rawParentId;
+      }
+
+      // If expansion with no parent, add as base.
+      const effectiveKind = kind !== 'base' && !parentId ? 'base' : kind;
+
+      try {
+        const { item } = await api.createItem({
+          name: t.resolvedName ?? t.title,
+          kind: effectiveKind,
+          parentItemId: effectiveKind === 'base' ? null : parentId,
+          bggId: t.bggId,
+          publisher: t.publisher,
+          yearPublished: t.yearPublished,
+          thumbnailUrl: t.thumbnailUrl,
+        });
+
+        await api.createCopy(item.id, {
+          quantity: 1,
+          status: 'owned',
+          isSleeved: false,
+          isPunched: false,
+        });
+
+        batchIds[i] = item.id;
+        setResults((r) => ({ ...r, [i]: { itemId: item.id } }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setResults((r) => ({ ...r, [i]: { error: msg } }));
+      }
+    }
+
+    // Mark job done.
+    try {
+      await api.completeScanJob(id);
+    } catch {
+      // Non-fatal — the items are added.
+    }
+
+    setAdding(false);
+  }
+
+  const addedCount = Object.values(results).filter((r) => 'itemId' in r).length;
+  const pendingCount = [...selected].filter((i) => !results[i]).length;
+
+  return (
+    <div className="scan-jobs-page">
+      <header className="page-head">
+        <div>
+          <h1>Review scan</h1>
+          <p className="subtitle">
+            {fresh.length} new title{fresh.length === 1 ? '' : 's'} found
+            {owned.length > 0 && ` \u00b7 ${owned.length} already owned`}
+            {addedCount > 0 && ` \u00b7 ${addedCount} added`}
+          </p>
+        </div>
+        <Link to="/scan-jobs" className="btn btn-quiet">Back to queue</Link>
+      </header>
+
+      {error != null && <ErrorBox error={error} what="Add" />}
+
+      {fresh.length > 0 && (
+        <section className="card">
+          <div className="shelf-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={adding || pendingCount === 0}
+              onClick={addSelected}
+            >
+              {adding
+                ? `Adding... ${addedCount}`
+                : pendingCount === 0
+                  ? 'All done'
+                  : `Add ${pendingCount} game${pendingCount === 1 ? '' : 's'}`}
+            </button>
+            <button
+              type="button"
+              className="btn btn-quiet"
+              disabled={adding}
+              onClick={() =>
+                setSelected(
+                  selected.size === fresh.length ? new Set() : new Set(fresh.map((_, i) => i)),
+                )
+              }
+            >
+              {selected.size === fresh.length ? 'Clear all' : 'Select all'}
+            </button>
+          </div>
+
+          <ul className="candidate-list shelf-classify">
+            {fresh.map((t, i) => {
+              const result = results[i];
+              const kind = getKind(i);
+              const parentId = getParentId(i);
+
+              return (
+                <li key={i} className="candidate">
+                  {result ? (
+                    <span className="shelf-outcome" aria-hidden="true">
+                      {'itemId' in result ? '\u2713' : '!'}
+                    </span>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      className="shelf-check"
+                      checked={selected.has(i)}
+                      disabled={adding}
+                      onChange={() => toggle(i)}
+                      aria-label={`Add ${t.resolvedName ?? t.title}`}
+                    />
+                  )}
+
+                  {t.thumbnailUrl && (
+                    <img src={t.thumbnailUrl} alt="" className="candidate__thumb" />
+                  )}
+
+                  <div className="candidate__body">
+                    <strong>{t.resolvedName ?? t.title}</strong>
+                    {t.resolvedName && t.resolvedName !== t.title && (
+                      <span className="muted">read as &quot;{t.title}&quot;</span>
+                    )}
+                    {t.publisher && <span className="muted">{t.publisher}</span>}
+
+                    {!result && (
+                      <div className="shelf-classify__controls">
+                        <select
+                          value={kind}
+                          onChange={(e) => {
+                            const newKind = e.target.value as ItemKind;
+                            setKindOverrides((o) => ({ ...o, [i]: newKind }));
+                            if (newKind === 'base') {
+                              setParentOverrides((o) => ({ ...o, [i]: null }));
+                            }
+                          }}
+                          disabled={adding}
+                          aria-label="Type"
+                        >
+                          {ITEM_KINDS.map((k) => (
+                            <option key={k} value={k}>{KIND_LABEL[k]}</option>
+                          ))}
+                        </select>
+
+                        {kind !== 'base' && (
+                          <select
+                            value={parentId ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value || null;
+                              // Could be a number (existing) or "batch:N" (sibling).
+                              const parsed = val && !val.startsWith('batch:') ? Number(val) : val;
+                              setParentOverrides((o) => ({ ...o, [i]: parsed }));
+                            }}
+                            disabled={adding}
+                            aria-label="Parent game"
+                          >
+                            <option value="">-- pick a parent --</option>
+                            {parentOptions
+                              .filter((p) => p.id !== `batch:${i}`) // can't be your own parent
+                              .map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}{p.isBatch ? ' (this scan)' : ''}
+                                </option>
+                              ))}
+                          </select>
+                        )}
+
+                        {t.reason && <span className="muted small">{t.reason}</span>}
+                      </div>
+                    )}
+
+                    {result && 'itemId' in result && (
+                      <Link to={`/items/${result.itemId}`}>Added &mdash; open it</Link>
+                    )}
+                    {result && 'error' in result && (
+                      <span className="muted candidate__note">{result.error}</span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {owned.length > 0 && (
+        <section className="card">
+          <h3>{owned.length} already in your collection</h3>
+          <ul className="child-list">
+            {owned.map((t, i) => (
+              <li key={i}>
+                <Link to={`/items/${t.existingItemId}`}>{t.existingName}</Link>{' '}
+                <span className="muted">read as &quot;{t.title}&quot;</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}

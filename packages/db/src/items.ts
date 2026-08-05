@@ -8,6 +8,7 @@ import type {
   Rating,
   UpdateItemInput,
 } from '@bgc/core';
+import { getRelatedItems } from './relations.js';
 import { mapCopyRow, type CopyRow } from './copies.js';
 
 export interface ItemRow {
@@ -241,12 +242,16 @@ export async function getItemDetail(db: D1Database, id: number): Promise<ItemDet
     ratedAt: r.rated_at,
   }));
 
+  // Related items — standalone games linked to this one (bidirectional).
+  const relatedItems = await getRelatedItems(db, id);
+
   return {
     ...item,
     parent,
     copies: ownCopyRows.map(mapCopyRow),
     children: children.sort((a, b) => (a.sortName ?? a.name).localeCompare(b.sortName ?? b.name)),
     ratings,
+    relatedItems,
   };
 }
 
@@ -404,6 +409,8 @@ export async function listItemNames(
 
 export async function collectionStats(db: D1Database): Promise<{
   baseGames: number;
+  expansions: number;
+  accessories: number;
   totalItems: number;
   ownedCopies: number;
   wantedCopies: number;
@@ -413,6 +420,8 @@ export async function collectionStats(db: D1Database): Promise<{
     .prepare(
       `SELECT
          (SELECT COUNT(*) FROM item WHERE kind = 'base')                     AS base_games,
+         (SELECT COUNT(*) FROM item WHERE kind = 'expansion')                AS expansions,
+         (SELECT COUNT(*) FROM item WHERE kind IN ('accessory','promo','upgrade')) AS accessories,
          (SELECT COUNT(*) FROM item)                                         AS total_items,
          (SELECT COALESCE(SUM(quantity), 0) FROM copy
            WHERE status IN ('owned','lent'))                                 AS owned_copies,
@@ -424,6 +433,8 @@ export async function collectionStats(db: D1Database): Promise<{
     )
     .first<{
       base_games: number;
+      expansions: number;
+      accessories: number;
       total_items: number;
       owned_copies: number;
       wanted_copies: number;
@@ -432,6 +443,8 @@ export async function collectionStats(db: D1Database): Promise<{
 
   return {
     baseGames: row?.base_games ?? 0,
+    expansions: row?.expansions ?? 0,
+    accessories: row?.accessories ?? 0,
     totalItems: row?.total_items ?? 0,
     ownedCopies: row?.owned_copies ?? 0,
     wantedCopies: row?.wanted_copies ?? 0,

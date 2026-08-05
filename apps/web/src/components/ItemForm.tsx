@@ -12,16 +12,31 @@ interface Props {
   /** Pre-selected parent when adding into a known game. */
   parentId?: number | null;
   parentName?: string | null;
+  /** Pre-filled data from the expansion picker. */
+  prefill?: Partial<{
+    name: string;
+    yearPublished: string;
+    publisher: string;
+    thumbnailUrl: string;
+    description: string;
+  }> | null;
   onSaved: (item: Item) => void;
   onCancel: () => void;
 }
 
-type FormState = {
-  name: string;
-  kind: ItemKind;
-  yearPublished: string;
+/**
+ * Everything about a game past its name, type and year.
+ *
+ * Split out of the form body because Quick add borrows it wholesale: "All
+ * fields" there reveals *these* inputs rather than a second set that would
+ * quietly drift out of step with this one. Held as strings because that is what
+ * an `<input>` deals in — the null/number conversion happens once, on submit.
+ */
+export type ItemDetails = {
   publisher: string;
+  publisherUrl: string;
   designers: string;
+  bggId: string;
   minPlayers: string;
   maxPlayers: string;
   playtimeMin: string;
@@ -29,6 +44,25 @@ type FormState = {
   thumbnailUrl: string;
   description: string;
 };
+
+export const EMPTY_DETAILS: ItemDetails = {
+  publisher: '',
+  publisherUrl: '',
+  designers: '',
+  bggId: '',
+  minPlayers: '',
+  maxPlayers: '',
+  playtimeMin: '',
+  weight: '',
+  thumbnailUrl: '',
+  description: '',
+};
+
+type FormState = {
+  name: string;
+  kind: ItemKind;
+  yearPublished: string;
+} & ItemDetails;
 
 function toForm(item?: Item, parentId?: number | null): FormState {
   return {
@@ -39,7 +73,9 @@ function toForm(item?: Item, parentId?: number | null): FormState {
     kind: item?.kind ?? (parentId ? 'expansion' : 'base'),
     yearPublished: item?.yearPublished?.toString() ?? '',
     publisher: item?.publisher ?? '',
+    publisherUrl: item?.publisherUrl ?? '',
     designers: item?.designers ?? '',
+    bggId: item?.bggId?.toString() ?? '',
     minPlayers: item?.minPlayers?.toString() ?? '',
     maxPlayers: item?.maxPlayers?.toString() ?? '',
     playtimeMin: item?.playtimeMin?.toString() ?? '',
@@ -51,8 +87,147 @@ function toForm(item?: Item, parentId?: number | null): FormState {
 
 const num = (s: string): number | null => (s.trim() === '' ? null : Number(s));
 
-export function ItemForm({ existing, parentId, parentName, onSaved, onCancel }: Props) {
-  const [form, setForm] = useState<FormState>(() => toForm(existing, parentId));
+/** The detail half of a create/update payload, blanks normalised to null. */
+export function detailsToInput(
+  d: ItemDetails,
+): Pick<
+  CreateItemInput,
+  | 'publisher'
+  | 'publisherUrl'
+  | 'designers'
+  | 'bggId'
+  | 'minPlayers'
+  | 'maxPlayers'
+  | 'playtimeMin'
+  | 'weight'
+  | 'thumbnailUrl'
+  | 'description'
+> {
+  return {
+    publisher: d.publisher.trim() || null,
+    publisherUrl: d.publisherUrl.trim() || null,
+    designers: d.designers.trim() || null,
+    bggId: num(d.bggId),
+    minPlayers: num(d.minPlayers),
+    maxPlayers: num(d.maxPlayers),
+    playtimeMin: num(d.playtimeMin),
+    weight: num(d.weight),
+    thumbnailUrl: d.thumbnailUrl.trim() || null,
+    description: d.description.trim() || null,
+  };
+}
+
+/** The inputs themselves, so both forms render the same controls. */
+export function ItemDetailFields({
+  value,
+  onChange,
+}: {
+  value: ItemDetails;
+  onChange: (patch: Partial<ItemDetails>) => void;
+}) {
+  return (
+    <>
+      <div className="row-2">
+        <Field label="Publisher">
+          <input
+            value={value.publisher}
+            onChange={(e) => onChange({ publisher: e.target.value })}
+          />
+        </Field>
+        <Field label="Designers">
+          <input
+            value={value.designers}
+            onChange={(e) => onChange({ designers: e.target.value })}
+          />
+        </Field>
+      </div>
+
+      <div className="row-2">
+        <Field label="Publisher URL">
+          <input
+            type="url"
+            value={value.publisherUrl}
+            onChange={(e) => onChange({ publisherUrl: e.target.value })}
+            placeholder="https://…"
+          />
+        </Field>
+        <Field label="BGG ID" hint="From boardgamegeek.com/boardgame/ID">
+          <input
+            type="number"
+            value={value.bggId}
+            onChange={(e) => onChange({ bggId: e.target.value })}
+            placeholder="e.g. 13"
+          />
+        </Field>
+      </div>
+
+      <div className="row-4">
+        <Field label="Min players">
+          <input
+            type="number"
+            value={value.minPlayers}
+            onChange={(e) => onChange({ minPlayers: e.target.value })}
+          />
+        </Field>
+        <Field label="Max players">
+          <input
+            type="number"
+            value={value.maxPlayers}
+            onChange={(e) => onChange({ maxPlayers: e.target.value })}
+          />
+        </Field>
+        <Field label="Minutes">
+          <input
+            type="number"
+            value={value.playtimeMin}
+            onChange={(e) => onChange({ playtimeMin: e.target.value })}
+          />
+        </Field>
+        <Field label="Weight" hint="1–5">
+          <input
+            type="number"
+            step="0.1"
+            value={value.weight}
+            onChange={(e) => onChange({ weight: e.target.value })}
+          />
+        </Field>
+      </div>
+
+      <Field label="Image URL">
+        <input
+          type="url"
+          value={value.thumbnailUrl}
+          onChange={(e) => onChange({ thumbnailUrl: e.target.value })}
+          placeholder="https://…"
+        />
+      </Field>
+
+      <Field label="Notes">
+        <textarea
+          rows={3}
+          value={value.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+        />
+      </Field>
+    </>
+  );
+}
+
+export function ItemForm({ existing, parentId, parentName, prefill, onSaved, onCancel }: Props) {
+  const [form, setForm] = useState<FormState>(() => {
+    const base = toForm(existing, parentId);
+    if (prefill) {
+      return {
+        ...base,
+        name: prefill.name ?? base.name,
+        yearPublished: prefill.yearPublished ?? base.yearPublished,
+        publisher: prefill.publisher ?? base.publisher,
+        thumbnailUrl: prefill.thumbnailUrl ?? base.thumbnailUrl,
+        description: prefill.description ?? base.description,
+      };
+    }
+    return base;
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -72,14 +247,7 @@ export function ItemForm({ existing, parentId, parentName, onSaved, onCancel }: 
         kind: form.kind,
         parentItemId: effectiveParent,
         yearPublished: num(form.yearPublished),
-        publisher: form.publisher.trim() || null,
-        designers: form.designers.trim() || null,
-        minPlayers: num(form.minPlayers),
-        maxPlayers: num(form.maxPlayers),
-        playtimeMin: num(form.playtimeMin),
-        weight: num(form.weight),
-        thumbnailUrl: form.thumbnailUrl.trim() || null,
-        description: form.description.trim() || null,
+        ...detailsToInput(form),
       };
 
       const res = existing
@@ -123,7 +291,6 @@ export function ItemForm({ existing, parentId, parentName, onSaved, onCancel }: 
           <select
             value={form.kind}
             onChange={(e) => set('kind', e.target.value as ItemKind)}
-            disabled={Boolean(existing)}
           >
             {ITEM_KINDS.map((k) => (
               <option key={k} value={k}>
@@ -143,63 +310,10 @@ export function ItemForm({ existing, parentId, parentName, onSaved, onCancel }: 
         </Field>
       </div>
 
-      <div className="row-2">
-        <Field label="Publisher">
-          <input value={form.publisher} onChange={(e) => set('publisher', e.target.value)} />
-        </Field>
-        <Field label="Designers">
-          <input value={form.designers} onChange={(e) => set('designers', e.target.value)} />
-        </Field>
-      </div>
-
-      <div className="row-4">
-        <Field label="Min players">
-          <input
-            type="number"
-            value={form.minPlayers}
-            onChange={(e) => set('minPlayers', e.target.value)}
-          />
-        </Field>
-        <Field label="Max players">
-          <input
-            type="number"
-            value={form.maxPlayers}
-            onChange={(e) => set('maxPlayers', e.target.value)}
-          />
-        </Field>
-        <Field label="Minutes">
-          <input
-            type="number"
-            value={form.playtimeMin}
-            onChange={(e) => set('playtimeMin', e.target.value)}
-          />
-        </Field>
-        <Field label="Weight" hint="1–5">
-          <input
-            type="number"
-            step="0.1"
-            value={form.weight}
-            onChange={(e) => set('weight', e.target.value)}
-          />
-        </Field>
-      </div>
-
-      <Field label="Image URL">
-        <input
-          type="url"
-          value={form.thumbnailUrl}
-          onChange={(e) => set('thumbnailUrl', e.target.value)}
-          placeholder="https://…"
-        />
-      </Field>
-
-      <Field label="Notes">
-        <textarea
-          rows={3}
-          value={form.description}
-          onChange={(e) => set('description', e.target.value)}
-        />
-      </Field>
+      <ItemDetailFields
+        value={form}
+        onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+      />
 
       <div className="form-actions">
         <button className="btn btn-primary" disabled={busy || !form.name.trim()}>
@@ -226,11 +340,87 @@ export function NewItemPage({ parentId }: { parentId: number | null }) {
   const parentItem = parent.state === 'ok' ? parent.data : null;
 
   return (
-    <ItemForm
-      parentId={parentId}
-      parentName={parentItem?.name ?? null}
-      onSaved={(item) => navigate(`/items/${item.id}`)}
-      onCancel={() => navigate(parentId ? `/items/${parentId}` : '/')}
-    />
+    <>
+      {parentItem && (
+        <ExpansionPicker
+          parentName={parentItem.name}
+          onPick={(c) => navigate(`/items/new?parent=${parentId}&prefill=${encodeURIComponent(JSON.stringify(c))}`)}
+        />
+      )}
+      <ItemForm
+        parentId={parentId}
+        parentName={parentItem?.name ?? null}
+        prefill={parsePrefill()}
+        onSaved={(item) => navigate(`/items/${item.id}`)}
+        onCancel={() => navigate(parentId ? `/items/${parentId}` : '/')}
+      />
+    </>
+  );
+}
+
+/** Parse prefill data from the URL if present. */
+function parsePrefill(): Partial<{
+  name: string;
+  yearPublished: string;
+  publisher: string;
+  thumbnailUrl: string;
+  description: string;
+}> | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('prefill');
+    if (!raw) return null;
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A picker showing known expansions for this parent game.
+ *
+ * Searches by the parent's name to find related titles from the free lookup
+ * services. When BGG token arrives, this will use the BGG expansion links
+ * for definitive results.
+ */
+function ExpansionPicker({
+  parentName,
+  onPick,
+}: {
+  parentName: string;
+  onPick: (data: { name: string; yearPublished?: number; publisher?: string; thumbnailUrl?: string }) => void;
+}) {
+  const [results] = useAsync(
+    () => api.lookup(parentName).then((r) => r.candidates).catch(() => []),
+    [parentName],
+  );
+
+  // Don't show if no results or still loading.
+  if (results.state !== 'ok' || results.data.length === 0) return null;
+
+  return (
+    <div className="card expansion-picker">
+      <h3>Known in this series</h3>
+      <p className="muted small">Pick one to pre-fill the form, or type your own below.</p>
+      <div className="expansion-picker__list">
+        {results.data.map((c, i) => (
+          <button
+            key={i}
+            type="button"
+            className="expansion-picker__item"
+            onClick={() => onPick({
+              name: c.name,
+              yearPublished: c.yearPublished ?? undefined,
+              publisher: c.publisher ?? undefined,
+              thumbnailUrl: c.thumbnailUrl ?? undefined,
+            })}
+          >
+            {c.thumbnailUrl && <img src={c.thumbnailUrl} alt="" className="thumb thumb-sm" />}
+            <span>{c.name}</span>
+            {c.yearPublished && <span className="muted">({c.yearPublished})</span>}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
