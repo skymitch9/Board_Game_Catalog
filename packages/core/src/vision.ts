@@ -54,12 +54,16 @@ export interface ShelfMatch {
 /**
  * Long edge, in pixels, to downscale a photo to before upload.
  *
- * Vision cost scales with pixel count (roughly width x height / 750 tokens), and
- * a box title is large high-contrast type — the accuracy gain from full
- * resolution does not pay for 4x the tokens. A modern iPhone shoots far larger
- * than this; sending it raw is pure waste.
+ * Claude charges images in 28x28 patches: ceil(w/28) * ceil(h/28) visual tokens.
+ * Opus 5 is in the high-resolution tier — it accepts up to 2576px on the long
+ * edge and caps at 4784 visual tokens, downscaling anything larger server-side.
+ *
+ * 1500px is the sweet spot for a box: a title occupies a large fraction of the
+ * frame and is already 100+px tall at this size, so the extra pixels up to 2576
+ * roughly double the cost for no gain. A 48MP iPhone photo is pure waste — it
+ * gets downscaled anyway, after you have paid to upload it.
  */
-export const PHOTO_LONG_EDGE = 1024;
+export const PHOTO_LONG_EDGE = 1500;
 
 /**
  * Fold a title down to something comparable.
@@ -111,11 +115,30 @@ export function matchExistingTitle<T extends { id: number; name: string }>(
   );
 }
 
-/** Shelves hold more detail than a single box, so allow more pixels. */
-export const SHELF_LONG_EDGE = 1568;
+/**
+ * Shelves earn the extra pixels: a dozen spines share the frame, so each title
+ * is a fraction of the height a single box cover gets. 2400 stays under the
+ * 2576px high-resolution ceiling, so nothing is re-scaled server-side.
+ */
+export const SHELF_LONG_EDGE = 2400;
 
-/** JPEG quality for the downscaled upload. Below ~0.7 small type starts to mush. */
-export const PHOTO_QUALITY = 0.8;
+/**
+ * JPEG quality for the downscaled upload.
+ *
+ * 0.85, not lower: the phone's photo is *already* lossy, so this is a second
+ * compression pass and the artifacts stack exactly on the letterforms we need to
+ * read. Below ~0.7 small type visibly mushes. One decode, one resize, one encode.
+ */
+export const PHOTO_QUALITY = 0.85;
+
+/**
+ * iOS Safari refuses to render a canvas whose area exceeds this, and does it
+ * *silently* — you get a blank image rather than an error. A 48MP iPhone photo
+ * (8064x6048) is roughly three times over. This is why downscaling must happen
+ * during decode via `createImageBitmap({resizeWidth})` rather than by drawing
+ * the full-size image to a canvas first.
+ */
+export const IOS_MAX_CANVAS_AREA = 16_777_216;
 
 /** Request bodies cap out well below this; a guard beats a confusing 413. */
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;

@@ -1,5 +1,7 @@
 import type {
   AppUser,
+  BarcodeCandidate,
+  ShelfMatch,
   Copy,
   CreateCopyInput,
   CreateItemInput,
@@ -108,4 +110,63 @@ export const api = {
   rate: (itemId: number, data: UpsertRatingInput) =>
     put(`/api/items/${itemId}/rating`, data) as Promise<{ rating: Rating }>,
   unrate: (itemId: number) => del(`/api/items/${itemId}/rating`) as Promise<{ deleted: boolean }>,
+
+  // --- Scanning -------------------------------------------------------------
+  // The free rungs first; the paid ones are separate calls the user asks for.
+
+  /** Local table, then GameUPC, then UPCitemdb. Fast and free. */
+  barcode: (code: string) => req<BarcodeLookup>(`/api/barcode/${encodeURIComponent(code)}`),
+
+  /** The slow rung: Claude with web search. 1-2 minutes — warn before calling. */
+  identifyBarcode: (barcode: string) =>
+    post('/api/barcode/identify', { barcode }) as Promise<{
+      barcode: string;
+      candidates: BarcodeCandidate[];
+      usage: ResearchUsage;
+    }>,
+
+  linkBarcode: (data: {
+    itemId: number;
+    barcode: string;
+    editionId?: number | null;
+    editionName?: string | null;
+    bggId?: number | null;
+    updateUrl?: string | null;
+  }) => post('/api/barcode/link', data) as Promise<{ barcode: string; contributed: boolean }>,
+
+  /** One box, read from a photo. ~3-5s, no web search. */
+  identifyPhoto: (photo: { data: string; mediaType: string }) =>
+    post('/api/vision/identify', photo) as Promise<{
+      candidates: BarcodeCandidate[];
+      unreadable: boolean;
+      usage: ResearchUsage;
+    }>,
+
+  /** A shelf of spines, matched against the collection and GameUPC. */
+  readShelf: (photo: { data: string; mediaType: string }) =>
+    post('/api/vision/shelf', photo) as Promise<{
+      matches: ShelfMatch[];
+      unreadable: boolean;
+      usage: ResearchUsage;
+    }>,
 };
+
+export interface ResearchUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCents: number;
+}
+
+export interface BarcodeLookup {
+  barcode: string;
+  /** True when this barcode is already attached to something we own. */
+  owned: boolean;
+  match: { item: Item; editionId: number; editionName: string | null } | null;
+  candidates: BarcodeCandidate[];
+  verified: boolean;
+  inferredName?: string | null;
+  updateUrls?: Record<number, string>;
+  trace: { source: string; outcome: string }[];
+  /** Every free rung missed — the paid one is the only thing left to try. */
+  exhausted: boolean;
+}

@@ -7,6 +7,7 @@ import { NewItemPage } from './components/ItemForm';
 import { CollectionPage } from './pages/CollectionPage';
 import { ItemPage, NotFoundPage } from './pages/ItemPage';
 import { PeoplePage } from './pages/PeoplePage';
+import { ScanPage } from './pages/ScanPage';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
 function Routes({ me }: { me: MeResponse }) {
@@ -21,6 +22,8 @@ function Routes({ me }: { me: MeResponse }) {
       return <ItemPage id={route.id} me={me} editing />;
     case 'newItem':
       return <NewItemPage parentId={route.parentId} />;
+    case 'scan':
+      return <ScanPage me={me} />;
     case 'people':
       return me.capabilities.includes('manageUsers') ? (
         <PeoplePage me={me} />
@@ -72,6 +75,7 @@ export default function App() {
           Board Game Catalog
         </Link>
         <span className="topbar-right">
+          <Link to="/scan">Scan</Link>
           {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}
