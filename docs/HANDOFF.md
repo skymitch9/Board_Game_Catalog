@@ -64,7 +64,7 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `abad9b35-9eda-4a1b-b09b-d52c6dc2e0d2` — queue polling, photo release |
+| Deployed version | `c4e602c9-0f74-4e5c-b7d1-3996eb1b5f9e` — upload errors surfaced, dashes repaired |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
@@ -301,7 +301,12 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
   enforced by triggers (migration 0002).
 - **PowerShell mangles strings containing double quotes** when passing them to
   native executables, and rewriting files through it corrupts UTF-8. Use
-  `git commit -F <file>` and edit files directly.
+  `git commit -F <file>` and edit files directly. **This has already happened
+  once**, to `ScanPage.tsx`: every `—`, `…` and `·` came back as `â€”`, `â€¦`
+  and `Â·`, including in text shown to the user while scanning. Nothing catches
+  it — it typechecks, builds and deploys clean. Sweep for it with
+  `grep -rn 'â€\|Â·\|Ã' --exclude-dir=dist`, and note that PowerShell heredocs
+  do not exist either (`<<'EOF'` is a parser error).
 - **`$b` and `$B` are the same variable in PowerShell.** Cost me a confusing
   debugging detour.
 - **wrangler on Windows sometimes prints success then exits 255** — a libuv
