@@ -17,10 +17,13 @@ answers **400 and not 404** — the check is a no-op without it.
 
 ## Working tree — clean
 
-Nothing is in flight. The two most recent commits:
+Nothing is in flight. The most recent commits:
 
 | Commit | What |
 |---|---|
+| `6eb0c8e` | Cover-link health check, cron and banner |
+| `ce03a8f` | The wishlist — item-level, not tree-level |
+| `227f7d0` | `item.source_url` |
 | `0e61948` | The add restructure, item relations and the photo queue — all of it |
 | `43bbf39` | Negative lookup results are actually read back from the cache now |
 | `d0f2d4c` | The queue polls itself; photos are released as soon as vision is done |
@@ -108,7 +111,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `14516b09-961f-4c35-b944-c5c6ee5e5983` — detail backfill, R2 removed |
+| Deployed version | `45b4d2d2-5f47-4e58-ab48-21ea3ceda87b` — wishlist + cover health (2026-08-06) |
+| Cron triggers | `*/30 * * * *` — the cover check. Confirmed registered in the deploy output |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
@@ -121,14 +125,10 @@ size).
 **Branch:** merged. `main` now holds all 38 phase-1 commits (merge `ab057d9`),
 and typechecks. `phase-1-manual-catalog` still exists and is unchanged.
 
-**Not pushed.** `origin` is
-<https://github.com/skymitch9/Board_Game_Catalog.git>, and `origin/main` is
-*gone* — nothing has been published. Everything above lives only on this
-machine and on Cloudflare. When you want it on GitHub:
-
-```bash
-git push -u origin main
-```
+**Pushed.** `origin` is
+<https://github.com/skymitch9/Board_Game_Catalog.git> and `origin/main` is up to
+date as of 2026-08-06 (`6eb0c8e`). An earlier version of this document said
+nothing had ever been published; that stopped being true on 08-06.
 
 ---
 
