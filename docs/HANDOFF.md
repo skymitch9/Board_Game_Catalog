@@ -103,7 +103,7 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `4396be79-be64-4144-9f6e-00f225cc49e4` — doubtful matches shown but unticked |
+| Deployed version | `cb7b7d41-23f4-4116-831c-afc066cd7335` — scan page can reach the photo library |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
@@ -193,6 +193,61 @@ this will use BGG's expansion links for definitive results.
 
 **Header stats (2026-08-05).** Shows `N games · N expansions · N accessories`
 (only non-zero counts), replacing the old `games · items · owned`.
+
+---
+
+## ⚠️ Orphan expansions — raised by the owner 2026-08-05, to discuss
+
+**The requirement.** Scanning a shelf turns up an expansion whose base game is
+not in the collection and was not in this batch — or whose base game did not
+resolve. Today that expansion cannot be added as an expansion. It needs either
+to be collectable later, or to hold a placeholder that adopts the real base
+game when it arrives.
+
+**What actually happens now is worse than refusing.** Both add paths silently
+demote it:
+
+```ts
+// ScanJobsPage.tsx:426 and ScanPage.tsx:680 — identical
+const effectiveKind = kind !== 'base' && !parentId ? 'base' : kind;
+```
+
+So "Wingspan: European Expansion" enters the catalog as a **base game**. It
+becomes a root in the collection tree, counts as a game in the header stats,
+and nothing records that it was ever meant to be an expansion. Scan the base
+game next week and nothing reconciles — you get Wingspan as a second root, with
+its expansion sitting beside it as an equal. The damage is silent and only
+findable by eye, which is what makes it worth fixing before the next bulk scan
+rather than after.
+
+**Three shapes worth weighing.** Not built, not decided:
+
+1. **Nullable parent, remembered intent.** Keep `kind = 'expansion'` and allow
+   `parent_item_id` to stay null, adding something like `pending_parent_name`
+   holding the text read off the spine. The collection groups parentless
+   expansions under an "Unattached" heading. When a base game is created whose
+   name matches, offer to adopt them. Cheapest, and the tree already tolerates
+   nulls — but "expansion with no parent" becomes a state every query must
+   consider.
+2. **Create the base game as a stub.** Insert a real base row from the prefix
+   `classifyShelfResults` already splits out — "Wingspan: European Expansion"
+   implies "Wingspan" — flagged `is_stub`, and let the expansion nest under it
+   properly. The tree stays well-formed and nothing special-cases. The cost is
+   inventing rows nobody scanned, which need reconciling if the real base game
+   arrives with a different name or a BGG id.
+3. **A holding queue outside the catalog.** Unresolvable items land in a
+   side table and never touch `item` until a parent exists. Keeps the catalog
+   clean at the price of a second place to look, which is the failure mode the
+   scan queue itself was built to avoid.
+
+**Recommendation: 1**, with the adoption prompt. It preserves what was actually
+observed — a real expansion, on a real shelf, whose parent is not here yet —
+without inventing a game. Option 2's stub is a guess wearing the same clothes
+as a scanned fact, which is the mistake `MIN_SPINE_SIMILARITY` above exists to
+stop making.
+
+Whichever is chosen, **the silent demotion should stop regardless** — it is
+producing wrong data on every shelf scan today.
 
 ---
 
