@@ -8,10 +8,12 @@ Stable reference lives alongside this file and is not duplicated here:
 **Last updated:** 2026-08-06. Everything is committed and deployed; the working
 tree is clean. Database was cleared and collection restarted fresh on 08-05.
 
-**Newest first:** the [wishlist](#the-wishlist--built-2026-08-06) and
-[cover-image health](#cover-image-health--built-2026-08-06) both shipped on
-08-06. If you read one thing from those, read why a dead BoardGameGeek image
-answers **400 and not 404** — the check is a no-op without it.
+**Newest first:** the [cover picker](#the-cover-picker--built-2026-08-06) —
+printings, and choosing which one's artwork represents our copy. Before that,
+the [wishlist](#the-wishlist--built-2026-08-06) and
+[cover-image health](#cover-image-health--built-2026-08-06). If you read one
+thing from those, read why a dead BoardGameGeek image answers **400 and not
+404** — the check is a no-op without it.
 
 ---
 
@@ -116,7 +118,7 @@ size).
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
-| Migrations applied | `0001_init` … `0013_cover_check` (local **and** production) |
+| Migrations applied | `0001_init` … `0014_edition_source` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -318,6 +320,109 @@ holding. Second pass: both surfaced with the right codes and
 
 ---
 
+## The cover picker — built 2026-08-06
+
+In the edit form, a grid of every cover this game could wear. Click one, Save
+changes, done.
+
+**The idea that made it one feature instead of three.** The ask was "let me swap
+between the BoardGameGeek image and the Kickstarter one" *and* "for games with
+several printings, let me see covers from multiple years". Those are the same
+question: an item has several known printings, each printing has a cover, and
+one of them looks like the box on our shelf. A crowdfunding edition **is** a
+printing — it belongs in the grid beside the 2019 and 2023 retail ones, not
+behind a Kickstarter-shaped button of its own.
+
+**Almost none of this was new.** The `edition` table has existed since migration
+0001 (`item_id`, `bgg_version_id`, `name`, `year`, `publisher`, `language`,
+`image_url` — one row per printing). `packages/bgg/src/client.ts` has always
+requested `versions=1` and parsed them. `importItem` has always inserted them.
+The table held **0 rows** because the catalog was populated by
+`POST /api/bgg/match/:id` and direct pledge inserts, and neither writes
+editions. The machinery was built and then bypassed. What was actually missing
+was a backfill, a read, and a grid.
+
+| Piece | Where |
+|---|---|
+| `source` column + idempotency indexes | migration `0014_edition_source.sql` |
+| Insert, read, campaign naming | `packages/db/src/editions.ts` |
+| The BGG fetching | `apps/worker/src/lib/edition-backfill.ts` |
+| Backfill routes | `apps/worker/src/routes/editions.ts` |
+| `GET /api/items/:id/covers` | `apps/worker/src/routes/catalog.ts` |
+| The grid | `apps/web/src/components/CoverPicker.tsx` |
+| Mounted in the edit form | `apps/web/src/components/ItemForm.tsx` (`coverPicker` slot) |
+
+### Two backfills, both re-runnable
+
+```bash
+curl -s -X POST localhost:8787/api/editions/backfill            # BGG printings
+curl -s -X POST "localhost:8787/api/editions/backfill?itemId=42"  # just one game
+curl -s -X POST localhost:8787/api/editions/campaign            # crowdfunding covers
+curl -s localhost:8787/api/editions/status                      # what is left
+```
+
+**Routes, not a script, because both need re-running.** Items keep gaining a
+`bgg_id` from scans and manual matching, and each new one has printings nobody
+has asked about. Covers are still being written by other processes, and a
+campaign cover only survives a swap if it was recorded first.
+
+Idempotency is in the database, not in the callers: migration 0014 adds a unique
+index on `(item_id, bgg_version_id)` for BGG rows and on `(item_id, image_url)`
+for campaign rows, which have no version id and are identified by the image
+itself. Re-running either backfill is a cheap no-op.
+
+**Ten BGG ids per request.** `things()` takes a comma-separated list, which is
+the only reason a whole-catalog run fits in one Worker invocation: 66 local items
+cost **7 requests and 7.1 seconds**. The free plan allows 50 subrequests, and
+the client retries a `202 Accepted` up to four times, so `BACKFILL_LIMIT = 80`
+(8 batches, worst case 40 subrequests). Raise it and redo that arithmetic.
+
+**The one place it can stall.** "Printings not fetched yet" is inferred from the
+absence of any `source = 'bgg'` row, so a game BoardGameGeek genuinely lists no
+versions for is re-asked every run. That is deliberate — remembering the
+negative would mean writing a fake edition row, and a fake printing would show
+up in the picker. It costs one slot in a batch of ten, and
+`/api/editions/status` makes a stall visible.
+
+### Picking writes through the ordinary item PATCH
+
+The picker sets the **form's** image URL; Save writes it. It does not PATCH on
+click, and that is not squeamishness — the form holds `thumbnailUrl` in its own
+state, so an immediate write would have been silently reverted by the Save that
+followed it. There is no cover-specific write route, for the same reason there
+is no wishlist-specific one.
+
+### Coverage is uneven on purpose, so the empty cases say why
+
+- **Several** — the good case, ~44 of 63 local items with any edition image.
+- **Exactly one** — says so, rather than offering a pointless grid of one.
+- **None** — explains which reason applies: never matched to BoardGameGeek
+  (most pledge accessories, and always will be), printings fetched and BGG lists
+  none, or nobody has asked yet — in which case a **Look up printings** button
+  appears and asks about that one game.
+- **A candidate that will not load** — two independent ways to know. `cover_check`
+  supplies a verdict before the image is requested, reusing `DEAD_AFTER` /
+  `UNREACHABLE_AFTER` so the picker cannot call something dead on weaker grounds
+  than the banner; the browser's own `onError` catches everything the checker has
+  not reached. Either way the slot reads "Image no longer loads" instead of
+  rendering an empty box under a caption.
+
+> **Local dev carries one deliberate broken candidate**: item 36 ("Veiled Fate")
+> was given a Gamefound `source_url` and a nonexistent `test-cover.png` while
+> testing the campaign naming, so its campaign card shows the failure state.
+> Alongside the two bad covers from the health work (items 111 and 121).
+> Production is unaffected.
+
+**Verified end to end against local dev, 2026-08-06.** Ticket to Ride (item 42,
+BGG 9209) went from 1 candidate to 40 printings in one BGG call, with the cover
+already on the item correctly recognised as the 2025 English edition rather than
+duplicated as an unattached "Current cover". A full run: 66 items, **687
+editions, 7 calls, 7.1s**, and an immediate re-run added nothing. Swapping item
+36 from its campaign cover to the BGG one left the campaign printing in the list,
+still offerable — which is the whole point of recording it.
+
+---
+
 ## Orphan expansions — built 2026-08-05
 
 An expansion can now be catalogued before the game it belongs to. Previously it
@@ -479,16 +584,18 @@ npm run secrets:push -- --dry # names and fingerprints only, sends nothing
 ```
 packages/core/    constants.ts (leaf) -> schemas.ts -> barcode.ts -> vision.ts -> index.ts
 packages/db/      users, health, items, copies, ratings, import, barcodes, cache,
-                  relations, scan-jobs, covers (cover-link health)
+                  relations, scan-jobs, covers (cover-link health),
+                  editions (printings, and the covers you choose between)
 packages/bgg/     BGG XML API2 client (throttled, retried, cached)
 packages/barcode/ free resolution: gameupc.ts, upcitemdb.ts, resolve.ts
 apps/worker/src/lib/ resolve-title.ts — the one cached title→candidate resolver
                   cover-check.ts — probes hotlinked covers; run by the cron
+                  edition-backfill.ts — fetches printings from BGG, ten ids a call
 packages/research/ Claude calls: client.ts, barcode.ts (paid rung), vision.ts
 apps/worker/      Hono routes + Access JWT verification + R2 photo storage
 apps/web/         React SPA; lib/camera.ts + lib/scanner.ts hold the iOS work
                   pages/ScanJobsPage.tsx is the photo queue UI
-migrations/       0001 … 0013
+migrations/       0001 … 0014
 ```
 
 Entry points stay thin: `apps/worker/src/index.ts` mounts routes and
@@ -520,6 +627,10 @@ exactly one implementation of anything that makes a decision.
 | GET | `/api/wishlist` | read — **item-level**, not tree-level. See below |
 | GET | `/api/covers/health` | read — dead cover images, for the banner |
 | POST | `/api/covers/check` | editCatalog — force a check slice now |
+| GET | `/api/items/:id/covers` | read — every printing's cover, selected one first |
+| GET | `/api/editions/status` | editCatalog — items still awaiting printings |
+| POST | `/api/editions/backfill` | editCatalog — fetch printings from BGG. `?itemId=`, `?limit=`, `?force=` |
+| POST | `/api/editions/campaign` | editCatalog — record crowdfunding covers as printings |
 | GET/POST | `/api/scan-jobs` | editCatalog — photo queue list and upload |
 | GET | `/api/scan-jobs/:id` | editCatalog — single job detail |
 | POST | `/api/scan-jobs/:id/enrich` | editCatalog — retry enrichment |
@@ -932,6 +1043,5 @@ three values side by side.
 - Phase 2 UI (search-and-pick, paste-a-list, edition picker) — blocked on token
 - Phase 3 research pipeline — blocked on key
 - Phase 4 bulk CLI, phase 5 barcode scanning, phase 6 offline PWA
-- Editions have a table and are populated by BGG import, but no UI
 - `sleeve_requirement` has a table and no UI
 - No automated tests — everything so far verified by exercising the running app

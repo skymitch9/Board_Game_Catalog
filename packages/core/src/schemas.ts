@@ -291,6 +291,68 @@ export interface CoverCheckRun {
   unchecked: number;
 }
 
+// ---------------------------------------------------------------------------
+// Cover candidates — the printings you may choose between
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a candidate cover came from.
+ *
+ * `campaign` is not a special case bolted on beside BoardGameGeek — a
+ * Kickstarter or Gamefound edition is a printing like any other, and the only
+ * reason it needs its own label is that nobody but us records it.
+ */
+export type CoverSource = 'bgg' | 'campaign' | 'current' | 'other';
+
+/**
+ * What the checker last knew about this image, so a candidate that will render
+ * as a broken box can say so before it is picked.
+ *
+ * `suspect` is failing but not yet often enough to be believed — the same
+ * one-failure-is-not-enough rule the health banner uses.
+ */
+export type CoverStatus = 'ok' | 'dead' | 'suspect' | 'unknown';
+
+/** One cover you could choose for an item. */
+export interface CoverCandidate {
+  /** The edition row behind it, or null for a cover held only by the item. */
+  editionId: number | null;
+  url: string;
+  /** "2019 English edition", "Gamefound: Altera", "Current cover". */
+  label: string;
+  year: number | null;
+  publisher: string | null;
+  language: string | null;
+  source: CoverSource;
+  /** True for the one currently on the item. Exactly one, when there are any. */
+  selected: boolean;
+  status: CoverStatus;
+}
+
+export interface CoverCandidates {
+  itemId: number;
+  /** Whatever the item wears right now, which may be nothing. */
+  currentUrl: string | null;
+  /** Null when the item was never matched to BoardGameGeek — the usual reason there is nothing to pick between. */
+  bggId: number | null;
+  /** True once a BGG backfill has actually asked about this item's printings. */
+  printingsFetched: boolean;
+  /** Deduplicated by URL; the selected one first, then newest printing first. */
+  candidates: CoverCandidate[];
+}
+
+/** What one backfill run did, for the owner-triggered routes to report. */
+export interface EditionBackfillRun {
+  itemsConsidered: number;
+  itemsUpdated: number;
+  editionsAdded: number;
+  /** Requests actually made to BoardGameGeek. Each covers several items. */
+  bggCalls: number;
+  /** Items with a bgg_id whose printings are still unfetched after this run. */
+  remaining: number;
+  failures: { itemId: number; bggId: number; detail: string }[];
+}
+
 /** A game linked via item_relation — standalone but connected. */
 export interface RelatedItemRef {
   /**

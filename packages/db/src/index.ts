@@ -7,6 +7,7 @@ export * from './import.js';
 export * from './barcodes.js';
 export * from './cache.js';
 export * from './covers.js';
+export * from './editions.js';
 export * from './relations.js';
 export * from './scan-jobs.js';
 export * from './research.js';

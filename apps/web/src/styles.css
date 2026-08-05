@@ -642,3 +642,46 @@ code {
   font: inherit; transition: border-color 0.1s;
 }
 .expansion-picker__item:hover { border-color: var(--accent); }
+
+/* --- Cover picker ---------------------------------------------------------
+   One item, several known printings, one cover chosen. Lives inside the edit
+   form rather than on a screen of its own, so picking and saving are the same
+   gesture as any other field change. */
+.cover-picker { margin: -0.25rem 0 0.75rem; }
+.cover-picker__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem; margin-bottom: 0.4rem;
+}
+.cover-picker p { margin: 0.25rem 0 0.5rem; }
+
+.cover-grid {
+  list-style: none; margin: 0.25rem 0 0.5rem; padding: 0;
+  display: grid; gap: 0.6rem;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+
+.cover-card {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  width: 100%; padding: 0.5rem;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: border-color 0.1s;
+}
+.cover-card:hover { border-color: var(--accent); }
+.cover-card--chosen { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Fixed aspect so a grid of covers stays a grid, whatever each CDN returns. */
+.cover-card__frame {
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 1 / 1; width: 100%;
+  border-radius: 6px; background: var(--bg); overflow: hidden;
+}
+.cover-card__frame img { width: 100%; height: 100%; object-fit: contain; }
+.cover-card__dead {
+  padding: 0.4rem; text-align: center;
+  font-size: 0.72rem; color: var(--bad);
+}
+.cover-card__meta { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.cover-card__label { font-size: 0.8rem; font-weight: 550; line-height: 1.25; }
+.cover-card__caption { font-size: 0.75rem; color: var(--muted); }

@@ -23,6 +23,7 @@ import {
   deleteRelation,
   getItemDetail,
   getRelatedItems,
+  listCoverCandidates,
   listItemTrees,
   listRelationPairs,
   listTopLevelItems,
@@ -65,6 +66,26 @@ export const catalogRoutes = new Hono<AppBindings>()
     const detail = await getItemDetail(c.env.DB, id);
     if (!detail) return c.json({ error: 'not_found' }, 404);
     return c.json({ item: detail });
+  })
+
+  /**
+   * The covers this item could wear, and which one it wears now.
+   *
+   * `read`, not `editCatalog`: this reads rows and nothing else. Picking one is
+   * an ordinary `PATCH /api/items/:id` setting `thumbnailUrl`, so there is no
+   * cover-specific write route — a second way to change an item's cover would be
+   * a second one to keep honest.
+   *
+   * Populating the candidates is `POST /api/editions/backfill` and
+   * `POST /api/editions/campaign`.
+   */
+  .get('/items/:id/covers', async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const covers = await listCoverCandidates(c.env.DB, id);
+    if (!covers) return c.json({ error: 'not_found' }, 404);
+    return c.json(covers);
   })
 
   /** Headline numbers, so the UI needn't compute them. */

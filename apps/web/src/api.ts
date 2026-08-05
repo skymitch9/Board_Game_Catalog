@@ -1,8 +1,10 @@
 import type {
   AppUser,
   BarcodeCandidate,
+  CoverCandidates,
   CoverCheckRun,
   CoverHealth,
+  EditionBackfillRun,
   ShelfMatch,
   Copy,
   CreateCopyInput,
@@ -132,6 +134,34 @@ export const api = {
     post(`/api/covers/check${limit ? `?limit=${limit}` : ''}`, {}) as Promise<{
       run: CoverCheckRun;
       health: CoverHealth;
+    }>,
+
+  // --- Printings and their covers -------------------------------------------
+  // An item has several known printings, each with a cover, and one of them
+  // represents our copy. Choosing is an ordinary item PATCH — see `updateItem`.
+
+  /** Every cover this item could wear, deduplicated, selected one first. */
+  covers: (itemId: number) => req<CoverCandidates>(`/api/items/${itemId}/covers`),
+
+  /**
+   * Fetch printings from BoardGameGeek. Idempotent, and meant to be re-run as
+   * items gain a `bggId`. Pass an itemId to ask about one game only.
+   */
+  backfillEditions: (opts: { itemId?: number; limit?: number; force?: boolean } = {}) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(opts)) {
+      if (v !== undefined) params.set(k, String(v));
+    }
+    const qs = params.toString();
+    return post(`/api/editions/backfill${qs ? `?${qs}` : ''}`, {}) as Promise<{
+      run: EditionBackfillRun;
+    }>;
+  },
+
+  /** Record every crowdfunding cover as a printing, so swapping away keeps it. */
+  recordCampaignCovers: () =>
+    post('/api/editions/campaign', {}) as Promise<{
+      run: { considered: number; added: number };
     }>,
 
   /** Fill a form from a title. Free rungs only, cached, no model call. */

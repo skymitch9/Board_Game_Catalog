@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ITEM_KINDS, type CreateItemInput, type Item, type ItemKind } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { navigate } from '../router';
+import { CoverPicker } from './CoverPicker';
 import { ErrorBox, Field, Spinner } from './ui';
 import { KIND_LABEL } from './ItemTree';
 
@@ -121,9 +122,16 @@ export function detailsToInput(
 export function ItemDetailFields({
   value,
   onChange,
+  coverPicker,
 }: {
   value: ItemDetails;
   onChange: (patch: Partial<ItemDetails>) => void;
+  /**
+   * Rendered under the image URL box. A slot rather than a flag because Quick
+   * add creates items that do not exist yet and so have no printings to choose
+   * between — it passes nothing and gets the plain field.
+   */
+  coverPicker?: ReactNode;
 }) {
   return (
     <>
@@ -201,6 +209,8 @@ export function ItemDetailFields({
           placeholder="https://…"
         />
       </Field>
+
+      {coverPicker}
 
       <Field label="Notes">
         <textarea
@@ -313,6 +323,15 @@ export function ItemForm({ existing, parentId, parentName, prefill, onSaved, onC
       <ItemDetailFields
         value={form}
         onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+        coverPicker={
+          existing ? (
+            <CoverPicker
+              itemId={existing.id}
+              value={form.thumbnailUrl}
+              onPick={(url) => set('thumbnailUrl', url)}
+            />
+          ) : null
+        }
       />
 
       <div className="form-actions">

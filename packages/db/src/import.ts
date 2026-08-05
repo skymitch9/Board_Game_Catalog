@@ -1,4 +1,5 @@
 import type { Item, ItemKind } from '@bgc/core';
+import { addBggEditions, type EditionInput } from './editions.js';
 import { getItem, mapItemRow, toSortName, type ItemRow } from './items.js';
 
 /**
@@ -18,14 +19,7 @@ export interface ImportableItem {
   maxPlayers: number | null;
   playtimeMin: number | null;
   weight: number | null;
-  editions: {
-    bggVersionId: number;
-    name: string | null;
-    year: number | null;
-    publisher: string | null;
-    language: string | null;
-    imageUrl: string | null;
-  }[];
+  editions: EditionInput[];
 }
 
 export async function findItemByBggId(db: D1Database, bggId: number): Promise<Item | null> {
@@ -105,23 +99,13 @@ export async function importItem(
     await db.prepare('UPDATE item SET root_game_id = id WHERE id = ?').bind(id).run();
   }
 
-  let editionsAdded = 0;
-  if (params.includeEditions && params.data.editions.length > 0) {
-    // Cap it: some long-running games carry 80+ versions, and importing every
-    // foreign-language printing buries the two you might actually own.
-    const editions = params.data.editions.slice(0, 40);
-    await db.batch(
-      editions.map((e) =>
-        db
-          .prepare(
-            `INSERT INTO edition (item_id, bgg_version_id, name, year, publisher, language, image_url)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .bind(id, e.bggVersionId, e.name, e.year, e.publisher, e.language, e.imageUrl),
-      ),
-    );
-    editionsAdded = editions.length;
-  }
+  // One insert path for printings, shared with the backfill — see
+  // `addBggEditions`. Import and backfill disagreeing about the cap, the
+  // `source` tag or de-duplication is exactly the kind of drift the cover
+  // picker would surface as two identical printings.
+  const editionsAdded = params.includeEditions
+    ? await addBggEditions(db, id, params.data.editions)
+    : 0;
 
   const item = await getItem(db, id);
   if (!item) throw new Error('imported item vanished immediately after creation');
