@@ -365,7 +365,7 @@ function LookupDetails({
   );
 }
 
-const RELATION_LABEL: Record<RelationType, string> = {
+export const RELATION_LABEL: Record<RelationType, string> = {
   works_with: 'Works with',
   reimplements: 'Reimplements',
   integrates_with: 'Integrates with',

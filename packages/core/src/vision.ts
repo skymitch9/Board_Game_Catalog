@@ -404,6 +404,71 @@ export function suggestRetags(
 }
 
 /**
+ * Standalone games that belong to the same family.
+ *
+ * The mirror image of `suggestRetags`, off the same signal. Both find a game
+ * whose name contains another game you own; they differ only in what that
+ * ought to mean. "Scythe: Invaders from Afar" is a box you cannot play without
+ * Scythe, so it belongs *inside* Scythe. "CATAN: Starfarers" is a complete game
+ * that happens to wear the Catan name, so it belongs *beside* Catan — filed on
+ * its own, and linked.
+ *
+ * No heuristic separates those two, which is why the app never decides: the
+ * re-filing screen offers the first reading, this offers the second, and the
+ * same row can be answered either way. The discriminator is one only you have:
+ * can you play it without the other box.
+ *
+ * Pairs already linked are dropped, so an answered suggestion stops being one.
+ */
+export interface RelationSuggestion {
+  fromItemId: number;
+  fromName: string;
+  toItemId: number;
+  toName: string;
+  reason: string;
+}
+
+export function suggestRelations(
+  items: readonly { id: number; name: string; kind: string; parentItemId: number | null }[],
+  existingPairs: ReadonlySet<string>,
+): RelationSuggestion[] {
+  const byKey = new Map<string, { id: number; name: string }>();
+  for (const item of items) byKey.set(normaliseTitle(item.name), { id: item.id, name: item.name });
+
+  const suggestions: RelationSuggestion[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    // Only games standing on their own. Something already filed under a parent
+    // is expressing that relationship the other way, and does not need a link
+    // saying the same thing again.
+    if (item.kind !== 'base' || item.parentItemId !== null) continue;
+
+    let family: { id: number; name: string } | undefined;
+    for (const prefix of prefixCandidates(item.name)) {
+      const found = byKey.get(normaliseTitle(prefix));
+      if (found && found.id !== item.id) family = found;
+    }
+    if (!family) continue;
+
+    const key = `${item.id}:${family.id}`;
+    if (existingPairs.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    seen.add(`${family.id}:${item.id}`);
+
+    suggestions.push({
+      fromItemId: item.id,
+      fromName: item.name,
+      toItemId: family.id,
+      toName: family.name,
+      reason: `Shares a name with "${family.name}". Link them if it plays on its own.`,
+    });
+  }
+
+  return suggestions;
+}
+
+/**
  * JPEG quality for the downscaled upload.
  *
  * 0.85, not lower: the phone's photo is *already* lossy, so this is a second

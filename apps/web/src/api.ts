@@ -171,7 +171,8 @@ export const api = {
       usage: ResearchUsage;
     }>,
 
-  retagSuggestions: () => req<{ suggestions: RetagSuggestion[] }>('/api/retag'),
+  retagSuggestions: () =>
+    req<{ suggestions: RetagSuggestion[]; relations: RelationSuggestion[] }>('/api/retag'),
 
   // --- Scan Jobs (photo queue) ----------------------------------------------
 
@@ -217,6 +218,14 @@ export interface RetagSuggestion {
   proposedParentId: number;
   proposedParentName: string;
   confident: boolean;
+  reason: string;
+}
+
+export interface RelationSuggestion {
+  fromItemId: number;
+  fromName: string;
+  toItemId: number;
+  toName: string;
   reason: string;
 }
 

@@ -102,6 +102,27 @@ export async function createRelation(
 }
 
 /** Remove a relation by its id. */
+/**
+ * Every link that exists, as unordered pairs.
+ *
+ * Used to stop the family suggester offering something already linked. Both
+ * directions are returned because a link is bidirectional in meaning even
+ * though it is stored once, and the suggester only asks "are these two
+ * connected", never "which way round".
+ */
+export async function listRelationPairs(db: D1Database): Promise<Set<string>> {
+  const { results } = await db
+    .prepare('SELECT from_item_id, to_item_id FROM item_relation')
+    .all<{ from_item_id: number; to_item_id: number }>();
+
+  const pairs = new Set<string>();
+  for (const r of results) {
+    pairs.add(`${r.from_item_id}:${r.to_item_id}`);
+    pairs.add(`${r.to_item_id}:${r.from_item_id}`);
+  }
+  return pairs;
+}
+
 export async function deleteRelation(db: D1Database, relationId: number): Promise<boolean> {
   const result = await db
     .prepare(`DELETE FROM item_relation WHERE id = ?1`)
