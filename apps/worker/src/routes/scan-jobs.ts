@@ -144,6 +144,27 @@ export const scanJobRoutes = new Hono<AppBindings>()
 // Background processing
 // ---------------------------------------------------------------------------
 
+/**
+ * Drop a photo. Best-effort: a bucket that will not delete must never turn a
+ * job that otherwise succeeded into a failure.
+ */
+async function releasePhoto(env: Env, photoKey: string): Promise<void> {
+  await env.PHOTOS.delete(photoKey).catch(() => undefined);
+}
+
+/**
+ * Record a failure, and let the photo go with it.
+ *
+ * A failed job has no review coming, so nothing will ever reach the two routes
+ * that clean up. Every failure path used to leave its object in the bucket
+ * permanently, which is how "no photo outlives the review it feeds" quietly
+ * becomes "photos are kept forever, just not on purpose".
+ */
+async function failJob(env: Env, jobId: number, message: string): Promise<void> {
+  const job = await updateScanJobStatus(env.DB, jobId, 'failed', { error: message });
+  if (job) await releasePhoto(env, job.photoKey);
+}
+
 /** Step 1: Run vision to extract titles from the photo. */
 async function processVision(
   env: Env,
@@ -156,9 +177,7 @@ async function processVision(
     await updateScanJobStatus(env.DB, jobId, 'reading');
 
     if (!env.ANTHROPIC_API_KEY) {
-      await updateScanJobStatus(env.DB, jobId, 'failed', {
-        error: 'No ANTHROPIC_API_KEY configured',
-      });
+      await failJob(env, jobId, 'No ANTHROPIC_API_KEY configured');
       return;
     }
 
@@ -184,16 +203,20 @@ async function processVision(
       }));
     }
 
-    await updateScanJobStatus(env.DB, jobId, 'read', {
+    const read = await updateScanJobStatus(env.DB, jobId, 'read', {
       rawTitles: JSON.stringify(titles),
     });
+
+    // Vision was the only reader this photo ever had. Enrichment works from the
+    // titles above and the review screen never displays the image, so there is
+    // nothing left to keep it for — and waiting until review means keeping it
+    // for a review that may never happen.
+    if (read) await releasePhoto(env, read.photoKey);
 
     // Immediately proceed to enrichment.
     await processEnrichment(env, jobId);
   } catch (err) {
-    await updateScanJobStatus(env.DB, jobId, 'failed', {
-      error: (err as Error).message,
-    });
+    await failJob(env, jobId, (err as Error).message);
   }
 }
 
@@ -204,9 +227,7 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
 
     const job = await getScanJob(env.DB, jobId);
     if (!job || !job.rawTitles) {
-      await updateScanJobStatus(env.DB, jobId, 'failed', {
-        error: 'No raw titles to enrich',
-      });
+      await failJob(env, jobId, 'No raw titles to enrich');
       return;
     }
 
@@ -287,8 +308,6 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
       enriched: JSON.stringify(finalResults),
     });
   } catch (err) {
-    await updateScanJobStatus(env.DB, jobId, 'failed', {
-      error: (err as Error).message,
-    });
+    await failJob(env, jobId, (err as Error).message);
   }
 }

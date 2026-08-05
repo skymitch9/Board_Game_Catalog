@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { ITEM_KINDS, SHELF_LONG_EDGE, PHOTO_LONG_EDGE, type ItemKind, type MeResponse } from '@bgc/core';
 import { api, type EnrichedTitle, type ScanJob } from '../api';
-import { useAsync } from '../hooks';
+import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
 import { KIND_LABEL } from '../components/ItemTree';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
@@ -17,6 +17,21 @@ const STATUS_LABEL: Record<ScanJob['status'], string> = {
   failed: 'Failed',
 };
 
+/**
+ * Statuses that still change on their own. Reading and looking up happen on the
+ * server after the upload has been answered, so while a job is in one of these
+ * the page has to keep asking; the rest are terminal and it can stop.
+ */
+const IN_FLIGHT: ReadonlySet<ScanJob['status']> = new Set([
+  'uploaded',
+  'reading',
+  'read',
+  'enriching',
+]);
+
+/** Slow enough not to be a nuisance, quick enough that a shelf read feels live. */
+const POLL_MS = 2500;
+
 const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
   uploaded: 'neutral',
   reading: 'neutral',
@@ -29,22 +44,43 @@ const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'k
 
 export function ScanJobsPage({ me }: { me: MeResponse }) {
   const [jobs, refresh] = useAsync(() => api.scanJobs(), []);
+  const [live, setLive] = useState<ScanJob[] | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [mode, setMode] = useState<'shelf' | 'single'>('shelf');
+
+  // The polled copy once there is one, else the first load. Kept separate from
+  // `useAsync` on purpose: its refresh drops back to `loading`, which would
+  // blink the whole list out of existence every few seconds while polling.
+  const shown = live ?? (jobs.state === 'ok' ? jobs.data.jobs : null);
+  const inFlight = shown?.some((j) => IN_FLIGHT.has(j.status)) ?? false;
+
+  useInterval(() => {
+    void api.scanJobs()
+      .then((r) => setLive(r.jobs))
+      // A dropped poll is not worth an error box; the next one is 2.5s away.
+      .catch(() => undefined);
+  }, POLL_MS, inFlight);
+
+  // Anything that changes the list itself — an upload, a delete — goes back to
+  // the authoritative fetch rather than letting a stale polled copy shadow it.
+  const reload = useCallback(() => {
+    setLive(null);
+    refresh();
+  }, [refresh]);
 
   const upload = useCallback(async (data: string, mediaType: string) => {
     setUploading(true);
     setError(null);
     try {
       await api.createScanJob({ data, mediaType, mode });
-      refresh();
+      reload();
     } catch (err) {
       setError(err);
     } finally {
       setUploading(false);
     }
-  }, [mode, refresh]);
+  }, [mode, reload]);
 
   const canEdit = me.capabilities.includes('editCatalog');
   if (!canEdit) {
@@ -88,20 +124,25 @@ export function ScanJobsPage({ me }: { me: MeResponse }) {
       <section className="card">
         <div className="section-head">
           <h2>Jobs</h2>
-          <button type="button" className="btn btn-quiet" onClick={refresh}>
-            Refresh
-          </button>
+          <div className="section-head__actions">
+            {inFlight && <span className="muted small">Working&hellip;</span>}
+            <button type="button" className="btn btn-quiet" onClick={reload}>
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {jobs.state === 'loading' && <Spinner label="Loading jobs..." />}
-        {jobs.state === 'error' && <ErrorBox error={jobs.error} what="Could not load jobs" />}
-        {jobs.state === 'ok' && jobs.data.jobs.length === 0 && (
+        {jobs.state === 'loading' && shown === null && <Spinner label="Loading jobs..." />}
+        {jobs.state === 'error' && shown === null && (
+          <ErrorBox error={jobs.error} what="Could not load jobs" />
+        )}
+        {shown !== null && shown.length === 0 && (
           <p className="muted">No photos uploaded yet. Take some pictures of your shelves above.</p>
         )}
-        {jobs.state === 'ok' && jobs.data.jobs.length > 0 && (
+        {shown !== null && shown.length > 0 && (
           <ul className="job-list">
-            {jobs.data.jobs.map((job) => (
-              <JobRow key={job.id} job={job} onChanged={refresh} />
+            {shown.map((job) => (
+              <JobRow key={job.id} job={job} onChanged={reload} />
             ))}
           </ul>
         )}
@@ -210,7 +251,8 @@ function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
  * Shows all enriched titles with proposed kinds, lets user adjust and add.
  */
 export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
-  const [jobState, refresh] = useAsync(() => api.scanJob(id), [id]);
+  const [jobState] = useAsync(() => api.scanJob(id), [id]);
+  const [live, setLive] = useState<ScanJob | null>(null);
   const [adding, setAdding] = useState(false);
   const [results, setResults] = useState<Record<number, { itemId: number } | { error: string }>>({});
   const [kindOverrides, setKindOverrides] = useState<Record<number, ItemKind>>({});
@@ -218,10 +260,23 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   const [selected, setSelected] = useState<Set<number> | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  if (jobState.state === 'loading') return <Spinner />;
-  if (jobState.state === 'error') return <ErrorBox error={jobState.error} what="Could not load job" />;
+  const job = live ?? (jobState.state === 'ok' ? jobState.data.job : null);
 
-  const job = jobState.data.job;
+  // Opening this by URL while the photo is still being read should resolve
+  // itself rather than looking stuck. Polling stops once the job reaches
+  // 'review', so it never fights the results rendered after adding.
+  useInterval(() => {
+    void api.scanJob(id)
+      .then((r) => setLive(r.job))
+      .catch(() => undefined);
+  }, POLL_MS, job !== null && IN_FLIGHT.has(job.status));
+
+  if (job === null) {
+    if (jobState.state === 'error') {
+      return <ErrorBox error={jobState.error} what="Could not load job" />;
+    }
+    return <Spinner />;
+  }
 
   if (job.status !== 'review' || !job.enriched) {
     return (

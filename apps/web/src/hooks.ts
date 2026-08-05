@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type Async<T> =
   | { state: 'loading' }
@@ -28,6 +28,31 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []): [Async<
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
   return [result, refresh];
+}
+
+/**
+ * Run `callback` every `ms`, but only while `active`.
+ *
+ * The gate matters more than the timer. Work that finishes on the server —
+ * a photo being read, titles being looked up — has no way to tell the browser,
+ * so the browser has to ask. But a page left open in a background tab would
+ * then ask forever about answers that stopped changing hours ago, so polling
+ * stops the moment nothing is still in flight.
+ *
+ * The callback is held in a ref so that passing a fresh closure each render
+ * does not tear down and restart the timer.
+ */
+export function useInterval(callback: () => void, ms: number, active: boolean): void {
+  const saved = useRef(callback);
+  useEffect(() => {
+    saved.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => saved.current(), ms);
+    return () => clearInterval(id);
+  }, [ms, active]);
 }
 
 /** Delay a fast-changing value — used so typing doesn't fire a request per keystroke. */
