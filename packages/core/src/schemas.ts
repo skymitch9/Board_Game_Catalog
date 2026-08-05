@@ -244,6 +244,53 @@ export interface WishlistEntry {
   addedAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Cover health — every thumbnail is somebody else's file
+// ---------------------------------------------------------------------------
+
+/**
+ * What one probe of a cover URL found.
+ *
+ * `dead` and `error` are kept apart because they license different actions. A
+ * 404 is the host telling us the file is gone; a timeout is the host telling us
+ * nothing at all. Only the first is worth reporting quickly.
+ */
+export type CoverOutcome = 'ok' | 'dead' | 'error';
+
+/** An item whose cover has failed often enough to be believed. */
+export interface DeadCover {
+  itemId: number;
+  name: string;
+  kind: (typeof ITEM_KINDS)[number];
+  url: string;
+  /** Null when the request never got an answer at all. */
+  statusCode: number | null;
+  outcome: CoverOutcome;
+  consecutiveFailures: number;
+  lastCheckedAt: string;
+}
+
+export interface CoverHealth {
+  dead: DeadCover[];
+  /** Distinct cover URLs in the catalog. */
+  total: number;
+  /** How many of those have been probed at least once. */
+  checked: number;
+  /** Failing, but not yet often enough to be called dead. */
+  suspect: number;
+  lastRunAt: string | null;
+}
+
+/** The summary a single check run reports back. */
+export interface CoverCheckRun {
+  checked: number;
+  ok: number;
+  dead: number;
+  errors: number;
+  /** Cover URLs still never probed, after this run. */
+  unchecked: number;
+}
+
 /** A game linked via item_relation — standalone but connected. */
 export interface RelatedItemRef {
   /**

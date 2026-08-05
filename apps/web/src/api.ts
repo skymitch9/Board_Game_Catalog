@@ -1,6 +1,8 @@
 import type {
   AppUser,
   BarcodeCandidate,
+  CoverCheckRun,
+  CoverHealth,
   ShelfMatch,
   Copy,
   CreateCopyInput,
@@ -118,6 +120,19 @@ export const api = {
   deleteCopy: (id: number) => del(`/api/copies/${id}`) as Promise<{ deleted: boolean }>,
 
   users: () => req<{ users: AppUser[] }>('/api/users'),
+
+  // --- Cover images ---------------------------------------------------------
+  // Read a stored verdict; never probe on render. The covers are hotlinked from
+  // other people's CDNs and there are hundreds of them.
+
+  coverHealth: () => req<{ health: CoverHealth }>('/api/covers/health'),
+
+  /** Force a slice now instead of waiting for the half-hourly cron. */
+  checkCovers: (limit?: number) =>
+    post(`/api/covers/check${limit ? `?limit=${limit}` : ''}`, {}) as Promise<{
+      run: CoverCheckRun;
+      health: CoverHealth;
+    }>,
 
   /** Fill a form from a title. Free rungs only, cached, no model call. */
   lookup: (q: string) =>

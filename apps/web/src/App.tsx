@@ -12,6 +12,7 @@ import { ScanJobsPage, ScanJobReviewPage } from './pages/ScanJobsPage';
 import { RetagPage } from './pages/RetagPage';
 import { DetailsQueuePage } from './pages/DetailsQueuePage';
 import { WishlistPage } from './pages/WishlistPage';
+import { CoverHealthBanner } from './components/CoverHealthBanner';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
 function Routes({ me }: { me: MeResponse }) {
@@ -107,6 +108,9 @@ export default function App() {
           </span>
         </span>
       </nav>
+      {/* Above the page rather than inside one: a dead cover is a fact about
+          the catalog, not about whichever screen happens to be open. */}
+      <CoverHealthBanner me={me.data} />
       <Routes me={me.data} />
     </main>
   );

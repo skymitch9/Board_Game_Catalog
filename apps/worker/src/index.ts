@@ -6,12 +6,14 @@
  */
 
 import { Hono } from 'hono';
-import type { AppBindings } from './env.js';
+import type { AppBindings, Env } from './env.js';
+import { runCoverCheck } from './lib/cover-check.js';
 import { requireAuth } from './middleware/auth.js';
 import { barcodeRoutes } from './routes/barcode.js';
 import { bggRoutes } from './routes/bgg.js';
 import { cacheRoutes } from './routes/cache.js';
 import { catalogRoutes } from './routes/catalog.js';
+import { coverRoutes } from './routes/covers.js';
 import { exportRoutes } from './routes/export.js';
 import { healthRoutes } from './routes/health.js';
 import { lookupRoutes } from './routes/lookup.js';
@@ -33,6 +35,7 @@ app.route('/api/bgg', bggRoutes);
 app.route('/api/barcode', barcodeRoutes);
 app.route('/api/vision', visionRoutes);
 app.route('/api/cache', cacheRoutes);
+app.route('/api/covers', coverRoutes);
 app.route('/api/lookup', lookupRoutes);
 app.route('/api/scan-jobs', scanJobRoutes);
 app.route('/api/research', researchRoutes);
@@ -63,4 +66,23 @@ app.onError((err, c) => {
   return c.json({ error: 'internal', detail: err.message }, 500);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+
+  /**
+   * The cron trigger (see wrangler.toml).
+   *
+   * One slice of the cover check per run, rotating oldest-first, because a
+   * Worker cannot fetch the whole catalog in a single invocation. Still just
+   * wiring: the decision about what to fetch and what a failure means lives in
+   * lib/cover-check.ts.
+   */
+  scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(
+      runCoverCheck(env.DB).then(
+        (run) => console.log('cover check', JSON.stringify(run)),
+        (err) => console.error('cover check failed', err),
+      ),
+    );
+  },
+} satisfies ExportedHandler<Env>;

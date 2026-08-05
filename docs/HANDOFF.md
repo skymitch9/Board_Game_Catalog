@@ -8,6 +8,11 @@ Stable reference lives alongside this file and is not duplicated here:
 **Last updated:** 2026-08-06. Everything is committed and deployed; the working
 tree is clean. Database was cleared and collection restarted fresh on 08-05.
 
+**Newest first:** the [wishlist](#the-wishlist--built-2026-08-06) and
+[cover-image health](#cover-image-health--built-2026-08-06) both shipped on
+08-06. If you read one thing from those, read why a dead BoardGameGeek image
+answers **400 and not 404** — the check is a no-op without it.
+
 ---
 
 ## Working tree — clean
@@ -107,7 +112,7 @@ size).
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
-| Migrations applied | `0001_init` … `0010_pending_parent` (local **and** production) |
+| Migrations applied | `0001_init` … `0013_cover_check` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -198,6 +203,118 @@ this will use BGG's expansion links for definitive results.
 
 **Header stats (2026-08-05).** Shows `N games · N expansions · N accessories`
 (only non-zero counts), replacing the old `games · items · owned`.
+
+---
+
+## The wishlist — built 2026-08-06
+
+`/wishlist`, linked from the top bar. Lists every copy marked `wanted`, with a
+**Mark as bought** button per row that flips that copy to `owned`.
+
+**The one thing to understand before touching it.** Every other listing query
+matches whole game *trees*, via `matchingRootsSql` in `packages/db/src/items.ts`,
+so that searching for an expansion also surfaces the base game it needs. That is
+correct for browsing and exactly wrong for a shopping list: the Ark Nova tree
+holds two `wanted` items sitting alongside eight `preordered` 3D upgrades, so
+`GET /api/items?status=wanted` answers with **all ten**. Measured, not assumed.
+
+`listWishlist` is therefore a query of its own and `matchingRootsSql` was not
+touched. One row per wanted copy, joined to the parent item so "Marine Worlds"
+reads as an Ark Nova expansion.
+
+| Piece | Where |
+|---|---|
+| `WishlistEntry` type | `packages/core/src/schemas.ts` |
+| `listWishlist` | `packages/db/src/items.ts` |
+| `GET /api/wishlist` | `apps/worker/src/routes/catalog.ts` |
+| `api.wishlist()` | `apps/web/src/api.ts` |
+| The page | `apps/web/src/pages/WishlistPage.tsx` |
+
+- **`preordered` is excluded on purpose.** Something already bought and waiting
+  for the post is a different question from what to buy next. If that turns out
+  to be wrong, the fix is one `WHERE` clause — but change the page's wording too,
+  because "2 games wanted" would stop being true.
+- **There is no wishlist-specific write route.** "Mark as bought" is the ordinary
+  `PATCH /api/copies/:id` the item page's copy editor already calls. Resist
+  adding one; a second way to change a copy's status is a second one to keep
+  correct.
+- **The header stat on the collection page counts something else.**
+  `collectionStats.wantedCopies` sums `wanted` **+** `preordered`, so it reads
+  10 where the wishlist reads 2. That is why the count was deliberately *not*
+  linked to `/wishlist` — the numbers would visibly disagree. Splitting the stat
+  in two is the honest fix if it ever matters.
+
+---
+
+## Cover-image health — built 2026-08-06
+
+Nothing here hosts a cover. Every `item.thumbnail_url` is a hotlink to
+BoardGameGeek (`cf.geekdo-images.com`), Kickstarter or Gamefound
+(`ksr-ugc.imgix.net`), none of whom owe us a stable URL. When one stops serving,
+the failure is silent — the card renders, the image slot is empty, and nobody
+re-opens a game they already catalogued.
+
+A cron probes a slice of the catalog every half hour and writes verdicts down; a
+banner appears when something is confirmed dead.
+
+| Piece | Where |
+|---|---|
+| `cover_check` table | migration `0013_cover_check.sql` |
+| Reads/writes | `packages/db/src/covers.ts` |
+| The probing | `apps/worker/src/lib/cover-check.ts` |
+| Routes | `apps/worker/src/routes/covers.ts` |
+| Cron trigger | `[triggers] crons = ["*/30 * * * *"]` in `apps/worker/wrangler.toml` |
+| `scheduled` handler | `apps/worker/src/index.ts` — three lines, delegates to the lib |
+| The banner | `apps/web/src/components/CoverHealthBanner.tsx`, mounted in `App.tsx` |
+
+**Keyed on the URL, not the item.** Several items share one image, and fetching
+per item would multiply requests against the very CDNs we want to stay friendly
+with. The item is recovered by joining `item.thumbnail_url = cover_check.url`,
+which also means a cover that gets *fixed* simply becomes an unknown URL and is
+re-checked, with no invalidation step to forget.
+
+**Rotation, because of the subrequest ceiling.** 20 URLs per invocation
+(`COVER_BATCH`), oldest-checked first, never-checked first of all. Every half
+hour is ~960 probes a day against ~450 distinct covers — roughly two full passes.
+A URL can cost two subrequests when HEAD is refused and the ranged
+`GET Range: bytes=0-0` fallback runs, so the worst case is 40, inside the free
+plan's 50.
+
+**Two failures before anyone is told** (`DEAD_AFTER`), and five for failures that
+never produced a status code at all (`UNREACHABLE_AFTER`) — a timeout says
+something about the network, not about the file.
+
+### ⚠️ The gotcha that would have made this useless
+
+**`cf.geekdo-images.com` answers a dead path with `400`, never `404`.**
+
+Verified three ways on 2026-08-06: a nonsense path, a real path with a wrong
+picture id, and a real picture id behind a wrong signature all returned **400
+Bad Request**. `ksr-ugc.imgix.net` returns **410** for a removed asset, which is
+conventional; BGG is not.
+
+So `PERMANENT` in `cover-check.ts` is `{400, 404, 410, 414}` — the codes that
+mean *the URL itself* is permanently unacceptable. **Do not "tidy" 400 out of
+that set.** The first version of this check treated 400 as transient, ran over
+the whole local catalog, and reported zero dead covers while staring straight at
+one. Since almost every cover in the collection is a geekdo URL, dropping 400
+turns the entire feature into a no-op that looks like it is working.
+
+`401`, `403`, `405` and `429` are deliberately *not* in the set: those are about
+the client, and are far more often a CDN objecting to a Worker than a missing
+file. The probe also sends a browser-ish `User-Agent` for the same reason.
+
+**Verified end to end against local dev (2026-08-06).** Two known-bad covers were
+seeded — a geekdo path returning 400 and an imgix path returning 410 — alongside
+67 real BGG covers. First pass: 78 ok, 2 recorded as `dead`, and
+`/api/covers/health` reported **`dead: 0`** — the one-failure-is-not-enough rule
+holding. Second pass: both surfaced with the right codes and
+`consecutiveFailures: 2`, and every real cover passed both times.
+
+> **Local dev still carries those two bad rows on purpose** — item 111
+> ("Ark Nova", a fake geekdo path) and item 121 ("Gamefound Pledge Test Game").
+> They are why the banner shows locally. Delete both items if you want a quiet
+> local app; production is unaffected.
 
 ---
 
@@ -361,15 +478,17 @@ npm run secrets:push -- --dry # names and fingerprints only, sends nothing
 
 ```
 packages/core/    constants.ts (leaf) -> schemas.ts -> barcode.ts -> vision.ts -> index.ts
-packages/db/      users, health, items, copies, ratings, import, barcodes, cache, relations, scan-jobs
+packages/db/      users, health, items, copies, ratings, import, barcodes, cache,
+                  relations, scan-jobs, covers (cover-link health)
 packages/bgg/     BGG XML API2 client (throttled, retried, cached)
 packages/barcode/ free resolution: gameupc.ts, upcitemdb.ts, resolve.ts
 apps/worker/src/lib/ resolve-title.ts — the one cached title→candidate resolver
+                  cover-check.ts — probes hotlinked covers; run by the cron
 packages/research/ Claude calls: client.ts, barcode.ts (paid rung), vision.ts
 apps/worker/      Hono routes + Access JWT verification + R2 photo storage
 apps/web/         React SPA; lib/camera.ts + lib/scanner.ts hold the iOS work
                   pages/ScanJobsPage.tsx is the photo queue UI
-migrations/       0001 … 0009
+migrations/       0001 … 0013
 ```
 
 Entry points stay thin: `apps/worker/src/index.ts` mounts routes and
@@ -398,6 +517,9 @@ exactly one implementation of anything that makes a decision.
 | GET/DELETE | `/api/cache` | manageUsers — cache stats and clearing |
 | GET/POST | `/api/items/:id/relations` | read / editCatalog — standalone-but-related links |
 | DELETE | `/api/relations/:id` | editCatalog |
+| GET | `/api/wishlist` | read — **item-level**, not tree-level. See below |
+| GET | `/api/covers/health` | read — dead cover images, for the banner |
+| POST | `/api/covers/check` | editCatalog — force a check slice now |
 | GET/POST | `/api/scan-jobs` | editCatalog — photo queue list and upload |
 | GET | `/api/scan-jobs/:id` | editCatalog — single job detail |
 | POST | `/api/scan-jobs/:id/enrich` | editCatalog — retry enrichment |
@@ -421,6 +543,19 @@ npm run tail --workspace @bgc/worker
 
 npx wrangler d1 execute board-game-catalog --remote --command "SELECT ..."
 ```
+
+Verifying the two newest features against `npm run dev:worker` (no tokens
+needed — the `DEV_EMAIL` bypass):
+
+```bash
+curl -s localhost:8787/api/wishlist                      # only `wanted` copies
+curl -s "localhost:8787/api/items?status=wanted"         # whole trees — compare
+curl -s -X POST "localhost:8787/api/covers/check?limit=40"   # force a check slice
+curl -s localhost:8787/api/covers/health                 # what the banner reads
+```
+
+A cover needs to fail **twice** before `/covers/health` reports it, so run the
+check twice before concluding it does not work.
 
 **Local dev has seeded sample data** so the UI isn't empty. Production is
 separate. Reset local:
@@ -506,6 +641,19 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
   stripping generic words like "expansion" and "edition" — without that strip it
   also rejected "Catan Expansion: Cities & Knights" against "Catan: Cities &
   Knights", which is the same box.
+- **A dead image URL does not have to answer 404.** `cf.geekdo-images.com`
+  returns **400** for every unresolvable path — measured three ways. A link
+  checker that only looks for 404/410 reports a clean bill of health on a
+  catalog whose covers are almost entirely geekdo URLs. See the cover-health
+  section above; `PERMANENT` in `apps/worker/src/lib/cover-check.ts` is the list
+  that matters.
+- **`d1_migrations` drifted from the local schema.** On 2026-08-06 the local
+  database already had `item.source_url` while `0012_source_url.sql` was not
+  recorded as applied, so `npm run db:migrate:local` died with
+  `duplicate column name: source_url` and refused to apply anything after it.
+  Fixed by inserting the row into `d1_migrations` by hand. If a local migration
+  fails on a column that already exists, this is why — check
+  `SELECT name FROM d1_migrations` before assuming the migration is wrong.
 - **`getCached` cannot tell a stored `null` from a cache miss** — both come back
   as `null`. Caching "nothing found" as `null` and then checking
   `if (cached !== null)` therefore does nothing, silently, forever: the entry is

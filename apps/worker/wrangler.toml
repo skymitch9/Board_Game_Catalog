@@ -25,6 +25,17 @@ migrations_dir = "../../migrations"
 # to be deleted later, and one code path forgetting to delete was all it took
 # to keep photos indefinitely.
 
+# Cover-image health, checked in slices.
+#
+# Every thumbnail_url is a hotlink to BoardGameGeek, Kickstarter or Gamefound,
+# and none of them owe us a stable URL. One invocation cannot probe the whole
+# catalog — Workers cap subrequests — so this walks it oldest-checked-first, 20
+# URLs at a time. Every half hour is ~960 probes a day against ~450 distinct
+# covers: roughly two full passes, which is often enough to notice a CDN change
+# within a day and rare enough to be a rounding error in anyone's traffic.
+[triggers]
+crons = ["*/30 * * * *"]
+
 [vars]
 APP_VERSION = "0.1.0"
 ENVIRONMENT = "production"

@@ -146,6 +146,19 @@ a:hover { text-decoration: underline; }
   padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.9rem;
 }
 
+/* A maintenance notice — something wants attention, nothing is broken. Warn
+   colours rather than the errorbox's red: a dead cover image is a chore, and
+   dressing it as a failure would teach people to ignore real failures. */
+.notice {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  background: var(--warn-bg); color: var(--warn);
+  border: 1px solid currentColor; border-radius: 8px;
+  padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.9rem;
+}
+.notice__body { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 0; }
+.notice__items { display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.8rem; }
+.notice .btn { flex: none; }
+
 /* --- controls ----------------------------------------------------------- */
 
 .btn {
