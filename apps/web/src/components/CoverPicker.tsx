@@ -41,7 +41,15 @@ export function CoverPicker({
     return <ErrorBox error={covers.error} what="Could not load the other covers" />;
   }
 
-  const { candidates, bggId, printingsFetched } = covers.data;
+  const { candidates, bggId, printingsFetched, kind } = covers.data;
+
+  /**
+   * How hard a missing cover is worth chasing, which is not the same for every
+   * kind of thing. Artwork matters for the games and expansions people browse;
+   * an insert or a pack of sleeves having no picture is simply fine. Saying so
+   * is the difference between an honest blank and a nag.
+   */
+  const coverMatters = kind === 'base' || kind === 'expansion' || kind === 'promo';
 
   async function lookUpPrintings() {
     setFetching(true);
@@ -72,10 +80,12 @@ export function CoverPicker({
    */
   const emptyReason =
     bggId == null
-      ? 'This one has never been matched to BoardGameGeek, so no other printings are known. Most pledge accessories are in this position and always will be.'
+      ? coverMatters
+        ? 'No covers known — this one has never been matched to BoardGameGeek. Worth fixing: set the BGG ID above, or use Free lookup on the game’s page.'
+        : 'No covers known, and none are likely: this has never been matched to BoardGameGeek, which is normal for an accessory or component. Not worth chasing.'
       : printingsFetched
-        ? 'BoardGameGeek lists no separate printings for this game.'
-        : 'Nobody has asked BoardGameGeek about this game’s printings yet.';
+        ? 'BoardGameGeek lists no separate printings for this one.'
+        : 'Nobody has asked BoardGameGeek about this one’s printings yet.';
 
   const canLookUp = bggId != null && !printingsFetched;
 

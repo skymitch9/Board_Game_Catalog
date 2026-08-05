@@ -384,6 +384,20 @@ negative would mean writing a fake edition row, and a fake printing would show
 up in the picker. It costs one slot in a batch of ten, and
 `/api/editions/status` makes a stall visible.
 
+### The rule: never overwrite a cover without keeping what was there
+
+`updateItem` records the outgoing `thumbnail_url` as a printing before it
+changes it (`preserveDisplacedCover`). This is the guarantee that makes the
+whole feature honest — a Kickstarter image, once nothing points at it, is gone,
+so without this a swap to a BoardGameGeek printing would be one-way and "keep
+the KS image in the picker" would be a promise the data could not keep.
+
+It lives in `updateItem` and not in the campaign backfill on purpose: a backfill
+only protects covers that existed the last time somebody remembered to run it.
+The insert is conditional, so swapping between two printings that are both
+already recorded costs one read and writes nothing, and swapping back and forth
+four times still leaves two candidates. Measured, not assumed.
+
 ### Picking writes through the ordinary item PATCH
 
 The picker sets the **form's** image URL; Save writes it. It does not PATCH on
@@ -406,6 +420,54 @@ is no wishlist-specific one.
   than the banner; the browser's own `onError` catches everything the checker has
   not reached. Either way the slot reads "Image no longer loads" instead of
   rendering an empty box under a caption.
+
+**How hard a missing cover is worth chasing is not uniform** (owner, 2026-08-06):
+games and expansions matter a lot, miniatures somewhat, accessories and
+components barely at all. `CoverCandidates` therefore carries the item's `kind`,
+and the no-candidates message differs — a sleeve pack with no picture is told it
+is fine and not worth chasing, while a base game is told to fix it and how. Do
+not flatten that back into one sentence.
+
+### ⚠️ Three rows shared one Kickstarter collage — one fixed, two refused
+
+The campaign hero for `dice-throne-x-men-marvel-co-op-missions` shows three
+boxes together, and all three catalog rows used it as their cover. The owner
+wants the BoardGameGeek art selected with the collage kept in the picker.
+
+| Item | Name | Outcome |
+|---|---|---|
+| 115 | Marvel Dice Throne: Missions | ✅ **Done.** Matched BGG 403495, cover now the 2025 Roxley printing, collage still offered |
+| 96 | Dice Throne: X-Men | ❌ **Refused** — `isFragmentOf` rejects it. Verified by hand as **BGG 403494** "Marvel Dice Throne: X-Men" (2025) |
+| 114 | Dice Throne: Deadpool Box Deluxe Edition | ❌ **Refused** — BGG's search returns *nothing* for that full string. Verified by hand as **BGG 403511** "Marvel Dice Throne: Deadpool" (2025) |
+
+**Both refusals are the guard working, not a bug.** 96 fails because
+"Dice Throne: X-Men" is a strict word-subset of "Marvel Dice Throne: X-Men", and
+that subset rule is what stops "Deep Rock Galactic" taking its expansion's
+identity. 114 fails earlier still: BGG's own search finds nothing for
+"Dice Throne: Deadpool Box Deluxe Edition", though "Dice Throne Deadpool" finds
+403511 immediately.
+
+They were **not forced**, because this project has been bitten three times by
+exact-name matches to the wrong game (Brink, Iliad, Moon — all scoring a perfect
+1.00). Both rows have a blank year *and* a blank publisher, so the disagreement
+guard in `/api/bgg/match/:id` had nothing to check against and name similarity
+was the only evidence there was.
+
+The evidence for the two ids above is strong and independent of the name: both
+BGG entries are 2025, both are Roxley, and the campaign URL on all three rows
+literally reads `dice-throne-x-men-marvel-co-op-missions`. **If the owner agrees,
+the fix is to type the BGG ID into the edit form** (`bggId` is an editable field),
+then press "Look up printings" in the cover picker and choose the retail cover —
+no forcing, no new code, and the collage survives either way because
+`updateItem` now preserves it.
+
+> **Leave room for the accessory split** (owner, 2026-08-06). Official
+> accessories are to count toward a future completeness figure; third-party ones
+> (Folded Space, Broken Token, generic sleeves) are not, but must stay checkable
+> behind something collapsible. Nothing here groups or displays accessories, so
+> nothing here forecloses it — but note that `edition.source` is about *where a
+> printing's record came from* and is a different axis entirely. Do not overload
+> it to mean "third-party".
 
 > **Local dev carries one deliberate broken candidate**: item 36 ("Veiled Fate")
 > was given a Gamefound `source_url` and a nonexistent `test-cover.png` while

@@ -273,6 +273,57 @@ export async function recordCampaignCovers(
   return { considered: results.length, added };
 }
 
+/**
+ * Keep the cover an item is about to stop wearing.
+ *
+ * **Never overwrite a thumbnail without first capturing what was there.** A
+ * campaign cover exists nowhere else — no CDN will hand it back once the item
+ * stops pointing at it — so a swap to a BoardGameGeek printing would otherwise
+ * be one-way, and "swap to the BGG image, keep the Kickstarter one in the
+ * picker" would be a promise the data could not keep.
+ *
+ * Called from `updateItem` rather than left to the campaign backfill, because
+ * a backfill only protects covers that existed when it last ran. Nothing
+ * happens when an edition already holds the outgoing URL, which is the common
+ * case: swapping between two printings that are both already recorded.
+ */
+export async function preserveDisplacedCover(
+  db: D1Database,
+  itemId: number,
+  outgoingUrl: string | null,
+): Promise<boolean> {
+  const url = outgoingUrl?.trim();
+  if (!url) return false;
+
+  const item = await db
+    .prepare('SELECT source_url, year_published, publisher FROM item WHERE id = ?')
+    .bind(itemId)
+    .first<{ source_url: string | null; year_published: number | null; publisher: string | null }>();
+
+  // A displaced BoardGameGeek image is recorded as an untagged printing rather
+  // than as `bgg`, because we do not know which version id it belonged to and
+  // guessing would make the backfill think this item had been asked about.
+  const isCampaign = !isBggImageUrl(url);
+
+  const res = await db
+    .prepare(
+      `INSERT INTO edition (item_id, name, year, publisher, image_url, source)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6
+        WHERE NOT EXISTS (SELECT 1 FROM edition WHERE item_id = ?1 AND image_url = ?5)`,
+    )
+    .bind(
+      itemId,
+      isCampaign ? campaignEditionName(item?.source_url ?? null) : 'Previous cover',
+      item?.year_published ?? null,
+      item?.publisher ?? null,
+      url,
+      isCampaign ? 'campaign' : null,
+    )
+    .run();
+
+  return (res.meta.changes ?? 0) > 0;
+}
+
 // ---------------------------------------------------------------------------
 // Reading the candidates back
 // ---------------------------------------------------------------------------
@@ -339,9 +390,9 @@ export async function listCoverCandidates(
   itemId: number,
 ): Promise<CoverCandidates | null> {
   const item = await db
-    .prepare('SELECT id, bgg_id, thumbnail_url FROM item WHERE id = ?')
+    .prepare('SELECT id, kind, bgg_id, thumbnail_url FROM item WHERE id = ?')
     .bind(itemId)
-    .first<{ id: number; bgg_id: number | null; thumbnail_url: string | null }>();
+    .first<{ id: number; kind: string; bgg_id: number | null; thumbnail_url: string | null }>();
   if (!item) return null;
 
   const currentUrl = item.thumbnail_url?.trim() || null;
@@ -416,6 +467,7 @@ export async function listCoverCandidates(
 
   return {
     itemId: item.id,
+    kind: item.kind as CoverCandidates['kind'],
     currentUrl,
     bggId: item.bgg_id,
     printingsFetched: bggEditions > 0,

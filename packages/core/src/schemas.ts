@@ -331,6 +331,16 @@ export interface CoverCandidate {
 
 export interface CoverCandidates {
   itemId: number;
+  /**
+   * How much a missing cover matters here.
+   *
+   * Not decoration: the owner cares a lot about game and expansion artwork,
+   * somewhat about miniatures, and barely at all about accessories and
+   * components. A sleeve pack with no picture is fine and not worth chasing; a
+   * base game without one is worth real effort. The picker says which of those
+   * it is looking at rather than nagging identically about both.
+   */
+  kind: (typeof ITEM_KINDS)[number];
   /** Whatever the item wears right now, which may be nothing. */
   currentUrl: string | null;
   /** Null when the item was never matched to BoardGameGeek — the usual reason there is nothing to pick between. */

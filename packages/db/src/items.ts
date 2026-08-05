@@ -10,6 +10,7 @@ import type {
   WishlistEntry,
 } from '@bgc/core';
 import { getRelatedItems } from './relations.js';
+import { preserveDisplacedCover } from './editions.js';
 import { mapCopyRow, toIso, type CopyRow } from './copies.js';
 
 export interface ItemRow {
@@ -451,6 +452,24 @@ export async function updateItem(
   }
 
   if (sets.length === 0) return existing;
+
+  /*
+    A cover being replaced is recorded as a printing before it goes.
+
+    This is the only place an item's `thumbnail_url` changes, so it is the only
+    place that can make the guarantee: the picker offers you the cover you had,
+    whichever one you swap to. Left to the campaign backfill, the guarantee
+    would hold only for covers that existed the last time somebody remembered to
+    run it — and a Kickstarter image, once unreferenced, is gone. The cost is one
+    read and one conditional insert on the rare update that touches the cover.
+  */
+  if (
+    'thumbnailUrl' in input &&
+    existing.thumbnailUrl &&
+    (input.thumbnailUrl || null) !== existing.thumbnailUrl
+  ) {
+    await preserveDisplacedCover(db, id, existing.thumbnailUrl);
+  }
 
   sets.push(`updated_at = datetime('now')`);
   params.push(id);
