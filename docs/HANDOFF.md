@@ -64,7 +64,7 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `c4e602c9-0f74-4e5c-b7d1-3996eb1b5f9e` — upload errors surfaced, dashes repaired |
+| Deployed version | `bb0624ca-28ce-4ed0-b309-03e888cd22a1` — `<img>` decoder fallback for picked photos |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
