@@ -103,10 +103,10 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `8dc53f95-660e-45a8-b809-76bd12887e7f` — orphan expansions, no more demotion |
+| Deployed version | `14516b09-961f-4c35-b944-c5c6ee5e5983` — detail backfill, R2 removed |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
-| R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
+| R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
 | Migrations applied | `0001_init` … `0010_pending_parent` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
@@ -236,6 +236,38 @@ that matters, `adoptOrphans` is already the right shape to call from `updateItem
 
 ---
 
+## Related games — the standalone/nested question, answered per game
+
+`/retag` ("Related games" on the collection) lists every top-level game whose
+name contains another game you own, and asks the one question that decides it:
+**can you play this without the other box?**
+
+- **Standalone** → writes an `item_relation` and leaves the game where it is.
+- **File under** → sets kind and parent, nesting it.
+
+The heuristic finds the pairs and refuses to pick. It cannot: "Scythe: Invaders
+from Afar" and "CATAN: Starfarers" are structurally identical, and one is an
+expansion while the other is a whole game. Only names containing "expansion" or
+"extension" outright are marked confident. This is the Catan / Seafarers /
+Starfarers question from the original design discussion, and it needed no new
+schema — `item_relation` already existed.
+
+Parent matching takes the **longest** owned prefix, not the first. "Catan:
+Starfarers – 5-6 Player Extension" contains both "Catan" and "Catan:
+Starfarers"; the first-colon rule filed it under Catan while looking correct.
+Separators include the en and em dashes publishers actually use.
+
+## Filling in blanks — `/details`
+
+A queue of every game missing publisher / year / players / playing time /
+description, working down the list one at a time with a running cost, stoppable
+mid-run. Per-game, the item page offers **Free lookup** (the scanner's sources)
+beside **Search the web** (Claude, ~1.4¢, owner-only). Kept separate rather
+than chained, because the free one is right often enough that paying for every
+blank would be waste.
+
+---
+
 ## Blocked, waiting on you
 
 ### 1. BoardGameGeek token — phase 2
@@ -269,6 +301,41 @@ public `test` stage using their published demo key
 against. The `test` stage's data is *wiped periodically*, so a barcode that
 resolved yesterday may miss today — that is the cost of not having the key, and
 it is why a miss should never be treated as an outage.
+
+### 1c. Phase 3 is built — and here is what unblocked it
+
+The research pipeline (`packages/research/{tiers,research}.ts`,
+`apps/worker/src/routes/research.ts`) is written and typechecks. Three tiers,
+three separate calls, `allowed_domains` enforcing the ordering. Findings land
+in `research_finding` for review and are **never applied** — that step is
+deliberately not built.
+
+**The official tier needs a publisher domain**, taken from the item's
+`publisherUrl`, and refuses to run without one rather than quietly searching
+the open web. That was a universal blocker: GameUPC carries no publisher at all
+(`packages/barcode/src/gameupc.ts:179`), so every scanned game had an empty
+field and tier 1 could not run on anything.
+
+`packages/research/src/enrich.ts` fixes that. It asks Claude with the open web
+for the dull box-facts — publisher, their site, year, players, playing time,
+description — at `effort: low`, ~1.4 cents a game measured. Verified end to
+end: a bare "Wingspan" came back Stonemaier Games / stonemaiergames.com / 2019
+/ 1–5 players / 90 min, and the research plan for that item then reported
+`official RUNNABLE` against `stonemaiergames.com`.
+
+It fills **gaps only** — a second run over the same game changes nothing.
+
+| Route | Does |
+|---|---|
+| `GET /api/research/needs-details` | The queue: games with blanks, and what filling costs |
+| `POST /api/research/:id/details` | Fill one game's gaps from the web |
+| `GET /api/research/:id/plan` | Per-tier cost, domains, and whether it can run |
+| `POST /api/research/:id/run` | Run one tier, synchronously |
+| `GET /api/research/:id/findings` | What has been found, official-tier first |
+| `PATCH /api/research/findings/:id` | Accept or reject one finding |
+
+**Not built:** the review UI for findings, and the step that applies an accepted
+finding to the catalog.
 
 ### 2. Anthropic API key — ✅ DONE, nothing outstanding
 
@@ -421,7 +488,24 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
   a search nothing; a missing title costs it everything.
 - **UPCitemdb's free quota is per IP.** A Worker is one IP for every user, so
   100/day is a whole-app budget, not per-person. It is deliberately only called
-  after GameUPC misses.
+  after GameUPC misses. **One 55-title shelf photo can exhaust it**, and the
+  failures cluster in the back half of the photo — if a bulk scan resolves the
+  first thirty games and then stops finding anything, this is why, not the data.
+- **A lookup that *failed* is not a lookup that found nothing.** `resolveTitle`
+  used to return the same empty result for both, and `cachedResolve` then wrote
+  a negative cache entry — so a quota exhaustion or a 5xx got frozen in as "this
+  game does not exist" for a week. It caused real damage: a shelf scan produced
+  nine games with correct titles and no cover art, several of them household
+  names that resolve perfectly on a retry. `resolveTitle` now returns `failed`,
+  and a failed lookup is never cached. **Keep that distinction if you touch the
+  resolver** — it is invisible in every type signature that does not carry it.
+- **Word-overlap similarity scores a fragment far too kindly.** "Deep Rock
+  Galactic" against "Deep Rock Galactic: Biome Expansion" scores 0.75 and sails
+  past a 0.7 floor, so a base game takes its expansion's identity. `isFragmentOf`
+  in `packages/core/src/barcode.ts` rejects strict-subset matches outright, after
+  stripping generic words like "expansion" and "edition" — without that strip it
+  also rejected "Catan Expansion: Cities & Knights" against "Catan: Cities &
+  Knights", which is the same box.
 - **`getCached` cannot tell a stored `null` from a cache miss** — both come back
   as `null`. Caching "nothing found" as `null` and then checking
   `if (cached !== null)` therefore does nothing, silently, forever: the entry is
@@ -632,8 +716,16 @@ Ideas, ranked:
 **Photos must be self-contained (owner requirement, 2026-08-05).** No captured
 photo may land in the iPhone's camera roll — nobody wants a photo library full
 of pictures only one app needed. The same logic applies server-side: capture into
-memory, send, read, discard. Nothing in D1, nothing in R2 unless the owner
-explicitly asks for a cover image on a specific copy.
+memory, send, read, discard.
+
+**Settled 2026-08-05: nothing is stored at all.** The R2 binding is gone from
+`wrangler.toml`. A scan photo goes from the upload request straight into the
+vision call and is then unreferenced — vision takes the base64 from the request,
+enrichment works from the extracted titles, and the review screen never shows an
+image. The bucket had been write-only storage whose entire purpose was to be
+deleted later, and one code path forgetting to delete was all it took to keep
+photos indefinitely. Not writing them is a guarantee; remembering to delete them
+was a habit. `photo_key` now holds the marker `not-stored`.
 
 This makes `getUserMedia` + canvas the *primary* capture path rather than a
 fallback, since it provably writes nothing to Photos. Whether
