@@ -15,7 +15,7 @@ verified end to end against live services.
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `323110d9-2042-4ae3-a681-246cbec91e93` |
+| Deployed version | `b8faec00-368a-43f7-bf65-995ebe521e5c` — first deploy including the scanner |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | Migrations applied | `0001_init`, `0002_copy_quantity`, `0003_barcode_unique` (local **and** production) |
@@ -289,9 +289,25 @@ curl -s localhost:8787/api/barcode/029877030713   # bad check digit -> 400
 
 ### Also outstanding
 
-- **`ANTHROPIC_API_KEY` is not set in production** — confirmed via
-  `wrangler secret list`, which returned nothing. Research will work locally and
-  500 on the live site until `npm run secret ANTHROPIC_API_KEY` is run.
+- **No secrets are set in production at all** — `npm run secret:list` returns
+  `[]` (checked 2026-08-05, just before the scanner deploy). Consequences on the
+  live site right now:
+
+  | Mode | Live? | Why |
+  |---|---|---|
+  | Barcode scan | ✅ works | Local + GameUPC `test` stage + UPCitemdb are all free and keyless |
+  | One box (photo) | ❌ 503 | Needs `ANTHROPIC_API_KEY` |
+  | Whole shelf | ❌ 503 | Needs `ANTHROPIC_API_KEY` |
+  | BGG hydration | bypassed | Needs `BGG_API_TOKEN`; by design, degrades rather than breaks |
+
+  ```bash
+  npm run secret ANTHROPIC_API_KEY   # interactive — a human must run this
+  ```
+
+  ⚠️ **Rotate the key first.** It was surfaced into a chat transcript on
+  2026-08-04 (see the Anthropic section above). Generate a new one at
+  <https://platform.claude.com/settings/keys>, then set it in **both**
+  `apps/worker/.dev.vars` and production.
 - ✅ **Migration `0003_barcode_unique.sql` is applied to local and production**
   (2026-08-05). Verified in production by reading back `sqlite_master`:
   `CREATE UNIQUE INDEX idx_edition_barcode ON edition(barcode) WHERE barcode IS
