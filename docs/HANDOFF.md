@@ -15,7 +15,7 @@ verified end to end against live services.
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `b818b57d-b480-47b2-b382-d2b1cea5beb9` — photo caching + index.html no-cache |
+| Deployed version | `9b7ebe2f-fd9b-42f7-b9c0-9c5c3f858bb2` — cached indicator + cache admin |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | Migrations applied | `0001_init` … `0006_photo_cache` (local **and** production) |
@@ -156,6 +156,7 @@ exactly one implementation of anything that makes a decision.
 | POST | `/api/barcode/link` | editCatalog — writes, contributes to GameUPC |
 | POST | `/api/vision/identify` | runResearch — one box from a photo, ~3-5s |
 | POST | `/api/vision/shelf` | runResearch — many spines, matched locally + GameUPC |
+| GET/DELETE | `/api/cache` | manageUsers — cache stats and clearing |
 
 `GET /api/items` accepts `q`, `status`, `kind`, `uncatalogued`, `duplicates`.
 

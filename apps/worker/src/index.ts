@@ -10,6 +10,7 @@ import type { AppBindings } from './env.js';
 import { requireAuth } from './middleware/auth.js';
 import { barcodeRoutes } from './routes/barcode.js';
 import { bggRoutes } from './routes/bgg.js';
+import { cacheRoutes } from './routes/cache.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { exportRoutes } from './routes/export.js';
 import { healthRoutes } from './routes/health.js';
@@ -28,6 +29,7 @@ app.route('/api', catalogRoutes);
 app.route('/api/bgg', bggRoutes);
 app.route('/api/barcode', barcodeRoutes);
 app.route('/api/vision', visionRoutes);
+app.route('/api/cache', cacheRoutes);
 app.route('/api', exportRoutes);
 
 app.notFound(async (c) => {

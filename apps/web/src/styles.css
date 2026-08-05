@@ -481,3 +481,12 @@ code {
 .external-links { display: flex; gap: 0.75rem; margin: 0.35rem 0 0; font-size: 0.85rem; }
 .external-links a { color: var(--accent); text-decoration: none; }
 .external-links a:hover { text-decoration: underline; }
+
+.cached-tag {
+  padding: 0.05rem 0.35rem; border: 1px dashed var(--line);
+  border-radius: 999px; font-size: 0.7rem;
+}
+
+.cache-stats { list-style: none; margin: 0.5rem 0; padding: 0; display: flex; gap: 1.25rem; }
+.cache-stats strong { font-size: 1.15rem; }
+.cache-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }

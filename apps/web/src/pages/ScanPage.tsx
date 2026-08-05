@@ -44,6 +44,8 @@ export function ScanPage({ me }: { me: MeResponse }) {
   const [candidates, setCandidates] = useState<BarcodeCandidate[] | null>(null);
   const [shelf, setShelf] = useState<ShelfMatch[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /** True when the last photo reading was served from a previous identical shot. */
+  const [fromCache, setFromCache] = useState(false);
 
   const stopLoopRef = useRef<(() => void) | null>(null);
   const canResearch = me.capabilities.includes('runResearch');
@@ -55,6 +57,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
     setShelf(null);
     setNote(null);
     setError(null);
+    setFromCache(false);
   }, []);
 
   const stopEverything = useCallback(() => {
@@ -102,6 +105,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
         if (which === 'photo') {
           const res = await api.identifyPhoto(photo);
           setCandidates(res.candidates);
+          setFromCache(res.cached === true);
           if (res.unreadable || res.candidates.length === 0) {
             setNote(
               'Could not read that one. Try filling more of the frame with the box, and avoid glare on the title.',
@@ -110,6 +114,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
         } else {
           const res = await api.readShelf(photo);
           setShelf(res.matches);
+          setFromCache(res.cached === true);
           if (res.unreadable || res.matches.length === 0) {
             setNote('No titles were legible. Try getting closer, or straighter on to the spines.');
           }
@@ -327,11 +332,14 @@ export function ScanPage({ me }: { me: MeResponse }) {
       {candidates && candidates.length > 0 && (
         <CandidateList
           candidates={candidates}
+          cached={fromCache}
           onAdd={(c) => addCandidate(c, lookup?.barcode ?? null)}
         />
       )}
 
-      {shelf && <ShelfResult matches={shelf} onAdd={(c) => addCandidate(c, null, false)} />}
+      {shelf && (
+        <ShelfResult matches={shelf} cached={fromCache} onAdd={(c) => addCandidate(c, null, false)} />
+      )}
 
       {showResults && (
         <button
@@ -465,9 +473,12 @@ function BarcodeResult({
 function CandidateList({
   candidates,
   onAdd,
+  cached = false,
 }: {
   candidates: BarcodeCandidate[];
   onAdd: (c: BarcodeCandidate) => void;
+  /** This whole reading came from a previous identical photo, not a fresh call. */
+  cached?: boolean;
 }) {
   return (
     <ul className="candidate-list">
@@ -484,6 +495,11 @@ function CandidateList({
                 {c.confidence}
               </Badge>
               <span className="muted">{c.source}</span>
+              {cached && (
+                <span className="muted cached-tag" title="Served from a recent identical photo — no model call">
+                  cached
+                </span>
+              )}
               {c.kind !== 'base' && <Badge tone="kind">{c.kind}</Badge>}
             </span>
             {c.note && <span className="muted candidate__note">{c.note}</span>}
@@ -511,9 +527,11 @@ function CandidateList({
 function ShelfResult({
   matches,
   onAdd,
+  cached = false,
 }: {
   matches: ShelfMatch[];
   onAdd: (c: BarcodeCandidate) => Promise<number | null>;
+  cached?: boolean;
 }) {
   const owned = matches.filter((m) => m.existingItemId != null);
   const fresh = matches.map((m, i) => ({ m, i })).filter(({ m }) => m.existingItemId == null);
@@ -562,6 +580,7 @@ function ShelfResult({
         Read {matches.length} title{matches.length === 1 ? '' : 's'}
         {owned.length > 0 && ` · ${owned.length} already yours`}
         {addedCount > 0 && ` · ${addedCount} added`}
+        {cached && ' · from a recent identical photo'}
       </p>
 
       {fresh.length > 0 && (

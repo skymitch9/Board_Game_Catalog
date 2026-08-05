@@ -172,3 +172,61 @@ export async function putCachedPhoto(
     // Ignored on purpose.
   }
 }
+
+// ---------------------------------------------------------------------------
+// Maintenance
+// ---------------------------------------------------------------------------
+
+export interface CacheStats {
+  titles: number;
+  barcodes: number;
+  photos: number;
+  /** Oldest surviving entry, so "is anything stale in here?" is answerable. */
+  oldest: string | null;
+}
+
+export async function cacheStats(db: D1Database): Promise<CacheStats> {
+  const [lookup, photo] = await db.batch([
+    db.prepare(
+      `SELECT kind, COUNT(*) AS n, MIN(created_at) AS oldest
+         FROM lookup_cache GROUP BY kind`,
+    ),
+    db.prepare('SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM photo_cache'),
+  ]);
+
+  const rows = (lookup?.results ?? []) as { kind: string; n: number; oldest: string | null }[];
+  const photos = ((photo?.results ?? []) as { n: number; oldest: string | null }[])[0];
+
+  const oldest = [...rows.map((r) => r.oldest), photos?.oldest ?? null]
+    .filter((v): v is string => !!v)
+    .sort()[0];
+
+  return {
+    titles: rows.find((r) => r.kind === 'title')?.n ?? 0,
+    barcodes: rows.find((r) => r.kind === 'barcode')?.n ?? 0,
+    photos: photos?.n ?? 0,
+    oldest: oldest ?? null,
+  };
+}
+
+export type CacheTarget = 'all' | 'lookups' | 'photos';
+
+/**
+ * Empty a cache.
+ *
+ * Worth being clear about what this does *not* touch: the catalog. Everything
+ * here is "we asked the internet this before" — deleting it costs a repeat
+ * lookup and nothing else, which is exactly why it is safe to offer as a button.
+ */
+export async function clearCache(db: D1Database, target: CacheTarget): Promise<number> {
+  let removed = 0;
+  if (target === 'all' || target === 'lookups') {
+    const res = await db.prepare('DELETE FROM lookup_cache').run();
+    removed += res.meta.changes ?? 0;
+  }
+  if (target === 'all' || target === 'photos') {
+    const res = await db.prepare('DELETE FROM photo_cache').run();
+    removed += res.meta.changes ?? 0;
+  }
+  return removed;
+}

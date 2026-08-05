@@ -103,6 +103,10 @@ export const api = {
   deleteCopy: (id: number) => del(`/api/copies/${id}`) as Promise<{ deleted: boolean }>,
 
   users: () => req<{ users: AppUser[] }>('/api/users'),
+
+  cache: () => req<{ stats: CacheStats }>('/api/cache'),
+  clearCache: (target: 'all' | 'lookups' | 'photos' = 'all') =>
+    del(`/api/cache?target=${target}`) as Promise<{ removed: number; stats: CacheStats }>,
   setRole: (userId: number, role: AppUser['role']) =>
     patch(`/api/users/${userId}/role`, { role }) as Promise<{ user: AppUser }>,
 
@@ -152,6 +156,13 @@ export const api = {
       cached?: boolean;
     }>,
 };
+
+export interface CacheStats {
+  titles: number;
+  barcodes: number;
+  photos: number;
+  oldest: string | null;
+}
 
 export interface ResearchUsage {
   inputTokens: number;
