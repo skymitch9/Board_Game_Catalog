@@ -14,6 +14,7 @@ import { cacheRoutes } from './routes/cache.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { exportRoutes } from './routes/export.js';
 import { healthRoutes } from './routes/health.js';
+import { lookupRoutes } from './routes/lookup.js';
 import { userRoutes } from './routes/users.js';
 import { visionRoutes } from './routes/vision.js';
 
@@ -30,6 +31,7 @@ app.route('/api/bgg', bggRoutes);
 app.route('/api/barcode', barcodeRoutes);
 app.route('/api/vision', visionRoutes);
 app.route('/api/cache', cacheRoutes);
+app.route('/api/lookup', lookupRoutes);
 app.route('/api', exportRoutes);
 
 app.notFound(async (c) => {

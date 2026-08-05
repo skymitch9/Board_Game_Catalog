@@ -104,6 +104,12 @@ export const api = {
 
   users: () => req<{ users: AppUser[] }>('/api/users'),
 
+  /** Fill a form from a title. Free rungs only, cached, no model call. */
+  lookup: (q: string) =>
+    req<{ candidates: BarcodeCandidate[]; cached: boolean }>(
+      `/api/lookup?q=${encodeURIComponent(q)}`,
+    ),
+
   cache: () => req<{ stats: CacheStats }>('/api/cache'),
   clearCache: (target: 'all' | 'lookups' = 'all') =>
     del(`/api/cache?target=${target}`) as Promise<{ removed: number; stats: CacheStats }>,
