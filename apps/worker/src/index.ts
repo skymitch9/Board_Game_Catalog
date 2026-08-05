@@ -8,8 +8,16 @@
 import { Hono } from 'hono';
 import type { AppBindings } from './env.js';
 import { requireAuth } from './middleware/auth.js';
+import { barcodeRoutes } from './routes/barcode.js';
+import { bggRoutes } from './routes/bgg.js';
+import { cacheRoutes } from './routes/cache.js';
+import { catalogRoutes } from './routes/catalog.js';
+import { exportRoutes } from './routes/export.js';
 import { healthRoutes } from './routes/health.js';
+import { lookupRoutes } from './routes/lookup.js';
+import { scanJobRoutes } from './routes/scan-jobs.js';
 import { userRoutes } from './routes/users.js';
+import { visionRoutes } from './routes/vision.js';
 
 const app = new Hono<AppBindings>();
 
@@ -19,6 +27,14 @@ app.route('/api/health', healthRoutes);
 // Everything else behind identity.
 app.use('/api/*', requireAuth());
 app.route('/api', userRoutes);
+app.route('/api', catalogRoutes);
+app.route('/api/bgg', bggRoutes);
+app.route('/api/barcode', barcodeRoutes);
+app.route('/api/vision', visionRoutes);
+app.route('/api/cache', cacheRoutes);
+app.route('/api/lookup', lookupRoutes);
+app.route('/api/scan-jobs', scanJobRoutes);
+app.route('/api', exportRoutes);
 
 app.notFound(async (c) => {
   // Unmatched /api/* is a genuine 404; anything else is an SPA route, so hand
@@ -28,7 +44,16 @@ app.notFound(async (c) => {
   }
   const url = new URL(c.req.url);
   url.pathname = '/index.html';
-  return c.env.ASSETS.fetch(new Request(url, { headers: c.req.raw.headers }));
+  const res = await c.env.ASSETS.fetch(new Request(url, { headers: c.req.raw.headers }));
+
+  // index.html names the content-hashed bundles, so a cached copy pins a browser
+  // to a previous deploy's JavaScript. Safari did exactly that: new assets were
+  // live, but the phone kept loading the old ones because the file naming them
+  // was still in cache. The bundles themselves are hashed and cached hard by
+  // public/_headers; this one file must always be revalidated.
+  const html = new Response(res.body, res);
+  html.headers.set('Cache-Control', 'no-cache');
+  return html;
 });
 
 app.onError((err, c) => {

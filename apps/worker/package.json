@@ -13,10 +13,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bgc/bgg": "*",
     "@bgc/core": "*",
     "@bgc/db": "*",
     "hono": "^4.6.14",
-    "jose": "^5.9.6"
+    "jose": "^5.9.6",
+    "zod": "^3.24.1",
+    "@bgc/barcode": "*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0"

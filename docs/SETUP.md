@@ -57,6 +57,42 @@ with a button.
 
 ---
 
+## Required for phase 2: a BoardGameGeek API token
+
+BGG's XML API used to be open. Since **July 2025** it requires registration and
+a bearer token, so game lookup is unavailable until you have one. Everything
+else works without it — the lookup routes answer 502 with an explanation and
+nothing else is affected.
+
+1. Sign in at [boardgamegeek.com](https://boardgamegeek.com) and follow
+   [Using the XML API](https://boardgamegeek.com/using_the_xml_api) to register
+   an application and request a token. Registration is free; approval is manual,
+   so it may not be instant.
+2. Store the token as a **secret**, never in `wrangler.toml`:
+
+   ```
+   ! npx wrangler secret put BGG_API_TOKEN
+   ```
+
+   It prompts for the value and encrypts it. (Run this yourself — it's
+   interactive, and the token shouldn't pass through anything that logs it.)
+3. For local development, add it to `apps/worker/.dev.vars`:
+
+   ```
+   BGG_API_TOKEN = "your-token"
+   ```
+
+Verify:
+
+```
+curl https://board-game-catalog.bgc-worker.workers.dev/api/bgg/search?q=wingspan
+```
+
+(Needs an Access session, so easiest from the browser devtools console on the
+app itself.)
+
+---
+
 ## Optional: swap one-time PIN for Google SSO
 
 Purely a login-UX change — **no code changes**. The Worker reads the verified
@@ -130,7 +166,7 @@ Start over locally: delete `apps/worker/.wrangler/state/v3/d1`, then
 
 **Phase 1 — the manual catalog.** Add and edit items and copies by hand, browse
 them rooted on base games with expansions and accessories nested underneath,
-filter and search, record location, purchase, condition and per-person ratings.
+filter and search, record how many you hold and per-person ratings.
 No external dependencies, so it works regardless of what BGG or any LLM is doing.
 
 See `docs/DESIGN.md` §7 for the full phase list.

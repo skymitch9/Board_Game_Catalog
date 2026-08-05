@@ -19,6 +19,10 @@ database_id = "7dd22702-f0e2-4fc7-b201-d16d60176efa"
 # Migrations live at the repo root so the CLI can reach them too.
 migrations_dir = "../../migrations"
 
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "bgc-photos"
+
 [vars]
 APP_VERSION = "0.1.0"
 ENVIRONMENT = "production"

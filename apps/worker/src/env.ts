@@ -3,6 +3,7 @@ import type { AppUser } from '@bgc/core';
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  PHOTOS: R2Bucket;
 
   APP_VERSION: string;
   ENVIRONMENT: string;
@@ -14,6 +15,33 @@ export interface Env {
   CF_ACCESS_TEAM_DOMAIN: string;
   /** The Access application's AUD tag. */
   CF_ACCESS_AUD: string;
+
+  /**
+   * BoardGameGeek application token. BGG began requiring registration and
+   * bearer tokens on its XML API in July 2025, so lookup is unavailable until
+   * this is set. Stored as a secret (`wrangler secret put BGG_API_TOKEN`),
+   * never in wrangler.toml.
+   */
+  BGG_API_TOKEN?: string;
+
+  /**
+   * Anthropic API key for the research pipeline. Set as a secret
+   * (`wrangler secret put ANTHROPIC_API_KEY`), never in wrangler.toml — that
+   * file is committed.
+   */
+  ANTHROPIC_API_KEY?: string;
+
+  /**
+   * GameUPC production key — a free board-game barcode database that answers
+   * with BoardGameGeek ids. Request one by emailing gameupc@grettir.org.
+   *
+   * Optional by design: with no key set, lookups fall back to GameUPC's public
+   * `test` stage using their published demo key, so barcode scanning works
+   * (against periodically-wiped data) before the real key arrives.
+   */
+  GAMEUPC_API_KEY?: string;
+  /** `test` | `dev` | `v1`. Defaults to `v1` when a key is set, `test` otherwise. */
+  GAMEUPC_STAGE?: string;
 
   /**
    * Local development only. Ignored unless ENVIRONMENT is "development", so a

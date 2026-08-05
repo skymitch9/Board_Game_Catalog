@@ -1,9 +1,21 @@
 # Copy to `.dev.vars` (gitignored) for local development.
 #
-# ENVIRONMENT must not be "production" or DEV_EMAIL is ignored — that guard is
-# what stops a stray value from bypassing Cloudflare Access on the real site.
+# This is wrangler's equivalent of a .env — loaded automatically by
+# `wrangler dev`. Production secrets are set separately with
+# `npx wrangler secret put NAME` and are never read from this file.
+
+# Must not be "production", or DEV_EMAIL is ignored. That guard is what stops a
+# stray value from bypassing Cloudflare Access on the real site.
 ENVIRONMENT = "development"
 
-# Stands in for the Google identity that Access would supply. The first identity
-# to hit an empty database becomes owner, so locally that's whoever this is.
+# Stands in for the Google identity Access would supply. The first identity to
+# hit an empty database becomes owner.
 DEV_EMAIL = "you@example.com"
+
+# Anthropic API key for the research pipeline (phase 3).
+# https://platform.claude.com/settings/keys
+ANTHROPIC_API_KEY = ""
+
+# BoardGameGeek application token (phase 2).
+# https://boardgamegeek.com/applications → Tokens
+BGG_API_TOKEN = ""

@@ -1,0 +1,20 @@
+{
+  "name": "@bgc/barcode",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Free barcode resolution: GameUPC (board-game native) then UPCitemdb, before anything costs money.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bgc/bgg": "*",
+    "@bgc/core": "*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0"
+  }
+}
