@@ -15,20 +15,29 @@ import {
   type BarcodeCandidate,
   type ShelfTitle,
 } from '@bgc/core';
-import { gameUpcConfig, resolveTitle } from '@bgc/barcode';
+import { gameUpcConfig } from '@bgc/barcode';
 import {
   createScanJob,
   deleteScanJob,
-  getCached,
   getScanJob,
   listItemNames,
   listScanJobs,
-  putCached,
   updateScanJobStatus,
 } from '@bgc/db';
 import { isPhotoMediaType, readShelf, identifyFromPhoto, type PhotoMediaType } from '@bgc/research';
-import type { AppBindings } from '../env.js';
+import type { AppBindings, Env } from '../env.js';
+import { cachedResolve } from '../lib/resolve-title.js';
 import { requireCapability } from '../middleware/auth.js';
+
+const statusSchema = z.enum([
+  'uploaded',
+  'reading',
+  'read',
+  'enriching',
+  'review',
+  'done',
+  'failed',
+]);
 
 const uploadSchema = z.object({
   data: z.string().min(64),
@@ -41,10 +50,11 @@ export const scanJobRoutes = new Hono<AppBindings>()
 
   // --- List all jobs -------------------------------------------------------
   .get('/', async (c) => {
-    const status = c.req.query('status') as Parameters<typeof listScanJobs>[1] extends infer T
-      ? T extends { status?: infer S } ? S : undefined
-      : undefined;
-    const jobs = await listScanJobs(c.env.DB, status ? { status } : undefined);
+    // Validate rather than cast: an unrecognised ?status= should list
+    // everything, not silently match no rows.
+    const raw = c.req.query('status');
+    const status = statusSchema.safeParse(raw);
+    const jobs = await listScanJobs(c.env.DB, status.success ? { status: status.data } : undefined);
     return c.json({ jobs });
   })
 
@@ -133,8 +143,6 @@ export const scanJobRoutes = new Hono<AppBindings>()
 // ---------------------------------------------------------------------------
 // Background processing
 // ---------------------------------------------------------------------------
-
-import type { Env } from '../env.js';
 
 /** Step 1: Run vision to extract titles from the photo. */
 async function processVision(
@@ -229,16 +237,7 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
         // Try free resolution.
         let best: BarcodeCandidate | null = null;
         try {
-          const cached = await getCached<BarcodeCandidate | null>(env.DB, 'title', title.text);
-          if (cached !== null) {
-            best = cached;
-          } else if (deps.gameUpc) {
-            const hit = await resolveTitle(deps, title.text);
-            best = hit.candidates[0] ?? null;
-            if (best === null || hit.bggHydrated || !deps.bggToken) {
-              await putCached(env.DB, 'title', title.text, best);
-            }
-          }
+          best = await cachedResolve(env.DB, deps, title.text);
         } catch {
           // Lookup failure is not fatal — the title still shows for review.
         }

@@ -25,11 +25,23 @@ export function cacheKey(kind: CacheKind, raw: string): string {
   return kind === 'barcode' ? normaliseBarcode(raw) : normaliseTitle(raw);
 }
 
-export async function getCached<T>(
+/**
+ * Read an entry, distinguishing "we have no answer" from "the answer is null".
+ *
+ * `getCached` cannot tell those apart — both come back as `null` — so a lookup
+ * that legitimately resolved to *nothing found* reads back exactly like an
+ * empty cache and gets asked again. That is the wrong way round: a title that
+ * resolves to nothing is precisely the one worth remembering, because it will
+ * otherwise re-run the whole free ladder on every pass, and UPCitemdb's free
+ * quota is 100/day for the entire Worker rather than per person.
+ *
+ * `null` here means miss. `{ value }` means hit, and `value` may itself be null.
+ */
+export async function getCachedEntry<T>(
   db: D1Database,
   kind: CacheKind,
   raw: string,
-): Promise<T | null> {
+): Promise<{ value: T } | null> {
   const key = cacheKey(kind, raw);
   if (!key) return null;
 
@@ -44,11 +56,24 @@ export async function getCached<T>(
 
   if (!row) return null;
   try {
-    return JSON.parse(row.payload) as T;
+    return { value: JSON.parse(row.payload) as T };
   } catch {
     // A corrupt row should behave exactly like a miss, never like an error.
     return null;
   }
+}
+
+/**
+ * The convenient form, for callers that never store a null payload. If you
+ * cache negative results, reach for `getCachedEntry` instead.
+ */
+export async function getCached<T>(
+  db: D1Database,
+  kind: CacheKind,
+  raw: string,
+): Promise<T | null> {
+  const entry = await getCachedEntry<T>(db, kind, raw);
+  return entry ? entry.value : null;
 }
 
 /**

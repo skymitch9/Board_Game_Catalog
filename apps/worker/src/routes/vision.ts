@@ -7,9 +7,10 @@ import {
   type ShelfMatch,
 } from '@bgc/core';
 import { gameUpcConfig, lookupGameUpc, resolveTitle } from '@bgc/barcode';
-import { getCached, listItemNames, putCached } from '@bgc/db';
+import { listItemNames } from '@bgc/db';
 import { ResearchError, identifyFromPhoto, isPhotoMediaType, readShelf } from '@bgc/research';
 import type { AppBindings } from '../env.js';
+import { cachedResolve } from '../lib/resolve-title.js';
 import { requireCapability } from '../middleware/auth.js';
 
 /**
@@ -82,35 +83,6 @@ function upstream(err: unknown) {
     },
     status: 502,
   };
-}
-
-/**
- * Resolve a title to its best candidate, remembering the answer.
- *
- * Re-photographing a shelf used to re-resolve every title on it — nine games,
- * nine round trips, every time. Resolution is deterministic, so it is cached.
- * The vision call above is not, and cannot be: a new photo is genuinely new
- * input, and a shelf changes.
- *
- * A miss is cached too, as `null`. Titles that resolve to nothing are exactly
- * the ones you would otherwise re-ask about on every pass.
- */
-async function cachedResolve(
-  db: D1Database,
-  deps: Parameters<typeof resolveTitle>[0],
-  title: string,
-): Promise<BarcodeCandidate | null> {
-  const cached = await getCached<BarcodeCandidate | null>(db, 'title', title);
-  if (cached !== null) return cached;
-
-  const hit = await resolveTitle(deps, title);
-  const best = hit.candidates[0] ?? null;
-  // Only cache once BGG hydration has had its chance, or a week of lookups
-  // would be pinned to the un-hydrated shape from before the token arrived.
-  if (best === null || hit.bggHydrated || !deps.bggToken) {
-    await putCached(db, 'title', title, best);
-  }
-  return best;
 }
 
 export const visionRoutes = new Hono<AppBindings>()
