@@ -419,7 +419,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
 }
 
 /**
- * The `<input capture>` path.
+ * The file-picker path.
  *
  * Verified not to write to the camera roll — Safari presents a picker whose
  * result is handed to the page and discarded; saving would require the host app
@@ -427,6 +427,14 @@ export function ScanPage({ me }: { me: MeResponse }) {
  *
  * Kept because it works in contexts `getUserMedia` does not — notably in-app
  * browsers whose host app never wired up the media-capture delegate.
+ *
+ * **No `capture` attribute, deliberately.** It used to say `capture="environment"`,
+ * which on iOS opens the rear camera *directly* and offers no Photo Library
+ * option at all — so a photo already taken, of a shelf in another room or a box
+ * that has since been put away, simply could not be used. Without it Safari
+ * shows the full menu: Photo Library, Take Photo, Choose File. Android loses a
+ * shortcut straight to the camera, which is a fair trade for a whole input
+ * being reachable.
  *
  * `accept` is plain `image/*` on purpose: adding `image/heic` makes Safari 17+
  * silently transcode *every* selection to HEIC.
@@ -443,11 +451,13 @@ function PhotoFallback({
   if (mode === 'barcode' || mode === 'manual') return null;
   return (
     <label className="scan-fallback">
-      <span className="muted">Camera not working? Take a photo instead — it is not saved to your library.</span>
+      <span className="muted">
+        Camera not working? Take a photo or choose one you already have — nothing
+        taken here is saved to your library.
+      </span>
       <input
         type="file"
         accept="image/*"
-        capture="environment"
         disabled={disabled}
         onChange={(e) => {
           const file = e.target.files?.[0];
