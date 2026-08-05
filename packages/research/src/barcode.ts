@@ -1,23 +1,29 @@
+import type { BarcodeCandidate, Confidence, ItemKind } from '@bgc/core';
 import { RESEARCH_MODEL, createClient, parseStructured, usageOf, type Usage } from './client.js';
 
 /**
- * Identify a board game product from a barcode.
+ * Identify a board game product from a barcode — the last and most expensive
+ * rung of the ladder.
  *
- * Only ever called after a local lookup misses, and its output is a *proposal*
- * — the caller confirms before anything is written. Barcode-to-game matching is
- * genuinely unreliable: retail UPCs are reused, regional printings differ, and
- * plenty of games simply aren't indexed anywhere searchable. Returning ranked
- * candidates with confidence is honest; returning one confident answer would
- * not be.
+ * Only ever reached after the local table, GameUPC and UPCitemdb have all
+ * missed, and its output is a *proposal*: the caller confirms before anything
+ * is written. Barcode-to-game matching is genuinely unreliable — retail UPCs
+ * get reused, regional printings differ, and plenty of games aren't indexed
+ * anywhere searchable. Returning ranked candidates with confidence is honest;
+ * returning one confident answer would not be.
+ *
+ * Measured against a live call: roughly 2 minutes and ~$0.01 in tokens plus a
+ * web-search fee. That latency is why it must never sit in the common path.
  */
 
-export interface BarcodeCandidate {
+/** What the model is asked for, before we widen it to the shared shape. */
+interface RawCandidate {
   name: string;
   publisher: string | null;
   yearPublished: number | null;
-  kind: 'base' | 'expansion' | 'accessory' | 'promo' | 'upgrade';
+  kind: ItemKind;
   editionName: string | null;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: Confidence;
   sourceUrl: string | null;
   note: string | null;
 }
@@ -111,31 +117,21 @@ export async function identifyBarcode(
     ],
   } as Parameters<typeof client.messages.create>[0]);
 
-  const parsed = parseStructured<{ candidates: BarcodeCandidate[] }>(
+  const parsed = parseStructured<{ candidates: RawCandidate[] }>(
     message as Parameters<typeof parseStructured>[0],
   );
 
+  // Widen onto the shared shape so the route and the confirm screen see one
+  // type regardless of which rung answered. The model has no BGG id to give us.
+  const candidates: BarcodeCandidate[] = (parsed.candidates ?? []).map((c) => ({
+    ...c,
+    bggId: null,
+    thumbnailUrl: null,
+    source: 'llm',
+  }));
+
   return {
-    candidates: parsed.candidates ?? [],
+    candidates,
     usage: usageOf(message as { usage?: { input_tokens?: number; output_tokens?: number } }),
   };
-}
-
-/**
- * UPC-A / EAN-13 check digit. Catches most misreads before they cost an API
- * call — a scanner that misreads one digit produces a syntactically valid
- * number that fails this.
- */
-export function isPlausibleBarcode(code: string): boolean {
-  const digits = code.replace(/\D/g, '');
-  if (digits.length !== 12 && digits.length !== 13) return false;
-
-  const padded = digits.padStart(13, '0');
-  let sum = 0;
-  for (let i = 0; i < 12; i++) {
-    const digit = Number(padded[i]);
-    sum += i % 2 === 0 ? digit : digit * 3;
-  }
-  const check = (10 - (sum % 10)) % 10;
-  return check === Number(padded[12]);
 }

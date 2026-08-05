@@ -1,9 +1,9 @@
 {
-  "name": "@bgc/research",
+  "name": "@bgc/barcode",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Claude-backed lookup: barcode identification and the tiered research pipeline.",
+  "description": "Free barcode resolution: GameUPC (board-game native) then UPCitemdb, before anything costs money.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
+    "@bgc/bgg": "*",
     "@bgc/core": "*"
   },
   "devDependencies": {

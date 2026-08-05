@@ -16,6 +16,7 @@ import { ROLES, type Role } from './constants.js';
 export * from './constants.js';
 export * from './schemas.js';
 export * from './capabilities.js';
+export * from './barcode.js';
 
 export const roleSchema = z.enum(ROLES);
 

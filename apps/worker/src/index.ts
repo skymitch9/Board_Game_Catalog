@@ -8,6 +8,7 @@
 import { Hono } from 'hono';
 import type { AppBindings } from './env.js';
 import { requireAuth } from './middleware/auth.js';
+import { barcodeRoutes } from './routes/barcode.js';
 import { bggRoutes } from './routes/bgg.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { exportRoutes } from './routes/export.js';
@@ -24,6 +25,7 @@ app.use('/api/*', requireAuth());
 app.route('/api', userRoutes);
 app.route('/api', catalogRoutes);
 app.route('/api/bgg', bggRoutes);
+app.route('/api/barcode', barcodeRoutes);
 app.route('/api', exportRoutes);
 
 app.notFound(async (c) => {

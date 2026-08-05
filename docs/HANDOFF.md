@@ -1,7 +1,12 @@
 # Handoff
 
 Everything needed to continue or finish this without Claude.
-**Last updated:** 2026-08-04, after multi-copy support and exports shipped.
+
+Stable reference lives alongside this file and is not duplicated here:
+[`access/`](access/README.md) (endpoints, key names, quotas) and
+[`info/`](info/README.md) (how and why things work).
+**Last updated:** 2026-08-05, after the barcode resolution ladder was built and
+verified end to end against live services.
 
 ---
 
@@ -76,6 +81,22 @@ Requirements already satisfied in code: `Authorization: Bearer <token>`, domain
 `boardgamegeek.com` with **no** `www`, server-side requests only, week-long edge
 cache.
 
+### 1b. GameUPC production key — optional, improves barcode hit rate
+
+Email **`gameupc@grettir.org`** asking for a `/v1` API key, then:
+
+```bash
+npm run secret GAMEUPC_API_KEY      # production
+# and add GAMEUPC_API_KEY=... to apps/worker/.dev.vars for local
+```
+
+**Not blocking.** With no key set, `gameUpcConfig()` falls back to GameUPC's
+public `test` stage using their published demo key
+(`test_test_test_test_test`), which is what every measurement above was taken
+against. The `test` stage's data is *wiped periodically*, so a barcode that
+resolved yesterday may miss today — that is the cost of not having the key, and
+it is why a miss should never be treated as an outage.
+
 ### 2. Anthropic API key — ✅ in place locally
 
 `ANTHROPIC_API_KEY` is set in `apps/worker/.dev.vars` and **verified working**:
@@ -101,12 +122,14 @@ The deployed Worker does not read `.dev.vars`.
 ## Repo layout
 
 ```
-packages/core/    constants.ts (leaf) → schemas.ts → capabilities.ts → index.ts
-packages/db/      users, health, items, copies, ratings, import
+packages/core/    constants.ts (leaf) → schemas.ts → barcode.ts → capabilities.ts → index.ts
+packages/db/      users, health, items, copies, ratings, import, barcodes
 packages/bgg/     BGG XML API2 client (throttled, retried, cached)
+packages/barcode/ free barcode resolution: gameupc.ts, upcitemdb.ts, resolve.ts
+packages/research/ Claude calls: client.ts, barcode.ts (the paid rung)
 apps/worker/      Hono routes + Access JWT verification
 apps/web/         React SPA, ~30-line router
-migrations/       0001_init.sql, 0002_copy_quantity.sql
+migrations/       0001_init.sql, 0002_copy_quantity.sql, 0003_barcode_unique.sql
 ```
 
 Entry points stay thin: `apps/worker/src/index.ts` mounts routes and
@@ -127,6 +150,9 @@ exactly one implementation of anything that makes a decision.
 | PUT/DELETE | `/api/items/:id/rating` | rate |
 | GET | `/api/export.json`, `/api/export.csv` | editCatalog |
 | GET/POST | `/api/bgg/*` | editCatalog — **needs BGG_API_TOKEN** |
+| GET | `/api/barcode/:code` | read — local + free rungs |
+| POST | `/api/barcode/identify` | runResearch — the paid rung, slow |
+| POST | `/api/barcode/link` | editCatalog — writes, contributes to GameUPC |
 
 `GET /api/items` accepts `q`, `status`, `location`, `kind`, `uncatalogued`,
 `duplicates`.
@@ -179,43 +205,86 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
   teardown quirk. Read the output, not the exit code.
 - **The browser extension has no permission for `*.workers.dev`**, so the live
   site can't be screenshotted through automation. Verify with `curl`.
+- **The Anthropic API can return a transient `400 "Invalid request data"`.**
+  Observed once on a request shape that then passed 15/15 identical retries.
+  The SDK does **not** retry 400s, so it surfaces as a hard failure. Don't spend
+  an hour bisecting a schema before re-running it — `/api/barcode/identify`
+  returns `retryable: true` for exactly this.
+- **GameUPC says "no idea" as the literal string `"None"`**, not `null` or an
+  absent field. Passing it through puts the word "None" in front of the user.
+- **GameUPC returns every BGG version, not the matching one.** Catan came back
+  with 136; taking `versions[0]` labelled a US retail scan "Arabic/English
+  edition". Only name a printing when there is exactly one.
+- **Never strip the publisher name from a retail title.** In this hobby the
+  brand often *is* the game — stripping "CATAN Studio" turned
+  "Catan 5-6 Player Extension" into "Asmodee Extension". A redundant word costs
+  a search nothing; a missing title costs it everything.
+- **UPCitemdb's free quota is per IP.** A Worker is one IP for every user, so
+  100/day is a whole-app budget, not per-person. It is deliberately only called
+  after GameUPC misses.
+- **A quoted heredoc (`<<'EOF'`) still ate backslashes** in this Git Bash,
+  corrupting regexes in throwaway scripts. Write scratch files with the editor,
+  not the shell.
 
 ---
 
-## ⚠️ STOP POINT — barcode work is half-built and does NOT compile
+## Barcode scanning — backend done and verified end to end
 
-The 6pm run was cut short. **Committed code on this branch will not typecheck
-until `npm install` is run** — `packages/research` declares `@anthropic-ai/sdk`
-but it was never installed.
+The previous stop point is cleared: everything typechecks, and every rung of the
+ladder has been exercised against live services.
 
-### First three commands next session
+**Root cause of the old breakage:** `packages/research` pinned
+`@anthropic-ai/sdk` at 0.65.0, which predates `output_config` *and* the current
+`web_search_20260209` tool. Upgraded to 0.115.0; all 7 workspaces typecheck.
+
+### The ladder, cheapest rung first
+
+| Rung | Where | Cost | Latency |
+|---|---|---|---|
+| local `edition.barcode` | `packages/db/src/barcodes.ts` | free | instant, offline |
+| **GameUPC** | `packages/barcode/src/gameupc.ts` | free, 100 new UPCs/day | ~1s |
+| **UPCitemdb → GameUPC search** | `packages/barcode/src/upcitemdb.ts` | free, 100/day **per IP** | ~2s |
+| Claude + web search | `packages/research/src/barcode.ts` | ~$0.009 + search fee | **74–137s** |
+
+`packages/barcode/src/resolve.ts` runs rungs 2–3 and returns a `trace` of what
+actually happened. Every rung answers in the one shared shape,
+`BarcodeCandidate` in `packages/core/src/barcode.ts`.
+
+**Measured hit rate on four real games** (Catan, Wingspan, Wingspan: European
+Expansion, Brass: Birmingham): GameUPC alone got 2/4. Adding the UPCitemdb →
+GameUPC-search rung took it to **4/4, entirely free**. The LLM rung is a rare
+fallback, not the main path — which matters because it takes over a minute.
+
+### GameUPC is worth understanding
+
+Crowdsourced UPC → BoardGameGeek-ID map, free, and the only board-game-native
+barcode database that exists. It answers with a **BGG id**, which is the same
+identifier the import path already speaks. `POST {update_url}` contributes a
+confirmed match back, so the shared database grows — `/api/barcode/link` does
+this automatically, keyed by a **SHA-256 hash of the user's email**, never the
+address itself.
+
+### Routes
+
+| Method | Path | Capability | Notes |
+|---|---|---|---|
+| GET | `/api/barcode/:code` | `read` | Local + all free rungs. `read`, not `editCatalog` — checking whether you already own something is browsing |
+| POST | `/api/barcode/identify` | `runResearch` | The paid rung. Separate route so nobody waits 2 minutes by accident |
+| POST | `/api/barcode/link` | `editCatalog` | The only route that writes. Contributes back to GameUPC after |
+
+### Verify it
 
 ```bash
-npm install          # installs @anthropic-ai/sdk for the new package
-npm run typecheck    # expect errors in packages/research — see below
+npm run dev:worker
+curl -s localhost:8787/api/barcode/029877030712   # Catan -> verified, BGG id 13
+curl -s localhost:8787/api/barcode/635405670338   # Brass -> rescued by rung 3
+curl -s localhost:8787/api/barcode/029877030713   # bad check digit -> 400
 ```
-
-### What exists (written, never run)
-
-| File | State |
-|---|---|
-| `packages/research/package.json` | new package, deps not installed |
-| `packages/research/src/client.ts` | Anthropic client, cost estimator, structured-output parser that checks `stop_reason` for refusal/truncation first |
-| `packages/research/src/barcode.ts` | `identifyBarcode()` — web search, `effort: low`, structured output, ranked candidates with confidence. Also `isPlausibleBarcode()` (UPC/EAN check digit) so misreads fail before costing an API call |
-| `packages/db/src/barcodes.ts` | `findByBarcode()`, `linkBarcode()`, `BarcodeConflict`. Exported from `packages/db/src/index.ts` |
-
-**Expect the SDK call shapes in `barcode.ts` to need correction.** They were
-written from documentation and never executed once — the `output_config` /
-`tools` fields are cast through `Parameters<typeof create>[0]` to get past
-typing, which is exactly the kind of thing that turns out subtly wrong on first
-real run. Verify against a live call before trusting it.
 
 ### Not started
 
-- Worker routes: `GET /api/barcode/:code` (local match, `read`),
-  `POST /api/barcode/identify` (LLM, should gate on `runResearch`),
-  `POST /api/barcode/link` (`editCatalog`)
 - The scanner UI (`BarcodeDetector` + ZXing wasm fallback for iOS Safari)
+- Shelf mode / camera vision (discussed, not begun — see "Next session")
 - All of phase 3
 
 ### Also outstanding
@@ -223,34 +292,87 @@ real run. Verify against a live call before trusting it.
 - **`ANTHROPIC_API_KEY` is not set in production** — confirmed via
   `wrangler secret list`, which returned nothing. Research will work locally and
   500 on the live site until `npm run secret ANTHROPIC_API_KEY` is run.
+- **Migration `0003_barcode_unique.sql` is applied LOCALLY ONLY.** Production is
+  deliberately untouched pending a decision — see below.
 - Root `package.json` gained `npm run secret` / `npm run secret:list`, which run
   wrangler against `apps/worker/wrangler.toml` — running `wrangler secret put`
   from the repo root fails with "Required Worker name missing".
 
 ---
 
-## Next session — decided 2026-08-04
+## ⚠️ Decisions waiting on the owner
+
+**1. Apply migration 0003 to production?**
+`migrations/0003_barcode_unique.sql` makes `idx_edition_barcode` UNIQUE. Without
+it, `linkBarcode()`'s conflict check is advisory only: two confirmations racing
+each other both pass the check and both write, and `findByBarcode()`'s `LIMIT 1`
+then resolves that barcode to an arbitrary one of them — silently wrong, and
+invisible in the UI. The route already handles the resulting constraint error
+and turns it into a clean 409.
+
+Verified safe: production held **0 editions and 0 barcodes** when this was
+written. Applied locally already. To apply:
+
+```bash
+npm run db:migrate     # production — do this BEFORE deploying
+```
+
+**2. Shelf mode / camera vision — in scope?** See "Next session" below.
+
+---
+
+## Next session — decided 2026-08-04, revised 2026-08-05
 
 Two things to build, in this order. Both are unblocked; neither needs BGG.
 
-### A. Barcode scanning (moved up from phase 5)
+### A. Barcode scanning — backend ✅ done, UI still to build
 
-Decided approach: **scan → local match → LLM fallback → human confirm.**
+The original plan was **scan → local → LLM → confirm**. Research on 2026-08-05
+found two free rungs that belong between local and the LLM, so the shipped
+design is **local → GameUPC → UPCitemdb → LLM → confirm**. That took the
+measured hit rate from 2/4 to 4/4 without spending anything, and demoted the
+2-minute LLM call to a rare fallback. Details in the barcode section above.
 
-1. `BarcodeDetector` where available (Android Chrome), ZXing wasm fallback for
-   iOS Safari, which does not support it.
-2. Look the UPC up against `edition.barcode` first — free, instant, works with
-   no network. This is also how you find a game you already own while standing
-   at the shelf.
-3. On a miss, ask Claude with web search to identify the barcode, and present
-   the answer as a **candidate to confirm**, never an automatic write. Barcode
-   → game matching is genuinely unreliable; expect to fall back to typing the
-   name a fair fraction of the time.
-4. Every confirmed scan writes back to `edition.barcode`, so the collection
-   becomes its own barcode database and the LLM is needed less over time.
+Still to build: the scanner UI. `BarcodeDetector` where available (Android
+Chrome), ZXing wasm fallback for iOS Safari, which does not support it. Present
+every result as a **candidate to confirm**, never an automatic write. Confirmed
+scans write back to `edition.barcode` *and* to GameUPC.
 
-Rejected: always asking the LLM (costs money for games already owned) and
-local-only matching (useless for adding anything new, which is the point).
+Rejected: always asking the LLM (costs money and two minutes for games already
+owned) and local-only matching (useless for adding anything new, which is the
+point).
+
+### A2. Camera / vision — proposed 2026-08-05, awaiting a decision
+
+The insight worth keeping: **barcodes are a weak primitive for board games.**
+Half the sample had no usable barcode record anywhere, Kickstarter and
+small-publisher editions frequently have none at all, and the barcode is often
+on shrink-wrap that is long gone. The title, meanwhile, is printed on the box in
+40-point type.
+
+Ideas, ranked:
+
+1. **Shelf mode.** One photo of a row of spines → Claude returns every title it
+   can read → tick a checklist. Turns 40 games into ~4 photos. ~$0.005/photo at
+   1024px. Barcode is precision for one item; a shelf photo is recall for many.
+   Pairs with the existing `uncatalogued` filter as the follow-up worklist.
+2. **Photograph the cover, not the barcode.** Degrades gracefully — a partial
+   read still yields a name to confirm.
+3. **Capture the video frame alongside the barcode**, so a barcode miss already
+   has an image for vision fallback with no second interaction.
+4. **Batch capture, deferred processing** (IndexedDB queue, one review screen).
+   Never block on network — these boxes live in a basement.
+5. **Store the cover photo on the copy** (R2): condition, insurance, telling two
+   copies apart.
+
+Known limits, so nobody oversells it: stylized spine typography misreads, you
+get a title only (no edition/printing), and base-vs-expansion is unreliable from
+a spine. Downscale to ~1024px long edge on-device — 4× cheaper, no accuracy loss
+for reading a title.
+
+Rejected: on-device OCR (Tesseract.js). Board game cover typography is stylized
+and OCR does badly on it; the vision call is cheap enough that shipping a wasm
+blob isn't worth it.
 
 ### B. Phase 3 — the research pipeline
 

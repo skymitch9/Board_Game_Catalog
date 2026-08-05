@@ -31,6 +31,18 @@ export interface Env {
   ANTHROPIC_API_KEY?: string;
 
   /**
+   * GameUPC production key — a free board-game barcode database that answers
+   * with BoardGameGeek ids. Request one by emailing gameupc@grettir.org.
+   *
+   * Optional by design: with no key set, lookups fall back to GameUPC's public
+   * `test` stage using their published demo key, so barcode scanning works
+   * (against periodically-wiped data) before the real key arrives.
+   */
+  GAMEUPC_API_KEY?: string;
+  /** `test` | `dev` | `v1`. Defaults to `v1` when a key is set, `test` otherwise. */
+  GAMEUPC_STAGE?: string;
+
+  /**
    * Local development only. Ignored unless ENVIRONMENT is "development", so a
    * stray value in production vars can never bypass Access.
    */
