@@ -49,6 +49,12 @@ export interface ShelfMatch {
   bggId: number | null;
   resolvedName: string | null;
   thumbnailUrl: string | null;
+  /**
+   * How well `resolvedName` matches what was actually read off the spine, 0..1.
+   * Null when nothing was resolved. Below `MIN_TITLE_SIMILARITY` the match is a
+   * guess and must not be acted on without the user looking at it.
+   */
+  similarity: number | null;
 }
 
 /**

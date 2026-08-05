@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import {
   MAX_PHOTO_BYTES,
+  isConfidentMatch,
   matchExistingTitle,
+  titleSimilarity,
   type BarcodeCandidate,
   type ShelfMatch,
 } from '@bgc/core';
@@ -118,6 +120,10 @@ export const visionRoutes = new Hono<AppBindings>()
       result.candidates.map(async (candidate) => {
         const best = await cachedResolve(c.env.DB, deps, candidate.name);
         if (!best) return candidate;
+        // Rejected outright here, unlike shelf mode: the model has already read
+        // the box in front of it, so a loose word match adds nothing and can
+        // only put someone else's cover and BGG id on a title we got right.
+        if (!isConfidentMatch(best.name, candidate.name)) return candidate;
         return {
           ...candidate,
           // The model read the box in front of us, so its own reading wins on
@@ -180,6 +186,7 @@ export const visionRoutes = new Hono<AppBindings>()
             bggId: null,
             resolvedName: null,
             thumbnailUrl: null,
+            similarity: null,
           };
         }
 
@@ -196,6 +203,10 @@ export const visionRoutes = new Hono<AppBindings>()
                 bggId: best.bggId,
                 resolvedName: best.name,
                 thumbnailUrl: best.thumbnailUrl,
+                // Carried rather than enforced here: the screen shows the match
+                // and declines to pre-select it, which is more useful than
+                // silently dropping a name the user can see on the shelf.
+                similarity: titleSimilarity(best.name, title.text),
               };
             }
           } catch {
@@ -211,6 +222,7 @@ export const visionRoutes = new Hono<AppBindings>()
           bggId: null,
           resolvedName: null,
           thumbnailUrl: null,
+          similarity: null,
         };
       }),
     );

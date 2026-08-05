@@ -125,6 +125,52 @@ export function titleSimilarity(candidateName: string, searchedFor: string): num
 }
 
 /**
+ * Below this, a match is a guess rather than an answer — for a title a person
+ * typed and then asked us to look up.
+ *
+ * Ranking orders candidates but never rejects one, so a search always answers
+ * with *something*, and the something for a game no database knows is whatever
+ * was closest. This is the floor that stops "Gloomhaven" being filled in from
+ * "Gloomhaven: Jaws of the Lion" (0.33).
+ *
+ * Deliberately forgiving, because someone named this specific item on purpose:
+ * "Azul" against "Azul (Nordic edition)" scores 0.5 and should still fill.
+ */
+export const MIN_TITLE_SIMILARITY = 0.34;
+
+/**
+ * The stricter floor, for a title nobody confirmed — read off a spine in a
+ * photograph and matched without anyone looking.
+ *
+ * Measured, not guessed. The free databases match on a single word, so six
+ * invented titles resolved like this:
+ *
+ *     ZORBLAX QUANDARY -> Quandary   0.67
+ *     NURDLETON RIFT   -> Rift       0.67
+ *     FRASKET GAMBIT   -> Gambit     0.67
+ *
+ * A one-word fragment of a two-word title always scores 2*1/(1+2) = 0.67, while
+ * genuine reads — CATAN, BRASS: BIRMINGHAM, TICKET TO RIDE — all score 1.0.
+ * 0.7 is the gap between those two populations. `MIN_TITLE_SIMILARITY` sits far
+ * below the bogus cluster and would have passed every one of them.
+ *
+ * An honest read that lands just under this is not lost, only left unticked:
+ * a false negative costs a tap, a false positive costs a wrong game in the
+ * catalog wearing someone else's cover.
+ */
+export const MIN_SPINE_SIMILARITY = 0.7;
+
+/** Close enough to act on, for a title a person named themselves. */
+export function isTrustedMatch(candidateName: string, searchedFor: string): boolean {
+  return titleSimilarity(candidateName, searchedFor) >= MIN_TITLE_SIMILARITY;
+}
+
+/** Close enough to act on unattended, for a title read off a photograph. */
+export function isConfidentMatch(candidateName: string, searchedFor: string): boolean {
+  return titleSimilarity(candidateName, searchedFor) >= MIN_SPINE_SIMILARITY;
+}
+
+/**
  * Re-rank candidates against the title we searched with.
  *
  * Only meaningful when candidates came from a *name* search rather than a direct

@@ -45,30 +45,32 @@ Production is still untouched: `scan_job` holds 0 rows and `bgc-photos` holds 0
 objects. **The phone half remains unverified** — nothing here exercised iOS
 Safari, which is where the camera-roll decode failure lives.
 
-### ⚠️ Open: nonsense titles resolve to confident wrong games
+### Doubtful lookup matches — fixed, and worth understanding
 
-Found while testing the negative cache, and the more serious of the two open
-items. GameUPC's search matches on a *single word* and returns a candidate with
-a real BGG id, year and cover art:
+The free databases match on a *single word*, so a title they do not know comes
+back as whatever shared one, complete with a real BGG id, year and cover art.
+Five of six invented titles resolved to a confident wrong game, and the review
+list pre-selected every one.
 
-| Vision read | Resolved to | BGG id |
+Weak matches are now shown but left unticked (`MIN_SPINE_SIMILARITY`), and
+ticking one adds **only the title** — id, publisher, year and thumbnail are
+dropped, since confirming a game is on your shelf is not confirming it is that
+other game. The single-box path rejects outright instead, because the model has
+already read the box and a loose match can only make that worse.
+
+**Two thresholds on purpose**, in `packages/core/src/barcode.ts`:
+
+| Constant | Value | For |
 |---|---|---|
-| `ZORBLAX QUANDARY` | Quandary | 12319 |
-| `NURDLETON RIFT` | Rift | 203616 |
-| `FRASKET GAMBIT` | Gambit | 6216 |
+| `MIN_TITLE_SIMILARITY` | 0.34 | A name a person typed and asked us to look up. Forgiving: "Azul" vs "Azul (Nordic edition)" is 0.5 and should still fill |
+| `MIN_SPINE_SIMILARITY` | 0.7 | Unattended matching of text read off a photograph |
 
-Only one of six invented titles correctly resolved to nothing. This matters
-because the review UI pre-selects every fresh title, so a misread spine — or a
-game genuinely absent from the database — is one tap from entering the catalog
-as the wrong game, wearing someone else's cover.
-
-`rankBySearchedTitle` orders candidates but never rejects one. The catalog
-already has the missing piece: `ItemPage`'s "Look up details" refuses a
-candidate whose `titleSimilarity` is below 0.34 rather than dressing a game in
-the wrong cover. The shelf and scan-job paths have no such floor. Either apply
-the same threshold in `lib/resolve-title.ts`, or surface low-similarity matches
-as unselected-by-default with the read text shown beside the proposal — the
-choice is whether a doubtful match is hidden or merely not trusted.
+**The gotcha that cost the first attempt:** reusing 0.34 for spine matching
+catches nothing. A one-word fragment of a two-word title scores
+`2*1/(1+2) = 0.67` *every time* — "Quandary" for "Zorblax Quandary", "Rift" for
+"Nurdleton Rift" — while genuine reads score 1.00. The two populations sit at
+0.67 and 1.00 with nothing between, which is where 0.7 comes from. Do not lower
+it without re-measuring; the fix looks correct at 0.34 and does nothing.
 
 ### ⚠️ Open question: should the photo go to R2 at all?
 

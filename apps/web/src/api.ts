@@ -221,6 +221,8 @@ export interface EnrichedTitle {
   thumbnailUrl: string | null;
   publisher: string | null;
   yearPublished: number | null;
+  /** How well `resolvedName` matches what was read, 0..1. Null if unresolved. */
+  similarity: number | null;
   proposedKind: string | null;
   proposedParentId: number | null;
   proposedParentName: string | null;

@@ -12,6 +12,7 @@ import { z } from 'zod';
 import {
   classifyShelfResults,
   matchExistingTitle,
+  titleSimilarity,
   type BarcodeCandidate,
   type ShelfTitle,
 } from '@bgc/core';
@@ -252,6 +253,7 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
             thumbnailUrl: null as string | null,
             publisher: null as string | null,
             yearPublished: null as number | null,
+            similarity: null as number | null,
           };
         }
 
@@ -275,6 +277,10 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
           thumbnailUrl: best?.thumbnailUrl ?? null,
           publisher: best?.publisher ?? null,
           yearPublished: best?.yearPublished ?? null,
+          // Kept rather than enforced: the review screen shows a weak match and
+          // leaves it unticked, which tells the truth about what was found
+          // instead of quietly discarding a name that is on the shelf.
+          similarity: best ? titleSimilarity(best.name, title.text) : null,
         };
       }),
     );

@@ -1,5 +1,12 @@
 import { useCallback, useState } from 'react';
-import { ITEM_KINDS, SHELF_LONG_EDGE, PHOTO_LONG_EDGE, type ItemKind, type MeResponse } from '@bgc/core';
+import {
+  ITEM_KINDS,
+  MIN_SPINE_SIMILARITY,
+  SHELF_LONG_EDGE,
+  PHOTO_LONG_EDGE,
+  type ItemKind,
+  type MeResponse,
+} from '@bgc/core';
 import { api, type EnrichedTitle, type ScanJob } from '../api';
 import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
@@ -31,6 +38,27 @@ const IN_FLIGHT: ReadonlySet<ScanJob['status']> = new Set([
 
 /** Slow enough not to be a nuisance, quick enough that a shelf read feels live. */
 const POLL_MS = 2500;
+
+/**
+ * A lookup that only loosely matches what was read off the spine.
+ *
+ * The free databases match on a single word, so "Zorblax Quandary" comes back
+ * as *Quandary* with a real id, a year and cover art — indistinguishable, at a
+ * glance, from a good match. These are still shown, because the title is on the
+ * shelf whatever the database thinks, but they are not ticked for you.
+ */
+const isDoubtful = (t: EnrichedTitle): boolean =>
+  t.resolvedName != null && t.similarity != null && t.similarity < MIN_SPINE_SIMILARITY;
+
+/**
+ * The name to actually save.
+ *
+ * A doubtful match falls back to what was read off the spine. Ticking one means
+ * "this game is on my shelf", not "and it is that other game" — so the title
+ * survives and the lookup's identity does not.
+ */
+const effectiveName = (t: EnrichedTitle): string =>
+  isDoubtful(t) ? t.title : (t.resolvedName ?? t.title);
 
 const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
   uploaded: 'neutral',
@@ -317,9 +345,10 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   const fresh = titles.filter((t) => !t.alreadyOwned);
   const owned = titles.filter((t) => t.alreadyOwned);
 
-  // Initialise selection on first render.
+  // Initialise selection on first render. Doubtful matches start unticked —
+  // adding a wrong game is far more annoying to undo than ticking a box.
   if (selected === null) {
-    setSelected(new Set(fresh.map((_, i) => i)));
+    setSelected(new Set(fresh.map((_, i) => i).filter((i) => !isDoubtful(fresh[i]!))));
     return <Spinner />;
   }
 
@@ -344,7 +373,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
     if (k === 'base') {
       parentOptions.push({
         id: `batch:${idx}`,
-        name: t.resolvedName ?? t.title,
+        name: effectiveName(t),
         isBatch: true,
       });
     }
@@ -396,15 +425,20 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       // If expansion with no parent, add as base.
       const effectiveKind = kind !== 'base' && !parentId ? 'base' : kind;
 
+      // A doubtful match contributes its title and nothing else. Carrying the
+      // id, cover and year across would put another game's identity on this
+      // row, which is the exact failure the similarity floor exists to stop.
+      const doubtful = isDoubtful(t);
+
       try {
         const { item } = await api.createItem({
-          name: t.resolvedName ?? t.title,
+          name: effectiveName(t),
           kind: effectiveKind,
           parentItemId: effectiveKind === 'base' ? null : parentId,
-          bggId: t.bggId,
-          publisher: t.publisher,
-          yearPublished: t.yearPublished,
-          thumbnailUrl: t.thumbnailUrl,
+          bggId: doubtful ? null : t.bggId,
+          publisher: doubtful ? null : t.publisher,
+          yearPublished: doubtful ? null : t.yearPublished,
+          thumbnailUrl: doubtful ? null : t.thumbnailUrl,
         });
 
         await api.createCopy(item.id, {
@@ -485,9 +519,10 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
               const result = results[i];
               const kind = getKind(i);
               const parentId = getParentId(i);
+              const doubtful = isDoubtful(t);
 
               return (
-                <li key={i} className="candidate">
+                <li key={i} className={doubtful ? 'candidate candidate--doubtful' : 'candidate'}>
                   {result ? (
                     <span className="shelf-outcome" aria-hidden="true">
                       {'itemId' in result ? '\u2713' : '!'}
@@ -503,16 +538,25 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                     />
                   )}
 
-                  {t.thumbnailUrl && (
+                  {t.thumbnailUrl && !doubtful && (
                     <img src={t.thumbnailUrl} alt="" className="candidate__thumb" />
                   )}
 
                   <div className="candidate__body">
-                    <strong>{t.resolvedName ?? t.title}</strong>
-                    {t.resolvedName && t.resolvedName !== t.title && (
-                      <span className="muted">read as &quot;{t.title}&quot;</span>
+                    <strong>{effectiveName(t)}</strong>
+                    {doubtful ? (
+                      <span className="candidate__doubt">
+                        Closest match was &quot;{t.resolvedName}&quot;, which is
+                        different enough that it is probably not the same game.
+                        Tick it to add &quot;{t.title}&quot; on its own.
+                      </span>
+                    ) : (
+                      t.resolvedName &&
+                      t.resolvedName !== t.title && (
+                        <span className="muted">read as &quot;{t.title}&quot;</span>
+                      )
                     )}
-                    {t.publisher && <span className="muted">{t.publisher}</span>}
+                    {t.publisher && !doubtful && <span className="muted">{t.publisher}</span>}
 
                     {!result && (
                       <div className="shelf-classify__controls">

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   RELATION_TYPES,
-  titleSimilarity,
+  isTrustedMatch,
   type Item,
   type MeResponse,
   type RelatedItemRef,
@@ -263,16 +263,6 @@ const FILLABLE: { key: FillableKey; label: string }[] = [
   { key: 'thumbnailUrl', label: 'cover image' },
 ];
 
-/**
- * How alike the found title and ours must be before we believe it.
- *
- * A name search always answers with *something*, and the something for a game
- * no database knows is whatever was closest — which is how "Gloomhaven" ends up
- * wearing "Gloomhaven: Jaws of the Lion"'s cover. Below this, we say what we
- * found and change nothing.
- */
-const MIN_SIMILARITY = 0.34;
-
 const isBlank = (v: string | number | null): boolean =>
   v == null || (typeof v === 'string' && v.trim() === '');
 
@@ -320,7 +310,7 @@ function LookupDetails({
         );
         return;
       }
-      if (titleSimilarity(best.name, item.name) < MIN_SIMILARITY) {
+      if (!isTrustedMatch(best.name, item.name)) {
         setNote(
           `The closest thing found was “${best.name}”, which is different enough that nothing was changed.`,
         );
