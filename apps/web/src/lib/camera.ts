@@ -179,26 +179,40 @@ export async function captureFrame(
 }
 
 /**
- * Downscale a file the user picked (the `<input capture>` fallback path).
+ * Downscale a file the user picked.
  *
- * Uses `createImageBitmap` with `resizeWidth` so the decoder scales *during*
- * decode — a 48MP iPhone photo never becomes a full-size bitmap, which is what
- * blows past the canvas cap. `imageOrientation: 'from-image'` applies the EXIF
- * rotation iPhones set; without it, portrait photos arrive sideways and the
- * model reads them as unreadable.
+ * Two decoders, because one of them is not enough on iOS. The bitmap path is
+ * better when it works — it scales during decode, so a 48MP photo never becomes
+ * a full-size bitmap — but it needs `createImageBitmap` to honour a resize
+ * option dictionary, which is the part WebKit has been least reliable about,
+ * and it refuses HEIC outright. So a failure there falls through to an `<img>`,
+ * which uses nothing newer than 2011 and decodes HEIC natively because the
+ * system codec is right there.
+ *
+ * This matters more than it sounds: `captureFrame` above draws a video element
+ * straight to a canvas and never touches `createImageBitmap`, which is why the
+ * live camera worked while picking the same scene from the photo library did
+ * nothing at all.
  */
 export async function fileToPhoto(file: File, longEdge: number): Promise<CapturedPhoto> {
-  if (typeof createImageBitmap !== 'function') {
-    throw new CameraError('unsupported', 'This browser cannot process the selected photo.');
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await fileToPhotoViaBitmap(file, longEdge);
+    } catch {
+      // Deliberately swallowed: the fallback handles everything this rejects,
+      // and its own failure carries the message the user actually sees.
+    }
   }
+  return fileToPhotoViaImage(file, longEdge);
+}
 
-  const probe = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
-  if (!probe) {
-    throw new CameraError(
-      'unknown',
-      'That image could not be read. HEIC photos from the Photos app may need converting — try taking a new photo instead.',
-    );
-  }
+/**
+ * The fast path. `imageOrientation: 'from-image'` applies the EXIF rotation
+ * iPhones set; without it, portrait photos arrive sideways and the model reads
+ * them as unreadable.
+ */
+async function fileToPhotoViaBitmap(file: File, longEdge: number): Promise<CapturedPhoto> {
+  const probe = await createImageBitmap(file, { imageOrientation: 'from-image' });
 
   const { w, h } = fit(probe.width, probe.height, longEdge);
   probe.close();
@@ -235,6 +249,66 @@ export async function fileToPhoto(file: File, longEdge: number): Promise<Capture
   } finally {
     bitmap.close();
     releaseCanvas(canvas);
+  }
+}
+
+/**
+ * The path that works when the bitmap decoder will not.
+ *
+ * Slower, because the image is decoded at full size before being scaled down —
+ * the canvas is still only the target size, so it is the decode rather than the
+ * backing store that costs. Accepted, because a photo that loads slowly beats a
+ * photo that cannot be loaded.
+ *
+ * EXIF orientation needs no flag here: browsers apply it to `<img>` by default,
+ * which is the behaviour the bitmap path has to opt into explicitly.
+ */
+async function fileToPhotoViaImage(file: File, longEdge: number): Promise<CapturedPhoto> {
+  const url = URL.createObjectURL(file);
+
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () =>
+        reject(
+          new CameraError(
+            'unknown',
+            'That image could not be read. Try taking a new photo instead of picking one from the library.',
+          ),
+        );
+      img.src = url;
+    });
+
+    const { w, h } = fit(img.naturalWidth, img.naturalHeight, longEdge);
+    if (!w || !h) {
+      throw new CameraError('unknown', 'That image reported no size, so it cannot be read.');
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new CameraError('unknown', 'Could not get a drawing context.');
+
+    try {
+      ctx.drawImage(img, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', PHOTO_QUALITY),
+      );
+      if (!blob) throw new CameraError('unknown', 'Could not encode the photo.');
+      return {
+        data: await toBase64(blob),
+        mediaType: 'image/jpeg',
+        width: w,
+        height: h,
+        bytes: blob.size,
+      };
+    } finally {
+      releaseCanvas(canvas);
+    }
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 
