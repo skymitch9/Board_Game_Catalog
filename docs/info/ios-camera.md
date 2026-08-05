@@ -117,11 +117,15 @@ tunnel:
 
 ## Confirmed on device
 
-**2026-08-05, iPhone, deployed URL:** the camera opened, decoded a real retail
-barcode, and the lookup returned candidates. That validates the whole chain —
-skipping `BarcodeDetector`, the self-hosted wasm loading, `playsinline`, the
-rear-camera constraints, and the secure-context requirement being met by the
-deployed origin.
+**2026-08-05, iPhone, deployed URL.** Two passes:
 
-Not yet exercised on device: photo mode, shelf mode, the `<input capture>`
-fallback, and PWA/home-screen behaviour.
+1. Camera opened, decoded a real retail barcode (King of Tokyo: Duel), and the
+   lookup resolved it through the free rungs. That validates the whole chain —
+   skipping `BarcodeDetector`, the self-hosted wasm loading, `playsinline`, the
+   rear-camera constraints, and the deployed origin satisfying secure-context.
+2. Re-scanning the same box after adding it returned **"Already in your
+   collection"** from the local table. The write-back loop works: a barcode
+   resolved once never costs a network call again.
+
+Not yet exercised on device: photo mode, shelf mode, the paid barcode rung, the
+`<input capture>` fallback, and PWA/home-screen behaviour.
