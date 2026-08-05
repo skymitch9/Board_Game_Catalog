@@ -370,6 +370,24 @@ export async function deleteItem(db: D1Database, id: number): Promise<boolean> {
   return (res.meta.changes ?? 0) > 0;
 }
 
+/**
+ * Every item's name, for matching titles read off a shelf photo.
+ *
+ * Deliberately fetches the lot and matches in JS rather than issuing one query
+ * per title. A household catalog is hundreds of rows, not millions, so this is
+ * a single cheap read — and it allows the normalising comparison in
+ * `matchShelfTitles` (punctuation, articles, subtitle splits), which SQLite
+ * cannot express without a custom collation.
+ */
+export async function listItemNames(
+  db: D1Database,
+): Promise<{ id: number; name: string; kind: string }[]> {
+  const { results } = await db
+    .prepare('SELECT id, name, kind FROM item ORDER BY id')
+    .all<{ id: number; name: string; kind: string }>();
+  return results;
+}
+
 export async function listLocations(db: D1Database): Promise<string[]> {
   const { results } = await db
     .prepare(

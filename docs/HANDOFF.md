@@ -305,7 +305,66 @@ curl -s localhost:8787/api/barcode/029877030713   # bad check digit -> 400
 
 ## ⚠️ Decisions waiting on the owner
 
-**Shelf mode / camera vision — in scope?** See "Next session → A2" below.
+### Grouping / family model — owner wants to discuss before catalog UI work
+
+Raised 2026-08-05. The requirement:
+
+- **Catan + Catan: Seafarers** → one entry. Seafarers must not appear as a
+  separate game.
+- **Catan: Starfarers** → its own entry, because it is standalone.
+- **But Starfarers still keeps a relational tie back to Catan.**
+
+**The schema cannot express this today.** `item` has exactly one relationship —
+`parent_item_id`, with `root_game_id` denormalized. That models *containment*
+and nothing else, so an item is either nested (and invisible as its own game) or
+a root (and unrelated to anything). There is no third option, which is precisely
+what Starfarers needs.
+
+Two relationships are actually in play, and conflating them is the bug:
+
+| Relationship | Example | Behaviour |
+|---|---|---|
+| **requires** | Seafarers → Catan | Nest. Not a separate entry |
+| **related to** | Starfarers → Catan | Own root entry, plus a visible link |
+
+The clean discriminator is **"can you play it without the base game?"** —
+checkable, and it maps 1:1 onto nest-vs-link.
+
+Sketch (not built, not agreed):
+
+- Add `item_relation(from_item_id, to_item_id, relation)` where `relation` is
+  something like `standalone_expansion_of` / `reimplements` / `integrates_with`.
+  Directional, and it survives either item being deleted independently.
+- Add a `standalone` flag (or a `standalone_expansion` kind) so import knows
+  which branch to take.
+- This aligns with how BGG already models it — `boardgameexpansion`,
+  `boardgameintegration`, `boardgameimplementation` are separate link types on
+  the `/thing` response the client already parses — so BGG import could populate
+  it rather than needing hand-entry.
+
+**Ratings — decided 2026-08-05.** Every entry keeps its own rating; Seafarers
+might be a 3 while Catan base is a 5, and flattening that loses the most useful
+thing the catalog knows. On top of the per-entry scores, show a **family score**.
+So three numbers are visible: base game, expansion, family.
+
+Per-person ratings already work this way (`rating` is keyed on item + user), so
+the per-entry half needs no schema change — only the family roll-up is new, and
+it is derived, not stored.
+
+Still open for that conversation:
+
+- **How is the family score computed?** A plain mean lets one poor accessory drag
+  a great game down, which is wrong. Options: weight the base game heavier;
+  average only `base` + `expansion` and ignore accessories/promos; or treat it as
+  its own rating people give explicitly ("how good is Catan *as a whole*").
+  Recommend deriving it with base-weighting first — no schema change, and it can
+  become explicit later if it feels wrong.
+- Does the `duplicates` filter treat a family as one thing, or per-entry?
+- Does search surface the family or the individual entries?
+
+### Shelf mode / camera vision
+
+Approved 2026-08-05, in progress. See "Next session → A2" below.
 
 ---
 
@@ -350,8 +409,19 @@ Ideas, ranked:
    has an image for vision fallback with no second interaction.
 4. **Batch capture, deferred processing** (IndexedDB queue, one review screen).
    Never block on network — these boxes live in a basement.
-5. **Store the cover photo on the copy** (R2): condition, insurance, telling two
-   copies apart.
+5. ~~Store the cover photo on the copy (R2)~~ — **demoted to opt-in only.** See
+   the transience requirement below.
+
+**Photos must be self-contained (owner requirement, 2026-08-05).** No captured
+photo may land in the iPhone's camera roll — nobody wants a photo library full
+of pictures only one app needed. The same logic applies server-side: capture into
+memory, send, read, discard. Nothing in D1, nothing in R2 unless the owner
+explicitly asks for a cover image on a specific copy.
+
+This makes `getUserMedia` + canvas the *primary* capture path rather than a
+fallback, since it provably writes nothing to Photos. Whether
+`<input type="file" capture>` also avoids the camera roll on iOS is being
+verified — if it does not, that fallback is out entirely.
 
 Known limits, so nobody oversells it: stylized spine typography misreads, you
 get a title only (no edition/printing), and base-vs-expansion is unreliable from

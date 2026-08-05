@@ -14,6 +14,7 @@ import { catalogRoutes } from './routes/catalog.js';
 import { exportRoutes } from './routes/export.js';
 import { healthRoutes } from './routes/health.js';
 import { userRoutes } from './routes/users.js';
+import { visionRoutes } from './routes/vision.js';
 
 const app = new Hono<AppBindings>();
 
@@ -26,6 +27,7 @@ app.route('/api', userRoutes);
 app.route('/api', catalogRoutes);
 app.route('/api/bgg', bggRoutes);
 app.route('/api/barcode', barcodeRoutes);
+app.route('/api/vision', visionRoutes);
 app.route('/api', exportRoutes);
 
 app.notFound(async (c) => {

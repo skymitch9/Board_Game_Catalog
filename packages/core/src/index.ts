@@ -17,6 +17,7 @@ export * from './constants.js';
 export * from './schemas.js';
 export * from './capabilities.js';
 export * from './barcode.js';
+export * from './vision.js';
 
 export const roleSchema = z.enum(ROLES);
 
