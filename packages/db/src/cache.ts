@@ -88,90 +88,6 @@ export async function sweepCache(db: D1Database): Promise<number> {
   return res.meta.changes ?? 0;
 }
 
-// ---------------------------------------------------------------------------
-// Photo cache — "have we already looked at this exact box?"
-// ---------------------------------------------------------------------------
-
-export type PhotoMode = 'identify' | 'shelf';
-
-/**
- * How long a photo reading stays trustworthy.
- *
- * Much shorter than the title cache. A title resolves to the same game
- * indefinitely; a *photo* only means "this is what was in front of the camera",
- * and a shelf gets rearranged. A day covers the case this exists for — shooting
- * the same box twice in one cataloguing session — without pretending a reading
- * from last week still describes the shelf.
- */
-const PHOTO_TTL_HOURS = 24;
-
-/** How many recent rows to compare against. Hamming distance cannot be indexed. */
-const PHOTO_SCAN_LIMIT = 300;
-
-/**
- * Find a recent photo whose difference hash is close enough to count as the same
- * subject.
- *
- * Returns the *nearest* match rather than the first under the threshold, because
- * a shelf holds several similar-looking boxes and "close enough" is not the same
- * as "closest".
- */
-export async function getCachedPhoto<T>(
-  db: D1Database,
-  mode: PhotoMode,
-  hash: string,
-  maxDistance: number,
-  distance: (a: string, b: string) => number,
-): Promise<T | null> {
-  if (!hash) return null;
-
-  const { results } = await db
-    .prepare(
-      `SELECT hash, payload FROM photo_cache
-        WHERE mode = ? AND created_at > datetime('now', ?)
-        ORDER BY created_at DESC
-        LIMIT ?`,
-    )
-    .bind(mode, `-${PHOTO_TTL_HOURS} hours`, PHOTO_SCAN_LIMIT)
-    .all<{ hash: string; payload: string }>();
-
-  let best: { payload: string; d: number } | null = null;
-  for (const row of results) {
-    const d = distance(hash, row.hash);
-    if (d <= maxDistance && (!best || d < best.d)) best = { payload: row.payload, d };
-    if (best?.d === 0) break;
-  }
-  if (!best) return null;
-
-  try {
-    return JSON.parse(best.payload) as T;
-  } catch {
-    return null;
-  }
-}
-
-/** Best-effort, like the rest of the cache: a failed write must not fail the read. */
-export async function putCachedPhoto(
-  db: D1Database,
-  mode: PhotoMode,
-  hash: string,
-  payload: unknown,
-): Promise<void> {
-  if (!hash) return;
-  try {
-    await db
-      .prepare(
-        `INSERT INTO photo_cache (hash, mode, payload, created_at)
-         VALUES (?, ?, ?, datetime('now'))
-         ON CONFLICT(hash, mode) DO UPDATE
-           SET payload = excluded.payload, created_at = excluded.created_at`,
-      )
-      .bind(hash, mode, JSON.stringify(payload))
-      .run();
-  } catch {
-    // Ignored on purpose.
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Maintenance
@@ -180,36 +96,32 @@ export async function putCachedPhoto(
 export interface CacheStats {
   titles: number;
   barcodes: number;
-  photos: number;
   /** Oldest surviving entry, so "is anything stale in here?" is answerable. */
   oldest: string | null;
 }
 
 export async function cacheStats(db: D1Database): Promise<CacheStats> {
-  const [lookup, photo] = await db.batch([
+  const [lookup] = await db.batch([
     db.prepare(
       `SELECT kind, COUNT(*) AS n, MIN(created_at) AS oldest
          FROM lookup_cache GROUP BY kind`,
     ),
-    db.prepare('SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM photo_cache'),
   ]);
 
   const rows = (lookup?.results ?? []) as { kind: string; n: number; oldest: string | null }[];
-  const photos = ((photo?.results ?? []) as { n: number; oldest: string | null }[])[0];
 
-  const oldest = [...rows.map((r) => r.oldest), photos?.oldest ?? null]
+  const oldest = rows.map((r) => r.oldest)
     .filter((v): v is string => !!v)
     .sort()[0];
 
   return {
     titles: rows.find((r) => r.kind === 'title')?.n ?? 0,
     barcodes: rows.find((r) => r.kind === 'barcode')?.n ?? 0,
-    photos: photos?.n ?? 0,
     oldest: oldest ?? null,
   };
 }
 
-export type CacheTarget = 'all' | 'lookups' | 'photos';
+export type CacheTarget = 'all' | 'lookups';
 
 /**
  * Empty a cache.
@@ -222,10 +134,6 @@ export async function clearCache(db: D1Database, target: CacheTarget): Promise<n
   let removed = 0;
   if (target === 'all' || target === 'lookups') {
     const res = await db.prepare('DELETE FROM lookup_cache').run();
-    removed += res.meta.changes ?? 0;
-  }
-  if (target === 'all' || target === 'photos') {
-    const res = await db.prepare('DELETE FROM photo_cache').run();
     removed += res.meta.changes ?? 0;
   }
   return removed;

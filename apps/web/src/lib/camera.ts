@@ -132,60 +132,6 @@ export interface CapturedPhoto {
   width: number;
   height: number;
   bytes: number;
-  /** 64-bit difference hash, hex. Lets the server recognise a re-shot box. */
-  hash: string;
-}
-
-/**
- * Difference hash of the frame: 64 bits describing which way brightness steps
- * between neighbouring pixels of a 9x8 thumbnail.
- *
- * Why this and not a checksum: two handheld photos of the same cover are never
- * byte-identical — exposure shifts, the phone rotates a degree — so hashing the
- * bytes would never match. A dHash is stable under exactly those changes while
- * still separating different games.
- *
- * Computed from the canvas we already drew, so it costs a 72-pixel read.
- */
-function differenceHash(source: CanvasImageSource): string {
-  const W = 9;
-  const H = 8;
-  const tiny = document.createElement('canvas');
-  tiny.width = W;
-  tiny.height = H;
-  const ctx = tiny.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return '';
-
-  try {
-    ctx.drawImage(source, 0, 0, W, H);
-    const { data } = ctx.getImageData(0, 0, W, H);
-
-    const grey: number[] = [];
-    for (let i = 0; i < W * H; i++) {
-      const p = i * 4;
-      // Rec. 601 luma — closer to perceived brightness than a flat average.
-      grey.push(0.299 * data[p]! + 0.587 * data[p + 1]! + 0.114 * data[p + 2]!);
-    }
-
-    let bits = '';
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W - 1; x++) {
-        bits += grey[y * W + x]! > grey[y * W + x + 1]! ? '1' : '0';
-      }
-    }
-
-    // 64 bits -> 16 hex chars, a nibble at a time (64-bit ints are not safe here).
-    let hex = '';
-    for (let i = 0; i < 64; i += 4) {
-      hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
-    }
-    return hex;
-  } catch {
-    // A tainted or unreadable canvas just means no caching, never a failed scan.
-    return '';
-  } finally {
-    releaseCanvas(tiny);
-  }
 }
 
 /**
@@ -226,7 +172,6 @@ export async function captureFrame(
       width: w,
       height: h,
       bytes: blob.size,
-      hash: differenceHash(canvas),
     };
   } finally {
     releaseCanvas(canvas);
@@ -286,7 +231,6 @@ export async function fileToPhoto(file: File, longEdge: number): Promise<Capture
       width: canvas.width,
       height: canvas.height,
       bytes: blob.size,
-      hash: differenceHash(canvas),
     };
   } finally {
     bitmap.close();
@@ -305,4 +249,79 @@ function toBase64(blob: Blob): Promise<string> {
     };
     reader.readAsDataURL(blob);
   });
+}
+
+/**
+ * Fire a callback once the camera has held still.
+ *
+ * Auto-capture needs to know when the person has *stopped moving* — shooting on
+ * a timer catches the phone mid-swing, and the resulting blur is exactly what
+ * makes a reading fail. So: sample a tiny greyscale thumbnail a few times a
+ * second and watch how much it changes between frames.
+ *
+ * A 32x24 thumbnail is enough. It is insensitive to sensor noise and to the
+ * autofocus hunting a little, while still moving decisively when the phone does.
+ *
+ * Deliberately requires several consecutive still frames rather than one: a
+ * hand pauses at the end of a swing before it settles, and firing on that pause
+ * gives you a photo of the moment before the shot you wanted.
+ */
+export function onceSteady(
+  video: HTMLVideoElement,
+  onSteady: () => void,
+  opts: { stillFrames?: number; graceMs?: number } = {},
+): () => void {
+  const W = 32;
+  const H = 24;
+  const stillNeeded = opts.stillFrames ?? 4;
+  // Ignore the first moment after the camera opens: exposure and focus are still
+  // settling, and the frame can be misleadingly stable while it is doing so.
+  const notBefore = performance.now() + (opts.graceMs ?? 900);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  let previous: Uint8ClampedArray | null = null;
+  let steady = 0;
+  let timer = 0;
+  let stopped = false;
+
+  function sample(): void {
+    if (stopped || !ctx) return;
+    if (video.readyState < 2 || !video.videoWidth) return;
+
+    ctx.drawImage(video, 0, 0, W, H);
+    const frame = ctx.getImageData(0, 0, W, H).data;
+
+    if (previous) {
+      let delta = 0;
+      // Green channel alone tracks luminance closely enough and is a third of
+      // the work of a full conversion.
+      for (let i = 1; i < frame.length; i += 4) delta += Math.abs(frame[i]! - previous[i]!);
+      const perPixel = delta / (W * H);
+
+      // ~2 levels of average change per pixel: below this the image is settled,
+      // above it something is genuinely moving.
+      if (perPixel < 2) steady += 1;
+      else steady = 0;
+
+      if (steady >= stillNeeded && performance.now() > notBefore) {
+        stopped = true;
+        releaseCanvas(canvas);
+        onSteady();
+        return;
+      }
+    }
+    previous = frame;
+  }
+
+  timer = window.setInterval(sample, 120);
+
+  return () => {
+    stopped = true;
+    window.clearInterval(timer);
+    releaseCanvas(canvas);
+  };
 }

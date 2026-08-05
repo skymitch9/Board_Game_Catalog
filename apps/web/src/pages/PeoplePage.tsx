@@ -138,7 +138,7 @@ function CachePanel() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  async function clear(target: 'all' | 'lookups' | 'photos', label: string) {
+  async function clear(target: 'all' | 'lookups', label: string) {
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -178,18 +178,12 @@ function CachePanel() {
             <li>
               <strong>{stats.data.stats.barcodes}</strong> barcodes
             </li>
-            <li>
-              <strong>{stats.data.stats.photos}</strong> photos
-            </li>
           </ul>
           {stats.data.stats.oldest && (
             <p className="muted">Oldest entry: {stats.data.stats.oldest}</p>
           )}
 
           <div className="cache-actions">
-            <button type="button" disabled={busy} onClick={() => clear('photos', 'photo')}>
-              Clear photos
-            </button>
             <button type="button" disabled={busy} onClick={() => clear('lookups', 'lookup')}>
               Clear lookups
             </button>

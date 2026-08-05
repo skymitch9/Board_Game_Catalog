@@ -376,7 +376,12 @@ code {
    targets are large and the camera gets as much of the viewport as it can.
    --------------------------------------------------------------------------- */
 
-.scan-page { display: flex; flex-direction: column; gap: 1rem; }
+.scan-page {
+  display: flex; flex-direction: column; gap: 0.75rem;
+  /* dvh, not vh: iOS Safari's toolbar collapses on scroll and vh does not
+     account for it, which is exactly how the shutter ended up off-screen. */
+  min-height: calc(100dvh - 7rem);
+}
 
 .scan-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 .scan-header h1 { margin: 0; }
@@ -394,8 +399,10 @@ code {
 .camera-stage {
   position: relative; overflow: hidden;
   background: #000; border-radius: 12px;
-  aspect-ratio: 3 / 4; max-height: 60vh;
   display: flex; align-items: center; justify-content: center;
+  /* Take whatever is left after the header and tabs, so the shutter pinned to
+     its bottom edge is always on screen. */
+  flex: 1 1 auto; min-height: 40dvh;
 }
 .camera-stage--blocked {
   aspect-ratio: auto; background: var(--card);
@@ -468,9 +475,11 @@ code {
 .scan-trace ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
 
 @media (max-width: 560px) {
-  .scan-modes { grid-template-columns: 1fr; }
-  .scan-mode { flex-direction: row; align-items: baseline; gap: 0.5rem; }
-  .camera-stage { max-height: 55vh; }
+  /* Keep three across — stacking these is what pushed the shutter off-screen. */
+  .scan-modes { grid-template-columns: repeat(3, 1fr); gap: 0.35rem; }
+  .scan-mode { padding: 0.45rem 0.35rem; text-align: center; align-items: center; }
+  .scan-mode span { display: none; }
+  .scan-header h1 { font-size: 1.25rem; }
 }
 
 .shelf-actions { display: flex; gap: 0.5rem; }
@@ -490,3 +499,11 @@ code {
 .cache-stats { list-style: none; margin: 0.5rem 0; padding: 0; display: flex; gap: 1.25rem; }
 .cache-stats strong { font-size: 1.15rem; }
 .cache-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+
+.camera-stage__actions { align-items: center; gap: 0.75rem; }
+.auto-toggle {
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.5rem 0.7rem; border-radius: 999px;
+  background: rgb(0 0 0 / 0.55); color: #fff; font-size: 0.85rem;
+}
+.auto-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }

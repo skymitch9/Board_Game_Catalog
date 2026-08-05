@@ -7,7 +7,7 @@ import {
   type ShelfMatch,
 } from '@bgc/core';
 import { api, ApiError, type BarcodeLookup } from '../api';
-import { captureFrame, fileToPhoto } from '../lib/camera';
+import { captureFrame, fileToPhoto, onceSteady } from '../lib/camera';
 import { preloadDecoder, startScanLoop } from '../lib/scanner';
 import { CameraStage } from '../components/CameraStage';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
@@ -44,10 +44,15 @@ export function ScanPage({ me }: { me: MeResponse }) {
   const [candidates, setCandidates] = useState<BarcodeCandidate[] | null>(null);
   const [shelf, setShelf] = useState<ShelfMatch[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  /** True when the last photo reading was served from a previous identical shot. */
-  const [fromCache, setFromCache] = useState(false);
 
   const stopLoopRef = useRef<(() => void) | null>(null);
+  const stopSteadyRef = useRef<(() => void) | null>(null);
+  /**
+   * Auto-capture fires when the phone stops moving. On by default because the
+   * alternative — reach for a button while holding a box steady one-handed — is
+   * the awkward part of this screen.
+   */
+  const [autoCapture, setAutoCapture] = useState(true);
   const canResearch = me.capabilities.includes('runResearch');
   const canEdit = me.capabilities.includes('editCatalog');
 
@@ -57,12 +62,13 @@ export function ScanPage({ me }: { me: MeResponse }) {
     setShelf(null);
     setNote(null);
     setError(null);
-    setFromCache(false);
   }, []);
 
   const stopEverything = useCallback(() => {
     stopLoopRef.current?.();
     stopLoopRef.current = null;
+    stopSteadyRef.current?.();
+    stopSteadyRef.current = null;
     setActive(false);
   }, []);
 
@@ -105,7 +111,6 @@ export function ScanPage({ me }: { me: MeResponse }) {
         if (which === 'photo') {
           const res = await api.identifyPhoto(photo);
           setCandidates(res.candidates);
-          setFromCache(res.cached === true);
           if (res.unreadable || res.candidates.length === 0) {
             setNote(
               'Could not read that one. Try filling more of the frame with the box, and avoid glare on the title.',
@@ -114,7 +119,6 @@ export function ScanPage({ me }: { me: MeResponse }) {
         } else {
           const res = await api.readShelf(photo);
           setShelf(res.matches);
-          setFromCache(res.cached === true);
           if (res.unreadable || res.matches.length === 0) {
             setNote('No titles were legible. Try getting closer, or straighter on to the spines.');
           }
@@ -132,9 +136,17 @@ export function ScanPage({ me }: { me: MeResponse }) {
   const onReady = useCallback(
     (video: HTMLVideoElement) => {
       videoRef.current = video;
-      if (mode === 'barcode') onBarcodeReady(video);
+      if (mode === 'barcode') {
+        onBarcodeReady(video);
+        return;
+      }
+      // Photo modes: shoot as soon as the phone settles, unless switched off.
+      stopSteadyRef.current?.();
+      stopSteadyRef.current = autoCapture
+        ? onceSteady(video, () => void shoot(video, mode))
+        : null;
     },
-    [mode, onBarcodeReady],
+    [autoCapture, mode, onBarcodeReady, shoot],
   );
 
   // --- the slow rung -------------------------------------------------------
@@ -279,10 +291,34 @@ export function ScanPage({ me }: { me: MeResponse }) {
                 type="button"
                 className="primary"
                 disabled={busy != null}
-                onClick={() => videoRef.current && shoot(videoRef.current, mode)}
+                onClick={() => {
+                  // Tapping is an override: cancel the watcher so it cannot
+                  // fire a second shot a moment later.
+                  stopSteadyRef.current?.();
+                  stopSteadyRef.current = null;
+                  if (videoRef.current) void shoot(videoRef.current, mode);
+                }}
               >
                 {mode === 'photo' ? 'Read this box' : 'Read this shelf'}
               </button>
+              <label className="auto-toggle">
+                <input
+                  type="checkbox"
+                  checked={autoCapture}
+                  onChange={(e) => {
+                    setAutoCapture(e.target.checked);
+                    if (!e.target.checked) {
+                      stopSteadyRef.current?.();
+                      stopSteadyRef.current = null;
+                    } else if (videoRef.current) {
+                      stopSteadyRef.current = onceSteady(videoRef.current, () => {
+                        if (videoRef.current) void shoot(videoRef.current, mode);
+                      });
+                    }
+                  }}
+                />
+                Auto
+              </label>
             </div>
           )}
         </CameraStage>
@@ -332,13 +368,12 @@ export function ScanPage({ me }: { me: MeResponse }) {
       {candidates && candidates.length > 0 && (
         <CandidateList
           candidates={candidates}
-          cached={fromCache}
           onAdd={(c) => addCandidate(c, lookup?.barcode ?? null)}
         />
       )}
 
       {shelf && (
-        <ShelfResult matches={shelf} cached={fromCache} onAdd={(c) => addCandidate(c, null, false)} />
+        <ShelfResult matches={shelf} onAdd={(c) => addCandidate(c, null, false)} />
       )}
 
       {showResults && (
@@ -473,12 +508,9 @@ function BarcodeResult({
 function CandidateList({
   candidates,
   onAdd,
-  cached = false,
 }: {
   candidates: BarcodeCandidate[];
   onAdd: (c: BarcodeCandidate) => void;
-  /** This whole reading came from a previous identical photo, not a fresh call. */
-  cached?: boolean;
 }) {
   return (
     <ul className="candidate-list">
@@ -495,11 +527,6 @@ function CandidateList({
                 {c.confidence}
               </Badge>
               <span className="muted">{c.source}</span>
-              {cached && (
-                <span className="muted cached-tag" title="Served from a recent identical photo — no model call">
-                  cached
-                </span>
-              )}
               {c.kind !== 'base' && <Badge tone="kind">{c.kind}</Badge>}
             </span>
             {c.note && <span className="muted candidate__note">{c.note}</span>}
@@ -527,11 +554,9 @@ function CandidateList({
 function ShelfResult({
   matches,
   onAdd,
-  cached = false,
 }: {
   matches: ShelfMatch[];
   onAdd: (c: BarcodeCandidate) => Promise<number | null>;
-  cached?: boolean;
 }) {
   const owned = matches.filter((m) => m.existingItemId != null);
   const fresh = matches.map((m, i) => ({ m, i })).filter(({ m }) => m.existingItemId == null);
@@ -580,7 +605,6 @@ function ShelfResult({
         Read {matches.length} title{matches.length === 1 ? '' : 's'}
         {owned.length > 0 && ` · ${owned.length} already yours`}
         {addedCount > 0 && ` · ${addedCount} added`}
-        {cached && ' · from a recent identical photo'}
       </p>
 
       {fresh.length > 0 && (

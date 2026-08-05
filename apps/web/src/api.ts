@@ -105,7 +105,7 @@ export const api = {
   users: () => req<{ users: AppUser[] }>('/api/users'),
 
   cache: () => req<{ stats: CacheStats }>('/api/cache'),
-  clearCache: (target: 'all' | 'lookups' | 'photos' = 'all') =>
+  clearCache: (target: 'all' | 'lookups' = 'all') =>
     del(`/api/cache?target=${target}`) as Promise<{ removed: number; stats: CacheStats }>,
   setRole: (userId: number, role: AppUser['role']) =>
     patch(`/api/users/${userId}/role`, { role }) as Promise<{ user: AppUser }>,
@@ -138,29 +138,25 @@ export const api = {
   }) => post('/api/barcode/link', data) as Promise<{ barcode: string; contributed: boolean }>,
 
   /** One box, read from a photo. ~3-5s, no web search. */
-  identifyPhoto: (photo: { data: string; mediaType: string; hash?: string }) =>
+  identifyPhoto: (photo: { data: string; mediaType: string }) =>
     post('/api/vision/identify', photo) as Promise<{
       candidates: BarcodeCandidate[];
       unreadable: boolean;
       usage: ResearchUsage;
-      /** True when this answer came from a recent identical photo, not a fresh call. */
-      cached?: boolean;
     }>,
 
   /** A shelf of spines, matched against the collection and GameUPC. */
-  readShelf: (photo: { data: string; mediaType: string; hash?: string }) =>
+  readShelf: (photo: { data: string; mediaType: string }) =>
     post('/api/vision/shelf', photo) as Promise<{
       matches: ShelfMatch[];
       unreadable: boolean;
       usage: ResearchUsage;
-      cached?: boolean;
     }>,
 };
 
 export interface CacheStats {
   titles: number;
   barcodes: number;
-  photos: number;
   oldest: string | null;
 }
 

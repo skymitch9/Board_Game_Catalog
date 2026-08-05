@@ -17,7 +17,7 @@ import { requireCapability } from '../middleware/auth.js';
  */
 
 const targetSchema = z.object({
-  target: z.enum(['all', 'lookups', 'photos']).default('all'),
+  target: z.enum(['all', 'lookups']).default('all'),
 });
 
 export const cacheRoutes = new Hono<AppBindings>()
