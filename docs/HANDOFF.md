@@ -26,12 +26,49 @@ so for a while production was running code with no commit behind it and no
 rollback point. It is committed as one unit because that is what actually went
 out. Don't repeat the pattern — commit, then deploy.
 
-**Still unverified on a phone — and never run at all.** The photo queue
-(`/scan-jobs`) has never been walked end to end: `scan_job` holds 0 rows in
-production and `bgc-photos` holds 0 objects (checked 2026-08-06). Two things
-that would each have looked like a different bug were found by reading rather
-than running, and are fixed in `d0f2d4c`; a third is left open below. The
-barcode and shelf paths *were* verified on device on 08-05.
+**The pipeline is verified end to end — against local dev, not a phone.**
+Exercised over curl on 2026-08-05 with `npm run dev:worker` (the `DEV_EMAIL`
+bypass in `middleware/auth.ts` means no Access and no tokens are needed; a
+Cloudflare *service token* would not work anyway, because `auth.ts` requires an
+`email` claim and service-token JWTs carry `common_name`). What was confirmed:
+
+| Checked | Result |
+|---|---|
+| Upload → vision → enrich → review | Reached `review` in ~8s |
+| Vision accuracy | Read all 5 synthetic spines, all `high` confidence |
+| Free lookups | Resolved all 5 to correct BGG ids, and normalised the caps |
+| Photo released on success | No blob in the local R2 store afterwards |
+| Photo released on failure | Forced a vision failure; still no blob |
+| Negative lookups cached | A true negative's `created_at` does **not** refresh on a repeat run, so it is read from cache rather than re-resolved — the `43bbf39` fix works |
+
+Production is still untouched: `scan_job` holds 0 rows and `bgc-photos` holds 0
+objects. **The phone half remains unverified** — nothing here exercised iOS
+Safari, which is where the camera-roll decode failure lives.
+
+### ⚠️ Open: nonsense titles resolve to confident wrong games
+
+Found while testing the negative cache, and the more serious of the two open
+items. GameUPC's search matches on a *single word* and returns a candidate with
+a real BGG id, year and cover art:
+
+| Vision read | Resolved to | BGG id |
+|---|---|---|
+| `ZORBLAX QUANDARY` | Quandary | 12319 |
+| `NURDLETON RIFT` | Rift | 203616 |
+| `FRASKET GAMBIT` | Gambit | 6216 |
+
+Only one of six invented titles correctly resolved to nothing. This matters
+because the review UI pre-selects every fresh title, so a misread spine — or a
+game genuinely absent from the database — is one tap from entering the catalog
+as the wrong game, wearing someone else's cover.
+
+`rankBySearchedTitle` orders candidates but never rejects one. The catalog
+already has the missing piece: `ItemPage`'s "Look up details" refuses a
+candidate whose `titleSimilarity` is below 0.34 rather than dressing a game in
+the wrong cover. The shelf and scan-job paths have no such floor. Either apply
+the same threshold in `lib/resolve-title.ts`, or surface low-similarity matches
+as unselected-by-default with the read text shown beside the proposal — the
+choice is whether a doubtful match is hidden or merely not trusted.
 
 ### ⚠️ Open question: should the photo go to R2 at all?
 
