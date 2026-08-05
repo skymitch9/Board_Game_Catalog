@@ -18,6 +18,7 @@ Nothing is in flight. The two most recent commits:
 |---|---|
 | `0e61948` | The add restructure, item relations and the photo queue — all of it |
 | `43bbf39` | Negative lookup results are actually read back from the cache now |
+| `d0f2d4c` | The queue polls itself; photos are released as soon as vision is done |
 
 `0e61948` is worth understanding as a process note rather than a code one: that
 work was **deployed straight from the working tree before it was committed**,
@@ -25,10 +26,34 @@ so for a while production was running code with no commit behind it and no
 rollback point. It is committed as one unit because that is what actually went
 out. Don't repeat the pattern — commit, then deploy.
 
-**Still unverified on a phone.** The photo queue (`/scan-jobs`) has never been
-walked end to end on the iPhone — upload → vision → enrich → review → done.
-The barcode and shelf paths were verified on device on 08-05; this one was
-not. Also worth a look: four tabs across a narrow screen is tight, so at ≤560px
+**Still unverified on a phone — and never run at all.** The photo queue
+(`/scan-jobs`) has never been walked end to end: `scan_job` holds 0 rows in
+production and `bgc-photos` holds 0 objects (checked 2026-08-06). Two things
+that would each have looked like a different bug were found by reading rather
+than running, and are fixed in `d0f2d4c`; a third is left open below. The
+barcode and shelf paths *were* verified on device on 08-05.
+
+### ⚠️ Open question: should the photo go to R2 at all?
+
+**Nothing ever reads it back.** There is no `PHOTOS.get` in the repo. Vision
+gets the base64 straight from the request in memory, enrichment works from
+`raw_titles`, and the review screen never displays the image. The bucket was
+write-only storage whose entire purpose was to be deleted later.
+
+It is now released the moment vision finishes rather than at review, so it
+lives for seconds instead of indefinitely — but the honest options are:
+
+1. **Drop R2 from this path entirely.** `photo_key` becomes vestigial, the
+   binding goes, and the transience requirement is satisfied by construction
+   rather than by remembering to delete. Simplest, and matches what the code
+   actually does today.
+2. **Keep it, and give it a reader.** Justifiable if review should be able to
+   show you the photo a title came from, or if a failed job should be
+   re-runnable without walking back to the shelf. Both are real features;
+   neither exists.
+
+Do not split the difference by leaving it as-is — write-only storage that must
+be cleaned up by hand is the shape that caused the leak in the first place. Also worth a look: four tabs across a narrow screen is tight, so at ≤560px
 the blurbs are hidden and the labels drop to 0.78rem ("Whole shelf" sets the
 size).
 
@@ -39,7 +64,7 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `41eb6f1a-22d2-44af-8aa6-7633eb3948b6` — relations, photo queue, cache fix |
+| Deployed version | `abad9b35-9eda-4a1b-b09b-d52c6dc2e0d2` — queue polling, photo release |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
