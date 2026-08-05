@@ -155,6 +155,15 @@ export interface ClassifiedItem {
   /** If classified as expansion, the existing item it likely belongs to. */
   proposedParentId: number | null;
   proposedParentName: string | null;
+  /**
+   * The base game read off this title that is *not* in the collection.
+   *
+   * "Wingspan: European Expansion" implies a "Wingspan" that may not be here
+   * yet. The default proposal stays `base` — plenty of standalone games carry a
+   * subtitle — but the prefix is kept so that choosing expansion has a name to
+   * remember, rather than forcing a choice between the wrong kind and nothing.
+   */
+  inferredParentName: string | null;
   /** Why we think this is an expansion (for display). */
   reason: string | null;
   /** Original ShelfMatch data preserved for the add flow. */
@@ -216,6 +225,7 @@ export function classifyShelfResults(
         proposedKind: 'base',
         proposedParentId: null,
         proposedParentName: null,
+        inferredParentName: null,
         reason: null,
         bggId,
         thumbnailUrl,
@@ -234,6 +244,7 @@ export function classifyShelfResults(
         proposedKind: 'expansion',
         proposedParentId: existingMatch.id,
         proposedParentName: existingMatch.name,
+        inferredParentName: null,
         reason: `"${prefix}" is already in your collection`,
         bggId,
         thumbnailUrl,
@@ -250,6 +261,7 @@ export function classifyShelfResults(
         proposedKind: 'expansion',
         proposedParentId: null, // No ID yet — it hasn't been saved
         proposedParentName: batchMatch.name,
+        inferredParentName: null,
         reason: `"${prefix}" is also in this scan`,
         bggId,
         thumbnailUrl,
@@ -266,7 +278,11 @@ export function classifyShelfResults(
       proposedKind: 'base',
       proposedParentId: null,
       proposedParentName: null,
-      reason: null,
+      // Kept rather than discarded: if this really is an expansion, the base
+      // game's name is right there in the title and is the only clue we will
+      // get about what to attach it to later.
+      inferredParentName: prefix,
+      reason: `"${prefix}" is not in your collection — if this is an expansion, it will wait for it`,
       bggId,
       thumbnailUrl,
     });

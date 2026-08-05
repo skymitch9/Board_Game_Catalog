@@ -17,6 +17,7 @@ export interface ItemRow {
   kind: string;
   parent_item_id: number | null;
   root_game_id: number | null;
+  pending_parent_name: string | null;
   name: string;
   sort_name: string | null;
   year_published: number | null;
@@ -40,6 +41,7 @@ export function mapItemRow(r: ItemRow): Item {
     kind: r.kind as Item['kind'],
     parentItemId: r.parent_item_id,
     rootGameId: r.root_game_id,
+    pendingParentName: r.pending_parent_name,
     name: r.name,
     sortName: r.sort_name,
     yearPublished: r.year_published,
@@ -57,9 +59,9 @@ export function mapItemRow(r: ItemRow): Item {
   };
 }
 
-const ITEM_COLUMNS = `id, bgg_id, kind, parent_item_id, root_game_id, name, sort_name,
-  year_published, publisher, publisher_url, designers, min_players, max_players,
-  playtime_min, weight, thumbnail_url, description, created_at, updated_at`;
+const ITEM_COLUMNS = `id, bgg_id, kind, parent_item_id, root_game_id, pending_parent_name,
+  name, sort_name, year_published, publisher, publisher_url, designers, min_players,
+  max_players, playtime_min, weight, thumbnail_url, description, created_at, updated_at`;
 
 /** "The Castles of Burgundy" sorts under C, not T. */
 export function toSortName(name: string): string {
@@ -258,7 +260,13 @@ export async function getItemDetail(db: D1Database, id: number): Promise<ItemDet
 export async function createItem(db: D1Database, input: CreateItemInput): Promise<Item> {
   let rootGameId: number | null = null;
 
-  if (input.kind !== 'base') {
+  // A non-base item without a parent is allowed, and is the whole point of
+  // `pending_parent_name`: an expansion can reach the shelf before the game it
+  // belongs to. Demanding a parent here is what forced both add flows to save
+  // such a thing as a base game, silently losing what it actually was.
+  const orphaned = input.kind !== 'base' && input.parentItemId == null;
+
+  if (input.kind !== 'base' && !orphaned) {
     const parent = await getItem(db, input.parentItemId!);
     if (!parent) throw new ItemError('parent item does not exist', 400);
     // Everything inherits the base game at the top of the tree, however deep.
@@ -281,16 +289,20 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
 
   const res = await db
     .prepare(
-      `INSERT INTO item (bgg_id, kind, parent_item_id, root_game_id, name, sort_name, year_published,
+      `INSERT INTO item (bgg_id, kind, parent_item_id, root_game_id, pending_parent_name,
+                         name, sort_name, year_published,
                          publisher, publisher_url, designers, min_players, max_players,
                          playtime_min, weight, thumbnail_url, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       input.bggId ?? null,
       input.kind,
-      input.kind === 'base' ? null : input.parentItemId,
+      input.kind === 'base' ? null : (input.parentItemId ?? null),
       rootGameId,
+      // Only meaningful while parentless: a name to watch for, not a second
+      // way of expressing a relationship that already exists.
+      orphaned ? (input.pendingParentName || null) : null,
       input.name,
       toSortName(input.name),
       input.yearPublished ?? null,
@@ -308,14 +320,72 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
 
   const id = Number(res.meta.last_row_id);
 
-  // A base game is its own root; we only know the id after the insert.
-  if (input.kind === 'base') {
+  // A base game is its own root; we only know the id after the insert. An
+  // orphan roots itself for the same reason a base game does — every listing
+  // query selects by root_game_id, so a null root would make it invisible
+  // rather than unattached.
+  if (input.kind === 'base' || orphaned) {
     await db.prepare('UPDATE item SET root_game_id = id WHERE id = ?').bind(id).run();
   }
 
   const created = await getItem(db, id);
   if (!created) throw new ItemError('item vanished immediately after creation', 500);
   return created;
+}
+
+/**
+ * Hand every waiting orphan to a game that has just arrived.
+ *
+ * The other half of `pending_parent_name`. Scanning a shelf can turn up
+ * "Wingspan: European Expansion" months before Wingspan itself; the expansion
+ * waits, named, and is re-parented the moment its base game is created.
+ *
+ * Matching is on the normalised name rather than a BGG id on purpose — the
+ * orphan was read off a spine and usually has no id at all, which is exactly
+ * the situation that produced it.
+ *
+ * Called after every item creation. Cheap: an indexed lookup that almost always
+ * returns nothing, against a mistake that is otherwise invisible until someone
+ * notices their collection has two Wingspans.
+ */
+export async function adoptOrphans(db: D1Database, parent: Item): Promise<Item[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT ${ITEM_COLUMNS} FROM item
+        WHERE parent_item_id IS NULL
+          AND pending_parent_name IS NOT NULL
+          AND id != ?1
+          AND lower(trim(pending_parent_name)) = lower(trim(?2))`,
+    )
+    .bind(parent.id, parent.name)
+    .all<ItemRow>();
+
+  const orphans = results.map(mapItemRow);
+  if (orphans.length === 0) return [];
+
+  const newRoot = parent.rootGameId ?? parent.id;
+
+  for (const orphan of orphans) {
+    // The orphan may already have grown a tree of its own — an accessory filed
+    // under an expansion that was itself waiting. Move the whole subtree, which
+    // is identified by the root the orphan was standing in for.
+    await db.batch([
+      db
+        .prepare('UPDATE item SET root_game_id = ?1 WHERE root_game_id = ?2')
+        .bind(newRoot, orphan.id),
+      db
+        .prepare(
+          `UPDATE item
+              SET parent_item_id = ?1, pending_parent_name = NULL,
+                  updated_at = datetime('now')
+            WHERE id = ?2`,
+        )
+        .bind(parent.id, orphan.id),
+    ]);
+  }
+
+  const adopted = await Promise.all(orphans.map((o) => getItem(db, o.id)));
+  return adopted.filter((i): i is Item => i !== null);
 }
 
 const UPDATABLE: Record<keyof UpdateItemInput, string> = {
@@ -325,6 +395,7 @@ const UPDATABLE: Record<keyof UpdateItemInput, string> = {
   // match from a scan can be corrected rather than requiring a delete.
   bggId: 'bgg_id',
   parentItemId: 'parent_item_id',
+  pendingParentName: 'pending_parent_name',
   yearPublished: 'year_published',
   publisher: 'publisher',
   publisherUrl: 'publisher_url',
@@ -371,6 +442,10 @@ export async function updateItem(
       }
       sets.push('root_game_id = ?');
       params.push(parent.rootGameId ?? parent.id);
+      // Attaching a parent by hand answers the question the pending name was
+      // holding open, so it stops being true. Leaving it would keep the item
+      // eligible for adoption by a second game with the same name.
+      if (!('pendingParentName' in input)) sets.push('pending_parent_name = NULL');
     }
   }
 

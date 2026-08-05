@@ -196,6 +196,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
       goToItem = true,
       overrideKind?: ItemKind,
       overrideParentId?: number | null,
+      pendingParentName?: string | null,
     ): Promise<number | null> => {
       if (goToItem) setBusy(`Adding ${candidate.name}…`);
       setError(null);
@@ -207,6 +208,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
           name: candidate.name,
           kind,
           parentItemId,
+          pendingParentName: pendingParentName ?? null,
           bggId: candidate.bggId,
           yearPublished: candidate.yearPublished,
           publisher: candidate.publisher,
@@ -399,7 +401,9 @@ export function ScanPage({ me }: { me: MeResponse }) {
       {shelf && (
         <ShelfResult
           matches={shelf}
-          onAdd={(c, kind, parentId) => addCandidate(c, null, false, kind, parentId)}
+          onAdd={(c, kind, parentId, pendingParentName) =>
+            addCandidate(c, null, false, kind, parentId, pendingParentName)
+          }
         />
       )}
 
@@ -592,6 +596,7 @@ function ShelfResult({
     c: BarcodeCandidate,
     kind?: ItemKind,
     parentId?: number | null,
+    pendingParentName?: string | null,
   ) => Promise<number | null>;
 }) {
   const owned = matches.filter((m) => m.existingItemId != null);
@@ -686,12 +691,17 @@ function ShelfResult({
         }
       }
 
-      // Expansion without a resolved parent -> add as base.
-      const effectiveKind = kind !== 'base' && !parentId ? 'base' : kind;
+      // No demotion. An expansion whose base game is not here yet stays an
+      // expansion and remembers what it is waiting for, rather than entering
+      // the collection as a root and losing what it was.
+      const pendingParentName =
+        kind !== 'base' && !parentId
+          ? (item.inferredParentName ?? item.proposedParentName ?? null)
+          : null;
 
       try {
         const candidate = toCandidate(m);
-        const itemId = await onAdd(candidate, effectiveKind, parentId);
+        const itemId = await onAdd(candidate, kind, parentId, pendingParentName);
         if (itemId) {
           setResults((r) => ({ ...r, [i]: { itemId } }));
           setBatchIds((b) => ({ ...b, [i]: itemId }));

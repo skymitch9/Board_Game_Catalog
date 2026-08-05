@@ -13,6 +13,7 @@
     "dev:worker": "npm run dev --workspace @bgc/worker",
     "dev:web": "npm run dev --workspace @bgc/web",
     "build": "npm run build --workspace @bgc/web",
+    "predeploy": "node scripts/check-clean.mjs",
     "deploy": "npm run build && npm run deploy --workspace @bgc/worker",
     "secret": "wrangler secret put --config apps/worker/wrangler.toml",
     "secret:list": "wrangler secret list --config apps/worker/wrangler.toml",

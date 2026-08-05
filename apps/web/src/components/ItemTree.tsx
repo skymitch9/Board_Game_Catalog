@@ -88,6 +88,16 @@ export function ItemCard({ node }: { node: ItemNode }) {
           </span>
         </span>
         <span className="item-badges">
+          {/* An expansion sitting at the top level is not a game — it is one
+              waiting for its game. Saying so is the difference between a
+              catalog that looks wrong and one that is honest about a gap. */}
+          {node.kind !== 'base' && node.parentItemId == null && (
+            <Badge tone="wanted">
+              {node.pendingParentName
+                ? `${KIND_LABEL[node.kind]}, waiting for ${node.pendingParentName}`
+                : `${KIND_LABEL[node.kind]}, not filed yet`}
+            </Badge>
+          )}
           {own.tone ? (
             <Badge tone={STATUS_TONE[own.tone]}>{own.text}</Badge>
           ) : (

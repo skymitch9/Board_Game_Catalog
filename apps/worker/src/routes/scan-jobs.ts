@@ -299,13 +299,23 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
     // Merge classification back into enriched results.
     let classIdx = 0;
     const finalResults = enrichedResults.map((r) => {
-      if (r.alreadyOwned) return { ...r, proposedKind: null, proposedParentId: null, proposedParentName: null, reason: null };
+      if (r.alreadyOwned) {
+        return {
+          ...r,
+          proposedKind: null,
+          proposedParentId: null,
+          proposedParentName: null,
+          inferredParentName: null,
+          reason: null,
+        };
+      }
       const cls = classified[classIdx++];
       return {
         ...r,
         proposedKind: cls?.proposedKind ?? 'base',
         proposedParentId: cls?.proposedParentId ?? null,
         proposedParentName: cls?.proposedParentName ?? null,
+        inferredParentName: cls?.inferredParentName ?? null,
         reason: cls?.reason ?? null,
       };
     });

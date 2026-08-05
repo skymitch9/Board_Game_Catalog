@@ -11,6 +11,7 @@ import {
 import {
   ItemError,
   RelationError,
+  adoptOrphans,
   collectionStats,
   createCopy,
   createItem,
@@ -75,7 +76,12 @@ export const catalogRoutes = new Hono<AppBindings>()
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
     try {
-      return c.json({ item: await createItem(c.env.DB, parsed.data) }, 201);
+      const item = await createItem(c.env.DB, parsed.data);
+      // A game arriving can complete something that has been waiting months for
+      // it. Reported back so the screen can say so rather than leaving the user
+      // to notice their orphan quietly moved.
+      const adopted = await adoptOrphans(c.env.DB, item);
+      return c.json({ item, adopted }, 201);
     } catch (err) {
       if (err instanceof ItemError) {
         return c.json({ error: 'bad_request', detail: err.message }, err.status as 400);

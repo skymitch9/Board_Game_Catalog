@@ -95,7 +95,8 @@ export const api = {
     req<{ items: ItemNode[] }>(`/api/items${toQueryString(query)}`),
   item: (id: number) => req<{ item: ItemDetail }>(`/api/items/${id}`),
 
-  createItem: (data: CreateItemInput) => post('/api/items', data) as Promise<{ item: Item }>,
+  createItem: (data: CreateItemInput) =>
+    post('/api/items', data) as Promise<{ item: Item; adopted: Item[] }>,
   updateItem: (id: number, data: UpdateItemInput) =>
     patch(`/api/items/${id}`, data) as Promise<{ item: Item }>,
   deleteItem: (id: number) => del(`/api/items/${id}`) as Promise<{ deleted: boolean }>,
@@ -226,6 +227,8 @@ export interface EnrichedTitle {
   proposedKind: string | null;
   proposedParentId: number | null;
   proposedParentName: string | null;
+  /** Base game implied by the title but absent from the collection. */
+  inferredParentName: string | null;
   reason: string | null;
 }
 

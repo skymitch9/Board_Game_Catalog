@@ -4,6 +4,7 @@ import {
   MIN_SPINE_SIMILARITY,
   SHELF_LONG_EDGE,
   PHOTO_LONG_EDGE,
+  type Item,
   type ItemKind,
   type MeResponse,
 } from '@bgc/core';
@@ -310,6 +311,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   const [kindOverrides, setKindOverrides] = useState<Record<number, ItemKind>>({});
   const [parentOverrides, setParentOverrides] = useState<Record<number, number | string | null>>({});
   const [selected, setSelected] = useState<Set<number> | null>(null);
+  const [adoptions, setAdoptions] = useState<Item[]>([]);
   const [error, setError] = useState<unknown>(null);
 
   const job = live ?? (jobState.state === 'ok' ? jobState.data.job : null);
@@ -422,8 +424,15 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
         parentId = rawParentId;
       }
 
-      // If expansion with no parent, add as base.
-      const effectiveKind = kind !== 'base' && !parentId ? 'base' : kind;
+      // No demotion. An expansion whose base game is not here yet stays an
+      // expansion and remembers the name it is waiting for; it used to be saved
+      // as a base game instead, which put it in the collection as a root and
+      // lost what it actually was. `pendingParentName` is what lets the catalog
+      // reunite them when the base game finally turns up.
+      const orphan = kind !== 'base' && !parentId;
+      const pendingParentName = orphan
+        ? (t.inferredParentName ?? t.proposedParentName ?? null)
+        : null;
 
       // A doubtful match contributes its title and nothing else. Carrying the
       // id, cover and year across would put another game's identity on this
@@ -431,15 +440,19 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       const doubtful = isDoubtful(t);
 
       try {
-        const { item } = await api.createItem({
+        const { item, adopted } = await api.createItem({
           name: effectiveName(t),
-          kind: effectiveKind,
-          parentItemId: effectiveKind === 'base' ? null : parentId,
+          kind,
+          parentItemId: kind === 'base' ? null : parentId,
+          pendingParentName,
           bggId: doubtful ? null : t.bggId,
           publisher: doubtful ? null : t.publisher,
           yearPublished: doubtful ? null : t.yearPublished,
           thumbnailUrl: doubtful ? null : t.thumbnailUrl,
         });
+
+        // Adding a base game can reunite it with expansions catalogued earlier.
+        if (adopted.length > 0) setAdoptions((a) => [...a, ...adopted]);
 
         await api.createCopy(item.id, {
           quantity: 1,
@@ -484,6 +497,23 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       </header>
 
       {error != null && <ErrorBox error={error} what="Add" />}
+
+      {adoptions.length > 0 && (
+        <section className="card">
+          <h3>Reunited with what was waiting</h3>
+          <p className="muted small">
+            These were catalogued before the game they belong to, and have just been
+            filed under it.
+          </p>
+          <ul className="child-list">
+            {adoptions.map((a) => (
+              <li key={a.id}>
+                <Link to={`/items/${a.id}`}>{a.name}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {fresh.length > 0 && (
         <section className="card">
@@ -589,7 +619,11 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                             disabled={adding}
                             aria-label="Parent game"
                           >
-                            <option value="">-- pick a parent --</option>
+                            <option value="">
+                              {t.inferredParentName
+                                ? `${t.inferredParentName} — not here yet, wait for it`
+                                : 'Not in the collection yet — wait for it'}
+                            </option>
                             {parentOptions
                               .filter((p) => p.id !== `batch:${i}`) // can't be your own parent
                               .map((p) => (

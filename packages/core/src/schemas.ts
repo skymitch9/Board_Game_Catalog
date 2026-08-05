@@ -25,6 +25,14 @@ const itemFields = z.object({
    */
   bggId: z.number().int().positive().nullable().optional(),
   parentItemId: z.number().int().positive().nullable().optional(),
+  /**
+   * The base game this belongs to, when it is not in the collection yet.
+   *
+   * Set only for a parentless expansion, accessory, promo or upgrade. Holds the
+   * name to watch for — usually the prefix read off a spine — and is cleared the
+   * moment a matching game is created and the orphan is adopted.
+   */
+  pendingParentName: nullableString(200),
   yearPublished: z.number().int().min(1000).max(2200).nullable().optional(),
   publisher: nullableString(200),
   publisherUrl: z.string().trim().url().max(500).nullable().optional().or(z.literal('')),
@@ -37,10 +45,23 @@ const itemFields = z.object({
   description: nullableString(5000),
 });
 
+/**
+ * A non-base item needs a parent, *or* the name of one to wait for.
+ *
+ * The second half is the point. Requiring a real parent meant an expansion
+ * found on a shelf before its base game could not be recorded as an expansion
+ * at all, so both add flows saved it as a base game instead — which put it in
+ * the collection as a root and threw away what it actually was. Naming what it
+ * is waiting for keeps the record honest until the base game turns up.
+ */
 export const createItemSchema = itemFields.refine(
-  (d) => d.kind === 'base' || (d.parentItemId != null && d.parentItemId > 0),
+  (d) =>
+    d.kind === 'base' ||
+    (d.parentItemId != null && d.parentItemId > 0) ||
+    (d.pendingParentName != null && d.pendingParentName.trim() !== ''),
   {
-    message: 'expansions, accessories, promos and upgrades must belong to a base game',
+    message:
+      'an expansion, accessory, promo or upgrade needs a base game — either pick one, or name the one it is waiting for',
     path: ['parentItemId'],
   },
 );
@@ -127,6 +148,8 @@ export interface Item {
   kind: (typeof ITEM_KINDS)[number];
   parentItemId: number | null;
   rootGameId: number | null;
+  /** Set when this hangs off a game that is not in the collection yet. */
+  pendingParentName: string | null;
   name: string;
   sortName: string | null;
   yearPublished: number | null;
