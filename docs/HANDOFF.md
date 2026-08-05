@@ -5,45 +5,32 @@ Everything needed to continue or finish this without Claude.
 Stable reference lives alongside this file and is not duplicated here:
 [`access/`](access/README.md) (endpoints, key names, quotas) and
 [`info/`](info/README.md) (how and why things work).
-**Last updated:** 2026-08-05, after photo queue pipeline shipped and full
-session of improvements. Database was cleared and collection restarted fresh.
+**Last updated:** 2026-08-06. Everything is committed and deployed; the working
+tree is clean. Database was cleared and collection restarted fresh on 08-05.
 
 ---
 
-## ⚠️ Uncommitted — the "add" restructure is done but not landed
+## Working tree — clean
 
-The four-part rework of the add flows is **finished in the working tree and not
-committed**. `npm run typecheck` and `npm run build` both pass. It wants a read
-on a phone and a commit; nothing is deployed.
+Nothing is in flight. The two most recent commits:
 
-Changed, all in `apps/web/src`: `App.tsx`, `pages/CollectionPage.tsx`,
-`pages/ItemPage.tsx`, `pages/ScanPage.tsx`, `components/ItemForm.tsx`,
-`components/QuickAdd.tsx`, `styles.css`.
+| Commit | What |
+|---|---|
+| `0e61948` | The add restructure, item relations and the photo queue — all of it |
+| `43bbf39` | Negative lookup results are actually read back from the cache now |
 
-1. **One "Add" entry point.** The nav link says **Add** and goes to `/scan`,
-   which gained a fourth tab, **Manually**, rendering `QuickAdd` inline. The
-   collection page's "Quick add" button and "+ Add game" link are gone, replaced
-   by one **+ Add** to `/scan`. `/items/new` is untouched and still routed —
-   item pages and item cards link to it for adding children.
-2. **"All fields" expander** in quick add. `ItemForm`'s inputs past name/type/
-   year now live in an exported `ItemDetailFields`, which both the full form and
-   the expander render — one set of controls, not two that drift.
-3. **"Look up details"** on `ItemPage`, shown only while something is missing.
-   Fills empty fields only, and refuses a candidate whose title is too unlike
-   ours (`titleSimilarity` < 0.34) rather than dressing a game in the wrong
-   cover. Reports what it filled and from which title.
-4. **Type-ahead in quick add** — debounced 550ms, 3+ characters, offered as an
-   explicit "Use this" below the name row. It never writes the name, never
-   focuses, never applies itself, and a failed lookup is silent.
+`0e61948` is worth understanding as a process note rather than a code one: that
+work was **deployed straight from the working tree before it was committed**,
+so for a while production was running code with no commit behind it and no
+rollback point. It is committed as one unit because that is what actually went
+out. Don't repeat the pattern — commit, then deploy.
 
-`GET /api/lookup?q=` was already committed (`apps/worker/src/routes/lookup.ts`,
-`api.lookup()` in `apps/web/src/api.ts`). It is free, cached a week, no model
-call — but it requires `editCatalog`, which is why the **Manually** tab is
-hidden from readers.
-
-Worth a look on a phone: four tabs across a narrow screen is tight, so at
-≤560px the blurbs are hidden and the labels drop to 0.78rem ("Whole shelf" is
-the one that sets the size).
+**Still unverified on a phone.** The photo queue (`/scan-jobs`) has never been
+walked end to end on the iPhone — upload → vision → enrich → review → done.
+The barcode and shelf paths were verified on device on 08-05; this one was
+not. Also worth a look: four tabs across a narrow screen is tight, so at ≤560px
+the blurbs are hidden and the labels drop to 0.78rem ("Whole shelf" sets the
+size).
 
 ---
 
@@ -52,7 +39,7 @@ the one that sets the size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `2de9930f-4cf8-4de9-acd7-ad310365791b` — scanning, auto-capture, viewport fit |
+| Deployed version | `41eb6f1a-22d2-44af-8aa6-7633eb3948b6` — relations, photo queue, cache fix |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
@@ -206,6 +193,7 @@ packages/core/    constants.ts (leaf) -> schemas.ts -> barcode.ts -> vision.ts -
 packages/db/      users, health, items, copies, ratings, import, barcodes, cache, relations, scan-jobs
 packages/bgg/     BGG XML API2 client (throttled, retried, cached)
 packages/barcode/ free resolution: gameupc.ts, upcitemdb.ts, resolve.ts
+apps/worker/src/lib/ resolve-title.ts — the one cached title→candidate resolver
 packages/research/ Claude calls: client.ts, barcode.ts (paid rung), vision.ts
 apps/worker/      Hono routes + Access JWT verification + R2 photo storage
 apps/web/         React SPA; lib/camera.ts + lib/scanner.ts hold the iOS work
@@ -320,6 +308,14 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
 - **UPCitemdb's free quota is per IP.** A Worker is one IP for every user, so
   100/day is a whole-app budget, not per-person. It is deliberately only called
   after GameUPC misses.
+- **`getCached` cannot tell a stored `null` from a cache miss** — both come back
+  as `null`. Caching "nothing found" as `null` and then checking
+  `if (cached !== null)` therefore does nothing, silently, forever: the entry is
+  written on every pass and read on none. Production had 15 of 69 title entries
+  in exactly that state before it was spotted, each one re-running the full free
+  ladder every time. **If you cache negatives, use `getCachedEntry`**, which
+  returns `{ value } | null` so a hit carrying a null value is still a hit.
+  Nothing about this fails loudly — the only symptom is quota quietly draining.
 - **A quoted heredoc (`<<'EOF'`) still ate backslashes** in this Git Bash,
   corrupting regexes in throwaway scripts. Write scratch files with the editor,
   not the shell.
@@ -387,25 +383,18 @@ curl -s localhost:8787/api/barcode/029877030713   # bad check digit -> 400
 
 ### Also outstanding
 
-- **No secrets are set in production at all** — `npm run secret:list` returns
-  `[]` (checked 2026-08-05, just before the scanner deploy). Consequences on the
-  live site right now:
+- ✅ **`ANTHROPIC_API_KEY` is set in production** — `npm run secret:list`
+  returns it and nothing else (re-checked 2026-08-06). An earlier draft of this
+  document claimed no secrets were set at all; that was true only before the
+  08-05 rotation. Current state:
 
   | Mode | Live? | Why |
   |---|---|---|
   | Barcode scan | ✅ works | Local + GameUPC `test` stage + UPCitemdb are all free and keyless |
-  | One box (photo) | ❌ 503 | Needs `ANTHROPIC_API_KEY` |
-  | Whole shelf | ❌ 503 | Needs `ANTHROPIC_API_KEY` |
+  | One box (photo) | ✅ works | `ANTHROPIC_API_KEY` is set |
+  | Whole shelf | ✅ works | `ANTHROPIC_API_KEY` is set |
+  | Photo queue | ✅ deployed | Same key; **not yet walked on a phone** |
   | BGG hydration | bypassed | Needs `BGG_API_TOKEN`; by design, degrades rather than breaks |
-
-  ```bash
-  npm run secret ANTHROPIC_API_KEY   # interactive — a human must run this
-  ```
-
-  ⚠️ **Rotate the key first.** It was surfaced into a chat transcript on
-  2026-08-04 (see the Anthropic section above). Generate a new one at
-  <https://platform.claude.com/settings/keys>, then set it in **both**
-  `apps/worker/.dev.vars` and production.
 - ✅ **Migration `0003_barcode_unique.sql` is applied to local and production**
   (2026-08-05). Verified in production by reading back `sqlite_master`:
   `CREATE UNIQUE INDEX idx_edition_barcode ON edition(barcode) WHERE barcode IS
