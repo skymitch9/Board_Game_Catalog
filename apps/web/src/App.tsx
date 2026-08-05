@@ -83,10 +83,12 @@ export default function App() {
           Board Game Catalog
         </Link>
         <span className="topbar-right">
-          {/* One way in. Scanning, photographing and typing are all tabs on
-              the other side of this link, not competing entry points. */}
-          <Link to="/scan">Add</Link>
-          <Link to="/scan-jobs">Queue</Link>
+          {/* One way in, and it is the queue. Photographing a shelf and coming
+              back to the results beats deciding about each game while stood in
+              front of it, so the queue is "Add games" and the live camera is
+              the specialist tool behind it, not a competing front door. */}
+          <Link to="/scan-jobs">Add games</Link>
+          <Link to="/scan">Scan a barcode</Link>
           {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}

@@ -68,10 +68,11 @@ export function CollectionPage({ me }: { me: MeResponse }) {
         </div>
         {canEdit && (
           <div className="head-actions">
-            {/* Scan, photograph or type — all of it lives on /scan now, so this
-                page offers the door rather than one of the rooms behind it. */}
-            <Link to="/scan" className="btn btn-primary">
-              + Add
+            {/* The queue is the front door: photograph the shelf, review at
+                leisure. Everything else — barcode, typing — is reachable from
+                there rather than competing with it here. */}
+            <Link to="/scan-jobs" className="btn btn-primary">
+              + Add games
             </Link>
           </div>
         )}

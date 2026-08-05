@@ -25,6 +25,17 @@ const STATUS_LABEL: Record<ScanJob['status'], string> = {
   failed: 'Failed',
 };
 
+/** Titles still wanting a decision. Drives "4 left" on a job row. */
+function outstandingOf(job: ScanJob): number | null {
+  if (!job.enriched) return null;
+  try {
+    const titles = JSON.parse(job.enriched) as EnrichedTitle[];
+    return titles.filter((t) => !t.alreadyOwned && !t.addedItemId && !t.dismissed).length;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Statuses that still change on their own. Reading and looking up happen on the
  * server after the upload has been answered, so while a job is in one of these
@@ -120,9 +131,11 @@ export function ScanJobsPage({ me }: { me: MeResponse }) {
     <div className="scan-jobs-page">
       <header className="page-head">
         <div>
-          <h1>Photo Queue</h1>
+          <h1>Add games</h1>
           <p className="subtitle">
-            Upload photos of shelves or boxes. They get read, looked up, and queued for your review.
+            Photograph your shelves. Each photo is read and looked up, then waits here until
+            you have dealt with everything on it — nothing disappears because you only got
+            through half.
           </p>
         </div>
         <Link to="/" className="btn btn-quiet">Collection</Link>
@@ -260,6 +273,7 @@ function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
   const isReviewable = job.status === 'review';
   const isFailed = job.status === 'failed';
   const isProcessing = ['uploaded', 'reading', 'enriching'].includes(job.status);
+  const outstanding = outstandingOf(job);
 
   return (
     <li className="job-row">
@@ -269,12 +283,21 @@ function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
           {new Date(job.createdAt).toLocaleString()}
         </span>
         <span className="muted">{job.mode === 'shelf' ? 'Shelf' : 'Single box'}</span>
+        {/* The number that decides whether this photo still wants you. */}
+        {isReviewable && outstanding !== null && (
+          <span className={outstanding > 0 ? 'job-row__left' : 'muted small'}>
+            {outstanding > 0 ? `${outstanding} still to sort` : 'all sorted'}
+          </span>
+        )}
         {isProcessing && <Spinner label="" />}
       </div>
       <div className="job-row__actions">
         {isReviewable && (
-          <Link to={`/scan-jobs/${job.id}`} className="btn btn-primary">
-            Review
+          <Link
+            to={`/scan-jobs/${job.id}`}
+            className={outstanding === 0 ? 'btn btn-quiet' : 'btn btn-primary'}
+          >
+            {outstanding === 0 ? 'Look again' : 'Review'}
           </Link>
         )}
         {isFailed && (
@@ -312,6 +335,8 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   const [parentOverrides, setParentOverrides] = useState<Record<number, number | string | null>>({});
   const [selected, setSelected] = useState<Set<number> | null>(null);
   const [adoptions, setAdoptions] = useState<Item[]>([]);
+  const [busyRow, setBusyRow] = useState<number | null>(null);
+  const [retryText, setRetryText] = useState<Record<number, string>>({});
   const [error, setError] = useState<unknown>(null);
 
   const job = live ?? (jobState.state === 'ok' ? jobState.data.job : null);
@@ -344,13 +369,38 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   }
 
   const titles: EnrichedTitle[] = JSON.parse(job.enriched);
-  const fresh = titles.filter((t) => !t.alreadyOwned);
+
+  // The original index travels with each row: it is the address the server
+  // stores outcomes against, and `fresh` is a filtered view whose positions
+  // do not match it.
+  const freshEntries = titles
+    .map((t, originalIndex) => ({ t, originalIndex }))
+    .filter((e) => !e.t.alreadyOwned);
+  const fresh = freshEntries.map((e) => e.t);
   const owned = titles.filter((t) => t.alreadyOwned);
 
-  // Initialise selection on first render. Doubtful matches start unticked —
-  // adding a wrong game is far more annoying to undo than ticking a box.
+  /** What already happened to this row, whether this visit or a previous one. */
+  const outcomeOf = (i: number): { itemId: number } | { error: string } | null => {
+    const local = results[i];
+    if (local) return local;
+    const persisted = fresh[i]?.addedItemId;
+    return persisted ? { itemId: persisted } : null;
+  };
+
+  const isSettled = (i: number): boolean => outcomeOf(i) !== null || !!fresh[i]?.dismissed;
+  const outstanding = fresh.filter((_, i) => !isSettled(i));
+
+  // Initialise selection on first render. Anything already dealt with stays
+  // out of it, and doubtful matches start unticked — adding a wrong game is
+  // far more annoying to undo than ticking a box.
   if (selected === null) {
-    setSelected(new Set(fresh.map((_, i) => i).filter((i) => !isDoubtful(fresh[i]!))));
+    setSelected(
+      new Set(
+        fresh
+          .map((_, i) => i)
+          .filter((i) => !isSettled(i) && !isDoubtful(fresh[i]!)),
+      ),
+    );
     return <Spinner />;
   }
 
@@ -403,10 +453,11 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
 
     // Base games first.
     const pending = [...selected!]
-      .filter((i) => !results[i])
+      .filter((i) => !isSettled(i))
       .sort((a, b) => (getKind(a) === 'base' ? 0 : 1) - (getKind(b) === 'base' ? 0 : 1));
 
     const batchIds: Record<number, number> = {};
+    const added: { index: number; addedItemId: number }[] = [];
 
     for (const i of pending) {
       const t = fresh[i];
@@ -463,24 +514,71 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
 
         batchIds[i] = item.id;
         setResults((r) => ({ ...r, [i]: { itemId: item.id } }));
+        added.push({ index: freshEntries[i]!.originalIndex, addedItemId: item.id });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setResults((r) => ({ ...r, [i]: { error: msg } }));
       }
     }
 
-    // Mark job done.
-    try {
-      await api.completeScanJob(id);
-    } catch {
-      // Non-fatal — the items are added.
+    // Record which titles became which items, and leave the job open.
+    //
+    // This used to mark the whole photo done here, which is what made the
+    // unfinished rows vanish: the ones that needed a correction were precisely
+    // the ones not in this batch. The job now closes only when you say so.
+    if (added.length > 0) {
+      try {
+        const { job: saved } = await api.updateScanJobTitles(id, added);
+        setLive(saved);
+      } catch {
+        // The items exist either way; a failed bookkeeping write costs a
+        // re-tick on the next visit, not a lost game.
+      }
     }
 
     setAdding(false);
   }
 
-  const addedCount = Object.values(results).filter((r) => 'itemId' in r).length;
-  const pendingCount = [...selected].filter((i) => !results[i]).length;
+  /** Set a row aside without adding it — a real answer, not an unfinished one. */
+  async function dismiss(i: number) {
+    try {
+      const { job: saved } = await api.updateScanJobTitles(id, [
+        { index: freshEntries[i]!.originalIndex, dismissed: true },
+      ]);
+      setLive(saved);
+      setSelected((prev) => {
+        const next = new Set(prev!);
+        next.delete(i);
+        return next;
+      });
+    } catch (err) {
+      setError(err);
+    }
+  }
+
+  /** Ask again about one row, with corrected text when the spine was misread. */
+  async function relookup(i: number, query?: string) {
+    setBusyRow(i);
+    setError(null);
+    try {
+      const { job: saved } = await api.relookupScanJobTitle(
+        id,
+        freshEntries[i]!.originalIndex,
+        query,
+      );
+      setLive(saved);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusyRow(null);
+    }
+  }
+
+  const addedCount = fresh.filter((_, i) => {
+    const outcome = outcomeOf(i);
+    return outcome !== null && 'itemId' in outcome;
+  }).length;
+  const pendingCount = [...selected].filter((i) => !isSettled(i)).length;
 
   return (
     <div className="scan-jobs-page">
@@ -536,27 +634,47 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
               disabled={adding}
               onClick={() =>
                 setSelected(
-                  selected.size === fresh.length ? new Set() : new Set(fresh.map((_, i) => i)),
+                  selected.size > 0
+                    ? new Set()
+                    : new Set(fresh.map((_, i) => i).filter((i) => !isSettled(i))),
                 )
               }
             >
-              {selected.size === fresh.length ? 'Clear all' : 'Select all'}
+              {selected.size > 0 ? 'Clear all' : 'Select all'}
             </button>
+            {outstanding.length === 0 && (
+              <span className="muted small">
+                Everything on this photo is dealt with. It stays here until you delete it.
+              </span>
+            )}
           </div>
 
           <ul className="candidate-list shelf-classify">
             {fresh.map((t, i) => {
-              const result = results[i];
+              const result = outcomeOf(i);
               const kind = getKind(i);
               const parentId = getParentId(i);
               const doubtful = isDoubtful(t);
+              const dismissed = !!t.dismissed;
+              const unresolved = t.resolvedName == null;
 
               return (
-                <li key={i} className={doubtful ? 'candidate candidate--doubtful' : 'candidate'}>
+                <li
+                  key={i}
+                  className={
+                    dismissed
+                      ? 'candidate candidate--dismissed'
+                      : doubtful
+                        ? 'candidate candidate--doubtful'
+                        : 'candidate'
+                  }
+                >
                   {result ? (
                     <span className="shelf-outcome" aria-hidden="true">
                       {'itemId' in result ? '\u2713' : '!'}
                     </span>
+                  ) : dismissed ? (
+                    <span className="shelf-outcome" aria-hidden="true">&ndash;</span>
                   ) : (
                     <input
                       type="checkbox"
@@ -587,8 +705,57 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       )
                     )}
                     {t.publisher && !doubtful && <span className="muted">{t.publisher}</span>}
+                    {t.relookedUpAs && (
+                      <span className="muted small">looked up as &quot;{t.relookedUpAs}&quot;</span>
+                    )}
 
-                    {!result && (
+                    {/*
+                      The repair bench for one row.
+                      Vision reading the spine correctly and the lookup coming
+                      back empty are different failures, and the second one used
+                      to be terminal: the title was right, the cover was missing,
+                      and there was nothing to do but add it bare or lose it.
+                      Correcting the text and asking again fixes both the misread
+                      spine and the lookup that simply had a bad day.
+                    */}
+                    {!result && !dismissed && (
+                      <div className="candidate__repair">
+                        <input
+                          type="text"
+                          value={retryText[i] ?? t.relookedUpAs ?? t.title}
+                          onChange={(e) => setRetryText((s) => ({ ...s, [i]: e.target.value }))}
+                          disabled={adding || busyRow === i}
+                          aria-label="Text to look up"
+                          className="candidate__repair-input"
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-quiet btn-xs"
+                          disabled={adding || busyRow === i}
+                          onClick={() => relookup(i, (retryText[i] ?? t.title).trim())}
+                        >
+                          {busyRow === i ? 'Looking…' : 'Look up again'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-quiet btn-xs"
+                          disabled={adding || busyRow === i}
+                          onClick={() => dismiss(i)}
+                        >
+                          Not wanted
+                        </button>
+                        {unresolved && (
+                          <span className="muted small">
+                            Nothing found for this one — it will be added under the name
+                            read off the spine.
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {dismissed && <span className="muted small">Set aside.</span>}
+
+                    {!result && !dismissed && (
                       <div className="shelf-classify__controls">
                         <select
                           value={kind}

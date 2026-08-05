@@ -187,6 +187,23 @@ export const api = {
   completeScanJob: (id: number) =>
     post(`/api/scan-jobs/${id}/done`, {}) as Promise<{ job: ScanJob }>,
 
+  /** Record per-title outcomes without finishing the job. */
+  updateScanJobTitles: (
+    id: number,
+    updates: { index: number; addedItemId?: number | null; dismissed?: boolean }[],
+  ) =>
+    post(`/api/scan-jobs/${id}/titles`, { updates }) as Promise<{
+      job: ScanJob;
+      outstanding: number;
+    }>,
+
+  /** Ask again about one title, optionally with corrected text. */
+  relookupScanJobTitle: (id: number, index: number, q?: string) =>
+    post(
+      `/api/scan-jobs/${id}/titles/${index}/relookup${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+      {},
+    ) as Promise<{ job: ScanJob; title: EnrichedTitle; found: boolean }>,
+
   deleteScanJob: (id: number) =>
     del(`/api/scan-jobs/${id}`) as Promise<{ deleted: boolean }>,
 };
@@ -230,6 +247,12 @@ export interface EnrichedTitle {
   /** Base game implied by the title but absent from the collection. */
   inferredParentName: string | null;
   reason: string | null;
+  /** The item this became, once added. Survives so the job can be revisited. */
+  addedItemId?: number | null;
+  /** Deliberately not wanted — distinct from simply not dealt with yet. */
+  dismissed?: boolean;
+  /** Set when a retry searched with corrected text rather than what was read. */
+  relookedUpAs?: string | null;
 }
 
 export interface ResearchUsage {

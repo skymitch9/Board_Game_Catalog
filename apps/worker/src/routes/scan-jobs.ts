@@ -30,6 +30,55 @@ import type { AppBindings, Env } from '../env.js';
 import { cachedResolve } from '../lib/resolve-title.js';
 import { requireCapability } from '../middleware/auth.js';
 
+/**
+ * One line of a read photo, as it stands after enrichment and any review.
+ *
+ * `addedItemId` and `dismissed` are the outcome fields — everything else is
+ * what was read or looked up. A title with neither set is unfinished business,
+ * which is the state the whole screen exists to make visible.
+ */
+interface EnrichedTitle {
+  title: string;
+  confidence: string;
+  position: number;
+  alreadyOwned: boolean;
+  existingItemId: number | null;
+  existingName: string | null;
+  bggId: number | null;
+  resolvedName: string | null;
+  thumbnailUrl: string | null;
+  publisher: string | null;
+  yearPublished: number | null;
+  similarity: number | null;
+  proposedKind: string | null;
+  proposedParentId: number | null;
+  proposedParentName: string | null;
+  inferredParentName: string | null;
+  reason: string | null;
+  addedItemId?: number | null;
+  dismissed?: boolean;
+  /** Set when a retry searched with corrected text rather than the spine's. */
+  relookedUpAs?: string | null;
+}
+
+/** Titles still wanting a decision — not added, not dismissed, not already owned. */
+function countOutstanding(titles: EnrichedTitle[]): number {
+  return titles.filter((t) => !t.alreadyOwned && !t.addedItemId && !t.dismissed).length;
+}
+
+const titleUpdatesSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        index: z.number().int().min(0),
+        addedItemId: z.number().int().positive().nullable().optional(),
+        dismissed: z.boolean().optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
 const statusSchema = z.enum([
   'uploaded',
   'reading',
@@ -110,6 +159,101 @@ export const scanJobRoutes = new Hono<AppBindings>()
 
     c.executionCtx.waitUntil(processEnrichment(c.env, job.id));
     return c.json({ job: { ...job, status: 'enriching' } });
+  })
+
+  /**
+   * Record what happened to individual titles, without finishing the job.
+   *
+   * The behaviour this replaces: adding the titles that looked right marked the
+   * *whole photo* reviewed, and everything you had not dealt with — the wrong
+   * names, the missed expansion tags, the ones whose lookup came back bare —
+   * disappeared with it. The good ones were the cheap part; the ones needing a
+   * second look were the ones worth keeping, and they were exactly what got
+   * thrown away.
+   *
+   * So outcomes are per title and the job stays put. A title is `added` (with
+   * the item it became), `dismissed` (deliberately not wanted), or neither —
+   * and neither is the state worth coming back to.
+   */
+  .post('/:id/titles', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request' }, 400);
+
+    const parsed = titleUpdatesSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+    }
+
+    const job = await getScanJob(c.env.DB, id);
+    if (!job || !job.enriched) return c.json({ error: 'not_found' }, 404);
+
+    const titles = JSON.parse(job.enriched) as EnrichedTitle[];
+    for (const update of parsed.data.updates) {
+      const entry = titles[update.index];
+      if (!entry) continue;
+      if (update.addedItemId !== undefined) entry.addedItemId = update.addedItemId;
+      if (update.dismissed !== undefined) entry.dismissed = update.dismissed;
+    }
+
+    const updated = await updateScanJobStatus(c.env.DB, id, job.status, {
+      enriched: JSON.stringify(titles),
+    });
+
+    return c.json({ job: updated, outstanding: countOutstanding(titles) });
+  })
+
+  /**
+   * Ask again about one title.
+   *
+   * Most of what goes wrong in a shelf read is per-title, not per-photo: the
+   * spine read correctly but the lookup came back with no cover, or with a game
+   * that only shares a word. Re-running the whole job would re-pay for vision
+   * over a photo that was read perfectly well. This re-asks about one line, and
+   * skips the cache, because the person pressing it has seen the answer and
+   * judged it wrong — better evidence than a week-old entry.
+   */
+  .post('/:id/titles/:index/relookup', async (c) => {
+    const id = Number(c.req.param('id'));
+    const index = Number(c.req.param('index'));
+    if (!id || !Number.isInteger(index) || index < 0) {
+      return c.json({ error: 'bad_request' }, 400);
+    }
+
+    const job = await getScanJob(c.env.DB, id);
+    if (!job || !job.enriched) return c.json({ error: 'not_found' }, 404);
+
+    const titles = JSON.parse(job.enriched) as EnrichedTitle[];
+    const entry = titles[index];
+    if (!entry) return c.json({ error: 'not_found' }, 404);
+
+    // The text to search with: whatever the person corrected it to, else what
+    // the spine said. A corrected name is the whole point — "Wingsapn" will
+    // never resolve, and re-asking with the same misread is theatre.
+    const query = (c.req.query('q') ?? entry.title).trim();
+    if (!query) return c.json({ error: 'bad_request', detail: 'nothing to look up' }, 400);
+
+    const deps = { gameUpc: gameUpcConfig(c.env), bggToken: c.env.BGG_API_TOKEN };
+    let best: BarcodeCandidate | null = null;
+    try {
+      best = await cachedResolve(c.env.DB, deps, query, { force: true });
+    } catch (err) {
+      return c.json({ error: 'lookup_failed', detail: (err as Error).message }, 502);
+    }
+
+    const similarity = best ? titleSimilarity(best.name, query) : null;
+    entry.bggId = best?.bggId ?? null;
+    entry.resolvedName = best?.name ?? null;
+    entry.thumbnailUrl = best?.thumbnailUrl ?? null;
+    entry.publisher = best?.publisher ?? null;
+    entry.yearPublished = best?.yearPublished ?? null;
+    entry.similarity = similarity;
+    entry.relookedUpAs = query === entry.title ? null : query;
+
+    const updated = await updateScanJobStatus(c.env.DB, id, job.status, {
+      enriched: JSON.stringify(titles),
+    });
+
+    return c.json({ job: updated, title: entry, found: best !== null });
   })
 
   // --- Mark a job as done (user reviewed) -----------------------------------

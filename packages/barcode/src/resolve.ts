@@ -96,9 +96,11 @@ async function hydrateFromBgg(
 export async function resolveTitle(
   deps: ResolveDeps,
   title: string,
-): Promise<{ candidates: BarcodeCandidate[]; bggHydrated: boolean }> {
+): Promise<{ candidates: BarcodeCandidate[]; bggHydrated: boolean; failed: boolean }> {
   const trimmed = title.trim();
-  if (!trimmed || !deps.gameUpc) return { candidates: [], bggHydrated: false };
+  // No config and no title are both "nothing to ask", not "asked and got
+  // nothing" — the distinction matters to whoever caches this.
+  if (!trimmed || !deps.gameUpc) return { candidates: [], bggHydrated: false, failed: true };
 
   let candidates: BarcodeCandidate[] = [];
   try {
@@ -110,16 +112,22 @@ export async function resolveTitle(
     });
     candidates = rankBySearchedTitle(hit.candidates, trimmed);
   } catch {
-    return { candidates: [], bggHydrated: false };
+    // `failed`, not an empty result. The two are indistinguishable to a caller
+    // that only sees candidates, and conflating them is expensive now that
+    // negatives are actually cached: a quota exhaustion or a 5xx during a bulk
+    // scan would otherwise be frozen in as "this game does not exist" for a
+    // week. UPCitemdb's free quota is 100/day for the whole Worker, so running
+    // out mid-shelf is an ordinary Tuesday, not an edge case.
+    return { candidates: [], bggHydrated: false, failed: true };
   }
 
-  if (candidates.length === 0) return { candidates: [], bggHydrated: false };
+  if (candidates.length === 0) return { candidates: [], bggHydrated: false, failed: false };
 
   if (deps.bggToken) {
     const hydrated = await hydrateFromBgg(candidates, deps.bggToken);
-    return { candidates: hydrated.candidates, bggHydrated: hydrated.hydrated };
+    return { candidates: hydrated.candidates, bggHydrated: hydrated.hydrated, failed: false };
   }
-  return { candidates, bggHydrated: false };
+  return { candidates, bggHydrated: false, failed: false };
 }
 
 export async function resolveBarcode(
