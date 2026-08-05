@@ -22,15 +22,15 @@ import { Link, navigate } from '../router';
 /**
  * Adding a game: by barcode, by photo, by shelf, or by hand.
  *
- * This is the one way in. There used to be three â€” a Scan page, an Add page and
- * a Quick add panel on the collection â€” which meant choosing a route before
+ * This is the one way in. There used to be three — a Scan page, an Add page and
+ * a Quick add panel on the collection — which meant choosing a route before
  * knowing which would work. Now the choice is a tab, and switching costs
  * nothing.
  *
  * The ordering here reflects what things actually cost. A barcode lookup hits
  * the local table and two free services and comes back in about a second. A
  * photo takes three to five. Asking Claude about a *barcode number* takes one to
- * two minutes, so it is never automatic â€” it sits behind a button that says how
+ * two minutes, so it is never automatic — it sits behind a button that says how
  * long it will take. Typing costs a person's time, which is why it is last.
  *
  * Photos are never stored. They are captured from a live frame, uploaded, read,
@@ -61,7 +61,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
   const stopSteadyRef = useRef<(() => void) | null>(null);
   /**
    * Auto-capture fires when the phone stops moving. On by default because the
-   * alternative â€” reach for a button while holding a box steady one-handed â€” is
+   * alternative — reach for a button while holding a box steady one-handed — is
    * the awkward part of this screen.
    */
   const [autoCapture, setAutoCapture] = useState(true);
@@ -93,7 +93,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
         video,
         onScan: async ({ code }) => {
           stopEverything();
-          setBusy('Looking that barcode upâ€¦');
+          setBusy('Looking that barcode up…');
           try {
             setLookup(await api.barcode(code));
           } catch (err) {
@@ -112,7 +112,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
 
   const shoot = useCallback(
     async (video: HTMLVideoElement, which: 'photo' | 'shelf') => {
-      setBusy(which === 'photo' ? 'Reading the boxâ€¦' : 'Reading the shelfâ€¦');
+      setBusy(which === 'photo' ? 'Reading the box…' : 'Reading the shelf…');
       setError(null);
       try {
         const photo = await captureFrame(
@@ -165,13 +165,13 @@ export function ScanPage({ me }: { me: MeResponse }) {
   // --- the slow rung -------------------------------------------------------
 
   const askClaude = useCallback(async (barcode: string) => {
-    setBusy('Searching the web. This usually takes a minute or twoâ€¦');
+    setBusy('Searching the web. This usually takes a minute or two…');
     setError(null);
     try {
       const res = await api.identifyBarcode(barcode);
       setCandidates(res.candidates);
       if (res.candidates.length === 0) {
-        setNote('Nothing found for that barcode. Try the photo mode instead â€” it reads the title.');
+        setNote('Nothing found for that barcode. Try the photo mode instead — it reads the title.');
       }
     } catch (err) {
       setError(err);
@@ -187,7 +187,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
    *
    * `goToItem` is false for shelf mode. Navigating away after a single add threw
    * away every other title the photo found, which made a nine-game shelf photo
-   * strictly worse than typing nine names â€” the whole point is bulk intake.
+   * strictly worse than typing nine names — the whole point is bulk intake.
    */
   const addCandidate = useCallback(
     async (
@@ -197,7 +197,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
       overrideKind?: ItemKind,
       overrideParentId?: number | null,
     ): Promise<number | null> => {
-      if (goToItem) setBusy(`Adding ${candidate.name}â€¦`);
+      if (goToItem) setBusy(`Adding ${candidate.name}…`);
       setError(null);
       try {
         const kind = overrideKind ?? 'base';
@@ -217,7 +217,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
           description: candidate.description,
         });
 
-        // Scanning a game means you own it â€” create a copy so it counts.
+        // Scanning a game means you own it — create a copy so it counts.
         await api.createCopy(item.id, {
           quantity: 1,
           status: 'owned',
@@ -293,7 +293,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
           active={active}
           hint={
             mode === 'barcode'
-              ? 'Hold the barcode steady and fill the frame. No flash on iPhone â€” find good light.'
+              ? 'Hold the barcode steady and fill the frame. No flash on iPhone — find good light.'
               : mode === 'photo'
                 ? 'Fill the frame with the front of the box.'
                 : 'Stand back far enough to get a whole row of spines in frame.'
@@ -353,7 +353,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
           mode={mode}
           disabled={busy != null}
           onPhoto={async (file) => {
-            setBusy('Readingâ€¦');
+            setBusy('Reading…');
             setError(null);
             try {
               const photo = await fileToPhoto(
@@ -421,11 +421,11 @@ export function ScanPage({ me }: { me: MeResponse }) {
 /**
  * The `<input capture>` path.
  *
- * Verified not to write to the camera roll â€” Safari presents a picker whose
+ * Verified not to write to the camera roll — Safari presents a picker whose
  * result is handed to the page and discarded; saving would require the host app
  * to call `UIImageWriteToSavedPhotosAlbum`, and Safari never does.
  *
- * Kept because it works in contexts `getUserMedia` does not â€” notably in-app
+ * Kept because it works in contexts `getUserMedia` does not — notably in-app
  * browsers whose host app never wired up the media-capture delegate.
  *
  * `accept` is plain `image/*` on purpose: adding `image/heic` makes Safari 17+
@@ -443,7 +443,7 @@ function PhotoFallback({
   if (mode === 'barcode' || mode === 'manual') return null;
   return (
     <label className="scan-fallback">
-      <span className="muted">Camera not working? Take a photo instead â€” it is not saved to your library.</span>
+      <span className="muted">Camera not working? Take a photo instead — it is not saved to your library.</span>
       <input
         type="file"
         accept="image/*"
@@ -486,7 +486,7 @@ function BarcodeResult({
     <div className="scan-result">
       <p className="muted">
         Barcode <code>{lookup.barcode}</code>
-        {lookup.verified && ' Â· community-verified match'}
+        {lookup.verified && ' · community-verified match'}
       </p>
 
       {lookup.candidates.length > 0 ? (
@@ -523,7 +523,7 @@ function BarcodeResult({
         <ul>
           {lookup.trace.map((t, i) => (
             <li key={i}>
-              <code>{t.source}</code> â€” {t.outcome}
+              <code>{t.source}</code> — {t.outcome}
             </li>
           ))}
         </ul>
@@ -547,7 +547,7 @@ function CandidateList({
           <div className="candidate__body">
             <strong>{c.name}</strong>
             <span className="muted">
-              {[c.publisher, c.yearPublished, c.editionName].filter(Boolean).join(' Â· ')}
+              {[c.publisher, c.yearPublished, c.editionName].filter(Boolean).join(' · ')}
             </span>
             <span className="candidate__meta">
               <Badge tone={c.confidence === 'high' ? 'owned' : c.confidence === 'low' ? 'wanted' : 'neutral'}>

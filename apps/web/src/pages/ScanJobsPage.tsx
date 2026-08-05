@@ -69,14 +69,14 @@ export function ScanJobsPage({ me }: { me: MeResponse }) {
     refresh();
   }, [refresh]);
 
+  // Deliberately does not swallow its own failures: the uploader below runs the
+  // decode and the upload in one loop, and both fail the same way to the person
+  // holding the phone, so both are reported from one place.
   const upload = useCallback(async (data: string, mediaType: string) => {
     setUploading(true);
-    setError(null);
     try {
       await api.createScanJob({ data, mediaType, mode });
       reload();
-    } catch (err) {
-      setError(err);
     } finally {
       setUploading(false);
     }
@@ -118,6 +118,8 @@ export function ScanJobsPage({ me }: { me: MeResponse }) {
           mode={mode}
           uploading={uploading}
           onPhoto={upload}
+          onError={setError}
+          onStart={() => setError(null)}
         />
       </section>
 
@@ -155,23 +157,45 @@ function PhotoUploader({
   mode,
   uploading,
   onPhoto,
+  onError,
+  onStart,
 }: {
   mode: 'shelf' | 'single';
   uploading: boolean;
-  onPhoto: (data: string, mediaType: string) => void;
+  onPhoto: (data: string, mediaType: string) => Promise<void>;
+  onError: (err: unknown) => void;
+  onStart: () => void;
 }) {
   const [count, setCount] = useState(0);
 
+  /**
+   * Read each photo, then upload it, reporting anything that goes wrong.
+   *
+   * The reporting is the point. This used to let `fileToPhoto` throw straight
+   * through an unhandled promise, so picking a photo the browser could not
+   * decode did nothing whatsoever — no error, no spinner, no row. A photo from
+   * the iPhone camera roll is HEIC where one taken through the picker is JPEG,
+   * so "the camera works and my library doesn't" was the same silent failure
+   * both times.
+   */
   async function handleFiles(files: FileList) {
+    onStart();
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file) continue;
-      const photo = await fileToPhoto(
-        file,
-        mode === 'shelf' ? SHELF_LONG_EDGE : PHOTO_LONG_EDGE,
-      );
-      onPhoto(photo.data, photo.mediaType);
-      setCount((c) => c + 1);
+      try {
+        const photo = await fileToPhoto(
+          file,
+          mode === 'shelf' ? SHELF_LONG_EDGE : PHOTO_LONG_EDGE,
+        );
+        // Awaited, so a multi-photo selection uploads in order rather than
+        // firing every request at once and racing the `uploading` flag.
+        await onPhoto(photo.data, photo.mediaType);
+        setCount((c) => c + 1);
+      } catch (err) {
+        // One unreadable photo out of ten should not abandon the other nine.
+        onError(err);
+      }
     }
   }
 
