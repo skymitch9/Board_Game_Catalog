@@ -1,8 +1,8 @@
 ﻿import { Hono } from 'hono';
 import { z } from 'zod';
-import { ITEM_KINDS } from '@bgc/core';
+import { ITEM_KINDS, isConfidentMatch } from '@bgc/core';
 import { BggError, kindForBggType, search, thing, things } from '@bgc/bgg';
-import { importItem, knownBggIds } from '@bgc/db';
+import { getItem, importItem, knownBggIds, updateItem } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
 
@@ -43,6 +43,138 @@ function handleBggError(err: unknown) {
 
 export const bggRoutes = new Hono<AppBindings>()
   .use('*', requireCapability('editCatalog'))
+
+  /**
+   * Attach a game already in the catalog to its BoardGameGeek entry.
+   *
+   * The catalog is full of games that arrived by photograph or from a pledge
+   * list: a name and nothing else, no cover, no BGG id. This finds the entry
+   * and fills the blanks from it.
+   *
+   * Guarded by the same similarity floor the shelf scanner uses, because a BGG
+   * search always returns *something* — "Savage" alone brings back a dozen
+   * unrelated games. An unconfident match writes nothing and says so, which is
+   * the right outcome for a Kickstarter special edition that BGG may not list
+   * under the name printed on the box.
+   *
+   * Fills gaps only, and never changes `kind`. BGG's type is better evidence
+   * than the name-prefix guess that produced most of these, but re-filing a
+   * game is a decision with a screen of its own — the suggestion is returned
+   * for that screen to use rather than applied here.
+   */
+  .post('/match/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!id || !Number.isInteger(id)) {
+      return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+    }
+
+    const item = await getItem(c.env.DB, id);
+    if (!item) return c.json({ error: 'not_found' }, 404);
+
+    try {
+      let bggId = item.bggId;
+
+      if (bggId == null) {
+        const results = await search(c.env.BGG_API_TOKEN ?? '', item.name);
+        const confident = results.filter((r) => isConfidentMatch(r.name, item.name));
+        if (confident.length === 0) {
+          return c.json({
+            item,
+            matched: false,
+            detail:
+              results.length === 0
+                ? `BoardGameGeek has nothing for "${item.name}".`
+                : `No confident match for "${item.name}" — closest was "${results[0]!.name}".`,
+            candidates: results.slice(0, 5),
+          });
+        }
+        // An exact normalised name beats a merely confident one: "Catan" should
+        // find Catan, not "Catan: Cities & Knights", which also clears the bar.
+        const exact = confident.find(
+          (r) => r.name.toLowerCase().trim() === item.name.toLowerCase().trim(),
+        );
+        bggId = (exact ?? confident[0]!).bggId;
+      }
+
+      const found = await thing(c.env.BGG_API_TOKEN ?? '', bggId);
+      if (!found) return c.json({ item, matched: false, detail: 'That BGG entry has gone.' });
+
+      /*
+        A name is not an identity.
+
+        "Brink" matched BGG 14780 — a 2004 game with no known publisher — when
+        the box owned is IV Studio's 2025 Kickstarter. "Iliad" matched Asmodee's
+        2006 game rather than Bitewing's 2025 one. Both scored a perfect 1.00 on
+        the similarity check, because the names really are identical, so the
+        guard that catches loose matches never had anything to catch.
+
+        Short titles get reused constantly, and crowdfunded games are the worst
+        case: often absent from BGG entirely, or listed under a name nobody
+        prints on the box. So where the catalog already knows a year or a
+        publisher, BGG has to agree with it. Disagreeing is not an error — it is
+        evidence this is a different game with the same name, and the answer is
+        to say so rather than write it down.
+      */
+      const disagreements: string[] = [];
+      if (item.yearPublished && found.yearPublished) {
+        const gap = Math.abs(item.yearPublished - found.yearPublished);
+        // Reprints and later editions shift a year or two; a decade is a
+        // different game.
+        if (gap > 3) {
+          disagreements.push(
+            `we have ${item.yearPublished}, BoardGameGeek says ${found.yearPublished}`,
+          );
+        }
+      }
+      if (item.publisher && found.publisher && !isConfidentMatch(found.publisher, item.publisher)) {
+        disagreements.push(`we have "${item.publisher}", BoardGameGeek says "${found.publisher}"`);
+      }
+
+      if (disagreements.length > 0) {
+        return c.json({
+          item,
+          matched: false,
+          detail:
+            `"${found.name}" (BGG ${found.bggId}) does not look like the same game: ` +
+            `${disagreements.join('; ')}. Nothing was changed.`,
+          candidates: [{ bggId: found.bggId, name: found.name, type: found.type }],
+        });
+      }
+
+      const blank = (v: string | number | null | undefined) =>
+        v == null || (typeof v === 'string' && v.trim() === '');
+
+      const patch: Record<string, string | number> = {};
+      if (item.bggId == null) patch['bggId'] = found.bggId;
+      if (blank(item.thumbnailUrl) && found.thumbnailUrl) patch['thumbnailUrl'] = found.thumbnailUrl;
+      if (blank(item.publisher) && found.publisher) patch['publisher'] = found.publisher;
+      if (blank(item.yearPublished) && found.yearPublished) {
+        patch['yearPublished'] = found.yearPublished;
+      }
+      if (blank(item.minPlayers) && found.minPlayers) patch['minPlayers'] = found.minPlayers;
+      if (blank(item.maxPlayers) && found.maxPlayers) patch['maxPlayers'] = found.maxPlayers;
+      if (blank(item.playtimeMin) && found.playtimeMin) patch['playtimeMin'] = found.playtimeMin;
+
+      const updated =
+        Object.keys(patch).length > 0 ? await updateItem(c.env.DB, id, patch) : item;
+
+      return c.json({
+        item: updated,
+        matched: true,
+        filled: patch,
+        bgg: {
+          bggId: found.bggId,
+          name: found.name,
+          suggestedKind: kindForBggType(found.type),
+          expansions: found.related.filter((r) => r.type === 'expansion').length,
+        },
+      });
+    } catch (err) {
+      const mapped = handleBggError(err);
+      if (mapped) return c.json({ error: mapped.error, detail: mapped.detail }, 502);
+      throw err;
+    }
+  })
 
   /** Candidates for a typed name. The human picks; nothing is written. */
   .get('/search', async (c) => {

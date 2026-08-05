@@ -129,11 +129,28 @@ export async function importItem(
 }
 
 /** Which of these BGG ids do we already have? Used to grey out search hits. */
+/**
+ * Which of these BGG ids the catalog already holds.
+ *
+ * Chunked, because the caller's list is however long a BGG search happened to
+ * be and D1 caps how many variables one statement may bind — a search for a
+ * common word blew straight past it with `D1_ERROR: too many SQL variables`,
+ * which reads like a database fault rather than "your query was too popular".
+ */
+const D1_MAX_VARIABLES = 100;
+
 export async function knownBggIds(db: D1Database, ids: number[]): Promise<Set<number>> {
-  if (ids.length === 0) return new Set();
-  const { results } = await db
-    .prepare(`SELECT bgg_id FROM item WHERE bgg_id IN (${ids.map(() => '?').join(',')})`)
-    .bind(...ids)
-    .all<{ bgg_id: number }>();
-  return new Set(results.map((r) => r.bgg_id));
+  const unique = [...new Set(ids.filter((id) => Number.isFinite(id)))];
+  if (unique.length === 0) return new Set();
+
+  const found = new Set<number>();
+  for (let i = 0; i < unique.length; i += D1_MAX_VARIABLES) {
+    const chunk = unique.slice(i, i + D1_MAX_VARIABLES);
+    const { results } = await db
+      .prepare(`SELECT bgg_id FROM item WHERE bgg_id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(...chunk)
+      .all<{ bgg_id: number }>();
+    for (const row of results) found.add(row.bgg_id);
+  }
+  return found;
 }
