@@ -2,12 +2,20 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import {
   MAX_PHOTO_BYTES,
+  hammingDistance,
   matchExistingTitle,
+  PHOTO_HASH_MAX_DISTANCE,
   type BarcodeCandidate,
   type ShelfMatch,
 } from '@bgc/core';
 import { gameUpcConfig, lookupGameUpc, resolveTitle } from '@bgc/barcode';
-import { getCached, listItemNames, putCached } from '@bgc/db';
+import {
+  getCached,
+  getCachedPhoto,
+  listItemNames,
+  putCached,
+  putCachedPhoto,
+} from '@bgc/db';
 import { ResearchError, identifyFromPhoto, isPhotoMediaType, readShelf } from '@bgc/research';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
@@ -30,6 +38,8 @@ const photoSchema = z.object({
   /** Base64, no data: URL prefix — the client strips it before sending. */
   data: z.string().min(64),
   mediaType: z.string().refine(isPhotoMediaType, 'unsupported image type'),
+  /** 64-bit dHash from the client. Absent just means no caching for this shot. */
+  hash: z.string().regex(/^[0-9a-f]{16}$/).optional(),
 });
 
 /** base64 is 4 chars per 3 bytes; check before decoding anything large. */
@@ -127,6 +137,22 @@ export const visionRoutes = new Hono<AppBindings>()
       );
     }
 
+    // Photographing a box, not adding it, and photographing it again a minute
+    // later is a real pattern — and it used to pay for a second identical
+    // reading. Match on the perceptual hash rather than the bytes, because two
+    // handheld shots of the same cover are never byte-identical.
+    const hash = parsed.data.hash;
+    if (hash) {
+      const hit = await getCachedPhoto<unknown>(
+        c.env.DB,
+        'identify',
+        hash,
+        PHOTO_HASH_MAX_DISTANCE,
+        hammingDistance,
+      );
+      if (hit) return c.json({ ...(hit as object), cached: true });
+    }
+
     let result;
     try {
       result = await identifyFromPhoto(c.env.ANTHROPIC_API_KEY, {
@@ -159,7 +185,14 @@ export const visionRoutes = new Hono<AppBindings>()
       }),
     );
 
-    return c.json({ ...result, candidates: resolved });
+    const payload = { ...result, candidates: resolved };
+    // Only remember a reading that actually said something. Caching "unreadable"
+    // would lock in a bad photo and make the obvious fix — take a better one —
+    // stop working for a day.
+    if (hash && resolved.length > 0 && !result.unreadable) {
+      await putCachedPhoto(c.env.DB, 'identify', hash, payload);
+    }
+    return c.json(payload);
   })
 
   /**
@@ -179,6 +212,21 @@ export const visionRoutes = new Hono<AppBindings>()
         { error: 'bad_request', detail: 'That photo is too large. Downscale before sending.' },
         413,
       );
+    }
+
+    // Same photo cache as single-box, kept under its own mode: a shelf photo
+    // asks a different question of the same pixels and must never answer a box
+    // lookup. The 24-hour TTL matters more here — shelves get rearranged.
+    const hash = parsed.data.hash;
+    if (hash) {
+      const hit = await getCachedPhoto<unknown>(
+        c.env.DB,
+        'shelf',
+        hash,
+        PHOTO_HASH_MAX_DISTANCE,
+        hammingDistance,
+      );
+      if (hit) return c.json({ ...(hit as object), cached: true });
     }
 
     let reading;
@@ -243,9 +291,9 @@ export const visionRoutes = new Hono<AppBindings>()
       }),
     );
 
-    return c.json({
-      matches,
-      unreadable: reading.unreadable,
-      usage: reading.usage,
-    });
+    const payload = { matches, unreadable: reading.unreadable, usage: reading.usage };
+    if (hash && matches.length > 0 && !reading.unreadable) {
+      await putCachedPhoto(c.env.DB, 'shelf', hash, payload);
+    }
+    return c.json(payload);
   });

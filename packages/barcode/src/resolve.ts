@@ -133,6 +133,8 @@ export async function resolveBarcode(
   let updateUrls: Record<number, string> = {};
   /** Set only when candidates came from a name search, not a direct barcode hit. */
   let searchedTitle: string | null = null;
+  /** Retail blurb, used only to fill a description nothing better supplied. */
+  let retailDescription: string | null = null;
 
   // --- Rung 1: GameUPC, straight barcode lookup -----------------------------
   if (deps.gameUpc) {
@@ -169,6 +171,7 @@ export async function resolveBarcode(
         // "Wingspan - A Bird-Collection, Engine-Building Stonemaier for , +".
         const cleaned = cleanRetailTitle(retail.title);
         inferredName = retail.title;
+        retailDescription = retail.description;
         trace.push({ source: 'upcitemdb', outcome: `title: ${retail.title}` });
 
         if (deps.gameUpc && cleaned) {
@@ -218,9 +221,10 @@ export async function resolveBarcode(
   return {
     // Rank last: BGG hydration can replace a name, and the ordering should
     // reflect the names the user will actually read.
-    candidates: searchedTitle
+    candidates: (searchedTitle
       ? rankBySearchedTitle(candidates, searchedTitle)
-      : rankCandidates(candidates),
+      : rankCandidates(candidates)
+    ).map((c) => (c.description ? c : { ...c, description: retailDescription })),
     verified,
     inferredName,
     updateUrls,

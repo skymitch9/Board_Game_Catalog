@@ -39,6 +39,12 @@ export interface UpcItemDbResult {
   brand: string | null;
   category: string | null;
   imageUrl: string | null;
+  /**
+   * Retail blurb. Not authoritative and often marketing copy, but for a game
+   * whose box we never photographed it is better than an empty page — and it
+   * frequently states the player count and playing time in prose.
+   */
+  description: string | null;
 }
 
 /**
@@ -126,6 +132,7 @@ export async function lookupUpcItemDb(barcode: string): Promise<UpcItemDbResult 
     title: item.title,
     brand: item.brand ?? null,
     category: item.category ?? null,
+    description: item.description ?? null,
     imageUrl: item.images?.[0] ?? null,
   };
 }

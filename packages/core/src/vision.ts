@@ -140,5 +140,31 @@ export const PHOTO_QUALITY = 0.85;
  */
 export const IOS_MAX_CANVAS_AREA = 16_777_216;
 
+/**
+ * How different two photos may be and still count as the same box.
+ *
+ * These are 64-bit difference hashes, so the distance is "how many of the 64
+ * brightness comparisons flipped". Two handheld shots of the same cover
+ * typically land within 6-8; genuinely different games are usually well past 20.
+ * Set conservatively — returning a *wrong* cached reading is far worse than
+ * paying for a second look.
+ */
+export const PHOTO_HASH_MAX_DISTANCE = 8;
+
+/** Bits that differ between two hex-encoded 64-bit hashes. 65 means "not comparable". */
+export function hammingDistance(a: string, b: string): number {
+  if (a.length !== b.length || a.length !== 16) return 65;
+  let total = 0;
+  for (let i = 0; i < 16; i++) {
+    // Nibble at a time: 64-bit values do not fit in a JS number safely.
+    let diff = parseInt(a[i]!, 16) ^ parseInt(b[i]!, 16);
+    while (diff) {
+      total += diff & 1;
+      diff >>= 1;
+    }
+  }
+  return total;
+}
+
 /** Request bodies cap out well below this; a guard beats a confusing 413. */
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;

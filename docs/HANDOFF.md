@@ -15,10 +15,10 @@ verified end to end against live services.
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `d28eee2d-8c79-48be-805e-0dc09f3f2001` — shelf multi-select, box details, lookup cache |
+| Deployed version | `efdcc84c-d970-4081-a034-862e7ef8ee79` — photo caching by perceptual hash |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
-| Migrations applied | `0001_init` … `0005_lookup_cache` (local **and** production) |
+| Migrations applied | `0001_init` … `0006_photo_cache` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |

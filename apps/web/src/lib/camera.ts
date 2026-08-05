@@ -132,6 +132,60 @@ export interface CapturedPhoto {
   width: number;
   height: number;
   bytes: number;
+  /** 64-bit difference hash, hex. Lets the server recognise a re-shot box. */
+  hash: string;
+}
+
+/**
+ * Difference hash of the frame: 64 bits describing which way brightness steps
+ * between neighbouring pixels of a 9x8 thumbnail.
+ *
+ * Why this and not a checksum: two handheld photos of the same cover are never
+ * byte-identical — exposure shifts, the phone rotates a degree — so hashing the
+ * bytes would never match. A dHash is stable under exactly those changes while
+ * still separating different games.
+ *
+ * Computed from the canvas we already drew, so it costs a 72-pixel read.
+ */
+function differenceHash(source: CanvasImageSource): string {
+  const W = 9;
+  const H = 8;
+  const tiny = document.createElement('canvas');
+  tiny.width = W;
+  tiny.height = H;
+  const ctx = tiny.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return '';
+
+  try {
+    ctx.drawImage(source, 0, 0, W, H);
+    const { data } = ctx.getImageData(0, 0, W, H);
+
+    const grey: number[] = [];
+    for (let i = 0; i < W * H; i++) {
+      const p = i * 4;
+      // Rec. 601 luma — closer to perceived brightness than a flat average.
+      grey.push(0.299 * data[p]! + 0.587 * data[p + 1]! + 0.114 * data[p + 2]!);
+    }
+
+    let bits = '';
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W - 1; x++) {
+        bits += grey[y * W + x]! > grey[y * W + x + 1]! ? '1' : '0';
+      }
+    }
+
+    // 64 bits -> 16 hex chars, a nibble at a time (64-bit ints are not safe here).
+    let hex = '';
+    for (let i = 0; i < 64; i += 4) {
+      hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+    }
+    return hex;
+  } catch {
+    // A tainted or unreadable canvas just means no caching, never a failed scan.
+    return '';
+  } finally {
+    releaseCanvas(tiny);
+  }
 }
 
 /**
@@ -166,7 +220,14 @@ export async function captureFrame(
       canvas.toBlob(resolve, 'image/jpeg', PHOTO_QUALITY),
     );
     if (!blob) throw new CameraError('unknown', 'Could not encode the photo.');
-    return { data: await toBase64(blob), mediaType: 'image/jpeg', width: w, height: h, bytes: blob.size };
+    return {
+      data: await toBase64(blob),
+      mediaType: 'image/jpeg',
+      width: w,
+      height: h,
+      bytes: blob.size,
+      hash: differenceHash(canvas),
+    };
   } finally {
     releaseCanvas(canvas);
   }
@@ -225,6 +286,7 @@ export async function fileToPhoto(file: File, longEdge: number): Promise<Capture
       width: canvas.width,
       height: canvas.height,
       bytes: blob.size,
+      hash: differenceHash(canvas),
     };
   } finally {
     bitmap.close();
