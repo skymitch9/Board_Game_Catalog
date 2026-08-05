@@ -101,19 +101,20 @@ export function rankCandidates(candidates: BarcodeCandidate[]): BarcodeCandidate
  * and "Dark" are one letter apart in the wrong places, whereas word membership
  * is exactly what distinguishes a variant from its base game.
  */
-export function titleSimilarity(candidateName: string, searchedFor: string): number {
-  const words = (s: string) =>
-    new Set(
-      s
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim()
-        .split(' ')
-        .filter((w) => w.length > 1),
-    );
+function titleWords(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter((w) => w.length > 1),
+  );
+}
 
-  const a = words(candidateName);
-  const b = words(searchedFor);
+export function titleSimilarity(candidateName: string, searchedFor: string): number {
+  const a = titleWords(candidateName);
+  const b = titleWords(searchedFor);
   if (a.size === 0 || b.size === 0) return 0;
 
   let shared = 0;
@@ -165,8 +166,69 @@ export function isTrustedMatch(candidateName: string, searchedFor: string): bool
   return titleSimilarity(candidateName, searchedFor) >= MIN_TITLE_SIMILARITY;
 }
 
+/**
+ * One title's words wholly contained in the other's, with words to spare.
+ *
+ * This is the "same family, different product" shape, and the symmetric score
+ * scores it far too kindly — a real shelf produced both of these, and both sailed
+ * past a 0.7 floor:
+ *
+ *     Deep Rock Galactic  ->  Deep Rock Galactic: Biome Expansion    0.75
+ *     The Settlers of Catan 5-6 Player Extension  ->  The Settlers of Catan   0.80
+ *
+ * The base game took its expansion's identity, and the extension took the base
+ * game's. Both directions are wrong for the same reason: every shared word
+ * agrees, and the words that *disagree* are the ones naming which product this
+ * actually is. A genuine match has neither side saying more than the other.
+ */
+function isFragmentOf(candidateName: string, searchedFor: string): boolean {
+  const a = withoutGenerics(titleWords(candidateName));
+  const b = withoutGenerics(titleWords(searchedFor));
+  if (a.size === 0 || b.size === 0) return false;
+  if (a.size === b.size) return false;
+
+  const [small, large] = a.size < b.size ? [a, b] : [b, a];
+  for (const word of small) if (!large.has(word)) return false;
+  return true;
+}
+
+/**
+ * Words that say what *kind* of product this is, not which one.
+ *
+ * Dropped before the subset test, and only there — the whole question is
+ * whether the words that differ identify a different product, and these never
+ * do. Checked against a real 55-title shelf: without this, the rule flagged
+ * "Catan Expansion: Cities & Knights" against "Catan: Cities & Knights", which
+ * differ by the word "Expansion" and are the same box. With it, "Deep Rock
+ * Galactic" against "Deep Rock Galactic: Biome Expansion" is still caught,
+ * because *Biome* survives the strip and names a thing you do not own.
+ *
+ * They stay in `titleSimilarity`, where extra words legitimately mean less
+ * agreement.
+ */
+const GENERIC_TITLE_WORDS = new Set([
+  'expansion',
+  'expansions',
+  'extension',
+  'edition',
+  'miniature',
+  'miniatures',
+  'board',
+  'game',
+  'the',
+]);
+
+function withoutGenerics(words: Set<string>): Set<string> {
+  const kept = new Set<string>();
+  for (const word of words) if (!GENERIC_TITLE_WORDS.has(word)) kept.add(word);
+  // A title made entirely of generic words has nothing left to compare, so keep
+  // the original rather than declaring every such pair a fragment of the other.
+  return kept.size > 0 ? kept : words;
+}
+
 /** Close enough to act on unattended, for a title read off a photograph. */
 export function isConfidentMatch(candidateName: string, searchedFor: string): boolean {
+  if (isFragmentOf(candidateName, searchedFor)) return false;
   return titleSimilarity(candidateName, searchedFor) >= MIN_SPINE_SIMILARITY;
 }
 

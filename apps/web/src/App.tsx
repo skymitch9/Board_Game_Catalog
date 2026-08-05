@@ -83,12 +83,10 @@ export default function App() {
           Board Game Catalog
         </Link>
         <span className="topbar-right">
-          {/* One way in, and it is the queue. Photographing a shelf and coming
-              back to the results beats deciding about each game while stood in
-              front of it, so the queue is "Add games" and the live camera is
-              the specialist tool behind it, not a competing front door. */}
-          <Link to="/scan-jobs">Add games</Link>
-          <Link to="/scan">Scan a barcode</Link>
+          {/* Adding lives on the collection page, next to the thing being added
+              to. Hoisting it up here as well made the top bar a second, competing
+              menu for the same job — and the bar is for moving between places,
+              not for actions. */}
           {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}

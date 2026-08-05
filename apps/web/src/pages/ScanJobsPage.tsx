@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   ITEM_KINDS,
-  MIN_SPINE_SIMILARITY,
+  isConfidentMatch,
   SHELF_LONG_EDGE,
   PHOTO_LONG_EDGE,
   type Item,
@@ -60,7 +60,11 @@ const POLL_MS = 2500;
  * shelf whatever the database thinks, but they are not ticked for you.
  */
 const isDoubtful = (t: EnrichedTitle): boolean =>
-  t.resolvedName != null && t.similarity != null && t.similarity < MIN_SPINE_SIMILARITY;
+  t.resolvedName != null &&
+  // Judged from the names themselves rather than the stored score, so the
+  // fragment rule applies here too — and so a re-lookup is judged against the
+  // text it actually searched with, not the spine's original misreading.
+  !isConfidentMatch(t.resolvedName, t.relookedUpAs ?? t.title);
 
 /**
  * The name to actually save.
@@ -270,7 +274,9 @@ function PhotoUploader({
 }
 
 function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
-  const isReviewable = job.status === 'review';
+  // Anything with titles on it can be opened, including a finished job — see
+  // the note on the review page. Only a job with nothing read has no inside.
+  const isReviewable = job.enriched != null;
   const isFailed = job.status === 'failed';
   const isProcessing = ['uploaded', 'reading', 'enriching'].includes(job.status);
   const outstanding = outstandingOf(job);
@@ -357,7 +363,11 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
     return <Spinner />;
   }
 
-  if (job.status !== 'review' || !job.enriched) {
+  // Openable whenever there is something read, not only at status 'review'.
+  // A job marked done still holds every title it found, and "done" was often
+  // something the old code decided on your behalf the moment you added the
+  // easy ones — the rows worth revisiting are precisely the ones inside it.
+  if (!job.enriched) {
     return (
       <div className="card">
         <h2>Job #{job.id}</h2>

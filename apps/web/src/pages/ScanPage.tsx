@@ -260,10 +260,21 @@ export function ScanPage({ me }: { me: MeResponse }) {
 
   return (
     <div className="scan-page">
+      {/*
+        "Check", not "Add", because the first question is nearly always whether
+        you already own the thing — standing in a shop, holding a box you half
+        recognise. Answering that is useful on its own, and the barcode path
+        already answers it instantly from the local table. Adding is what
+        follows when the answer turns out to be no.
+      */}
       <header className="scan-header">
-        <h1>Add a game</h1>
+        <h1>Check a game</h1>
         <Link to="/">Back to collection</Link>
       </header>
+      <p className="muted scan-header__blurb">
+        Scan, photograph or type a game to see whether it is already in your
+        collection — and add it if it is not.
+      </p>
 
       <div className="scan-modes" role="tablist">
         {/* Typing a game in needs write access, and so does the name lookup

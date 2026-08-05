@@ -68,11 +68,17 @@ export function CollectionPage({ me }: { me: MeResponse }) {
         </div>
         {canEdit && (
           <div className="head-actions">
-            {/* The queue is the front door: photograph the shelf, review at
-                leisure. Everything else — barcode, typing — is reachable from
-                there rather than competing with it here. */}
+            {/* Two doors, because they answer different questions. "Add games"
+                is bulk intake: photograph a shelf, sort it out afterwards.
+                "Check a game" is the one-off — point it at a single box and it
+                says whether this is already on a shelf at home, which is the
+                question you have in a shop and the one the catalog exists to
+                answer. Adding it is what you do *after* the answer is no. */}
             <Link to="/scan-jobs" className="btn btn-primary">
               + Add games
+            </Link>
+            <Link to="/scan" className="btn btn-quiet">
+              Check a game
             </Link>
           </div>
         )}
