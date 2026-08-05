@@ -15,7 +15,7 @@ verified end to end against live services.
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `b8faec00-368a-43f7-bf65-995ebe521e5c` — first deploy including the scanner |
+| Deployed version | `e8fef39f-a195-4237-a82c-5f3ccad22911` — scanner + trimmed copy record |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | Migrations applied | `0001_init`, `0002_copy_quantity`, `0003_barcode_unique`, `0004_trim_copy_fields` (local **and** production) |
