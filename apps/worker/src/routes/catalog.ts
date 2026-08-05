@@ -4,6 +4,7 @@ import {
   createItemSchema,
   createRelationSchema,
   itemQuerySchema,
+  suggestRetags,
   updateCopySchema,
   updateItemSchema,
   upsertRatingSchema,
@@ -23,6 +24,7 @@ import {
   getItemDetail,
   getRelatedItems,
   listItemTrees,
+  listTopLevelItems,
   updateCopy,
   updateItem,
   upsertRating,
@@ -66,6 +68,17 @@ export const catalogRoutes = new Hono<AppBindings>()
   /** Headline numbers, so the UI needn't compute them. */
   .get('/meta', async (c) => {
     return c.json({ stats: await collectionStats(c.env.DB) });
+  })
+
+  /**
+   * Top-level games whose name says they belong to another.
+   *
+   * A read-only proposal list. Applying a row is an ordinary PATCH of that
+   * item, so there is no second write path to keep honest.
+   */
+  .get('/retag', async (c) => {
+    const items = await listTopLevelItems(c.env.DB);
+    return c.json({ suggestions: suggestRetags(items) });
   })
 
   // ---- items -------------------------------------------------------------

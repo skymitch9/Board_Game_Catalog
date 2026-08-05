@@ -171,6 +171,8 @@ export const api = {
       usage: ResearchUsage;
     }>,
 
+  retagSuggestions: () => req<{ suggestions: RetagSuggestion[] }>('/api/retag'),
+
   // --- Scan Jobs (photo queue) ----------------------------------------------
 
   scanJobs: (status?: string) =>
@@ -207,6 +209,16 @@ export const api = {
   deleteScanJob: (id: number) =>
     del(`/api/scan-jobs/${id}`) as Promise<{ deleted: boolean }>,
 };
+
+export interface RetagSuggestion {
+  itemId: number;
+  name: string;
+  currentKind: string;
+  proposedParentId: number;
+  proposedParentName: string;
+  confident: boolean;
+  reason: string;
+}
 
 export interface CacheStats {
   titles: number;

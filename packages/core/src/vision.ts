@@ -308,6 +308,102 @@ function extractPrefix(name: string): string | null {
 }
 
 /**
+ * Games sitting at the top level whose name says they belong to another.
+ *
+ * The clean-up counterpart to `classifyShelfResults`: that one classifies
+ * titles on their way in, this one finds the ones that got in wrongly. Both
+ * read the same signal — the part of a name before a colon — because the same
+ * signal is what was missed.
+ *
+ * It exists because a bulk scan produces this mess in bulk. Twenty games came
+ * off one shelf photo tagged as base games when a dozen were expansions, and
+ * fixing that a page at a time is enough work that it does not get done.
+ *
+ * Every result is a *proposal*. The heuristic cannot tell "Scythe: Invaders
+ * from Afar" (an expansion) from "CATAN: Starfarers" (a standalone game that
+ * merely shares a brand), and guessing wrong buries a real game inside another
+ * one. `confident` marks the rows whose name says "expansion" outright — those
+ * are safe to tick for you. The rest are a judgment call and are offered, not
+ * assumed.
+ */
+export interface RetagSuggestion {
+  itemId: number;
+  name: string;
+  currentKind: string;
+  proposedParentId: number;
+  proposedParentName: string;
+  /** The name says "expansion"/"extension" outright, so it needs no judgement. */
+  confident: boolean;
+  reason: string;
+}
+
+/** Words that state the relationship rather than leaving it to be inferred. */
+const EXPLICIT_EXPANSION = /\b(expansion|extension|expansions)\b/i;
+
+/**
+ * Every leading fragment of a name, shortest first.
+ *
+ * Broader than `extractPrefix`, which stops at the first separator: publishers
+ * nest two deep ("Catan: Starfarers – 5-6 Player Extension"), and the en dash
+ * they favour is not a hyphen. Returned shortest-first so a caller taking the
+ * last match gets the most specific parent it actually owns.
+ */
+function prefixCandidates(name: string): string[] {
+  const out: string[] = [];
+  const separators = [':', ' - ', ' – ', ' — '];
+  for (let i = 1; i < name.length; i++) {
+    for (const sep of separators) {
+      if (name.startsWith(sep, i)) {
+        const prefix = name.slice(0, i).trim();
+        if (prefix.length > 2) out.push(prefix);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+export function suggestRetags(
+  items: readonly { id: number; name: string; kind: string; parentItemId: number | null }[],
+): RetagSuggestion[] {
+  const byKey = new Map<string, { id: number; name: string }>();
+  for (const item of items) byKey.set(normaliseTitle(item.name), { id: item.id, name: item.name });
+
+  const suggestions: RetagSuggestion[] = [];
+  for (const item of items) {
+    // Only things standing on their own. An item already filed under a parent
+    // is not what this screen is for, whatever its name looks like.
+    if (item.kind !== 'base' || item.parentItemId !== null) continue;
+
+    // Longest match wins. "Catan: Starfarers – 5-6 Player Extension" contains
+    // both "Catan" and "Catan: Starfarers", and only the longer one is its
+    // actual parent — filing it under Catan would put a Starfarers expansion
+    // in the wrong tree while looking like a success.
+    let parent: { id: number; name: string } | undefined;
+    for (const prefix of prefixCandidates(item.name)) {
+      const found = byKey.get(normaliseTitle(prefix));
+      if (found && found.id !== item.id) parent = found;
+    }
+    if (!parent) continue;
+
+    const explicit = EXPLICIT_EXPANSION.test(item.name);
+    suggestions.push({
+      itemId: item.id,
+      name: item.name,
+      currentKind: item.kind,
+      proposedParentId: parent.id,
+      proposedParentName: parent.name,
+      confident: explicit,
+      reason: explicit
+        ? `Says "expansion" in the name, and you own "${parent.name}".`
+        : `You own "${parent.name}" — but a subtitle can also mean a standalone game.`,
+    });
+  }
+
+  return suggestions;
+}
+
+/**
  * JPEG quality for the downscaled upload.
  *
  * 0.85, not lower: the phone's photo is *already* lossy, so this is a second

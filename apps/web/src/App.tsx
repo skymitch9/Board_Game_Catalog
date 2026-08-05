@@ -9,6 +9,7 @@ import { ItemPage, NotFoundPage } from './pages/ItemPage';
 import { PeoplePage } from './pages/PeoplePage';
 import { ScanPage } from './pages/ScanPage';
 import { ScanJobsPage, ScanJobReviewPage } from './pages/ScanJobsPage';
+import { RetagPage } from './pages/RetagPage';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
 function Routes({ me }: { me: MeResponse }) {
@@ -32,6 +33,8 @@ function Routes({ me }: { me: MeResponse }) {
       return <ScanJobsPage me={me} />;
     case 'scanJobReview':
       return <ScanJobReviewPage id={route.id} me={me} />;
+    case 'retag':
+      return <RetagPage me={me} />;
     case 'people':
       return me.capabilities.includes('manageUsers') ? (
         <PeoplePage me={me} />

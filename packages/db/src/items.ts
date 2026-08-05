@@ -482,6 +482,24 @@ export async function listItemNames(
   return results;
 }
 
+/** Top-level items and their kinds — the input to a re-tagging pass. */
+export async function listTopLevelItems(
+  db: D1Database,
+): Promise<{ id: number; name: string; kind: string; parentItemId: number | null }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, name, kind, parent_item_id FROM item
+        WHERE parent_item_id IS NULL ORDER BY sort_name`,
+    )
+    .all<{ id: number; name: string; kind: string; parent_item_id: number | null }>();
+  return results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    kind: r.kind,
+    parentItemId: r.parent_item_id,
+  }));
+}
+
 export async function collectionStats(db: D1Database): Promise<{
   baseGames: number;
   expansions: number;
