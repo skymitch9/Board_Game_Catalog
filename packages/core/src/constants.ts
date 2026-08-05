@@ -29,9 +29,22 @@ export type SourceTier = (typeof SOURCE_TIERS)[number];
 
 /**
  * How two standalone items relate to each other without nesting.
+ * - same_family: the same game reworked — a different setting or ruleset built
+ *   on the same bones, by the same publisher. Catan: New Energies and CATAN:
+ *   Starfarers are Catan games you can play without owning Catan.
  * - works_with: standalone games that combine (Dice Throne characters, Unmatched fighters)
  * - reimplements: a newer standalone version of an older game
  * - integrates_with: can be combined with another standalone game
+ *
+ * `same_family` is first because it is the common case in a real collection and
+ * the one the others were being stretched to cover. Starfarers does not *work
+ * with* Catan — you cannot shuffle them together — and calling it a
+ * reimplementation overstates it. It is simply another Catan.
  */
-export const RELATION_TYPES = ['works_with', 'reimplements', 'integrates_with'] as const;
+export const RELATION_TYPES = [
+  'same_family',
+  'works_with',
+  'reimplements',
+  'integrates_with',
+] as const;
 export type RelationType = (typeof RELATION_TYPES)[number];

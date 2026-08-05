@@ -23,8 +23,17 @@ function copySummary(copies: Copy[]): {
   tone: Copy['status'] | null;
   text: string;
   duplicated: boolean;
+  /**
+   * The same summary with "owned" left out, and null when there is nothing
+   * left to say. Being owned is what the collection *means*, so a card that
+   * announces it on every row is announcing nothing — but "lent" alongside it
+   * still matters, which is why this drops a word rather than the whole badge.
+   */
+  notable: { tone: Copy['status']; text: string } | null;
 } {
-  if (copies.length === 0) return { tone: null, text: 'not catalogued', duplicated: false };
+  if (copies.length === 0) {
+    return { tone: null, text: 'not catalogued', duplicated: false, notable: null };
+  }
 
   const counts = new Map<Copy['status'], number>();
   for (const c of copies) counts.set(c.status, (counts.get(c.status) ?? 0) + (c.quantity || 1));
@@ -32,11 +41,21 @@ function copySummary(copies: Copy[]): {
   const order: Copy['status'][] = ['owned', 'lent', 'preordered', 'wanted', 'sold'];
   const primary = order.find((s) => counts.has(s)) ?? copies[0]!.status;
 
-  const parts = order
-    .filter((s) => counts.has(s))
-    .map((s) => (counts.get(s)! > 1 ? `${counts.get(s)} ${s}` : s));
+  const label = (s: Copy['status']) => (counts.get(s)! > 1 ? `${counts.get(s)} ${s}` : s);
+  const parts = order.filter((s) => counts.has(s)).map(label);
 
-  return { tone: primary, text: parts.join(' · '), duplicated: ownedCount(copies) > 1 };
+  const exceptions = order.filter((s) => s !== 'owned' && counts.has(s));
+  const notable =
+    exceptions.length > 0
+      ? { tone: exceptions[0]!, text: exceptions.map(label).join(' · ') }
+      : null;
+
+  return {
+    tone: primary,
+    text: parts.join(' · '),
+    duplicated: ownedCount(copies) > 1,
+    notable,
+  };
 }
 
 function ChildRow({ node, depth }: { node: ItemNode; depth: number }) {
@@ -98,11 +117,14 @@ export function ItemCard({ node }: { node: ItemNode }) {
                 : `${KIND_LABEL[node.kind]}, not filed yet`}
             </Badge>
           )}
-          {own.tone ? (
-            <Badge tone={STATUS_TONE[own.tone]}>{own.text}</Badge>
-          ) : (
-            <Badge tone="neutral">not catalogued</Badge>
+          {/* "Owned" is not worth a badge: it is what being in the collection
+              means, and a label repeated on every card stops being read. The
+              exceptions still are — wanted, lent, preordered and sold each say
+              something the shelf does not, and so does having no copy at all. */}
+          {own.notable && (
+            <Badge tone={STATUS_TONE[own.notable.tone]}>{own.notable.text}</Badge>
           )}
+          {own.tone === null && <Badge tone="neutral">not catalogued</Badge>}
         </span>
       </Link>
 

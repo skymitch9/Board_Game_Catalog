@@ -411,6 +411,7 @@ function LookupDetails({
 }
 
 export const RELATION_LABEL: Record<RelationType, string> = {
+  same_family: 'Same family',
   works_with: 'Works with',
   reimplements: 'Reimplements',
   integrates_with: 'Integrates with',
