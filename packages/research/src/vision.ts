@@ -52,6 +52,11 @@ Rules:
   smaller and normally name their base game somewhere on the front.
 - editionName only when the box actually says so ("2nd Edition", "Kickstarter
   Exclusive", "Big Box"), otherwise null.
+- Player count and playing time are printed on almost every box, usually near a
+  corner or on the back. Read them if visible. Null if not — a wrong player
+  count is worse than a blank one.
+- description: one or two sentences of what the game is, only if the box says so
+  in its own words. Do not write marketing copy and do not invent a summary.
 - If the photo is too blurry, dark or angled to read, return zero candidates and
   say why in note. That is far more useful than a guess.`;
 
@@ -62,6 +67,10 @@ const CANDIDATE_PROPERTIES = {
   kind: { type: 'string', enum: ['base', 'expansion', 'accessory', 'promo', 'upgrade'] },
   editionName: { type: ['string', 'null'] },
   confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+  minPlayers: { type: ['integer', 'null'] },
+  maxPlayers: { type: ['integer', 'null'] },
+  playtimeMin: { type: ['integer', 'null'] },
+  description: { type: ['string', 'null'] },
   note: { type: ['string', 'null'] },
 } as const;
 
@@ -73,7 +82,10 @@ const IDENTIFY_SCHEMA = {
       items: {
         type: 'object',
         properties: CANDIDATE_PROPERTIES,
-        required: ['name', 'publisher', 'yearPublished', 'kind', 'editionName', 'confidence', 'note'],
+        required: [
+          'name', 'publisher', 'yearPublished', 'kind', 'editionName', 'confidence',
+          'minPlayers', 'maxPlayers', 'playtimeMin', 'description', 'note',
+        ],
         additionalProperties: false,
       },
     },
@@ -90,6 +102,10 @@ interface RawIdentified {
   kind: ItemKind;
   editionName: string | null;
   confidence: Confidence;
+  minPlayers: number | null;
+  maxPlayers: number | null;
+  playtimeMin: number | null;
+  description: string | null;
   note: string | null;
 }
 

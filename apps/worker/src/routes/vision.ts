@@ -3,10 +3,11 @@ import { z } from 'zod';
 import {
   MAX_PHOTO_BYTES,
   matchExistingTitle,
+  type BarcodeCandidate,
   type ShelfMatch,
 } from '@bgc/core';
-import { gameUpcConfig, lookupGameUpc } from '@bgc/barcode';
-import { listItemNames } from '@bgc/db';
+import { gameUpcConfig, lookupGameUpc, resolveTitle } from '@bgc/barcode';
+import { getCached, listItemNames, putCached } from '@bgc/db';
 import { ResearchError, identifyFromPhoto, isPhotoMediaType, readShelf } from '@bgc/research';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
@@ -36,10 +37,43 @@ function tooLarge(base64: string): boolean {
   return Math.floor((base64.length * 3) / 4) > MAX_PHOTO_BYTES;
 }
 
+/**
+ * Turn an upstream failure into something the person holding the phone can act
+ * on.
+ *
+ * The auth branch exists because it was got wrong once: a rejected API key
+ * surfaced as "Could not read that photo", which sent someone looking at their
+ * lighting and camera angle when the actual problem was a rotated key that had
+ * not been pushed to production. An authentication failure has nothing to do
+ * with the photo and must never be described as though it does.
+ */
 function upstream(err: unknown) {
   if (err instanceof ResearchError) {
     return { body: { error: 'upstream', detail: err.message }, status: err.status };
   }
+
+  const status = (err as { status?: number })?.status;
+  if (status === 401 || status === 403) {
+    return {
+      body: {
+        error: 'config',
+        detail:
+          'The Anthropic API key was rejected. This is a configuration problem, not a problem with your photo — the key was probably rotated without being pushed to production. Run `npm run secrets:push`.',
+      },
+      status: 503,
+    };
+  }
+  if (status === 429) {
+    return {
+      body: {
+        error: 'rate_limited',
+        detail: 'Rate limited by the Anthropic API. Wait a moment and try again.',
+        retryable: true,
+      },
+      status: 429,
+    };
+  }
+
   return {
     body: {
       error: 'upstream',
@@ -48,6 +82,35 @@ function upstream(err: unknown) {
     },
     status: 502,
   };
+}
+
+/**
+ * Resolve a title to its best candidate, remembering the answer.
+ *
+ * Re-photographing a shelf used to re-resolve every title on it — nine games,
+ * nine round trips, every time. Resolution is deterministic, so it is cached.
+ * The vision call above is not, and cannot be: a new photo is genuinely new
+ * input, and a shelf changes.
+ *
+ * A miss is cached too, as `null`. Titles that resolve to nothing are exactly
+ * the ones you would otherwise re-ask about on every pass.
+ */
+async function cachedResolve(
+  db: D1Database,
+  deps: Parameters<typeof resolveTitle>[0],
+  title: string,
+): Promise<BarcodeCandidate | null> {
+  const cached = await getCached<BarcodeCandidate | null>(db, 'title', title);
+  if (cached !== null) return cached;
+
+  const hit = await resolveTitle(deps, title);
+  const best = hit.candidates[0] ?? null;
+  // Only cache once BGG hydration has had its chance, or a week of lookups
+  // would be pinned to the un-hydrated shape from before the token arrived.
+  if (best === null || hit.bggHydrated || !deps.bggToken) {
+    await putCached(db, 'title', title, best);
+  }
+  return best;
 }
 
 export const visionRoutes = new Hono<AppBindings>()
@@ -64,16 +127,39 @@ export const visionRoutes = new Hono<AppBindings>()
       );
     }
 
+    let result;
     try {
-      const result = await identifyFromPhoto(c.env.ANTHROPIC_API_KEY, {
+      result = await identifyFromPhoto(c.env.ANTHROPIC_API_KEY, {
         data: parsed.data.data,
         mediaType: parsed.data.mediaType,
       });
-      return c.json(result);
     } catch (err) {
       const { body, status } = upstream(err);
-      return c.json(body, status as 502);
+      return c.json(body, status as 503);
     }
+
+    // Reading the name off the box is only half the job. Resolve each title the
+    // same way shelf mode does, so a photographed box comes back with a cover,
+    // a year and a BGG id rather than a bare string. Free, and adds ~1s.
+    const deps = { gameUpc: gameUpcConfig(c.env), bggToken: c.env.BGG_API_TOKEN };
+    const resolved = await Promise.all(
+      result.candidates.map(async (candidate) => {
+        const best = await cachedResolve(c.env.DB, deps, candidate.name);
+        if (!best) return candidate;
+        return {
+          ...candidate,
+          // The model read the box in front of us, so its own reading wins on
+          // anything it could actually see. The lookup only fills the gaps.
+          bggId: best.bggId,
+          thumbnailUrl: candidate.thumbnailUrl ?? best.thumbnailUrl,
+          yearPublished: candidate.yearPublished ?? best.yearPublished,
+          publisher: candidate.publisher ?? best.publisher,
+          sourceUrl: best.sourceUrl,
+        };
+      }),
+    );
+
+    return c.json({ ...result, candidates: resolved });
   })
 
   /**
@@ -103,11 +189,11 @@ export const visionRoutes = new Hono<AppBindings>()
       });
     } catch (err) {
       const { body, status } = upstream(err);
-      return c.json(body, status as 502);
+      return c.json(body, status as 503);
     }
 
     const existing = await listItemNames(c.env.DB);
-    const config = gameUpcConfig(c.env);
+    const deps = { gameUpc: gameUpcConfig(c.env), bggToken: c.env.BGG_API_TOKEN };
 
     // Resolve unknown titles concurrently — these are independent free lookups
     // and doing them in series would make a full shelf feel slow.
@@ -125,16 +211,11 @@ export const visionRoutes = new Hono<AppBindings>()
           };
         }
 
-        // Not owned: ask GameUPC to turn the printed title into a BGG id.
-        if (config) {
+        // Not owned: resolve the printed title, reusing the cache so a shelf
+        // photographed twice does not pay for the same answers twice.
+        if (deps.gameUpc) {
           try {
-            // The `upc` path segment is ignored when `search` is supplied, but
-            // the endpoint requires one, so pass a placeholder.
-            const hit = await lookupGameUpc(config, '0000000000000', {
-              search: title.text,
-              searchMode: 'quality',
-            });
-            const best = hit.candidates[0];
+            const best = await cachedResolve(c.env.DB, deps, title.text);
             if (best) {
               return {
                 title,

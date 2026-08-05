@@ -18,6 +18,12 @@ const nullableString = (max: number) => z.string().trim().max(max).nullable().op
 const itemFields = z.object({
   name: z.string().trim().min(1, 'name is required').max(200),
   kind: itemKindSchema,
+  /**
+   * BoardGameGeek id, when something already resolved it — a barcode lookup or a
+   * photo both hand one back. Storing it is what stops a later BGG import
+   * creating a second copy of a game you already scanned in.
+   */
+  bggId: z.number().int().positive().nullable().optional(),
   parentItemId: z.number().int().positive().nullable().optional(),
   yearPublished: z.number().int().min(1000).max(2200).nullable().optional(),
   publisher: nullableString(200),

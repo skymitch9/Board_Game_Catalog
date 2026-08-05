@@ -472,3 +472,12 @@ code {
   .scan-mode { flex-direction: row; align-items: baseline; gap: 0.5rem; }
   .camera-stage { max-height: 55vh; }
 }
+
+.shelf-actions { display: flex; gap: 0.5rem; }
+.shelf-actions button { flex: 1; padding: 0.7rem; }
+.shelf-check { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+.shelf-outcome { width: 24px; text-align: center; font-weight: 700; flex: none; color: var(--good); }
+
+.external-links { display: flex; gap: 0.75rem; margin: 0.35rem 0 0; font-size: 0.85rem; }
+.external-links a { color: var(--accent); text-decoration: none; }
+.external-links a:hover { text-decoration: underline; }

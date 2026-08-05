@@ -71,9 +71,55 @@ async function hydrateFromBgg(
         yearPublished: thing.yearPublished ?? c.yearPublished,
         kind: kindForBggType(thing.type),
         thumbnailUrl: thing.thumbnailUrl ?? c.thumbnailUrl,
+        // The box wins where it was legible; BGG fills the gaps.
+        minPlayers: c.minPlayers ?? thing.minPlayers,
+        maxPlayers: c.maxPlayers ?? thing.maxPlayers,
+        playtimeMin: c.playtimeMin ?? thing.playtimeMin,
+        description: c.description ?? thing.description,
       };
     }),
   };
+}
+
+/**
+ * Turn a *title* into candidates — the photo path's equivalent of a barcode
+ * lookup.
+ *
+ * Reading a name off a box is only half the job: a name alone has no cover, no
+ * year, no BGG id, and nothing to distinguish two printings. GameUPC's search
+ * resolves it for free, and BGG fills in the rest when a token exists.
+ *
+ * Shared so single-box and shelf reading behave identically. They diverged
+ * once — shelf resolved and single-box didn't, so photographing a box gave you
+ * a bare name while photographing a shelf gave you covers.
+ */
+export async function resolveTitle(
+  deps: ResolveDeps,
+  title: string,
+): Promise<{ candidates: BarcodeCandidate[]; bggHydrated: boolean }> {
+  const trimmed = title.trim();
+  if (!trimmed || !deps.gameUpc) return { candidates: [], bggHydrated: false };
+
+  let candidates: BarcodeCandidate[] = [];
+  try {
+    // The barcode path segment is ignored when `search` is supplied, but the
+    // endpoint still requires one, so pass a placeholder.
+    const hit = await lookupGameUpc(deps.gameUpc, '0000000000000', {
+      search: trimmed,
+      searchMode: 'quality',
+    });
+    candidates = rankBySearchedTitle(hit.candidates, trimmed);
+  } catch {
+    return { candidates: [], bggHydrated: false };
+  }
+
+  if (candidates.length === 0) return { candidates: [], bggHydrated: false };
+
+  if (deps.bggToken) {
+    const hydrated = await hydrateFromBgg(candidates, deps.bggToken);
+    return { candidates: hydrated.candidates, bggHydrated: hydrated.hydrated };
+  }
+  return { candidates, bggHydrated: false };
 }
 
 export async function resolveBarcode(

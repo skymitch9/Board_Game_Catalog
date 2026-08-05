@@ -19,7 +19,8 @@
     "db:create": "wrangler d1 create board-game-catalog",
     "db:migrate:local": "npm run db:migrate:local --workspace @bgc/worker",
     "db:migrate": "npm run db:migrate --workspace @bgc/worker",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "secrets:push": "node scripts/push-secrets.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

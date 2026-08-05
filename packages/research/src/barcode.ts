@@ -127,6 +127,11 @@ export async function identifyBarcode(
     ...c,
     bggId: null,
     thumbnailUrl: null,
+    // Not asked for on this rung — it answers from search results, not a photo.
+    minPlayers: null,
+    maxPlayers: null,
+    playtimeMin: null,
+    description: null,
     source: 'llm',
   }));
 

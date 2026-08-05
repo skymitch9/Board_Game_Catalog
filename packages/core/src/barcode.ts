@@ -28,6 +28,16 @@ export interface BarcodeCandidate {
   /** The specific printing, when named: "2nd Edition", "Kickstarter Deluxe". */
   editionName: string | null;
   thumbnailUrl: string | null;
+  /**
+   * Printed on almost every box, so vision reads them in the same call it reads
+   * the title — no extra request, no extra cost. Null when not visible rather
+   * than guessed, because a wrong player count is worse than a blank one.
+   */
+  minPlayers: number | null;
+  maxPlayers: number | null;
+  playtimeMin: number | null;
+  /** What the box says the game is, in its own words. Never invented copy. */
+  description: string | null;
   confidence: Confidence;
   source: CandidateSource;
   sourceUrl: string | null;

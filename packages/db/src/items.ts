@@ -260,14 +260,29 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
     rootGameId = parent.rootGameId ?? parent.id;
   }
 
+  // `idx_item_bgg` is UNIQUE where bgg_id IS NOT NULL, so scanning a game you
+  // already own fails here rather than silently creating a second entry. That is
+  // the behaviour we want — but it has to read as "you already have this",
+  // not as an internal error.
+  if (input.bggId != null) {
+    const existing = await db
+      .prepare('SELECT id, name FROM item WHERE bgg_id = ?')
+      .bind(input.bggId)
+      .first<{ id: number; name: string }>();
+    if (existing) {
+      throw new ItemError(`"${existing.name}" is already in the collection.`, 409);
+    }
+  }
+
   const res = await db
     .prepare(
-      `INSERT INTO item (kind, parent_item_id, root_game_id, name, sort_name, year_published,
+      `INSERT INTO item (bgg_id, kind, parent_item_id, root_game_id, name, sort_name, year_published,
                          publisher, publisher_url, designers, min_players, max_players,
                          playtime_min, weight, thumbnail_url, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
+      input.bggId ?? null,
       input.kind,
       input.kind === 'base' ? null : input.parentItemId,
       rootGameId,
@@ -301,6 +316,9 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
 const UPDATABLE: Record<keyof UpdateItemInput, string> = {
   name: 'name',
   kind: 'kind',
+  // Editable so a game added by hand can be linked to BGG later, and so a wrong
+  // match from a scan can be corrected rather than requiring a delete.
+  bggId: 'bgg_id',
   parentItemId: 'parent_item_id',
   yearPublished: 'year_published',
   publisher: 'publisher',

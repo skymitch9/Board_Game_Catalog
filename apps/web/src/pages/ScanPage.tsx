@@ -152,9 +152,20 @@ export function ScanPage({ me }: { me: MeResponse }) {
 
   // --- adding --------------------------------------------------------------
 
+  /**
+   * Add one candidate to the collection.
+   *
+   * `goToItem` is false for shelf mode. Navigating away after a single add threw
+   * away every other title the photo found, which made a nine-game shelf photo
+   * strictly worse than typing nine names — the whole point is bulk intake.
+   */
   const addCandidate = useCallback(
-    async (candidate: BarcodeCandidate, barcode: string | null) => {
-      setBusy(`Adding ${candidate.name}…`);
+    async (
+      candidate: BarcodeCandidate,
+      barcode: string | null,
+      goToItem = true,
+    ): Promise<number | null> => {
+      if (goToItem) setBusy(`Adding ${candidate.name}…`);
       setError(null);
       try {
         // An expansion needs a parent, and we do not know it from a scan. Create
@@ -164,9 +175,14 @@ export function ScanPage({ me }: { me: MeResponse }) {
         const { item } = await api.createItem({
           name: candidate.name,
           kind: 'base',
+          bggId: candidate.bggId,
           yearPublished: candidate.yearPublished,
           publisher: candidate.publisher,
           thumbnailUrl: candidate.thumbnailUrl,
+          minPlayers: candidate.minPlayers,
+          maxPlayers: candidate.maxPlayers,
+          playtimeMin: candidate.playtimeMin,
+          description: candidate.description,
         });
 
         if (barcode && canEdit) {
@@ -186,11 +202,16 @@ export function ScanPage({ me }: { me: MeResponse }) {
             `Added "${candidate.name}". It looks like a ${candidate.kind} — open it to nest it under its base game.`,
           );
         }
-        navigate(`/items/${item.id}`);
+        if (goToItem) navigate(`/items/${item.id}`);
+        return item.id;
       } catch (err) {
-        setError(err);
+        // In bulk mode one failure must not sink the batch, so it is reported
+        // per row by the caller rather than blanking the whole screen.
+        if (goToItem) setError(err);
+        else throw err;
+        return null;
       } finally {
-        setBusy(null);
+        if (goToItem) setBusy(null);
       }
     },
     [canEdit, lookup],
@@ -310,7 +331,7 @@ export function ScanPage({ me }: { me: MeResponse }) {
         />
       )}
 
-      {shelf && <ShelfResult matches={shelf} onAdd={(c) => addCandidate(c, null)} />}
+      {shelf && <ShelfResult matches={shelf} onAdd={(c) => addCandidate(c, null, false)} />}
 
       {showResults && (
         <button
@@ -476,65 +497,147 @@ function CandidateList({
   );
 }
 
+/**
+ * A shelf photo's results: tick what you want, add them all at once.
+ *
+ * This is the whole point of shelf mode, and it was got wrong first time round —
+ * each row had its own Add button that navigated to the new item, discarding
+ * every other title the photo had found. A nine-game shelf could add one game.
+ *
+ * So: selection is local, adding is a batch, and nothing navigates. Rows report
+ * their own outcome, because one failure in a batch of nine must not lose the
+ * other eight.
+ */
 function ShelfResult({
   matches,
   onAdd,
 }: {
   matches: ShelfMatch[];
-  onAdd: (c: BarcodeCandidate) => void;
+  onAdd: (c: BarcodeCandidate) => Promise<number | null>;
 }) {
   const owned = matches.filter((m) => m.existingItemId != null);
-  const fresh = matches.filter((m) => m.existingItemId == null);
+  const fresh = matches.map((m, i) => ({ m, i })).filter(({ m }) => m.existingItemId == null);
+
+  // Everything not already owned starts ticked: the common case is "add this
+  // shelf", and unticking the odd one is less work than ticking eight.
+  const [selected, setSelected] = useState<Set<number>>(
+    () => new Set(fresh.map(({ i }) => i)),
+  );
+  const [results, setResults] = useState<Record<number, { itemId: number } | { error: string }>>({});
+  const [adding, setAdding] = useState(false);
+
+  const pending = fresh.filter(({ i }) => selected.has(i) && !results[i]);
+
+  const toggle = (i: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+
+  async function addSelected() {
+    setAdding(true);
+    // Sequential, not parallel: each add is a write, and a burst of concurrent
+    // inserts makes the "already in the collection" conflict check race itself.
+    for (const { m, i } of pending) {
+      try {
+        const itemId = await onAdd(toCandidate(m));
+        setResults((r) => ({ ...r, [i]: itemId ? { itemId } : { error: 'could not add' } }));
+      } catch (err) {
+        setResults((r) => ({
+          ...r,
+          [i]: { error: err instanceof ApiError ? err.detail : String(err) },
+        }));
+      }
+    }
+    setAdding(false);
+  }
+
+  const addedCount = Object.values(results).filter((r) => 'itemId' in r).length;
 
   return (
     <div className="scan-result">
       <p className="muted">
         Read {matches.length} title{matches.length === 1 ? '' : 's'}
         {owned.length > 0 && ` · ${owned.length} already yours`}
+        {addedCount > 0 && ` · ${addedCount} added`}
       </p>
 
       {fresh.length > 0 && (
-        <ul className="candidate-list">
-          {fresh.map((m, i) => (
-            <li key={i} className="candidate">
-              {m.thumbnailUrl && <img src={m.thumbnailUrl} alt="" className="candidate__thumb" />}
-              <div className="candidate__body">
-                <strong>{m.resolvedName ?? m.title.text}</strong>
-                {m.resolvedName && m.resolvedName !== m.title.text && (
-                  <span className="muted">read as “{m.title.text}”</span>
-                )}
-                <span className="candidate__meta">
-                  <Badge tone={m.title.confidence === 'high' ? 'owned' : 'neutral'}>
-                    {m.title.confidence}
-                  </Badge>
-                  <span className="muted">position {m.title.position}</span>
-                </span>
-                {m.title.note && <span className="muted candidate__note">{m.title.note}</span>}
-              </div>
-              <button
-                type="button"
-                className="primary"
-                onClick={() =>
-                  onAdd({
-                    name: m.resolvedName ?? m.title.text,
-                    bggId: m.bggId,
-                    publisher: null,
-                    yearPublished: null,
-                    kind: 'base',
-                    editionName: null,
-                    thumbnailUrl: m.thumbnailUrl,
-                    confidence: m.title.confidence,
-                    source: 'llm',
-                    sourceUrl: null,
-                    note: null,
-                  })
-                }
-              >
-                Add
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="shelf-actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={adding || pending.length === 0}
+              onClick={addSelected}
+            >
+              {adding
+                ? `Adding… ${addedCount}/${pending.length + addedCount}`
+                : pending.length === 0
+                  ? 'Nothing selected'
+                  : `Add ${pending.length} game${pending.length === 1 ? '' : 's'}`}
+            </button>
+            <button
+              type="button"
+              disabled={adding}
+              onClick={() =>
+                setSelected(
+                  selected.size === fresh.length ? new Set() : new Set(fresh.map(({ i }) => i)),
+                )
+              }
+            >
+              {selected.size === fresh.length ? 'Clear all' : 'Select all'}
+            </button>
+          </div>
+
+          <ul className="candidate-list">
+            {fresh.map(({ m, i }) => {
+              const result = results[i];
+              return (
+                <li key={i} className="candidate">
+                  {result ? (
+                    <span className="shelf-outcome" aria-hidden="true">
+                      {'itemId' in result ? '✓' : '!'}
+                    </span>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      className="shelf-check"
+                      checked={selected.has(i)}
+                      disabled={adding}
+                      onChange={() => toggle(i)}
+                      aria-label={`Add ${m.resolvedName ?? m.title.text}`}
+                    />
+                  )}
+
+                  {m.thumbnailUrl && <img src={m.thumbnailUrl} alt="" className="candidate__thumb" />}
+
+                  <div className="candidate__body">
+                    <strong>{m.resolvedName ?? m.title.text}</strong>
+                    {m.resolvedName && m.resolvedName !== m.title.text && (
+                      <span className="muted">read as “{m.title.text}”</span>
+                    )}
+                    <span className="candidate__meta">
+                      <Badge tone={m.title.confidence === 'high' ? 'owned' : 'neutral'}>
+                        {m.title.confidence}
+                      </Badge>
+                      <span className="muted">position {m.title.position}</span>
+                    </span>
+                    {m.title.note && <span className="muted candidate__note">{m.title.note}</span>}
+                    {result && 'itemId' in result && (
+                      <Link to={`/items/${result.itemId}`}>Added — open it</Link>
+                    )}
+                    {result && 'error' in result && (
+                      <span className="muted candidate__note">{result.error}</span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       {owned.length > 0 && (
@@ -552,6 +655,28 @@ function ShelfResult({
       )}
     </div>
   );
+}
+
+/** A shelf reading, shaped like every other candidate so one add path serves all. */
+function toCandidate(m: ShelfMatch): BarcodeCandidate {
+  return {
+    name: m.resolvedName ?? m.title.text,
+    bggId: m.bggId,
+    publisher: null,
+    yearPublished: null,
+    kind: 'base',
+    editionName: null,
+    thumbnailUrl: m.thumbnailUrl,
+    // A spine shows a title and nothing else.
+    minPlayers: null,
+    maxPlayers: null,
+    playtimeMin: null,
+    description: null,
+    confidence: m.title.confidence,
+    source: 'llm',
+    sourceUrl: null,
+    note: null,
+  };
 }
 
 export { ApiError };

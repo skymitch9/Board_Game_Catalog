@@ -182,6 +182,11 @@ export async function lookupGameUpc(
       kind: 'base',
       editionName: onlyVersion?.name ?? null,
       thumbnailUrl: info.thumbnail_url ?? info.image_url ?? null,
+      // GameUPC does not carry these; BGG hydration or a photo fills them in.
+      minPlayers: null,
+      maxPlayers: null,
+      playtimeMin: null,
+      description: null,
       confidence: bandConfidence(info.confidence, verified && infos.length === 1),
       source: 'gameupc',
       sourceUrl: info.page_url ?? null,

@@ -79,6 +79,7 @@ export function ItemPage({
               .filter(Boolean)
               .join(' · ') || 'No details recorded'}
           </p>
+          <ExternalLinks item={item} />
         </div>
         {canEdit && (
           <div className="head-actions">
@@ -200,5 +201,39 @@ export function NotFoundPage() {
         <Link to="/">Back to the collection</Link>
       </p>
     </EmptyState>
+  );
+}
+
+/**
+ * Where to read more about this game.
+ *
+ * BoardGameGeek is derived, not stored: a `bggId` is all you need, and building
+ * the URL means a scanned game links out the moment it resolves, with no extra
+ * column and nothing to keep in sync. `rel="noreferrer"` on both because there
+ * is no reason to leak where the click came from.
+ */
+function ExternalLinks({ item }: { item: { bggId: number | null; publisherUrl: string | null } }) {
+  const links: { href: string; label: string }[] = [];
+
+  if (item.bggId != null) {
+    links.push({
+      href: `https://boardgamegeek.com/boardgame/${item.bggId}`,
+      label: 'BoardGameGeek',
+    });
+  }
+  if (item.publisherUrl) {
+    links.push({ href: item.publisherUrl, label: 'Publisher' });
+  }
+
+  if (links.length === 0) return null;
+
+  return (
+    <p className="external-links">
+      {links.map((l) => (
+        <a key={l.href} href={l.href} target="_blank" rel="noreferrer noopener">
+          {l.label} ↗
+        </a>
+      ))}
+    </p>
   );
 }
