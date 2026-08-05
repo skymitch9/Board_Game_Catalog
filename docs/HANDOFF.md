@@ -23,12 +23,13 @@ Nothing is in flight. The most recent commits:
 
 | Commit | What |
 |---|---|
+| `d47abd8` | Never overwrite a cover without keeping the one it replaced |
+| `5bac8d6` | Pick which printing's cover represents our copy |
+| `3aaa730` | Handoff refresh |
 | `6eb0c8e` | Cover-link health check, cron and banner |
 | `ce03a8f` | The wishlist — item-level, not tree-level |
 | `227f7d0` | `item.source_url` |
 | `0e61948` | The add restructure, item relations and the photo queue — all of it |
-| `43bbf39` | Negative lookup results are actually read back from the cache now |
-| `d0f2d4c` | The queue polls itself; photos are released as soon as vision is done |
 
 `0e61948` is worth understanding as a process note rather than a code one: that
 work was **deployed straight from the working tree before it was committed**,
@@ -113,7 +114,7 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `45b4d2d2-5f47-4e58-ab48-21ea3ceda87b` — wishlist + cover health (2026-08-06) |
+| Deployed version | `4b56532d-b0db-4487-9f77-3194f20d774a` — the cover picker (2026-08-06) |
 | Cron triggers | `*/30 * * * *` — the cover check. Confirmed registered in the deploy output |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
@@ -129,7 +130,7 @@ and typechecks. `phase-1-manual-catalog` still exists and is unchanged.
 
 **Pushed.** `origin` is
 <https://github.com/skymitch9/Board_Game_Catalog.git> and `origin/main` is up to
-date as of 2026-08-06 (`6eb0c8e`). An earlier version of this document said
+date as of 2026-08-06 (`d47abd8`). An earlier version of this document said
 nothing had ever been published; that stopped being true on 08-06.
 
 ---
@@ -474,6 +475,15 @@ no forcing, no new code, and the collage survives either way because
 > testing the campaign naming, so its campaign card shows the failure state.
 > Alongside the two bad covers from the health work (items 111 and 121).
 > Production is unaffected.
+
+**Production, after the first run (2026-08-06).** 457 items, 68 of them with a
+`bgg_id`. The BGG backfill added **771 printings across 67 items in 7 requests**
+with no failures; the campaign backfill has captured **132 covers** across three
+runs, the later ones picking up covers written while the work was in flight.
+**186 items now have at least one recorded cover and 53 have more than one** —
+which is the number that matters, because those 53 are the games where the
+picker has an actual choice to offer. Re-run both after any bulk cover work:
+`/api/editions/status` says whether the BGG half has anything left to do.
 
 **Verified end to end against local dev, 2026-08-06.** Ticket to Ride (item 42,
 BGG 9209) went from 1 candidate to 40 printings in one BGG call, with the cover
