@@ -1,32 +1,22 @@
 import { useState } from 'react';
-import {
-  CONDITIONS,
-  COPY_STATUSES,
-  formatMoney,
-  type Condition,
-  type Copy,
-  type CopyStatus,
-} from '@bgc/core';
+import { COPY_STATUSES, type Copy, type CopyStatus } from '@bgc/core';
 import { api } from '../api';
 import { Badge, ConfirmButton, ErrorBox, Field } from './ui';
 import { STATUS_TONE } from './ItemTree';
 
-const CONDITION_LABEL: Record<Condition, string> = {
-  new: 'New',
-  like_new: 'Like new',
-  good: 'Good',
-  fair: 'Fair',
-  poor: 'Poor',
-};
+/**
+ * "Added 4 Aug 2026". The clock time a row was typed in is noise, so only the
+ * date shows; `addedAt` is a UTC instant, so let the browser localise it.
+ */
+function formatAdded(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 interface FormState {
   quantity: string;
   status: CopyStatus;
-  location: string;
-  acquiredOn: string;
-  priceDollars: string;
-  vendor: string;
-  condition: string;
   isSleeved: boolean;
   isPunched: boolean;
   lentTo: string;
@@ -38,11 +28,6 @@ function toForm(copy?: Copy): FormState {
   return {
     quantity: String(copy?.quantity ?? 1),
     status: copy?.status ?? 'owned',
-    location: copy?.location ?? '',
-    acquiredOn: copy?.acquiredOn ?? '',
-    priceDollars: copy?.pricePaidCents != null ? (copy.pricePaidCents / 100).toFixed(2) : '',
-    vendor: copy?.vendor ?? '',
-    condition: copy?.condition ?? '',
     isSleeved: copy?.isSleeved ?? false,
     isPunched: copy?.isPunched ?? false,
     lentTo: copy?.lentTo ?? '',
@@ -54,13 +39,11 @@ function toForm(copy?: Copy): FormState {
 export function CopyForm({
   itemId,
   existing,
-  locations,
   onDone,
   onCancel,
 }: {
   itemId: number;
   existing?: Copy;
-  locations: string[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -76,16 +59,9 @@ export function CopyForm({
     setBusy(true);
     setError(null);
     try {
-      const dollars = form.priceDollars.trim();
       const payload = {
         quantity: Math.max(1, Number(form.quantity) || 1),
         status: form.status,
-        location: form.location.trim() || null,
-        acquiredOn: form.acquiredOn || null,
-        pricePaidCents: dollars === '' ? null : Math.round(Number(dollars) * 100),
-        currency: 'USD',
-        vendor: form.vendor.trim() || null,
-        condition: (form.condition || null) as Condition | null,
         isSleeved: form.isSleeved,
         isPunched: form.isPunched,
         lentTo: form.lentTo.trim() || null,
@@ -107,7 +83,7 @@ export function CopyForm({
     <form className="copy-form" onSubmit={submit}>
       {error ? <ErrorBox error={error} what="Could not save this copy" /> : null}
 
-      <div className="row-3">
+      <div className="row-2">
         <Field label="How many" hint="Identical copies">
           <input
             type="number"
@@ -126,54 +102,13 @@ export function CopyForm({
             ))}
           </select>
         </Field>
-
-        <Field label="Location" hint="Shelf, closet, box…">
-          <input
-            list="known-locations"
-            value={form.location}
-            onChange={(e) => set('location', e.target.value)}
-          />
-          <datalist id="known-locations">
-            {locations.map((l) => (
-              <option key={l} value={l} />
-            ))}
-          </datalist>
-        </Field>
-
-        <Field label="Condition">
-          <select value={form.condition} onChange={(e) => set('condition', e.target.value)}>
-            <option value="">—</option>
-            {CONDITIONS.map((cnd) => (
-              <option key={cnd} value={cnd}>
-                {CONDITION_LABEL[cnd]}
-              </option>
-            ))}
-          </select>
-        </Field>
       </div>
 
-      <div className="row-3">
-        <Field label="Paid">
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={form.priceDollars}
-            onChange={(e) => set('priceDollars', e.target.value)}
-            placeholder="0.00"
-          />
-        </Field>
-        <Field label="Vendor">
-          <input value={form.vendor} onChange={(e) => set('vendor', e.target.value)} />
-        </Field>
-        <Field label="Acquired">
-          <input
-            type="date"
-            value={form.acquiredOn}
-            onChange={(e) => set('acquiredOn', e.target.value)}
-          />
-        </Field>
-      </div>
+      {existing && (
+        // Read-only: the database stamps this on insert, so there is nothing
+        // to edit — but it answers "when did we get this?" at a glance.
+        <p className="muted small">Added {formatAdded(existing.addedAt)}</p>
+      )}
 
       {form.status === 'lent' && (
         <Field label="Lent to">
@@ -227,12 +162,10 @@ export function CopyForm({
 export function CopyRow({
   copy,
   canEdit,
-  locations,
   onChanged,
 }: {
   copy: Copy;
   canEdit: boolean;
-  locations: string[];
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -243,7 +176,6 @@ export function CopyRow({
         <CopyForm
           itemId={copy.itemId}
           existing={copy}
-          locations={locations}
           onDone={() => {
             setEditing(false);
             onChanged();
@@ -254,15 +186,13 @@ export function CopyRow({
     );
   }
 
+  // `Added` is last: it is always present, so leading with it would bury the
+  // facts that vary from copy to copy.
   const facts = [
-    copy.location,
-    copy.condition ? CONDITION_LABEL[copy.condition] : null,
     copy.isSleeved ? 'sleeved' : null,
     copy.isPunched ? 'punched' : null,
-    copy.pricePaidCents != null ? formatMoney(copy.pricePaidCents, copy.currency) : null,
-    copy.vendor,
-    copy.acquiredOn,
     copy.lentTo ? `lent to ${copy.lentTo}` : null,
+    `Added ${formatAdded(copy.addedAt)}`,
   ].filter(Boolean);
 
   return (
@@ -270,7 +200,7 @@ export function CopyRow({
       <Badge tone={STATUS_TONE[copy.status]}>
         {copy.quantity > 1 ? `${copy.quantity} × ${copy.status}` : copy.status}
       </Badge>
-      <span className="copy-facts">{facts.join(' · ') || 'no details'}</span>
+      <span className="copy-facts">{facts.join(' · ')}</span>
       {(copy.completenessNotes || copy.notes) && (
         <span className="copy-notes">{[copy.completenessNotes, copy.notes].filter(Boolean).join(' — ')}</span>
       )}

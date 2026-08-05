@@ -10,6 +10,7 @@ flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
 | File | Covers |
 |---|---|
 | [`barcode-ladder.md`](barcode-ladder.md) | Why barcode resolution is tiered, what each rung buys, measured hit rates |
+| [`ios-camera.md`](ios-camera.md) | Every WebKit constraint the scanner works around, and why photos never reach the camera roll |
 
 The overall architecture and phase plan are in [`../DESIGN.md`](../DESIGN.md);
 the repo map is in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.

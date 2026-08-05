@@ -20,9 +20,6 @@ export type ItemKind = (typeof ITEM_KINDS)[number];
 export const COPY_STATUSES = ['owned', 'wanted', 'preordered', 'lent', 'sold'] as const;
 export type CopyStatus = (typeof COPY_STATUSES)[number];
 
-export const CONDITIONS = ['new', 'like_new', 'good', 'fair', 'poor'] as const;
-export type Condition = (typeof CONDITIONS)[number];
-
 /**
  * Research source priority: official publisher first, then crowdfunding, then
  * retail. `community` covers BGG itself. Lower index wins on conflict.

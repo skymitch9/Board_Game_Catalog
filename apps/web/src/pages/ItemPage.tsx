@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMoney, type MeResponse } from '@bgc/core';
+import { type MeResponse } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Link, navigate } from '../router';
@@ -19,7 +19,6 @@ export function ItemPage({
   editing?: boolean;
 }) {
   const [detail, refresh] = useAsync(() => api.item(id), [id]);
-  const [meta, refreshMeta] = useAsync(() => api.meta(), []);
   const [addingCopy, setAddingCopy] = useState(false);
 
   const canEdit = me.capabilities.includes('editCatalog');
@@ -31,12 +30,7 @@ export function ItemPage({
   }
 
   const item = detail.data.item;
-  const locations = meta.state === 'ok' ? meta.data.locations : [];
-
-  const reload = () => {
-    refresh();
-    refreshMeta();
-  };
+  const reload = () => refresh();
 
   if (editing) {
     return (
@@ -49,8 +43,6 @@ export function ItemPage({
       />
     );
   }
-
-  const spent = item.copies.reduce((sum, c) => sum + (c.pricePaidCents ?? 0), 0);
 
   return (
     <>
@@ -125,7 +117,6 @@ export function ItemPage({
         {addingCopy && (
           <CopyForm
             itemId={item.id}
-            locations={locations}
             onDone={() => {
               setAddingCopy(false);
               reload();
@@ -137,25 +128,17 @@ export function ItemPage({
         {item.copies.length === 0 && !addingCopy && (
           <p className="muted">
             Nothing recorded for this one yet
-            {canEdit ? ' — add a copy to say where it lives and what it cost.' : '.'}
+            {canEdit ? ' — add a copy to say we hold it.' : '.'}
           </p>
         )}
 
         {item.copies.length > 0 && (
           <ul className="copy-list">
             {item.copies.map((copy) => (
-              <CopyRow
-                key={copy.id}
-                copy={copy}
-                canEdit={canEdit}
-                locations={locations}
-                onChanged={reload}
-              />
+              <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onChanged={reload} />
             ))}
           </ul>
         )}
-
-        {spent > 0 && <p className="muted pad">Spent on this item: {formatMoney(spent)}</p>}
       </section>
 
       <section className="card">

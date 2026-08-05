@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { COPY_STATUSES, ITEM_KINDS, formatMoney, type ItemQuery, type MeResponse } from '@bgc/core';
+import { COPY_STATUSES, ITEM_KINDS, type ItemQuery, type MeResponse } from '@bgc/core';
 import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
 import { Link } from '../router';
@@ -11,7 +11,6 @@ export function CollectionPage({ me }: { me: MeResponse }) {
   const [quickAdding, setQuickAdding] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
-  const [location, setLocation] = useState('');
   const [kind, setKind] = useState('');
   const [uncatalogued, setUncatalogued] = useState(false);
   const [duplicates, setDuplicates] = useState(false);
@@ -21,7 +20,6 @@ export function CollectionPage({ me }: { me: MeResponse }) {
   const query: ItemQuery = {
     ...(debouncedSearch ? { q: debouncedSearch } : {}),
     ...(status ? { status: status as ItemQuery['status'] } : {}),
-    ...(location ? { location } : {}),
     ...(kind ? { kind: kind as ItemQuery['kind'] } : {}),
     ...(uncatalogued ? { uncatalogued: true } : {}),
     ...(duplicates ? { duplicates: true } : {}),
@@ -32,7 +30,6 @@ export function CollectionPage({ me }: { me: MeResponse }) {
   const [items] = useAsync(() => api.items(query), [
     debouncedSearch,
     status,
-    location,
     kind,
     uncatalogued,
     duplicates,
@@ -46,7 +43,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
 
   const canEdit = me.capabilities.includes('editCatalog');
   const filtersActive = Boolean(
-    debouncedSearch || status || location || kind || uncatalogued || duplicates,
+    debouncedSearch || status || kind || uncatalogued || duplicates,
   );
 
   return (
@@ -59,7 +56,6 @@ export function CollectionPage({ me }: { me: MeResponse }) {
               {meta.data.stats.baseGames} games · {meta.data.stats.totalItems} items ·{' '}
               {meta.data.stats.ownedCopies} owned
               {meta.data.stats.wantedCopies > 0 && ` · ${meta.data.stats.wantedCopies} wanted`}
-              {meta.data.stats.spentCents > 0 && ` · ${formatMoney(meta.data.stats.spentCents)}`}
               {meta.data.stats.duplicatedItems > 0 && (
                 <>
                   {' · '}
@@ -92,11 +88,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
       </header>
 
       {canEdit && quickAdding && (
-        <QuickAdd
-          locations={meta.state === 'ok' ? meta.data.locations : []}
-          onAdded={reload}
-          onClose={() => setQuickAdding(false)}
-        />
+        <QuickAdd onAdded={reload} onClose={() => setQuickAdding(false)} />
       )}
 
       <div className="filters card">
@@ -115,21 +107,6 @@ export function CollectionPage({ me }: { me: MeResponse }) {
                 {s}
               </option>
             ))}
-          </select>
-
-          <select
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            aria-label="Location"
-            disabled={meta.state !== 'ok' || meta.data.locations.length === 0}
-          >
-            <option value="">Anywhere</option>
-            {meta.state === 'ok' &&
-              meta.data.locations.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
           </select>
 
           <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Type">
@@ -166,7 +143,6 @@ export function CollectionPage({ me }: { me: MeResponse }) {
               onClick={() => {
                 setSearch('');
                 setStatus('');
-                setLocation('');
                 setKind('');
                 setUncatalogued(false);
                 setDuplicates(false);

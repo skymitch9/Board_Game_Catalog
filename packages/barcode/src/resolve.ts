@@ -1,4 +1,4 @@
-import { rankCandidates, type BarcodeCandidate } from '@bgc/core';
+import { rankBySearchedTitle, rankCandidates, type BarcodeCandidate } from '@bgc/core';
 import { kindForBggType, things, type BggThing } from '@bgc/bgg';
 import { lookupGameUpc, type GameUpcConfig } from './gameupc.js';
 import { cleanRetailTitle, lookupUpcItemDb } from './upcitemdb.js';
@@ -85,6 +85,8 @@ export async function resolveBarcode(
   let verified = false;
   let inferredName: string | null = null;
   let updateUrls: Record<number, string> = {};
+  /** Set only when candidates came from a name search, not a direct barcode hit. */
+  let searchedTitle: string | null = null;
 
   // --- Rung 1: GameUPC, straight barcode lookup -----------------------------
   if (deps.gameUpc) {
@@ -129,7 +131,12 @@ export async function resolveBarcode(
               search: cleaned,
               searchMode: 'quality',
             });
-            candidates = bySearch.candidates;
+            // Re-rank against the title we searched with. GameUPC ranks by its
+            // own relevance, which puts a base game above the variant whose name
+            // contains it — scanning "King of Tokyo: Duel" returned plain
+            // "King of Tokyo" first. We know what was searched; it does not.
+            candidates = rankBySearchedTitle(bySearch.candidates, cleaned);
+            searchedTitle = cleaned;
             updateUrls = { ...updateUrls, ...bySearch.updateUrls };
             trace.push({
               source: 'gameupc:search',
@@ -163,7 +170,11 @@ export async function resolveBarcode(
   }
 
   return {
-    candidates: rankCandidates(candidates),
+    // Rank last: BGG hydration can replace a name, and the ordering should
+    // reflect the names the user will actually read.
+    candidates: searchedTitle
+      ? rankBySearchedTitle(candidates, searchedTitle)
+      : rankCandidates(candidates),
     verified,
     inferredName,
     updateUrls,

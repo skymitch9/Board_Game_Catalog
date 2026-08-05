@@ -4,20 +4,12 @@
  */
 
 import { z } from 'zod';
-import { CONDITIONS, COPY_STATUSES, ITEM_KINDS } from './constants.js';
+import { COPY_STATUSES, ITEM_KINDS } from './constants.js';
 
 export const itemKindSchema = z.enum(ITEM_KINDS);
 export const copyStatusSchema = z.enum(COPY_STATUSES);
-export const conditionSchema = z.enum(CONDITIONS);
 
 const nullableString = (max: number) => z.string().trim().max(max).nullable().optional();
-
-/** ISO date, no time component — what a `<input type="date">` produces. */
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
-  .nullable()
-  .optional();
 
 // ---------------------------------------------------------------------------
 // Items
@@ -64,12 +56,6 @@ const copyFields = z.object({
   /** How many identical copies this row stands for. */
   quantity: z.number().int().min(1).max(999).default(1),
   status: copyStatusSchema.default('owned'),
-  location: nullableString(120),
-  acquiredOn: isoDate,
-  pricePaidCents: z.number().int().min(0).max(100_000_00).nullable().optional(),
-  currency: z.string().trim().length(3).default('USD'),
-  vendor: nullableString(120),
-  condition: conditionSchema.nullable().optional(),
   isSleeved: z.boolean().default(false),
   isPunched: z.boolean().default(false),
   completenessNotes: nullableString(1000),
@@ -103,7 +89,6 @@ export type UpsertRatingInput = z.infer<typeof upsertRatingSchema>;
 export const itemQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   status: copyStatusSchema.optional(),
-  location: z.string().trim().max(120).optional(),
   kind: itemKindSchema.optional(),
   /** Only base games with no copies recorded anywhere in their tree. */
   uncatalogued: z.coerce.boolean().optional(),
@@ -146,17 +131,17 @@ export interface Copy {
   appliesToCopyId: number | null;
   quantity: number;
   status: (typeof COPY_STATUSES)[number];
-  location: string | null;
-  acquiredOn: string | null;
-  pricePaidCents: number | null;
-  currency: string;
-  vendor: string | null;
-  condition: (typeof CONDITIONS)[number] | null;
   isSleeved: boolean;
   isPunched: boolean;
   completenessNotes: string | null;
   lentTo: string | null;
   notes: string | null;
+  /**
+   * When this copy joined the collection, as an ISO instant. Set by the
+   * database on insert and never editable — it records a fact about the
+   * catalog, not a claim about the box.
+   */
+  addedAt: string;
 }
 
 export interface Rating {
@@ -193,16 +178,12 @@ export function summarizeTree(node: ItemNode): {
   owned: number;
   wanted: number;
   totalItems: number;
-  locations: string[];
-  spentCents: number;
   /** Items in this tree we hold more than one of. */
   duplicates: { id: number; name: string; count: number }[];
 } {
   let owned = 0;
   let wanted = 0;
   let totalItems = 0;
-  let spentCents = 0;
-  const locations = new Set<string>();
   const duplicates: { id: number; name: string; count: number }[] = [];
 
   const walk = (n: ItemNode) => {
@@ -214,24 +195,10 @@ export function summarizeTree(node: ItemNode): {
     for (const c of n.copies) {
       const q = c.quantity || 1;
       if (c.status === 'wanted' || c.status === 'preordered') wanted += q;
-      if (c.location) locations.add(c.location);
-      // Price is what that row cost in total, not per unit.
-      if (c.pricePaidCents) spentCents += c.pricePaidCents;
     }
     n.children.forEach(walk);
   };
   walk(node);
 
-  return {
-    owned,
-    wanted,
-    totalItems,
-    locations: [...locations].sort(),
-    spentCents,
-    duplicates,
-  };
-}
-
-export function formatMoney(cents: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
+  return { owned, wanted, totalItems, duplicates };
 }

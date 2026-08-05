@@ -7,17 +7,24 @@ export interface CopyRow {
   applies_to_copy_id: number | null;
   quantity: number;
   status: string;
-  location: string | null;
-  acquired_on: string | null;
-  price_paid_cents: number | null;
-  currency: string;
-  vendor: string | null;
-  condition: string | null;
   is_sleeved: number;
   is_punched: number;
   completeness_notes: string | null;
   lent_to: string | null;
   notes: string | null;
+  created_at: string;
+}
+
+/**
+ * SQLite's `datetime('now')` writes "YYYY-MM-DD HH:MM:SS" in UTC, which is not
+ * quite ISO 8601 — and `new Date()` in a browser reads that space-separated
+ * form as *local* time, so a copy added at 23:30 UTC could display as the day
+ * before. Normalising here means every consumer gets an unambiguous instant.
+ */
+function toIso(sqliteDatetime: string): string {
+  return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(sqliteDatetime)
+    ? `${sqliteDatetime.replace(' ', 'T')}Z`
+    : sqliteDatetime;
 }
 
 export function mapCopyRow(r: CopyRow): Copy {
@@ -28,17 +35,12 @@ export function mapCopyRow(r: CopyRow): Copy {
     appliesToCopyId: r.applies_to_copy_id,
     quantity: r.quantity ?? 1,
     status: r.status as Copy['status'],
-    location: r.location,
-    acquiredOn: r.acquired_on,
-    pricePaidCents: r.price_paid_cents,
-    currency: r.currency,
-    vendor: r.vendor,
-    condition: r.condition as Copy['condition'],
     isSleeved: r.is_sleeved === 1,
     isPunched: r.is_punched === 1,
     completenessNotes: r.completeness_notes,
     lentTo: r.lent_to,
     notes: r.notes,
+    addedAt: toIso(r.created_at),
   };
 }
 
@@ -47,6 +49,11 @@ export async function getCopy(db: D1Database, id: number): Promise<Copy | null> 
   return row ? mapCopyRow(row) : null;
 }
 
+/**
+ * `created_at` is deliberately absent from the column list: the table's
+ * `DEFAULT (datetime('now'))` sets it, so "when did this join the collection?"
+ * is answered by the database rather than by whatever clock the caller has.
+ */
 export async function createCopy(
   db: D1Database,
   itemId: number,
@@ -54,10 +61,9 @@ export async function createCopy(
 ): Promise<Copy> {
   const res = await db
     .prepare(
-      `INSERT INTO copy (item_id, edition_id, applies_to_copy_id, quantity, status, location,
-                         acquired_on, price_paid_cents, currency, vendor, condition,
+      `INSERT INTO copy (item_id, edition_id, applies_to_copy_id, quantity, status,
                          is_sleeved, is_punched, completeness_notes, lent_to, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       itemId,
@@ -65,12 +71,6 @@ export async function createCopy(
       input.appliesToCopyId ?? null,
       input.quantity,
       input.status,
-      input.location || null,
-      input.acquiredOn || null,
-      input.pricePaidCents ?? null,
-      input.currency,
-      input.vendor || null,
-      input.condition ?? null,
       input.isSleeved ? 1 : 0,
       input.isPunched ? 1 : 0,
       input.completenessNotes || null,
@@ -89,12 +89,6 @@ const UPDATABLE: Record<keyof UpdateCopyInput, string> = {
   appliesToCopyId: 'applies_to_copy_id',
   quantity: 'quantity',
   status: 'status',
-  location: 'location',
-  acquiredOn: 'acquired_on',
-  pricePaidCents: 'price_paid_cents',
-  currency: 'currency',
-  vendor: 'vendor',
-  condition: 'condition',
   isSleeved: 'is_sleeved',
   isPunched: 'is_punched',
   completenessNotes: 'completeness_notes',

@@ -68,7 +68,6 @@ export interface CollectionStats {
   totalItems: number;
   ownedCopies: number;
   wantedCopies: number;
-  spentCents: number;
   /** Items we hold more than one of. */
   duplicatedItems: number;
 }
@@ -86,7 +85,7 @@ export const api = {
   health: () => req<HealthResponse>('/api/health'),
   me: () => req<MeResponse>('/api/me'),
 
-  meta: () => req<{ locations: string[]; stats: CollectionStats }>('/api/meta'),
+  meta: () => req<{ stats: CollectionStats }>('/api/meta'),
 
   items: (query: ItemQuery = {}) =>
     req<{ items: ItemNode[] }>(`/api/items${toQueryString(query)}`),

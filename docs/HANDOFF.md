@@ -18,7 +18,7 @@ verified end to end against live services.
 | Deployed version | `b8faec00-368a-43f7-bf65-995ebe521e5c` — first deploy including the scanner |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
-| Migrations applied | `0001_init`, `0002_copy_quantity`, `0003_barcode_unique` (local **and** production) |
+| Migrations applied | `0001_init`, `0002_copy_quantity`, `0003_barcode_unique`, `0004_trim_copy_fields` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -44,7 +44,7 @@ first sign-ins can't both win, and self-limiting once an owner exists.
 rooted on base games with expansions, promos and accessories nested underneath,
 however deep. Filters match the *tree*, not the item, so searching an expansion
 surfaces its base game too. Search covers names, publishers, designers. Filters:
-status, location, type, nothing-recorded-yet, we-own-2+. Per-person ratings shown
+status, type, nothing-recorded-yet, we-own-2+. Per-person ratings shown
 side by side rather than averaged.
 
 **People screen.** Owners see everyone who has signed in, with pending accounts
@@ -56,7 +56,7 @@ separate rows still describe copies that differ. Both count toward the same
 totals. `×N` flags, a duplicate strip per game, and a filter.
 
 **Quick add.** Game + copy in one submit, focus stays in the name field,
-location and status persist between entries. Built for working along a shelf.
+status and quantity persist between entries. Built for working along a shelf.
 
 **Exports.** `/api/export.json` (full fidelity) and `/api/export.csv` (one row
 per copy). Owner-only.
@@ -129,7 +129,8 @@ packages/barcode/ free barcode resolution: gameupc.ts, upcitemdb.ts, resolve.ts
 packages/research/ Claude calls: client.ts, barcode.ts (the paid rung)
 apps/worker/      Hono routes + Access JWT verification
 apps/web/         React SPA, ~30-line router
-migrations/       0001_init.sql, 0002_copy_quantity.sql, 0003_barcode_unique.sql
+migrations/       0001_init.sql, 0002_copy_quantity.sql, 0003_barcode_unique.sql,
+                  0004_trim_copy_fields.sql (not yet applied)
 ```
 
 Entry points stay thin: `apps/worker/src/index.ts` mounts routes and
@@ -153,9 +154,10 @@ exactly one implementation of anything that makes a decision.
 | GET | `/api/barcode/:code` | read — local + free rungs |
 | POST | `/api/barcode/identify` | runResearch — the paid rung, slow |
 | POST | `/api/barcode/link` | editCatalog — writes, contributes to GameUPC |
+| POST | `/api/vision/identify` | runResearch — one box from a photo, ~3-5s |
+| POST | `/api/vision/shelf` | runResearch — many spines, matched locally + GameUPC |
 
-`GET /api/items` accepts `q`, `status`, `location`, `kind`, `uncatalogued`,
-`duplicates`.
+`GET /api/items` accepts `q`, `status`, `kind`, `uncatalogued`, `duplicates`.
 
 ---
 

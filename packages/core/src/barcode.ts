@@ -64,6 +64,9 @@ export function normaliseBarcode(code: string): string {
  * Best-first ordering: confidence dominates, then how much we trust the source.
  * A `local` hit is a barcode a human already confirmed, so it outranks anything
  * a remote service guessed at the same confidence.
+ *
+ * Sorting is stable, so candidates the source already ranked keep that order
+ * within a band — we only ever re-rank across bands.
  */
 export function rankCandidates(candidates: BarcodeCandidate[]): BarcodeCandidate[] {
   const byConfidence: Record<Confidence, number> = { high: 0, medium: 1, low: 2 };
@@ -78,4 +81,64 @@ export function rankCandidates(candidates: BarcodeCandidate[]): BarcodeCandidate
       byConfidence[a.confidence] - byConfidence[b.confidence] ||
       bySource[a.source] - bySource[b.source],
   );
+}
+
+/**
+ * How well a candidate name matches the title we actually searched for, 0..1.
+ *
+ * Word overlap in both directions, so neither a candidate that says more nor one
+ * that says less is unfairly favoured. Deliberately not edit distance: "Duel"
+ * and "Dark" are one letter apart in the wrong places, whereas word membership
+ * is exactly what distinguishes a variant from its base game.
+ */
+export function titleSimilarity(candidateName: string, searchedFor: string): number {
+  const words = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .split(' ')
+        .filter((w) => w.length > 1),
+    );
+
+  const a = words(candidateName);
+  const b = words(searchedFor);
+  if (a.size === 0 || b.size === 0) return 0;
+
+  let shared = 0;
+  for (const word of a) if (b.has(word)) shared += 1;
+  // Penalise both missing words and extra ones: "King of Tokyo" scores worse
+  // against "King of Tokyo Duel" than "King of Tokyo: Duel" does, which is the
+  // whole point — a base game should not outrank the variant we scanned.
+  return (2 * shared) / (a.size + b.size);
+}
+
+/**
+ * Re-rank candidates against the title we searched with.
+ *
+ * Only meaningful when candidates came from a *name* search rather than a direct
+ * barcode hit. GameUPC ranks a name search by its own relevance, which favours
+ * the base game — scanning "King of Tokyo: Duel" returned plain "King of Tokyo"
+ * first, because the shorter name is contained in the longer one. We know which
+ * string was searched; the search engine's ranking does not get to override that.
+ *
+ * Similarity is banded to two decimal places so near-ties fall back to the
+ * source's own ordering rather than being reshuffled by noise.
+ */
+export function rankBySearchedTitle(
+  candidates: BarcodeCandidate[],
+  searchedFor: string,
+): BarcodeCandidate[] {
+  if (!searchedFor.trim()) return rankCandidates(candidates);
+
+  const scored = candidates.map((candidate, index) => ({
+    candidate,
+    index,
+    score: Math.round(titleSimilarity(candidate.name, searchedFor) * 100) / 100,
+  }));
+
+  return scored
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((s) => s.candidate);
 }

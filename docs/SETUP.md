@@ -166,7 +166,7 @@ Start over locally: delete `apps/worker/.wrangler/state/v3/d1`, then
 
 **Phase 1 — the manual catalog.** Add and edit items and copies by hand, browse
 them rooted on base games with expansions and accessories nested underneath,
-filter and search, record location, purchase, condition and per-person ratings.
+filter and search, record how many you hold and per-person ratings.
 No external dependencies, so it works regardless of what BGG or any LLM is doing.
 
 See `docs/DESIGN.md` §7 for the full phase list.

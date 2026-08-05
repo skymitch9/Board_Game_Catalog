@@ -11,20 +11,18 @@ import { KIND_LABEL } from './ItemTree';
  *
  * The full form is the right shape for one careful record; it is the wrong
  * shape for two hundred. This does game and copy in a single submit, keeps
- * focus in the name field, and remembers the location between saves — because
- * when you're working along a shelf, the location is the thing that stays the
- * same and the name is the thing that changes.
+ * focus in the name field, and holds status and quantity steady between saves
+ * — when you're working along a shelf the name is the thing that changes and
+ * everything else stays put.
  */
 export function QuickAdd({
   parentId,
   parentName,
-  locations,
   onAdded,
   onClose,
 }: {
   parentId?: number | null;
   parentName?: string | null;
-  locations: string[];
   onAdded: () => void;
   onClose: () => void;
 }) {
@@ -32,7 +30,6 @@ export function QuickAdd({
   const [kind, setKind] = useState<ItemKind>(parentId ? 'expansion' : 'base');
   const [year, setYear] = useState('');
   const [status, setStatus] = useState<CopyStatus>('owned');
-  const [location, setLocation] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [recordCopy, setRecordCopy] = useState(true);
 
@@ -61,15 +58,13 @@ export function QuickAdd({
         await api.createCopy(item.id, {
           quantity: Math.max(1, Number(quantity) || 1),
           status,
-          location: location.trim() || null,
-          currency: 'USD',
           isSleeved: false,
           isPunched: false,
         });
       }
 
       setAdded((prev) => [{ id: item.id, name: item.name }, ...prev].slice(0, 8));
-      // Keep location and status; they're the shelf you're standing at.
+      // Keep status and quantity; only the name and year change per box.
       setName('');
       setYear('');
       nameRef.current?.focus();
@@ -144,21 +139,6 @@ export function QuickAdd({
             ))}
           </select>
         </Field>
-        <Field label="Location" hint="Kept between entries">
-          <input
-            list="quickadd-locations"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            disabled={!recordCopy}
-            placeholder="Shelf A"
-          />
-          <datalist id="quickadd-locations">
-            {locations.map((l) => (
-              <option key={l} value={l} />
-            ))}
-          </datalist>
-        </Field>
-
         <Field label="How many" hint="2+ if you own duplicates">
           <input
             type="number"

@@ -1,4 +1,4 @@
-import { formatMoney, ownedCount, summarizeTree, type Copy, type ItemNode } from '@bgc/core';
+import { ownedCount, summarizeTree, type Copy, type ItemNode } from '@bgc/core';
 import { Link } from '../router';
 import { Badge } from './ui';
 
@@ -18,7 +18,7 @@ const STATUS_TONE: Record<Copy['status'], 'owned' | 'wanted' | 'lent' | 'sold' |
   sold: 'sold',
 };
 
-/** Condensed copy state for a row: "2 owned · Shelf A". */
+/** Condensed copy state for a row: "2 owned · lent". */
 function copySummary(copies: Copy[]): {
   tone: Copy['status'] | null;
   text: string;
@@ -35,9 +35,6 @@ function copySummary(copies: Copy[]): {
   const parts = order
     .filter((s) => counts.has(s))
     .map((s) => (counts.get(s)! > 1 ? `${counts.get(s)} ${s}` : s));
-
-  const locations = [...new Set(copies.map((c) => c.location).filter(Boolean))];
-  if (locations.length > 0) parts.push(locations.join(', ') as string);
 
   return { tone: primary, text: parts.join(' · '), duplicated: ownedCount(copies) > 1 };
 }
@@ -123,8 +120,6 @@ export function ItemCard({ node }: { node: ItemNode }) {
         </span>
         {stats.owned > 0 && <span>{stats.owned} owned</span>}
         {stats.wanted > 0 && <span>{stats.wanted} wanted</span>}
-        {stats.locations.length > 0 && <span>{stats.locations.join(', ')}</span>}
-        {stats.spentCents > 0 && <span>{formatMoney(stats.spentCents)}</span>}
         <Link to={`/items/new?parent=${node.id}`} className="foot-action">
           + Add to this game
         </Link>

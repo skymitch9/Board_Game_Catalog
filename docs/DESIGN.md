@@ -18,7 +18,7 @@ research to fill in the details that no single database has.
 | R3 | Track **expansions** and **KS/exclusive content**, each attributed to its base game | `item.kind`, `parent_item_id`, `root_game_id` |
 | R4 | Track **accessories** — sleeves, inserts, playmats — also under the base game | `item.kind='accessory'`, `sleeve_requirement` |
 | R5 | Research each item: **official site → Kickstarter → 3rd party**, in that order | §5 Research pipeline (tiered) |
-| R6 | Ownership + location, purchase info, play data, condition | `copy`, `play`, `user_item` |
+| R6 | Ownership — how many, what state, who has it, when it arrived — plus play data | `copy`, `play`, `user_item` |
 | R7 | Add by name, name-list, barcode, or URL | §4 |
 | R8 | Free hosting, usable from our phones while out | §3 Deployment |
 | R9 | One joint collection; any signed-in Google user can rate | §3.1 Auth and roles |
@@ -396,14 +396,12 @@ erDiagram
         int edition_id FK
         int applies_to_copy_id FK "sleeves for THIS copy"
         string status "owned|wanted|preordered|lent|sold"
-        string location "shelf / closet / box 3"
-        date acquired_on
-        int price_paid_cents
-        string vendor
-        string condition
+        int quantity "identical copies this row stands for"
         bool is_sleeved
         bool is_punched
         string completeness_notes
+        string lent_to
+        datetime created_at "surfaced as 'Added'"
     }
     SLEEVE_REQUIREMENT {
         int id PK
@@ -486,7 +484,7 @@ Each phase ends with something you can actually use. Nothing is a big-bang.
 | Phase | Ships | Why this order |
 |---|---|---|
 | **0 · Scaffold** ✅ | Repo structure, `wrangler.toml`, D1 schema, Access + Google SSO wired, first-sign-in-claims-ownership bootstrap, sign-in screen, status page deployed and reachable from your phone | Prove the free-tier deployment path and the auth path work before writing features against them |
-| **1 · Manual catalog** ✅ | Add/edit/delete items and copies by hand. **Base-game-rooted browse** with expansions/accessories nested. Search across names, publishers and designers; filter by status, location, type, and not-yet-catalogued. Location, purchase, condition, sleeved/punched. Per-person ratings. | A working catalog with **zero** external dependencies. If everything else fails, this alone is useful |
+| **1 · Manual catalog** ✅ | Add/edit/delete items and copies by hand. **Base-game-rooted browse** with expansions/accessories nested. Search across names, publishers and designers; filter by status, type, and not-yet-catalogued. Quantity, sleeved/punched, who it's lent to, when it was added. Per-person ratings. | A working catalog with **zero** external dependencies. If everything else fails, this alone is useful |
 | **2 · BGG resolution** | Type-ahead search, paste-a-list, BGG URL import, edition picker, auto-filled metadata + thumbnails. Optional: bulk collection import if your BGG account turns out to have anything in it | This is the 80% — most of what you want is already in BGG, free, no LLM |
 | **3 · Research pipeline** | Tiered research jobs, findings review UI, accept/reject/edit, promote-to-catalog | The differentiator. Runs on-demand per item from the web app |
 | **4 · Bulk enrichment** | `enrich` CLI for your existing shelf; optional Batch API submission for 50% off | Cataloguing hundreds of games at once is a different workload than adding one |

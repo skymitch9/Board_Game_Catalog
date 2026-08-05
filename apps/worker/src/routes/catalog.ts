@@ -17,7 +17,6 @@ import {
   deleteRating,
   getItemDetail,
   listItemTrees,
-  listLocations,
   updateCopy,
   updateItem,
   upsertRating,
@@ -58,13 +57,9 @@ export const catalogRoutes = new Hono<AppBindings>()
     return c.json({ item: detail });
   })
 
-  /** Filter options and headline numbers, so the UI needn't compute them. */
+  /** Headline numbers, so the UI needn't compute them. */
   .get('/meta', async (c) => {
-    const [locations, stats] = await Promise.all([
-      listLocations(c.env.DB),
-      collectionStats(c.env.DB),
-    ]);
-    return c.json({ locations, stats });
+    return c.json({ stats: await collectionStats(c.env.DB) });
   })
 
   // ---- items -------------------------------------------------------------

@@ -92,10 +92,6 @@ function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } 
     where.push('c2.status = ?');
     params.push(query.status);
   }
-  if (query.location) {
-    where.push('c2.location = ?');
-    params.push(query.location);
-  }
   if (query.uncatalogued) {
     where.push(
       `NOT EXISTS (SELECT 1 FROM item i3 JOIN copy c3 ON c3.item_id = i3.id
@@ -388,23 +384,11 @@ export async function listItemNames(
   return results;
 }
 
-export async function listLocations(db: D1Database): Promise<string[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT DISTINCT location FROM copy
-        WHERE location IS NOT NULL AND trim(location) <> ''
-        ORDER BY location`,
-    )
-    .all<{ location: string }>();
-  return results.map((r) => r.location);
-}
-
 export async function collectionStats(db: D1Database): Promise<{
   baseGames: number;
   totalItems: number;
   ownedCopies: number;
   wantedCopies: number;
-  spentCents: number;
   duplicatedItems: number;
 }> {
   const row = await db
@@ -416,7 +400,6 @@ export async function collectionStats(db: D1Database): Promise<{
            WHERE status IN ('owned','lent'))                                 AS owned_copies,
          (SELECT COALESCE(SUM(quantity), 0) FROM copy
            WHERE status IN ('wanted','preordered'))                          AS wanted_copies,
-         (SELECT COALESCE(SUM(price_paid_cents), 0) FROM copy)               AS spent_cents,
          (SELECT COUNT(*) FROM (
             SELECT item_id FROM copy WHERE status IN ('owned','lent')
              GROUP BY item_id HAVING SUM(quantity) > 1))                     AS duplicated_items`,
@@ -426,7 +409,6 @@ export async function collectionStats(db: D1Database): Promise<{
       total_items: number;
       owned_copies: number;
       wanted_copies: number;
-      spent_cents: number;
       duplicated_items: number;
     }>();
 
@@ -435,7 +417,6 @@ export async function collectionStats(db: D1Database): Promise<{
     totalItems: row?.total_items ?? 0,
     ownedCopies: row?.owned_copies ?? 0,
     wantedCopies: row?.wanted_copies ?? 0,
-    spentCents: row?.spent_cents ?? 0,
     duplicatedItems: row?.duplicated_items ?? 0,
   };
 }

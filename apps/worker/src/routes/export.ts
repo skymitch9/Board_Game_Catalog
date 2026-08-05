@@ -60,10 +60,10 @@ export const exportRoutes = new Hono<AppBindings>()
          i.kind     AS kind,
          i.year_published AS year,
          i.publisher,
-         c.status, c.location, c.condition,
+         c.status,
          c.is_sleeved, c.is_punched,
-         c.price_paid_cents, c.currency, c.vendor, c.acquired_on,
-         c.lent_to, c.completeness_notes, c.notes
+         c.lent_to, c.completeness_notes, c.notes,
+         c.created_at AS added_at
        FROM copy c
        JOIN item i ON i.id = c.item_id
        LEFT JOIN item root ON root.id = i.root_game_id
@@ -71,9 +71,9 @@ export const exportRoutes = new Hono<AppBindings>()
     ).all<Record<string, unknown>>();
 
     const headers = [
-      'game', 'item', 'kind', 'year', 'publisher', 'status', 'location', 'condition',
-      'sleeved', 'punched', 'price_paid', 'currency', 'vendor', 'acquired_on',
-      'lent_to', 'completeness_notes', 'notes',
+      'game', 'item', 'kind', 'year', 'publisher', 'status',
+      'sleeved', 'punched',
+      'lent_to', 'completeness_notes', 'notes', 'added_at',
     ];
 
     const cell = (v: unknown): string => {
@@ -86,12 +86,10 @@ export const exportRoutes = new Hono<AppBindings>()
     const rows = results.map((r) =>
       [
         r['game'], r['item'], r['kind'], r['year'], r['publisher'],
-        r['status'], r['location'], r['condition'],
+        r['status'],
         r['is_sleeved'] ? 'yes' : 'no',
         r['is_punched'] ? 'yes' : 'no',
-        r['price_paid_cents'] == null ? '' : (Number(r['price_paid_cents']) / 100).toFixed(2),
-        r['currency'], r['vendor'], r['acquired_on'],
-        r['lent_to'], r['completeness_notes'], r['notes'],
+        r['lent_to'], r['completeness_notes'], r['notes'], r['added_at'],
       ]
         .map(cell)
         .join(','),
