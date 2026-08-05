@@ -5,8 +5,40 @@ Everything needed to continue or finish this without Claude.
 Stable reference lives alongside this file and is not duplicated here:
 [`access/`](access/README.md) (endpoints, key names, quotas) and
 [`info/`](info/README.md) (how and why things work).
-**Last updated:** 2026-08-05, after the barcode resolution ladder was built and
-verified end to end against live services.
+**Last updated:** 2026-08-05, after scanning shipped and was tested on a real
+iPhone. Written while approaching a usage limit — read "In flight" first.
+
+---
+
+## ⚠️ In flight — read this before touching apps/web
+
+**An agent was mid-task when this was written.** It was restructuring the "add"
+flows and its work was **not committed**. Check `git status` first:
+
+- **If the working tree is dirty** — that is its work. Run `npm run typecheck`
+  and `npm run build`. If both pass, review and commit. If they fail, the
+  cleanest recovery is `git checkout -- apps/web` and redo it by hand from the
+  spec below; nothing else depends on it.
+- **If the tree is clean** — it never landed. The spec below is what to build.
+
+What it was asked to do, all in `apps/web/src`:
+
+1. **One "Add" entry point.** Nav gets a single **Add** linking to `/scan`.
+   `/scan` gains a fourth tab, **Manually**, which shows `QuickAdd` inline
+   rather than navigating. `/items/new` must keep working — item pages link to
+   it for adding children.
+2. **"All fields" expander** inside quick add, revealing the rest of `ItemForm`
+   without a separate page.
+3. **"Look up details"** on `ItemPage` for games missing publisher / year /
+   players / playtime / description / cover. Calls `api.lookup(item.name)`,
+   fills **only empty fields**, never overwrites a human's entry.
+4. **Type-ahead lookup in quick add** — debounced (`useDebounced`, ~500ms, 3+
+   chars), offered as an explicit "Use this". **Must not** steal focus, rewrite
+   the name field, or auto-apply. Quick add exists for fast repeated entry along
+   a shelf; interrupting the keyboard is a regression.
+
+`GET /api/lookup?q=` already exists and is committed (`apps/worker/src/routes/lookup.ts`,
+`api.lookup()` in `apps/web/src/api.ts`). It is free, cached a week, no model call.
 
 ---
 
@@ -15,10 +47,10 @@ verified end to end against live services.
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `9b7ebe2f-fd9b-42f7-b9c0-9c5c3f858bb2` — cached indicator + cache admin |
+| Deployed version | `2de9930f-4cf8-4de9-acd7-ad310365791b` — scanning, auto-capture, viewport fit |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
-| Migrations applied | `0001_init` … `0006_photo_cache` (local **and** production) |
+| Migrations applied | `0001_init` … `0007_drop_photo_cache` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -57,6 +89,16 @@ totals. `×N` flags, a duplicate strip per game, and a filter.
 
 **Quick add.** Game + copy in one submit, focus stays in the name field,
 status and quantity persist between entries. Built for working along a shelf.
+
+**Scanning — confirmed working on a real iPhone (2026-08-05).** Three modes at
+`/scan`: **barcode** (wasm decode — `BarcodeDetector` does not work on iOS),
+**one box** (vision reads the title off the cover, 3–5s), **whole shelf** (reads
+every spine, returns a tick-list marking what you already own). Auto-capture
+fires when the phone stops moving. Nothing reaches the camera roll.
+
+Verified end to end on device: scan an unknown barcode → resolves through the
+free rungs → add it → re-scan returns "already in your collection" instantly
+from the local table. The write-back loop works.
 
 **Exports.** `/api/export.json` (full fidelity) and `/api/export.csv` (one row
 per copy). Owner-only.
@@ -97,40 +139,37 @@ against. The `test` stage's data is *wiped periodically*, so a barcode that
 resolved yesterday may miss today — that is the cost of not having the key, and
 it is why a miss should never be treated as an outage.
 
-### 2. Anthropic API key — ✅ in place locally
+### 2. Anthropic API key — ✅ DONE, nothing outstanding
 
-`ANTHROPIC_API_KEY` is set in `apps/worker/.dev.vars` and **verified working**:
-a live call returned `model=claude-opus-5, stop_reason=end_turn`, and the
-`web_search_20260209` tool with `allowed_domains` was accepted — that tool is
-what enforces the official → crowdfunding → retail tier ordering, so the core
-assumption of phase 3 is confirmed rather than assumed.
+Set in `apps/worker/.dev.vars` **and** in production, and **rotated on
+2026-08-05** after the original leaked into a chat transcript. Both verified by
+live call.
 
-**Still needed for production:**
+Sync with **`npm run secrets:push`** rather than `wrangler secret put` per key.
+The per-key flow is how production once ended up holding a *pre-rotation* key
+while `.dev.vars` had the new one — the symptom was photo mode failing with an
+unhelpful error. The script reads `.dev.vars`, pushes only allowlisted names,
+prints a last-4 fingerprint so you can confirm which value went up, and passes
+secrets over stdin so they never touch a command line or shell history.
 
+```bash
+npm run secrets:push          # sync .dev.vars -> production
+npm run secrets:push -- --dry # names and fingerprints only, sends nothing
 ```
-npx wrangler secret put ANTHROPIC_API_KEY
-```
-
-The deployed Worker does not read `.dev.vars`.
-
-> ⚠️ The key was surfaced into a chat transcript by the IDE integration on
-> 2026-08-04. Rotate it at <https://platform.claude.com/settings/keys> and paste
-> the replacement directly into `.dev.vars`.
 
 ---
 
 ## Repo layout
 
 ```
-packages/core/    constants.ts (leaf) → schemas.ts → barcode.ts → capabilities.ts → index.ts
-packages/db/      users, health, items, copies, ratings, import, barcodes
+packages/core/    constants.ts (leaf) -> schemas.ts -> barcode.ts -> vision.ts -> index.ts
+packages/db/      users, health, items, copies, ratings, import, barcodes, cache
 packages/bgg/     BGG XML API2 client (throttled, retried, cached)
-packages/barcode/ free barcode resolution: gameupc.ts, upcitemdb.ts, resolve.ts
-packages/research/ Claude calls: client.ts, barcode.ts (the paid rung)
+packages/barcode/ free resolution: gameupc.ts, upcitemdb.ts, resolve.ts
+packages/research/ Claude calls: client.ts, barcode.ts (paid rung), vision.ts
 apps/worker/      Hono routes + Access JWT verification
-apps/web/         React SPA, ~30-line router
-migrations/       0001_init.sql, 0002_copy_quantity.sql, 0003_barcode_unique.sql,
-                  0004_trim_copy_fields.sql (not yet applied)
+apps/web/         React SPA; lib/camera.ts + lib/scanner.ts hold the iOS work
+migrations/       0001 … 0007
 ```
 
 Entry points stay thin: `apps/worker/src/index.ts` mounts routes and
