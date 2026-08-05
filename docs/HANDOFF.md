@@ -15,7 +15,7 @@ verified end to end against live services.
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `efdcc84c-d970-4081-a034-862e7ef8ee79` — photo caching by perceptual hash |
+| Deployed version | `b818b57d-b480-47b2-b382-d2b1cea5beb9` — photo caching + index.html no-cache |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | Migrations applied | `0001_init` … `0006_photo_cache` (local **and** production) |
@@ -205,6 +205,14 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
   debugging detour.
 - **wrangler on Windows sometimes prints success then exits 255** — a libuv
   teardown quirk. Read the output, not the exit code.
+- **A cached `index.html` pins a phone to a previous deploy.** It names the
+  content-hashed bundles, so Safari serving a stale copy kept loading old
+  JavaScript while the new assets sat there unused — the symptom is "I deployed
+  a fix and the phone still shows the old behaviour". Fixed in two places:
+  `apps/web/public/_headers` (`no-cache` on index.html, `immutable` on /assets/*)
+  and the Worker's SPA fallback, which now sets `Cache-Control: no-cache` on the
+  index.html it hands back. On iOS a pull-to-refresh does **not** clear it —
+  close the tab and reopen.
 - **The browser extension has no permission for `*.workers.dev`**, so the live
   site can't be screenshotted through automation. Verify with `curl`.
 - **The Anthropic API can return a transient `400 "Invalid request data"`.**

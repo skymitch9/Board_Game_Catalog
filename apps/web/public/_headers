@@ -1,0 +1,19 @@
+# Cloudflare Assets reads this at deploy time. Vite copies public/ into dist/.
+#
+# The problem it solves: index.html names the hashed bundles, so a stale copy of
+# it points a phone at last deploy's JavaScript forever. Safari held onto it
+# across a deploy and kept rendering the previous build — the assets were new,
+# the file naming them was not.
+#
+# So: never trust a cached index.html, and always trust a hashed asset.
+
+/index.html
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache
+
+# Content-hashed by Vite, so the name changes whenever the bytes do. Safe to keep
+# for a year, and `immutable` stops the browser revalidating on every load.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

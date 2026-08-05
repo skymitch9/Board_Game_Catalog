@@ -38,7 +38,16 @@ app.notFound(async (c) => {
   }
   const url = new URL(c.req.url);
   url.pathname = '/index.html';
-  return c.env.ASSETS.fetch(new Request(url, { headers: c.req.raw.headers }));
+  const res = await c.env.ASSETS.fetch(new Request(url, { headers: c.req.raw.headers }));
+
+  // index.html names the content-hashed bundles, so a cached copy pins a browser
+  // to a previous deploy's JavaScript. Safari did exactly that: new assets were
+  // live, but the phone kept loading the old ones because the file naming them
+  // was still in cache. The bundles themselves are hashed and cached hard by
+  // public/_headers; this one file must always be revalidated.
+  const html = new Response(res.body, res);
+  html.headers.set('Cache-Control', 'no-cache');
+  return html;
 });
 
 app.onError((err, c) => {
