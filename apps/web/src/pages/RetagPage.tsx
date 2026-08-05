@@ -53,6 +53,9 @@ export function RetagPage({ me }: { me: MeResponse }) {
     try {
       await api.addRelation(s.itemId, { toItemId: s.proposedParentId, relation: relOf(s) });
       setDone((d) => ({ ...d, [s.itemId]: `Standalone — linked to ${s.proposedParentName}.` }));
+      // Both answers re-read the list. Without this the row sat there looking
+      // unanswered until the page was reloaded by hand.
+      refresh();
     } catch (err) {
       setError(err);
     } finally {
@@ -117,9 +120,6 @@ export function RetagPage({ me }: { me: MeResponse }) {
                     <span className={s.confident ? 'muted small' : 'candidate__doubt'}>
                       {s.reason}
                     </span>
-                    {s.alreadyLinked && (
-                      <span className="muted small">Already linked as family.</span>
-                    )}
 
                     {outcome ? (
                       <span className="muted small">{outcome}</span>
@@ -129,7 +129,7 @@ export function RetagPage({ me }: { me: MeResponse }) {
                           <button
                             type="button"
                             className="btn btn-quiet"
-                            disabled={working || s.alreadyLinked}
+                            disabled={working}
                             onClick={() => markStandalone(s)}
                           >
                             Standalone
@@ -142,7 +142,7 @@ export function RetagPage({ me }: { me: MeResponse }) {
                                 [s.itemId]: e.target.value as RelationType,
                               }))
                             }
-                            disabled={working || s.alreadyLinked}
+                            disabled={working}
                             aria-label="How they relate"
                           >
                             {RELATION_TYPES.map((r) => (

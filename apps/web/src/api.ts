@@ -232,7 +232,6 @@ export interface RetagSuggestion {
   proposedParentId: number;
   proposedParentName: string;
   confident: boolean;
-  alreadyLinked: boolean;
   reason: string;
 }
 

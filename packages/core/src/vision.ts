@@ -334,8 +334,6 @@ export interface RetagSuggestion {
   proposedParentName: string;
   /** The name says "expansion"/"extension" outright, so it needs no judgement. */
   confident: boolean;
-  /** Already connected by an item_relation, so "standalone" is answered. */
-  alreadyLinked: boolean;
   reason: string;
 }
 
@@ -389,6 +387,11 @@ export function suggestRetags(
     }
     if (!parent) continue;
 
+    // A link is an answer. Saying "standalone, same family" settles the only
+    // question this screen asks, so the row leaves — it used to stay, greyed
+    // out but still there, which reads as the click not having worked.
+    if (existingPairs.has(`${item.id}:${parent.id}`)) continue;
+
     const explicit = EXPLICIT_EXPANSION.test(item.name);
     suggestions.push({
       itemId: item.id,
@@ -397,7 +400,6 @@ export function suggestRetags(
       proposedParentId: parent.id,
       proposedParentName: parent.name,
       confident: explicit,
-      alreadyLinked: existingPairs.has(`${item.id}:${parent.id}`),
       reason: explicit
         ? `Says "expansion" in the name, so it almost certainly needs "${parent.name}".`
         : `Shares a name with "${parent.name}" — which does not say whether it needs it.`,
