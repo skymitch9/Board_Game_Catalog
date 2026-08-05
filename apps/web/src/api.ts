@@ -171,8 +171,22 @@ export const api = {
       usage: ResearchUsage;
     }>,
 
-  retagSuggestions: () =>
-    req<{ suggestions: RetagSuggestion[]; relations: RelationSuggestion[] }>('/api/retag'),
+  retagSuggestions: () => req<{ suggestions: RetagSuggestion[] }>('/api/retag'),
+
+  // --- Filling in missing details -------------------------------------------
+
+  needsDetails: () =>
+    req<{ items: NeedsDetails[]; centsEach: { low: number; high: number } }>(
+      '/api/research/needs-details',
+    ),
+
+  fillItemDetails: (id: number) =>
+    post(`/api/research/${id}/details`, {}) as Promise<{
+      item: Item;
+      filled: Record<string, string | number>;
+      detail?: string;
+      usage: { inputTokens: number; outputTokens: number; estimatedCents: number };
+    }>,
 
   // --- Scan Jobs (photo queue) ----------------------------------------------
 
@@ -218,15 +232,16 @@ export interface RetagSuggestion {
   proposedParentId: number;
   proposedParentName: string;
   confident: boolean;
+  alreadyLinked: boolean;
   reason: string;
 }
 
-export interface RelationSuggestion {
-  fromItemId: number;
-  fromName: string;
-  toItemId: number;
-  toName: string;
-  reason: string;
+export interface NeedsDetails {
+  id: number;
+  name: string;
+  kind: string;
+  /** Human-readable field names, for showing what a run would add. */
+  missing: string[];
 }
 
 export interface CacheStats {

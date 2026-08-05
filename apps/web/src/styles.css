@@ -125,6 +125,16 @@ a:hover { text-decoration: underline; }
 
 /* How much of a photo is still unsorted — the number that decides if you go back. */
 .job-row__left { color: var(--bad); font-size: 0.85rem; font-weight: 500; }
+
+/* Two answers to one question, weighted equally so neither reads as the default. */
+.retag-choice { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.5rem; }
+.retag-choice__option {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+}
+.retag-choice__option .btn { min-width: 6.5rem; }
+
+/* Free lookup and the paid web search, offered side by side. */
+.lookup-fill__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .count { color: var(--muted); font-weight: 400; }
 .description { white-space: pre-wrap; color: var(--muted); font-size: 0.92rem; }
 

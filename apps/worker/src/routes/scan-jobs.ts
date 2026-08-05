@@ -79,6 +79,15 @@ const titleUpdatesSchema = z.object({
     .max(200),
 });
 
+/**
+ * What goes in `photo_key` now that nothing is stored.
+ *
+ * The column is NOT NULL and older rows hold real keys, so it stays rather than
+ * being migrated away — a marker says plainly that this row never had a photo
+ * anywhere, which is more useful than an empty string.
+ */
+const NOT_STORED = 'not-stored';
+
 const statusSchema = z.enum([
   'uploaded',
   'reading',
@@ -124,16 +133,18 @@ export const scanJobRoutes = new Hono<AppBindings>()
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
 
-    // Store photo in R2.
-    const photoKey = `scan/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const photoBytes = Uint8Array.from(atob(parsed.data.data), (c) => c.charCodeAt(0));
-    await c.env.PHOTOS.put(photoKey, photoBytes, {
-      httpMetadata: { contentType: parsed.data.mediaType },
-    });
-
-    // Create the job row.
+    // The photo is never stored. It goes straight from this request into the
+    // vision call below and is then gone — it lives only in memory, for the few
+    // seconds that call takes.
+    //
+    // It used to be written to R2 first, and nothing ever read it back: vision
+    // takes the base64 from the request, enrichment works from the extracted
+    // titles, and the review screen shows no image. The bucket was write-only
+    // storage whose whole job was to be deleted later, and forgetting to delete
+    // it on one code path was all it took to keep photos indefinitely. Not
+    // writing it is a guarantee; remembering to delete it was a habit.
     const job = await createScanJob(c.env.DB, {
-      photoKey,
+      photoKey: NOT_STORED,
       mode: parsed.data.mode,
     });
 
@@ -265,10 +276,6 @@ export const scanJobRoutes = new Hono<AppBindings>()
     if (!job) return c.json({ error: 'not_found' }, 404);
 
     const updated = await updateScanJobStatus(c.env.DB, id, 'done');
-
-    // Clean up the photo from R2.
-    await c.env.PHOTOS.delete(job.photoKey).catch(() => undefined);
-
     return c.json({ job: updated });
   })
 
@@ -277,10 +284,6 @@ export const scanJobRoutes = new Hono<AppBindings>()
     const id = Number(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request' }, 400);
 
-    const job = await getScanJob(c.env.DB, id);
-    if (job) {
-      await c.env.PHOTOS.delete(job.photoKey).catch(() => undefined);
-    }
     await deleteScanJob(c.env.DB, id);
     return c.json({ deleted: true });
   });
@@ -289,25 +292,9 @@ export const scanJobRoutes = new Hono<AppBindings>()
 // Background processing
 // ---------------------------------------------------------------------------
 
-/**
- * Drop a photo. Best-effort: a bucket that will not delete must never turn a
- * job that otherwise succeeded into a failure.
- */
-async function releasePhoto(env: Env, photoKey: string): Promise<void> {
-  await env.PHOTOS.delete(photoKey).catch(() => undefined);
-}
-
-/**
- * Record a failure, and let the photo go with it.
- *
- * A failed job has no review coming, so nothing will ever reach the two routes
- * that clean up. Every failure path used to leave its object in the bucket
- * permanently, which is how "no photo outlives the review it feeds" quietly
- * becomes "photos are kept forever, just not on purpose".
- */
+/** Record a failure. Nothing to clean up: the photo was never stored. */
 async function failJob(env: Env, jobId: number, message: string): Promise<void> {
-  const job = await updateScanJobStatus(env.DB, jobId, 'failed', { error: message });
-  if (job) await releasePhoto(env, job.photoKey);
+  await updateScanJobStatus(env.DB, jobId, 'failed', { error: message });
 }
 
 /** Step 1: Run vision to extract titles from the photo. */
@@ -348,15 +335,9 @@ async function processVision(
       }));
     }
 
-    const read = await updateScanJobStatus(env.DB, jobId, 'read', {
+    await updateScanJobStatus(env.DB, jobId, 'read', {
       rawTitles: JSON.stringify(titles),
     });
-
-    // Vision was the only reader this photo ever had. Enrichment works from the
-    // titles above and the review screen never displays the image, so there is
-    // nothing left to keep it for — and waiting until review means keeping it
-    // for a review that may never happen.
-    if (read) await releasePhoto(env, read.photoKey);
 
     // Immediately proceed to enrichment.
     await processEnrichment(env, jobId);

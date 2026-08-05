@@ -126,6 +126,7 @@ export function ItemPage({
             setFilledNote(summary);
             reload();
           }}
+          canResearch={me.capabilities.includes('runResearch')}
         />
       )}
 
@@ -286,9 +287,12 @@ function inWords(labels: string[]): string {
 function LookupDetails({
   item,
   onFilled,
+  canResearch,
 }: {
   item: Item;
   onFilled: (summary: string) => void;
+  /** The web search costs money, so it is owner-only like the other paid calls. */
+  canResearch: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -342,6 +346,34 @@ function LookupDetails({
     }
   }
 
+  /**
+   * The paid fallback: Claude, with the open web.
+   *
+   * Offered separately rather than as an automatic second attempt, because it
+   * costs a few cents and the free lookup is right often enough that spending
+   * on every blank field would be silly. It is also the only thing that finds a
+   * publisher — the free sources carry none at all, which is why a scanned
+   * collection has an empty publisher on every game.
+   */
+  async function runWeb() {
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      const res = await api.fillItemDetails(item.id);
+      const filled = Object.keys(res.filled);
+      if (filled.length === 0) {
+        setNote(res.detail ?? 'Nothing new was found on the web either.');
+        return;
+      }
+      onFilled(`Filled in ${inWords(filled)} from the web.`);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (missing.length === 0) return null;
 
   return (
@@ -350,13 +382,26 @@ function LookupDetails({
         <div className="grow">
           <strong>No {inWords(missing.map((m) => m.label))} recorded</strong>
           <p className="muted small">
-            A free lookup by name, from the same sources the scanner uses. Only blanks are
-            filled — anything already written down stays as it is.
+            Only blanks are filled — anything already written down stays as it is.
+            The free lookup uses the same sources as the scanner; searching the web
+            costs a few cents and is the only thing that finds a publisher.
           </p>
         </div>
-        <button type="button" className="btn" disabled={busy} onClick={() => void run()}>
-          {busy ? 'Looking…' : 'Look up details'}
-        </button>
+        <div className="lookup-fill__actions">
+          <button type="button" className="btn" disabled={busy} onClick={() => void run()}>
+            {busy ? 'Looking…' : 'Free lookup'}
+          </button>
+          {canResearch && (
+            <button
+              type="button"
+              className="btn btn-quiet"
+              disabled={busy}
+              onClick={() => void runWeb()}
+            >
+              Search the web
+            </button>
+          )}
+        </div>
       </div>
 
       {note && <p className="scan-note">{note}</p>}

@@ -482,6 +482,34 @@ export async function listItemNames(
   return results;
 }
 
+/**
+ * Games missing the details a lookup could fill.
+ *
+ * The queue for enrichment. Publisher is the field that matters most — it is
+ * absent on everything a scan produced, and it is what the official research
+ * tier needs before it can run at all.
+ */
+export async function listItemsNeedingDetails(
+  db: D1Database,
+  limit = 200,
+): Promise<Item[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT ${ITEM_COLUMNS} FROM item
+        WHERE (publisher IS NULL OR publisher = '')
+           OR (publisher_url IS NULL OR publisher_url = '')
+           OR year_published IS NULL
+           OR min_players IS NULL
+           OR playtime_min IS NULL
+           OR (description IS NULL OR description = '')
+        ORDER BY sort_name
+        LIMIT ?`,
+    )
+    .bind(limit)
+    .all<ItemRow>();
+  return results.map(mapItemRow);
+}
+
 /** Top-level items and their kinds — the input to a re-tagging pass. */
 export async function listTopLevelItems(
   db: D1Database,

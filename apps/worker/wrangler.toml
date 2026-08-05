@@ -19,9 +19,11 @@ database_id = "7dd22702-f0e2-4fc7-b201-d16d60176efa"
 # Migrations live at the repo root so the CLI can reach them too.
 migrations_dir = "../../migrations"
 
-[[r2_buckets]]
-binding = "PHOTOS"
-bucket_name = "bgc-photos"
+# No R2 binding. Scan photos are never stored — they go from the upload request
+# straight into the vision call and are gone. The bucket that used to be here
+# was write-only: nothing ever read an object back, so its entire purpose was
+# to be deleted later, and one code path forgetting to delete was all it took
+# to keep photos indefinitely.
 
 [vars]
 APP_VERSION = "0.1.0"

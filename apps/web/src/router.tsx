@@ -18,6 +18,7 @@ export type Route =
   | { name: 'scanJobs' }
   | { name: 'scanJobReview'; id: number }
   | { name: 'retag' }
+  | { name: 'detailsQueue' }
   | { name: 'notFound' };
 
 function parse(pathname: string, search: string): Route {
@@ -31,6 +32,7 @@ function parse(pathname: string, search: string): Route {
   if (parts[0] === 'scan' && parts.length === 1) return { name: 'scan' };
 
   if (parts[0] === 'retag' && parts.length === 1) return { name: 'retag' };
+  if (parts[0] === 'details' && parts.length === 1) return { name: 'detailsQueue' };
 
   if (parts[0] === 'scan-jobs') {
     if (parts.length === 1) return { name: 'scanJobs' };

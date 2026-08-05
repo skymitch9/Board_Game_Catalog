@@ -4,7 +4,6 @@ import {
   createItemSchema,
   createRelationSchema,
   itemQuerySchema,
-  suggestRelations,
   suggestRetags,
   updateCopySchema,
   updateItemSchema,
@@ -80,14 +79,11 @@ export const catalogRoutes = new Hono<AppBindings>()
    */
   .get('/retag', async (c) => {
     const items = await listTopLevelItems(c.env.DB);
-    // Both readings of the same signal, returned together: a game whose name
-    // contains another either belongs inside it or beside it, and only the
-    // person who has played them knows which.
-    const [pairs] = await Promise.all([listRelationPairs(c.env.DB)]);
-    return c.json({
-      suggestions: suggestRetags(items),
-      relations: suggestRelations(items, pairs),
-    });
+    const pairs = await listRelationPairs(c.env.DB);
+    // One list, because it is one question — can this be played without the
+    // other box. The two answers, file-under and standalone, are what the
+    // screen offers per row.
+    return c.json({ suggestions: suggestRetags(items, pairs) });
   })
 
   // ---- items -------------------------------------------------------------

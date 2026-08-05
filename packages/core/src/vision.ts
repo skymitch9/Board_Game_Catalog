@@ -334,6 +334,8 @@ export interface RetagSuggestion {
   proposedParentName: string;
   /** The name says "expansion"/"extension" outright, so it needs no judgement. */
   confident: boolean;
+  /** Already connected by an item_relation, so "standalone" is answered. */
+  alreadyLinked: boolean;
   reason: string;
 }
 
@@ -365,6 +367,7 @@ function prefixCandidates(name: string): string[] {
 
 export function suggestRetags(
   items: readonly { id: number; name: string; kind: string; parentItemId: number | null }[],
+  existingPairs: ReadonlySet<string> = new Set(),
 ): RetagSuggestion[] {
   const byKey = new Map<string, { id: number; name: string }>();
   for (const item of items) byKey.set(normaliseTitle(item.name), { id: item.id, name: item.name });
@@ -394,9 +397,10 @@ export function suggestRetags(
       proposedParentId: parent.id,
       proposedParentName: parent.name,
       confident: explicit,
+      alreadyLinked: existingPairs.has(`${item.id}:${parent.id}`),
       reason: explicit
-        ? `Says "expansion" in the name, and you own "${parent.name}".`
-        : `You own "${parent.name}" — but a subtitle can also mean a standalone game.`,
+        ? `Says "expansion" in the name, so it almost certainly needs "${parent.name}".`
+        : `Shares a name with "${parent.name}" — which does not say whether it needs it.`,
     });
   }
 
@@ -420,54 +424,6 @@ export function suggestRetags(
  *
  * Pairs already linked are dropped, so an answered suggestion stops being one.
  */
-export interface RelationSuggestion {
-  fromItemId: number;
-  fromName: string;
-  toItemId: number;
-  toName: string;
-  reason: string;
-}
-
-export function suggestRelations(
-  items: readonly { id: number; name: string; kind: string; parentItemId: number | null }[],
-  existingPairs: ReadonlySet<string>,
-): RelationSuggestion[] {
-  const byKey = new Map<string, { id: number; name: string }>();
-  for (const item of items) byKey.set(normaliseTitle(item.name), { id: item.id, name: item.name });
-
-  const suggestions: RelationSuggestion[] = [];
-  const seen = new Set<string>();
-
-  for (const item of items) {
-    // Only games standing on their own. Something already filed under a parent
-    // is expressing that relationship the other way, and does not need a link
-    // saying the same thing again.
-    if (item.kind !== 'base' || item.parentItemId !== null) continue;
-
-    let family: { id: number; name: string } | undefined;
-    for (const prefix of prefixCandidates(item.name)) {
-      const found = byKey.get(normaliseTitle(prefix));
-      if (found && found.id !== item.id) family = found;
-    }
-    if (!family) continue;
-
-    const key = `${item.id}:${family.id}`;
-    if (existingPairs.has(key) || seen.has(key)) continue;
-    seen.add(key);
-    seen.add(`${family.id}:${item.id}`);
-
-    suggestions.push({
-      fromItemId: item.id,
-      fromName: item.name,
-      toItemId: family.id,
-      toName: family.name,
-      reason: `Shares a name with "${family.name}". Link them if it plays on its own.`,
-    });
-  }
-
-  return suggestions;
-}
-
 /**
  * JPEG quality for the downscaled upload.
  *

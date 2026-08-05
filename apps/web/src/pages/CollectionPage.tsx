@@ -81,7 +81,10 @@ export function CollectionPage({ me }: { me: MeResponse }) {
               Check a game
             </Link>
             <Link to="/retag" className="btn btn-quiet">
-              Tidy up filing
+              Related games
+            </Link>
+            <Link to="/details" className="btn btn-quiet">
+              Fill in details
             </Link>
           </div>
         )}

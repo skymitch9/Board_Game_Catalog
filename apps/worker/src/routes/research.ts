@@ -14,22 +14,28 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { SOURCE_TIERS } from '@bgc/core';
+import type { Item } from '@bgc/core';
 import {
   createRun,
   finishRun,
   findingCounts,
   getItem,
   listFindings,
+  listItemsNeedingDetails,
   listRuns,
   reviewFinding,
   saveFindings,
+  updateItem,
 } from '@bgc/db';
 import {
+  ENRICH_CENTS_EACH,
   RESEARCH_MODEL,
   ResearchError,
   TIER_SPECS,
   domainsForTier,
+  enrichItem,
   estimateTierCents,
+  fieldsToFill,
   runTier,
 } from '@bgc/research';
 import type { AppBindings } from '../env.js';
@@ -41,6 +47,21 @@ const tierSchema = z.enum(['official', 'crowdfunding', 'retail']);
 const reviewStateSchema = z.enum(['pending', 'accepted', 'rejected']);
 const runSchema = z.object({ tier: tierSchema });
 const reviewSchema = z.object({ reviewState: z.enum(['accepted', 'rejected']) });
+
+/** Which of the fillable fields this game has nothing for. */
+function missingFields(item: Item): string[] {
+  const blank = (v: string | number | null): boolean =>
+    v == null || (typeof v === 'string' && v.trim() === '');
+
+  const missing: string[] = [];
+  if (blank(item.publisher)) missing.push('publisher');
+  if (blank(item.publisherUrl)) missing.push('publisher site');
+  if (blank(item.yearPublished)) missing.push('year');
+  if (blank(item.minPlayers)) missing.push('players');
+  if (blank(item.playtimeMin)) missing.push('playing time');
+  if (blank(item.description)) missing.push('description');
+  return missing;
+}
 
 const idParam = (raw: string | undefined): number | null => {
   const id = Number(raw);
@@ -174,6 +195,73 @@ export const researchRoutes = new Hono<AppBindings>()
         return c.json({ error: 'research_failed', detail: message }, err.status as 400);
       }
       return c.json({ error: 'research_failed', detail: message }, 502);
+    }
+  })
+
+  /**
+   * The games still missing details, and what filling them would cost.
+   *
+   * Publisher is the one that matters beyond tidiness: it is empty on
+   * everything a scan produced, and the official research tier cannot run
+   * without the URL that comes with it.
+   */
+  .get('/needs-details', requireCapability('read'), async (c) => {
+    const items = await listItemsNeedingDetails(c.env.DB);
+    return c.json({
+      items: items.map((i) => ({
+        id: i.id,
+        name: i.name,
+        kind: i.kind,
+        missing: missingFields(i),
+      })),
+      centsEach: ENRICH_CENTS_EACH,
+    });
+  })
+
+  /**
+   * Fill in one game's blanks from the open web.
+   *
+   * Gaps only — anything already recorded is left alone, because a value you
+   * typed is better evidence than one a model found, and a catalog that
+   * quietly rewrites your entries is one you stop trusting. The response says
+   * exactly which fields moved.
+   */
+  .post('/:id/details', requireCapability('runResearch'), async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const item = await getItem(c.env.DB, id);
+    if (!item) return c.json({ error: 'not_found' }, 404);
+
+    try {
+      const { fields, usage } = await enrichItem(c.env.ANTHROPIC_API_KEY, {
+        name: item.name,
+        yearPublished: item.yearPublished,
+        bggId: item.bggId,
+        publisher: item.publisher,
+      });
+
+      if (fields.notFound) {
+        return c.json({
+          item,
+          filled: {},
+          found: fields,
+          usage,
+          detail: fields.note ?? 'That game could not be identified confidently.',
+        });
+      }
+
+      const patch = fieldsToFill(item, fields);
+      const updated =
+        Object.keys(patch).length > 0 ? await updateItem(c.env.DB, id, patch) : item;
+
+      return c.json({ item: updated, filled: patch, found: fields, usage });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof ResearchError) {
+        return c.json({ error: 'lookup_failed', detail: message }, err.status as 400);
+      }
+      return c.json({ error: 'lookup_failed', detail: message }, 502);
     }
   })
 
