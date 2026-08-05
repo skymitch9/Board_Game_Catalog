@@ -18,7 +18,7 @@ verified end to end against live services.
 | Deployed version | `323110d9-2042-4ae3-a681-246cbec91e93` |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
-| Migrations applied | `0001_init`, `0002_copy_quantity` (local **and** production) |
+| Migrations applied | `0001_init`, `0002_copy_quantity`, `0003_barcode_unique` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -292,8 +292,11 @@ curl -s localhost:8787/api/barcode/029877030713   # bad check digit -> 400
 - **`ANTHROPIC_API_KEY` is not set in production** — confirmed via
   `wrangler secret list`, which returned nothing. Research will work locally and
   500 on the live site until `npm run secret ANTHROPIC_API_KEY` is run.
-- **Migration `0003_barcode_unique.sql` is applied LOCALLY ONLY.** Production is
-  deliberately untouched pending a decision — see below.
+- ✅ **Migration `0003_barcode_unique.sql` is applied to local and production**
+  (2026-08-05). Verified in production by reading back `sqlite_master`:
+  `CREATE UNIQUE INDEX idx_edition_barcode ON edition(barcode) WHERE barcode IS
+  NOT NULL AND barcode != ''`. Production held 0 editions at the time, so there
+  was nothing to de-duplicate first.
 - Root `package.json` gained `npm run secret` / `npm run secret:list`, which run
   wrangler against `apps/worker/wrangler.toml` — running `wrangler secret put`
   from the repo root fails with "Required Worker name missing".
@@ -302,22 +305,7 @@ curl -s localhost:8787/api/barcode/029877030713   # bad check digit -> 400
 
 ## ⚠️ Decisions waiting on the owner
 
-**1. Apply migration 0003 to production?**
-`migrations/0003_barcode_unique.sql` makes `idx_edition_barcode` UNIQUE. Without
-it, `linkBarcode()`'s conflict check is advisory only: two confirmations racing
-each other both pass the check and both write, and `findByBarcode()`'s `LIMIT 1`
-then resolves that barcode to an arbitrary one of them — silently wrong, and
-invisible in the UI. The route already handles the resulting constraint error
-and turns it into a clean 409.
-
-Verified safe: production held **0 editions and 0 barcodes** when this was
-written. Applied locally already. To apply:
-
-```bash
-npm run db:migrate     # production — do this BEFORE deploying
-```
-
-**2. Shelf mode / camera vision — in scope?** See "Next session" below.
+**Shelf mode / camera vision — in scope?** See "Next session → A2" below.
 
 ---
 
