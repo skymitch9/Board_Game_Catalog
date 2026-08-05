@@ -182,6 +182,53 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
 
 ---
 
+## ⚠️ STOP POINT — barcode work is half-built and does NOT compile
+
+The 6pm run was cut short. **Committed code on this branch will not typecheck
+until `npm install` is run** — `packages/research` declares `@anthropic-ai/sdk`
+but it was never installed.
+
+### First three commands next session
+
+```bash
+npm install          # installs @anthropic-ai/sdk for the new package
+npm run typecheck    # expect errors in packages/research — see below
+```
+
+### What exists (written, never run)
+
+| File | State |
+|---|---|
+| `packages/research/package.json` | new package, deps not installed |
+| `packages/research/src/client.ts` | Anthropic client, cost estimator, structured-output parser that checks `stop_reason` for refusal/truncation first |
+| `packages/research/src/barcode.ts` | `identifyBarcode()` — web search, `effort: low`, structured output, ranked candidates with confidence. Also `isPlausibleBarcode()` (UPC/EAN check digit) so misreads fail before costing an API call |
+| `packages/db/src/barcodes.ts` | `findByBarcode()`, `linkBarcode()`, `BarcodeConflict`. Exported from `packages/db/src/index.ts` |
+
+**Expect the SDK call shapes in `barcode.ts` to need correction.** They were
+written from documentation and never executed once — the `output_config` /
+`tools` fields are cast through `Parameters<typeof create>[0]` to get past
+typing, which is exactly the kind of thing that turns out subtly wrong on first
+real run. Verify against a live call before trusting it.
+
+### Not started
+
+- Worker routes: `GET /api/barcode/:code` (local match, `read`),
+  `POST /api/barcode/identify` (LLM, should gate on `runResearch`),
+  `POST /api/barcode/link` (`editCatalog`)
+- The scanner UI (`BarcodeDetector` + ZXing wasm fallback for iOS Safari)
+- All of phase 3
+
+### Also outstanding
+
+- **`ANTHROPIC_API_KEY` is not set in production** — confirmed via
+  `wrangler secret list`, which returned nothing. Research will work locally and
+  500 on the live site until `npm run secret ANTHROPIC_API_KEY` is run.
+- Root `package.json` gained `npm run secret` / `npm run secret:list`, which run
+  wrangler against `apps/worker/wrangler.toml` — running `wrangler secret put`
+  from the repo root fails with "Required Worker name missing".
+
+---
+
 ## Next session — decided 2026-08-04
 
 Two things to build, in this order. Both are unblocked; neither needs BGG.
