@@ -103,21 +103,26 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `cb7b7d41-23f4-4116-831c-afc066cd7335` — scan page can reach the photo library |
+| Deployed version | `8dc53f95-660e-45a8-b809-76bd12887e7f` — orphan expansions, no more demotion |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | `bgc-photos` — temporary photo storage for scan jobs |
-| Migrations applied | `0001_init` … `0009_scan_jobs` (local **and** production) |
+| Migrations applied | `0001_init` … `0010_pending_parent` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
 | Owner | `nbaslamking@gmail.com` (claimed on first sign-in) |
 
-**Branch:** `phase-1-manual-catalog` — **not merged to main.** `main` is still at
-`f80cc3a` (phase 0). The deployed code is this branch.
+**Branch:** merged. `main` now holds all 38 phase-1 commits (merge `ab057d9`),
+and typechecks. `phase-1-manual-catalog` still exists and is unchanged.
+
+**Not pushed.** `origin` is
+<https://github.com/skymitch9/Board_Game_Catalog.git>, and `origin/main` is
+*gone* — nothing has been published. Everything above lives only on this
+machine and on Cloudflare. When you want it on GitHub:
 
 ```bash
-git checkout main && git merge phase-1-manual-catalog
+git push -u origin main
 ```
 
 ---
@@ -196,58 +201,38 @@ this will use BGG's expansion links for definitive results.
 
 ---
 
-## ⚠️ Orphan expansions — raised by the owner 2026-08-05, to discuss
+## Orphan expansions — built 2026-08-05
 
-**The requirement.** Scanning a shelf turns up an expansion whose base game is
-not in the collection and was not in this batch — or whose base game did not
-resolve. Today that expansion cannot be added as an expansion. It needs either
-to be collectable later, or to hold a placeholder that adopts the real base
-game when it arrives.
+An expansion can now be catalogued before the game it belongs to. Previously it
+could not: `createItem` demanded a parent and `createItemSchema` refused without
+one, so both add flows silently saved it as a **base game** — a root in the
+tree, counted in the header stats, with no record it was ever an expansion.
+Scanning the base game later reconciled nothing.
 
-**What actually happens now is worse than refusing.** Both add paths silently
-demote it:
+| Piece | Where |
+|---|---|
+| `pending_parent_name` column | migration `0010_pending_parent.sql` |
+| Orphan allowed, roots itself | `createItem`, `packages/db/src/items.ts` |
+| Re-parenting on arrival | `adoptOrphans`, same file |
+| Runs after every creation | `POST /api/items` returns `{ item, adopted }` |
+| Name kept from the spine | `inferredParentName`, `classifyShelfResults` |
+| Shown as unattached | `ItemTree.tsx` badge |
 
-```ts
-// ScanJobsPage.tsx:426 and ScanPage.tsx:680 — identical
-const effectiveKind = kind !== 'base' && !parentId ? 'base' : kind;
-```
+**Why it roots itself.** Every listing query selects `WHERE root_game_id IN
+(...)`, so an orphan with a null root would be invisible rather than
+unattached. It is its own root until adopted, exactly like a base game.
 
-So "Wingspan: European Expansion" enters the catalog as a **base game**. It
-becomes a root in the collection tree, counts as a game in the header stats,
-and nothing records that it was ever meant to be an expansion. Scan the base
-game next week and nothing reconciles — you get Wingspan as a second root, with
-its expansion sitting beside it as an equal. The damage is silent and only
-findable by eye, which is what makes it worth fixing before the next bulk scan
-rather than after.
+**Adoption matches on normalised name, not BGG id** — an orphan read off a
+spine usually has no id, which is the situation that produced it. The whole
+subtree moves, so an accessory filed under a waiting expansion travels with it.
 
-**Three shapes worth weighing.** Not built, not decided:
+Verified end to end against local dev: orphan created with kind intact,
+accessory nested beneath it, both visible as an unattached root, then the base
+game created — adopted, re-parented, subtree moved, pending name cleared.
 
-1. **Nullable parent, remembered intent.** Keep `kind = 'expansion'` and allow
-   `parent_item_id` to stay null, adding something like `pending_parent_name`
-   holding the text read off the spine. The collection groups parentless
-   expansions under an "Unattached" heading. When a base game is created whose
-   name matches, offer to adopt them. Cheapest, and the tree already tolerates
-   nulls — but "expansion with no parent" becomes a state every query must
-   consider.
-2. **Create the base game as a stub.** Insert a real base row from the prefix
-   `classifyShelfResults` already splits out — "Wingspan: European Expansion"
-   implies "Wingspan" — flagged `is_stub`, and let the expansion nest under it
-   properly. The tree stays well-formed and nothing special-cases. The cost is
-   inventing rows nobody scanned, which need reconciling if the real base game
-   arrives with a different name or a BGG id.
-3. **A holding queue outside the catalog.** Unresolvable items land in a
-   side table and never touch `item` until a parent exists. Keeps the catalog
-   clean at the price of a second place to look, which is the failure mode the
-   scan queue itself was built to avoid.
-
-**Recommendation: 1**, with the adoption prompt. It preserves what was actually
-observed — a real expansion, on a real shelf, whose parent is not here yet —
-without inventing a game. Option 2's stub is a guess wearing the same clothes
-as a scanned fact, which is the mistake `MIN_SPINE_SIMILARITY` above exists to
-stop making.
-
-Whichever is chosen, **the silent demotion should stop regardless** — it is
-producing wrong data on every shelf scan today.
+**Still open:** adoption only triggers on *creation*. Renaming an existing game
+to match a waiting orphan does not adopt it, and neither does an import. If
+that matters, `adoptOrphans` is already the right shape to call from `updateItem`.
 
 ---
 
@@ -362,7 +347,7 @@ exactly one implementation of anything that makes a decision.
 npm run dev              # web :5173, worker API :8787
 npm run typecheck        # every workspace
 npm run build            # build the web app
-npm run deploy           # build + deploy the Worker
+npm run deploy           # build + deploy the Worker (refuses a dirty tree)
 npm run db:migrate       # migrations → production
 npm run db:migrate:local # migrations → local
 npm run tail --workspace @bgc/worker
@@ -395,8 +380,13 @@ rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local
   enforced by triggers (migration 0002).
 - **PowerShell mangles strings containing double quotes** when passing them to
   native executables, and rewriting files through it corrupts UTF-8. Use
-  `git commit -F <file>` and edit files directly. **This has already happened
-  once**, to `ScanPage.tsx`: every `—`, `…` and `·` came back as `â€”`, `â€¦`
+  `git commit -F <file>` and edit files directly — see [`CLAUDE.md`](../CLAUDE.md),
+  which now states this as a rule because it has bitten twice. The second time,
+  `git commit -m "..." && npm run deploy` had its commit rejected for quoting
+  while the deploy went ahead anyway, putting live code ahead of the repo.
+  `npm run deploy` now runs `scripts/check-clean.mjs` first and refuses a dirty
+  working tree; override with `ALLOW_DIRTY_DEPLOY=1` when you mean it.
+  **UTF-8 corruption has also already happened once**, to `ScanPage.tsx`: every `—`, `…` and `·` came back as `â€”`, `â€¦`
   and `Â·`, including in text shown to the user while scanning. Nothing catches
   it — it typechecks, builds and deploys clean. Sweep for it with
   `grep -rn 'â€\|Â·\|Ã' --exclude-dir=dist`, and note that PowerShell heredocs
