@@ -26,6 +26,7 @@ import {
   listItemTrees,
   listRelationPairs,
   listTopLevelItems,
+  listWishlist,
   updateCopy,
   updateItem,
   upsertRating,
@@ -69,6 +70,20 @@ export const catalogRoutes = new Hono<AppBindings>()
   /** Headline numbers, so the UI needn't compute them. */
   .get('/meta', async (c) => {
     return c.json({ stats: await collectionStats(c.env.DB) });
+  })
+
+  /**
+   * The shopping list: every copy marked `wanted`, and nothing else.
+   *
+   * Not `/items?status=wanted`. That filters game trees, so one wanted
+   * expansion drags in its base game and every accessory filed beside it.
+   *
+   * Marking one as bought is an ordinary `PATCH /api/copies/:id` with
+   * `{ status: 'owned' }` — there is no wishlist-specific write route, because
+   * a second way to change a copy's status is a second thing to keep honest.
+   */
+  .get('/wishlist', async (c) => {
+    return c.json({ entries: await listWishlist(c.env.DB) });
   })
 
   /**

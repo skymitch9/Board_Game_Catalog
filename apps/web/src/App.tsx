@@ -11,6 +11,7 @@ import { ScanPage } from './pages/ScanPage';
 import { ScanJobsPage, ScanJobReviewPage } from './pages/ScanJobsPage';
 import { RetagPage } from './pages/RetagPage';
 import { DetailsQueuePage } from './pages/DetailsQueuePage';
+import { WishlistPage } from './pages/WishlistPage';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
 function Routes({ me }: { me: MeResponse }) {
@@ -38,6 +39,8 @@ function Routes({ me }: { me: MeResponse }) {
       return <RetagPage me={me} />;
     case 'detailsQueue':
       return <DetailsQueuePage me={me} />;
+    case 'wishlist':
+      return <WishlistPage me={me} />;
     case 'people':
       return me.capabilities.includes('manageUsers') ? (
         <PeoplePage me={me} />
@@ -93,6 +96,10 @@ export default function App() {
               to. Hoisting it up here as well made the top bar a second, competing
               menu for the same job — and the bar is for moving between places,
               not for actions. */}
+          {/* The wishlist is a place, not an action — what we don't have yet is
+              a different view of the collection, not a thing done to it — so it
+              belongs in the bar alongside People. */}
+          <Link to="/wishlist">Wishlist</Link>
           {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}

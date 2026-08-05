@@ -7,9 +7,10 @@ import type {
   ItemQuery,
   Rating,
   UpdateItemInput,
+  WishlistEntry,
 } from '@bgc/core';
 import { getRelatedItems } from './relations.js';
-import { mapCopyRow, type CopyRow } from './copies.js';
+import { mapCopyRow, toIso, type CopyRow } from './copies.js';
 
 export interface ItemRow {
   id: number;
@@ -508,6 +509,84 @@ export async function listItemsNeedingDetails(
     .bind(limit)
     .all<ItemRow>();
   return results.map(mapItemRow);
+}
+
+/**
+ * Everything marked `wanted`, one row per copy.
+ *
+ * A separate query rather than an option on `matchingRootsSql`, and the
+ * difference is the whole point of the screen. That helper matches whole game
+ * *trees* so that searching for an expansion also surfaces its base game —
+ * correct for browsing, and exactly wrong for a shopping list. The Ark Nova
+ * tree holds two wanted items sitting alongside eight preordered 3D upgrades,
+ * so `?status=wanted` on the collection page returns all ten. This returns the
+ * two.
+ *
+ * `preordered` is deliberately not included: it is something already bought and
+ * waiting for the post, which is a different question from what to buy next.
+ *
+ * The join to the parent is what lets a row read as "Marine Worlds, expansion
+ * of Ark Nova" rather than as a game nobody has heard of.
+ */
+export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.id            AS copy_id,
+              c.quantity      AS quantity,
+              c.notes         AS notes,
+              c.created_at    AS added_at,
+              i.id            AS item_id,
+              i.name          AS name,
+              i.kind          AS kind,
+              i.thumbnail_url AS thumbnail_url,
+              i.publisher     AS publisher,
+              i.year_published AS year_published,
+              i.min_players   AS min_players,
+              i.max_players   AS max_players,
+              i.bgg_id        AS bgg_id,
+              p.id            AS parent_item_id,
+              p.name          AS parent_name
+         FROM copy c
+         JOIN item i ON i.id = c.item_id
+         LEFT JOIN item p ON p.id = i.parent_item_id
+        WHERE c.status = 'wanted'
+        ORDER BY COALESCE(p.sort_name, i.sort_name, i.name), i.sort_name, c.id`,
+    )
+    .all<{
+      copy_id: number;
+      quantity: number | null;
+      notes: string | null;
+      added_at: string;
+      item_id: number;
+      name: string;
+      kind: string;
+      thumbnail_url: string | null;
+      publisher: string | null;
+      year_published: number | null;
+      min_players: number | null;
+      max_players: number | null;
+      bgg_id: number | null;
+      parent_item_id: number | null;
+      parent_name: string | null;
+    }>();
+
+  return results.map((r) => ({
+    copyId: r.copy_id,
+    itemId: r.item_id,
+    name: r.name,
+    kind: r.kind as WishlistEntry['kind'],
+    parentItemId: r.parent_item_id,
+    parentName: r.parent_name,
+    thumbnailUrl: r.thumbnail_url,
+    publisher: r.publisher,
+    yearPublished: r.year_published,
+    minPlayers: r.min_players,
+    maxPlayers: r.max_players,
+    bggId: r.bgg_id,
+    quantity: r.quantity ?? 1,
+    notes: r.notes,
+    addedAt: toIso(r.added_at),
+  }));
 }
 
 /** Top-level items and their kinds — the input to a re-tagging pass. */

@@ -209,6 +209,41 @@ export interface ItemDetail extends Item {
   parent: Item | null;
 }
 
+/**
+ * One thing we want but do not have — the unit the wishlist renders.
+ *
+ * Deliberately item-level rather than tree-level. Every other listing query
+ * matches whole game trees so that finding an expansion also surfaces its base
+ * game, which is right for browsing and wrong here: the Ark Nova tree holds two
+ * wanted items and eight preordered upgrades, and a tree-shaped wishlist would
+ * show all ten. A wishlist is a shopping list, so it lists exactly the copies
+ * marked `wanted` and nothing that merely sits beside one.
+ *
+ * `copyId` rather than `itemId` is the identity, because the wanted-ness is a
+ * property of the copy — it is the copy that gets flipped to `owned` when the
+ * box arrives.
+ */
+export interface WishlistEntry {
+  copyId: number;
+  itemId: number;
+  name: string;
+  kind: (typeof ITEM_KINDS)[number];
+  /** The game this hangs off, so "Marine Worlds" reads as an Ark Nova expansion. */
+  parentItemId: number | null;
+  parentName: string | null;
+  thumbnailUrl: string | null;
+  publisher: string | null;
+  yearPublished: number | null;
+  minPlayers: number | null;
+  maxPlayers: number | null;
+  bggId: number | null;
+  quantity: number;
+  /** Whatever was written on the copy — "birthday", "pledged, wave 2". */
+  notes: string | null;
+  /** When it was added to the wishlist, as an ISO instant. */
+  addedAt: string;
+}
+
 /** A game linked via item_relation — standalone but connected. */
 export interface RelatedItemRef {
   /**

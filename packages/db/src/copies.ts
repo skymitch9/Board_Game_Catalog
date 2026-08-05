@@ -21,7 +21,7 @@ export interface CopyRow {
  * form as *local* time, so a copy added at 23:30 UTC could display as the day
  * before. Normalising here means every consumer gets an unambiguous instant.
  */
-function toIso(sqliteDatetime: string): string {
+export function toIso(sqliteDatetime: string): string {
   return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(sqliteDatetime)
     ? `${sqliteDatetime.replace(' ', 'T')}Z`
     : sqliteDatetime;

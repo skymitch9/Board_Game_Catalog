@@ -14,6 +14,7 @@ export type Route =
   | { name: 'newItem'; parentId: number | null }
   | { name: 'editItem'; id: number }
   | { name: 'people' }
+  | { name: 'wishlist' }
   | { name: 'scan' }
   | { name: 'scanJobs' }
   | { name: 'scanJobReview'; id: number }
@@ -27,6 +28,7 @@ function parse(pathname: string, search: string): Route {
   if (parts.length === 0) return { name: 'collection' };
 
   if (parts[0] === 'people' && parts.length === 1) return { name: 'people' };
+  if (parts[0] === 'wishlist' && parts.length === 1) return { name: 'wishlist' };
   // One flat route, no hash segments: a standalone PWA on iOS re-prompts for
   // camera permission on every route change (WebKit #215884).
   if (parts[0] === 'scan' && parts.length === 1) return { name: 'scan' };

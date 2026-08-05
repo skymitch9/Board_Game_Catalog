@@ -17,6 +17,7 @@ import type {
   UpdateCopyInput,
   UpdateItemInput,
   UpsertRatingInput,
+  WishlistEntry,
 } from '@bgc/core';
 
 export class ApiError extends Error {
@@ -94,6 +95,15 @@ export const api = {
   items: (query: ItemQuery = {}) =>
     req<{ items: ItemNode[] }>(`/api/items${toQueryString(query)}`),
   item: (id: number) => req<{ item: ItemDetail }>(`/api/items/${id}`),
+
+  /**
+   * Only the copies marked `wanted` — item-level, not tree-level.
+   *
+   * `items({ status: 'wanted' })` answers a different question: which *games*
+   * have something wanted anywhere in them. Both are right; only this one is a
+   * shopping list.
+   */
+  wishlist: () => req<{ entries: WishlistEntry[] }>('/api/wishlist'),
 
   createItem: (data: CreateItemInput) =>
     post('/api/items', data) as Promise<{ item: Item; adopted: Item[] }>,
