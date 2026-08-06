@@ -78,11 +78,23 @@ export interface ResolvedOwnership {
   jobMode: ScanJobMode | null;
 }
 
-/** The two reads, once per request. */
+/**
+ * The two reads, once per request.
+ *
+ * Provenance is the *optional* half and is treated as such. It is the one query
+ * in this path that leans on SQLite's JSON functions — confirmed working on
+ * production D1, but if that ever stops being true the queue must degrade to
+ * saying "already in your collection" rather than failing to load at all. The
+ * warning is there because a silently degraded feature is the failure this
+ * project keeps producing; `wrangler tail` prints it.
+ */
 export async function ownershipContext(db: D1Database): Promise<OwnershipContext> {
   const [items, sources] = await Promise.all([
     listItemNames(db),
-    listAddedItemSources(db),
+    listAddedItemSources(db).catch((err: unknown) => {
+      console.warn('scan-job provenance unavailable', (err as Error).message);
+      return [];
+    }),
   ]);
 
   const addedBy = new Map<number, { jobId: number; mode: ScanJobMode }>();
