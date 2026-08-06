@@ -74,6 +74,23 @@ export const meResponseSchema = z.object({
   displayName: z.string().nullable(),
   role: roleSchema,
   capabilities: z.array(z.string()),
+  /**
+   * Outstanding maintenance work, so the nav can hide a screen with nothing on
+   * it. Rides here because this is the one call the app makes before it draws
+   * anything — see `apps/worker/src/lib/chores.ts` for the trade.
+   *
+   * **`null` means "not known", not "nothing to do".** A reader is never asked
+   * the question, and a count that fails is not worth failing sign-in over. The
+   * nav shows both links when it is null: a redundant link is a nuisance, a
+   * missing one is invisible.
+   */
+  chores: z
+    .object({
+      relatedGames: z.number(),
+      missingDetails: z.number(),
+    })
+    .nullable()
+    .optional(),
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
 

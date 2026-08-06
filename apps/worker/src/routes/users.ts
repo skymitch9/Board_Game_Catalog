@@ -2,17 +2,30 @@ import { Hono } from 'hono';
 import { capabilitiesFor, updateRoleSchema } from '@bgc/core';
 import { countOwners, listUsers, setUserRole } from '@bgc/db';
 import type { AppBindings } from '../env.js';
+import { outstandingChores } from '../lib/chores.js';
 import { requireCapability } from '../middleware/auth.js';
 
 export const userRoutes = new Hono<AppBindings>()
-  /** Who am I and what may I do — the first call the web app makes. */
-  .get('/me', (c) => {
+  /**
+   * Who am I, what may I do, and is there anything waiting — the first call the
+   * web app makes, and the only one it makes before drawing the nav.
+   *
+   * The chores count rides along rather than on routes of its own; see
+   * `lib/chores.ts` for why, and for why a failure answers `null` instead of
+   * throwing. Nothing here is worth failing sign-in over.
+   */
+  .get('/me', async (c) => {
     const user = c.get('user');
+    const capabilities = capabilitiesFor(user.role);
+    const chores = capabilities.includes('editCatalog')
+      ? await outstandingChores(c.env.DB).catch(() => null)
+      : null;
     return c.json({
       email: user.email,
       displayName: user.displayName,
       role: user.role,
-      capabilities: capabilitiesFor(user.role),
+      capabilities,
+      chores,
     });
   })
 

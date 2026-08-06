@@ -10,10 +10,10 @@ import { useCallback, useEffect, useState } from 'react';
 
 /** The tabs on /scan and on /scan-jobs. Kept here so `parse` can validate them. */
 export type ScanMode = 'barcode' | 'photo' | 'shelf' | 'manual';
-export type AddMode = 'barcode' | 'shelf' | 'single';
+export type AddMode = 'barcode' | 'shelf' | 'single' | 'manual';
 
 const SCAN_MODES: readonly ScanMode[] = ['barcode', 'photo', 'shelf', 'manual'];
-const ADD_MODES: readonly AddMode[] = ['barcode', 'shelf', 'single'];
+const ADD_MODES: readonly AddMode[] = ['barcode', 'shelf', 'single', 'manual'];
 
 export type Route =
   | { name: 'collection' }

@@ -128,42 +128,30 @@ export function CollectionPage({ me }: { me: MeResponse }) {
         {canEdit && (
           <div className="head-actions">
             {/*
-              One door in, and three places to go afterwards.
+              One action, because there is one thing you do on this screen.
 
-              This row used to hold five buttons of equal weight, three of which
-              landed on what looked like the same screen. "Scan a barcode" went
-              to `/scan-jobs?add=barcode` — the tab Add games already opens on,
-              so it was a shortcut to the button beside it. And "Check a game"
-              (`/scan`) opens the same tab strip over the same camera panel, so
-              from in front of the screen the two were indistinguishable. The
-              owner said so: they all seem to go to the same place.
+              This row reached five buttons of equal weight by accretion — each
+              addition reasonable on its own, and the row unreadable by the end.
+              Every one of them has now gone somewhere it belongs:
 
-              The old argument for the split — Add games is bulk intake, Check a
-              game is the one-off "am I already holding this?" you ask in a shop
-              — stopped being true when barcodes moved onto the queue. The queue
-              answers that question per scan now, out loud: BarcodeQueue marks a
-              code "Already yours" from our own table, on its own audio pitch.
+              - "Scan a barcode" pointed at `/scan-jobs?add=barcode`, the tab
+                "+ Add games" already opens on, so it was a shortcut to the
+                button beside it. "Check a game" (`/scan`) opened the same tab
+                strip over the same camera. Both gone; the owner's words were
+                that they all seem to go to the same place.
+              - "Type a name" is not a different act from adding a game, it is
+                the same act done with a keyboard, so it is now the fourth tab
+                inside "+ Add games" alongside Barcode, Shelf photo and One box.
+              - "Related games" and "Missing details" are places you visit
+                occasionally to work a list down, not things you do to the
+                collection. They moved to the top bar beside Wishlist, where
+                they appear only while they have something outstanding.
 
-              So the camera doors collapse to one. `/scan` is untouched and
-              still reachable — the link below opens it on the tab the queue has
-              no equivalent of, the keyboard. Typing a name is a different act,
-              not a second camera.
+              Nothing else goes here. If a new entry point seems necessary, it
+              almost certainly belongs on the screen it leads to.
             */}
             <Link to="/scan-jobs" className="btn btn-primary">
               + Add games
-            </Link>
-            <Link to="/scan?mode=manual" className="btn btn-quiet">
-              Type a name
-            </Link>
-            <Link to="/retag" className="btn btn-quiet">
-              Related games
-            </Link>
-            {/* A place, not an act. Labelled "Fill in details" this read as the
-                button that runs the lookup; the owner pressed it, landed on a
-                list, and took the feature for broken. The buttons that do run a
-                lookup live on that screen and keep their verbs. */}
-            <Link to="/details" className="btn btn-quiet">
-              Missing details
             </Link>
           </div>
         )}

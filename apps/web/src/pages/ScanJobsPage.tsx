@@ -13,6 +13,7 @@ import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
 import { formatDateTime } from '../lib/dates';
 import { BarcodeQueue } from '../components/BarcodeQueue';
+import { QuickAdd } from '../components/QuickAdd';
 import { KIND_LABEL } from '../components/ItemTree';
 import { Badge, ConfirmButton, ErrorBox, Spinner } from '../components/ui';
 import { Link, type AddMode } from '../router';
@@ -210,7 +211,7 @@ const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'k
 };
 
 /**
- * The three ways onto the queue, ordered by how certain each one is.
+ * The four ways to add a game, ordered by how certain each one is.
  *
  * **Barcode is first because it is the only exact identification this app
  * has.** A code carries a check digit and names one printing; reading a title
@@ -218,11 +219,23 @@ const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'k
  * to the wrong games at a perfect 1.00 similarity. The photo paths are the
  * fallback for boxes with no code — which is a large slice of a mostly
  * crowdfunded collection, so they are not a lesser feature, just a later rung.
+ *
+ * **Typing is last, and it is here at all because it is the same job.** It used
+ * to be a separate button in the collection header called "Type a name", which
+ * made a screen headed "Add games" the place where you could do three of the
+ * four ways of adding a game. The owner's words: *add a game and type a name
+ * are the same thing.* Every way in now lives on one screen.
+ *
+ * It is the one tab that does not create a scan job, and deliberately so: a
+ * typed name is already an unambiguous answer, and pushing it through a review
+ * queue would ask a person to confirm what they had just typed. The queue below
+ * exists to hold readings that need a judgement — this tab has none to hold.
  */
 const ADD_MODES: { id: AddMode; label: string; blurb: string }[] = [
   { id: 'barcode', label: 'Barcode', blurb: 'Exact, free, and keeps scanning. Best when the box has one.' },
   { id: 'shelf', label: 'Shelf photo', blurb: 'Reads every spine at once. Best for bulk.' },
   { id: 'single', label: 'One box', blurb: 'Reads the title off a single cover.' },
+  { id: 'manual', label: 'Type a name', blurb: 'No code, no box to hand. Looks the rest up as you type.' },
 ];
 
 export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null }) {
@@ -231,7 +244,8 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<unknown>(null);
   // Barcode by default, and `?add=` lets an entry point elsewhere land straight
-  // on the right one — the collection page's "Scan a barcode" button does.
+  // on the right tab — `/scan` points here with `?add=barcode`, and `?add=manual`
+  // is what an old "Type a name" link should now be aimed at.
   const [mode, setMode] = useState<AddMode>(add ?? 'barcode');
 
   // The polled copy once there is one, else the first load. Kept separate from
@@ -317,9 +331,10 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
         <div>
           <h1>Add games</h1>
           <p className="subtitle">
-            Scan barcodes or photograph your shelves. Everything lands in the same queue
-            below and waits there until you have dealt with it — nothing disappears
-            because you only got through half.
+            Scan a barcode, photograph a shelf, or type a name — every way in is a tab
+            below. Anything read off a code or a photo lands in the queue and waits
+            there until you have dealt with it, so nothing disappears because you only
+            got through half.
           </p>
         </div>
         <Link to="/" className="btn btn-quiet">Collection</Link>
@@ -345,6 +360,12 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
 
         {mode === 'barcode' ? (
           <BarcodeQueue onQueueChanged={reload} onWantPhoto={() => setMode('single')} />
+        ) : mode === 'manual' ? (
+          // The same component the check screen uses, not a second copy of the
+          // form: it already keeps focus in the name field, holds status and
+          // quantity steady between saves, and offers a lookup on what you have
+          // typed so far. Nothing about it is specific to where it is mounted.
+          <QuickAdd />
         ) : (
           <PhotoUploader
             mode={mode}

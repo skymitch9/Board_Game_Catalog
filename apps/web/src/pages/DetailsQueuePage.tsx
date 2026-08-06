@@ -216,6 +216,8 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
         </div>
 
         {items.length === 0 ? (
+          // Still reachable by URL once the nav stops offering the link, so the
+          // empty case has to say why it is empty rather than show a bare card.
           <p className="muted">
             Every game has a publisher, a year, a player count and a description, and
             everything filed under one reads its publisher from the game. Nothing to

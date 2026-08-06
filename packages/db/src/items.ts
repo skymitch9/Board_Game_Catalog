@@ -1069,6 +1069,23 @@ export async function listItemsNeedingDetails(
 }
 
 /**
+ * How long that queue is, without building it.
+ *
+ * For the nav, which draws the "Missing details" link only when there is
+ * something behind it. The same `WHERE` clause from the same generator, so a
+ * count and a list cannot disagree about what is outstanding — the whole reason
+ * `detailGapsSql` is generated from the policy in `packages/core/src/details.ts`
+ * rather than restated. A `LIMIT`-less `COUNT(*)`, because the number on the
+ * link is the whole queue and not the page of it a run would work through.
+ */
+export async function countItemsNeedingDetails(db: D1Database): Promise<number> {
+  const row = await db
+    .prepare(`SELECT COUNT(*) AS n FROM item WHERE ${detailGapsSql()}`)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/**
  * Everything marked `wanted`, one row per copy.
  *
  * A separate query rather than an option on `matchingRootsSql`, and the

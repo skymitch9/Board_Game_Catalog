@@ -86,6 +86,16 @@ export default function App() {
     );
   }
 
+  const canEdit = me.data.capabilities.includes('editCatalog');
+  // Absent (an older bundle against a newer worker, or the other way round) and
+  // null (a reader, or a count that failed) both mean "not known", and an
+  // unknown count shows the link. A link to an empty screen is a nuisance; a
+  // link that is not drawn is invisible, and the owner cannot press what they
+  // cannot see.
+  const chores = me.data.chores;
+  const showRetag = canEdit && (chores == null || chores.relatedGames > 0);
+  const showDetails = canEdit && (chores == null || chores.missingDetails > 0);
+
   return (
     <main>
       <nav className="topbar">
@@ -97,10 +107,31 @@ export default function App() {
               to. Hoisting it up here as well made the top bar a second, competing
               menu for the same job — and the bar is for moving between places,
               not for actions. */}
-          {/* The wishlist is a place, not an action — what we don't have yet is
-              a different view of the collection, not a thing done to it — so it
-              belongs in the bar alongside People. */}
+          {/* Places, not actions. The wishlist is a different view of the
+              collection; Related games and Missing details are two lists you
+              visit to work through and then leave. None of them is a thing you
+              *do* to the collection, which is why they sit here and not in the
+              collection header — that header now holds one button, "+ Add
+              games", because adding is the one thing you do on that screen.
+
+              Both maintenance links appear only while they have something
+              outstanding, with the count on the face so a tap can be judged
+              before it is spent. A screen with nothing on it does not earn a
+              permanent slot, and this is a better answer to a 360px-wide phone
+              than shrinking the type until five links fit. The pages stay
+              reachable by URL either way — this hides the link, not the
+              screen. */}
           <Link to="/wishlist">Wishlist</Link>
+          {showRetag && (
+            <Link to="/retag">
+              Related games{chores ? ` (${chores.relatedGames})` : ''}
+            </Link>
+          )}
+          {showDetails && (
+            <Link to="/details">
+              Missing details{chores ? ` (${chores.missingDetails})` : ''}
+            </Link>
+          )}
           {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}

@@ -71,11 +71,17 @@ a:hover { text-decoration: underline; }
 
 /* --- chrome ------------------------------------------------------------- */
 
+/* Wraps, because the bar now carries the two maintenance screens as well as the
+   wishlist and — for an owner — People and their own name. That is five things
+   plus the brand on a 360px phone. They are hidden when they have nothing
+   outstanding (see App.tsx), so the crowded case is not the usual one, but the
+   bar must not run off the edge on the day it happens. */
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
   padding: 0.9rem 0;
   margin-bottom: 0.5rem;
   border-bottom: 1px solid var(--line);
@@ -92,8 +98,8 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 1rem; margin: 1rem 0;
 }
-/* Wraps because there are now five of these and a phone is 360px wide. Without
-   it the row simply ran off the right-hand edge. */
+/* Wraps. The collection header is down to one button, but an item page still
+   has Edit and Delete side by side and a phone is 360px wide. */
 .head-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; flex-shrink: 0; }
 
 .crumbs {
@@ -494,7 +500,14 @@ textarea { resize: vertical; }
 
 /* --- people ------------------------------------------------------------- */
 
-.topbar-right { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+.topbar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 1rem; min-width: 0; }
+/* The links keep their full size; only the signed-in name gives ground, because
+   it is the one thing here nobody navigates with. */
+@media (max-width: 560px) {
+  .topbar-right { gap: 0.3rem 0.75rem; font-size: 0.88rem; }
+  .topbar-right .who { font-size: 0.78rem; max-width: 40vw; }
+  .brand { font-size: 0.95rem; }
+}
 
 .pending-callout {
   display: flex; flex-direction: column; gap: 0.2rem;
@@ -731,6 +744,14 @@ code {
 /* The add-mode tabs reuse .scan-modes/.scan-mode from the check screen; only
    the spacing below them is new here. */
 .scan-jobs-page .scan-modes { margin-bottom: 0.9rem; }
+
+/* The "Type a name" tab mounts QuickAdd, which is its own card, inside the card
+   holding the tab strip. Flattened rather than restructured: the panel below the
+   tabs is one region whatever tab is showing, and a box drawn inside a box would
+   say otherwise. */
+.scan-jobs-page .card > .quickadd {
+  background: none; border: 0; border-radius: 0; padding: 0; margin-bottom: 0;
+}
 
 .barcode-queue { display: flex; flex-direction: column; gap: 0.75rem; }
 .barcode-queue__bar {
