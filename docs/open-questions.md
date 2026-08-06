@@ -4,6 +4,104 @@
 > decision only you can make or a task only you can do. Nothing is blocked on me.
 > Delete this file once it is worked through.
 
+## Usage watch — trial run, 2026-08-06
+
+**State: session 46% (resets in ~2 hr 18 min) · weekly 63% (resets Sun 3:59 PM)**
+Second check. Session rose 2 points in 13 minutes.
+
+### There are TWO limits, and the weekly one matters more
+
+The first check only read the session figure. The page also carries a **weekly**
+limit, and it is the binding constraint on a long run:
+
+- **Session** — resets in hours. Hitting it costs a nap.
+- **Weekly** — resets **Sunday 3:59 PM**, three days out. Hitting it stops work
+  until then.
+
+At 46% session / 63% weekly, the weekly is over half gone and recovers far more
+slowly. **Apply the 89% rule to whichever is higher**, and treat the weekly as
+the real ceiling: pausing two hours for a session reset is cheap, pausing three
+days is not.
+
+Worth carrying into the global rule — a monitor that reads only the session
+figure will sail past the limit that actually hurts.
+
+How it works, and what was changed from the original idea:
+
+- **Readable via `find`, not page text.** `claude.ai/new#settings/usage` renders
+  the figures in a modal that `get_page_text` does not capture; `find` returns
+  "44% used", "Current session", "Resets in 2 hr 30 min" cleanly.
+- **Checked on a ~13 minute background timer**, not by a dedicated monitor agent.
+  An agent carries its own context and reasoning cost to do what is two tool
+  calls.
+- **Handoff at milestones, not every 10 minutes.** A handoff is a long output;
+  six an hour would consume a real share of the budget it exists to protect, and
+  consecutive copies would be near-identical. The timer updates the state line
+  above; a full refresh happens when an agent reports or a deploy lands.
+- **At 89%: stop the agents first, then pause.** This was the gap in the original
+  plan — pausing the conversation while a code agent keeps building and deploying
+  achieves nothing. `TaskStop` everything running, write the final handoff, then
+  wait out the window.
+- **Long waits are chained.** Background commands cap at 10 minutes; `Monitor`
+  reaches an hour. Size the wait from the reset time, which is readable.
+
+If this holds up it is worth promoting to a global rule.
+
+### The 10% after the threshold is a budget, not a runway
+
+- **Stop the agents first** — the largest ongoing spend, and two tool calls.
+- **Refresh the handoff, do not compose one.** These docs are kept current as
+  things land precisely so the threshold is an edit. Writing one from scratch at
+  89% means it was left too late.
+- **Nothing new starts.** No agents, no "quick" fixes, no final deploy. A
+  half-finished change at the boundary is worse than an unstarted one: the tree
+  ends up dirty and `npm run deploy` then refuses everything.
+- **Never kill a deploy mid-flight.** Let it land. A killed deploy can leave the
+  live version ahead of or behind the repo, which is the one state that is
+  genuinely expensive to untangle.
+
+### Overage credits — emergency only
+
+The owner's bar: use them only if stopping would **hard-lock the app**, or cost
+more than the overage to repair.
+
+Worth knowing that on this project almost nothing meets that bar:
+
+- **A dirty tree is not an emergency.** `npm run deploy` refuses it by design, so
+  nothing half-finished can ship. Finish or discard it later.
+- **An interrupted D1 write is not an emergency.** Writes are individually
+  complete; there are no multi-statement transactions in flight.
+- **A migration applied without its deploy is not an emergency.** The project
+  migrates *before* deploying on purpose, so new-schema-with-old-code is the
+  intended transient state and the app tolerates it.
+
+The realistic case is a deploy killed partway. Avoid it by not killing deploys,
+and the overage should never be needed.
+
+## If work stopped overnight
+
+One agent was running when this was filed, with four things queued in sequence:
+
+1. **Header and nav** — "Type a name" folded into Add games as a fourth tab; the
+   collection header reduced to a single **+ Add games**; **Related games** and
+   **Missing details** moved up to the nav beside Wishlist and hidden when they
+   have nothing outstanding.
+2. **The three-layer details policy** — never ask what cannot exist (TTRPG books
+   have no playtime); do not re-ask unless an input changed (`preordered` →
+   `owned`, a `bgg_id` appeared, the name was edited, the release year arrived);
+   and track asked-and-not-found **per field** rather than per item.
+3. **Deploy.**
+4. **Run the details fill** through Chrome, since the route is behind Access.
+
+**If the tree is dirty**, an agent died partway. `git diff` shows where it got
+to. `npm run deploy` refuses a dirty tree by design, so nothing half-finished can
+have shipped. Either finish the change or `git checkout -- <file>` to drop it —
+neither is dangerous, because everything already deployed is committed.
+
+**Nothing is lost by stopping.** Catalog writes are individually complete, the
+deployed app is whatever was last committed, and the queue of scan jobs is
+untouched.
+
 ## Where the catalog stands
 
 | | |
