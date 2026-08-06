@@ -124,7 +124,7 @@ size).
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
 | Deployed version | `32d5cacc-ab38-42f1-8764-d2016292dd45` — the four hidden columns (2026-08-07) |
 | Previous version | `00c1a732-29fb-4281-9126-4dc41b90ec9d` — collection paging (2026-08-07) |
-| Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Both confirmed registered in the deploy output, and both confirmed *firing* via `wrangler dev --test-scheduled` |
+| Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
@@ -218,6 +218,65 @@ this will use BGG's expansion links for definitive results.
 
 ---
 
+## 🚨 Cron triggers do not fire in production — nothing scheduled has ever run
+
+**Found 2026-08-06 while trying to bootstrap the component data.** This is not
+about the new feature; it invalidates a claim this document has been making
+since the cover check shipped.
+
+Evidence, all from production:
+
+| Check | Result |
+|---|---|
+| `SELECT COUNT(*) FROM cover_check` | **0** — the half-hourly check has never written a row |
+| `SELECT COUNT(*) FROM component_check` | **0** |
+| Component cron temporarily set to `*/2 * * * *`, deployed, watched 19 minutes | **0 rows, 0 log lines** |
+| `wrangler deployments list` | the accelerated version was live at 100% the whole time |
+| `npm run secret:list` | `BGG_API_TOKEN` **is** set, so the handler's no-token early return is not the cause |
+
+Both schedules appear in the deploy output — that is registration, not
+execution, and this document previously recorded "Confirmed registered in the
+deploy output" as if it were evidence. It is exactly the trap the cover-check
+work warned about in a different form: **a scheduled job that looks healthy and
+has never run.**
+
+What this means today:
+
+- **Cover-link health is a no-op in production.** The banner has nothing to
+  show because nothing has ever probed a URL. Locally it works — a forced
+  `POST /api/covers/check` returned `{checked:20, ok:20}` — so the code is
+  fine and the scheduler is not.
+- **The weekly component refresh will not fire either** until this is fixed.
+  Everything else about the feature works; the per-item "Check now" button and
+  `POST /api/components/backfill` run the same code on demand.
+
+Not diagnosable from the CLI. Next steps for whoever picks this up: check
+**Workers → board-game-catalog → Settings → Trigger Events** in the Cloudflare
+dashboard to see whether the crons are listed and whether any invocation is
+recorded, and check whether the account has cron triggers enabled at all.
+Cloudflare's own "Cron Events" view is the only place that reports a *missed*
+invocation.
+
+### ⚠️ Production has no component data yet, and this is why
+
+The backfill route is behind Cloudflare Access, and a service token cannot
+stand in (`auth.ts` requires an `email` claim; service-token JWTs carry
+`common_name`). With the cron dead, there is no unattended way in. **The owner
+can do it in seconds from a signed-in browser** — open the site, then in the
+console:
+
+```js
+// One full run: 8 BoardGameGeek calls, ~10s. Repeat until unclassifiedComponents is 0.
+await (await fetch('/api/components/backfill', {method:'POST'})).json();
+await (await fetch('/api/components/status')).json();
+```
+
+About eight runs covers the catalog: 83 rooted games, ~1,148 components.
+Pressing **Check now** on a single game's page does the same for that game and
+is enough to see the feature work immediately.
+
+---
+
 ## What am I missing — built 2026-08-06
 
 *Seven expansions exist, you have four, here are the three you do not.* The
@@ -276,18 +335,53 @@ including Kekpop Spiele's three 3D "expansions", which BoardGameGeek types as
 **557 of 640 catalog rows can never have an answer** and say "No data", never
 "complete". That is the honest limitation and it is surfaced, not hidden.
 
-### Weekly refresh — verified firing, not just registered
+### The "not filed yet" badge no longer fires on accessories
+
+`ItemCard` labelled **every** parentless non-base item "not filed yet". The
+intent was right for an orphaned expansion — a record waiting for its game —
+and wrong for the three items in the catalog that are legitimately standalone:
+the **Pangea Gaming Table** (372, nineteen components under it) and
+**Excursion Tiles 1 and 2** (117, 118), system-agnostic terrain belonging to no
+game. All three read as a broken catalog.
+
+`BELONGS_TO_A_GAME` in `ItemTree.tsx` now limits the badge to `expansion`,
+`promo` and `upgrade`. An accessory that *does* carry a `pendingParentName`
+still says what it is waiting for, because then it genuinely is. No catalog
+data was touched — the table's `kind` is correct.
+
+**Checked for the same premise elsewhere:**
+
+| Place | Carries it? |
+|---|---|
+| `matchingRootsSql`'s `uncatalogued` filter | **No.** It asks whether anything in the tree has a *copy*, which is a different question |
+| `suggestRetags` (`packages/core/src/vision.ts`) | **No** — it only considers `kind === 'base'`, so a standalone accessory is never proposed for filing. Correct as-is |
+| `createItem` (`packages/db/src/items.ts`) | **No.** An orphan roots itself, which is exactly right for the table |
+| **`createItemSchema`** (`packages/core/src/schemas.ts`) | **⚠️ Yes.** A non-base item must supply a parent *or* a `pendingParentName`, so **the app cannot create a standalone accessory at all** — the Pangea table can only have arrived through the bulk import |
+
+The schema was **deliberately left alone**, because relaxing it is a real
+trade-off rather than a tidy-up: exempting `accessory` would also stop a sleeve
+pack read off a shelf from erroring, and start silently saving it as a
+standalone root. That is the owner's call. Note that the display and the
+validation now openly disagree about whether a lone accessory is a complete
+record.
+
+### Weekly refresh — verified firing locally; **never fires in production**
 
 `crons = ["*/30 * * * *", "41 5 * * 1"]`. Monday 05:41 UTC; minute 41 stays off
 the cover check's `:00`/`:30`. One `scheduled` handler dispatching on
 `event.cron`.
 
-Exercised with `wrangler dev --test-scheduled`, both directions:
+Exercised with `wrangler dev --test-scheduled`, both directions — the dispatch
+is correct and the handler does real work:
 
 ```
 GET /__scheduled?cron=41+5+*+*+1   -> component refresh {"gamesChecked":2,...,"bggCalls":1}
 GET /__scheduled?cron=*/30+*+*+*+* -> cover check {"checked":20,"ok":20,...}
 ```
+
+**In production it never runs at all** — see
+[the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run).
+The dispatch logic is not the problem; nothing invokes it.
 
 ⚠️ **`COMPONENT_REFRESH_CRON` in `apps/worker/src/lib/component-backfill.ts`
 must stay character-identical to the `wrangler.toml` entry.** A stray space

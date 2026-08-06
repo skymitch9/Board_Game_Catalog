@@ -50,6 +50,22 @@ const STATUS_TONE: Record<
 };
 
 /**
+ * Kinds that, by definition, are part of something else.
+ *
+ * An expansion, promo or upgrade with no parent is an unfinished record — it
+ * names a product that cannot exist alone. An **accessory** can: the Pangea
+ * gaming table is a piece of furniture with nineteen components filed under it,
+ * and Excursion Tiles 1 and 2 are system-agnostic terrain belonging to no game.
+ * All three are correctly standalone, and all three were being labelled
+ * "Accessory, not filed yet" — which reads as a broken catalog rather than as
+ * the complete records they are.
+ *
+ * `base` is absent because a base game is a root by definition and never
+ * reaches this test.
+ */
+const BELONGS_TO_A_GAME = new Set<ItemNode['kind']>(['expansion', 'promo', 'upgrade']);
+
+/**
  * Which groups the reader has opened, for the life of the tab.
  *
  * Module-level rather than component state because the card is unmounted and
@@ -212,14 +228,23 @@ export function ItemCard({ node }: { node: ItemNode }) {
           {allDigital(node.copies) && <DigitalTag />}
           {/* An expansion sitting at the top level is not a game — it is one
               waiting for its game. Saying so is the difference between a
-              catalog that looks wrong and one that is honest about a gap. */}
-          {node.kind !== 'base' && node.parentItemId == null && (
-            <Badge tone="wanted">
-              {node.pendingParentName
-                ? `${KIND_LABEL[node.kind]}, waiting for ${node.pendingParentName}`
-                : `${KIND_LABEL[node.kind]}, not filed yet`}
-            </Badge>
-          )}
+              catalog that looks wrong and one that is honest about a gap.
+
+              An *accessory* is the exception, and the badge used to get it
+              wrong: a gaming table with nineteen components under it, or a set
+              of system-agnostic terrain tiles, belongs to no game and is a
+              complete record standing on its own. Calling those "not filed
+              yet" reads as though the catalog is broken. It still says so when
+              the accessory names a parent it is waiting for, because then it
+              really is waiting. */}
+          {node.parentItemId == null && node.kind !== 'base' &&
+            (BELONGS_TO_A_GAME.has(node.kind) || node.pendingParentName) && (
+              <Badge tone="wanted">
+                {node.pendingParentName
+                  ? `${KIND_LABEL[node.kind]}, waiting for ${node.pendingParentName}`
+                  : `${KIND_LABEL[node.kind]}, not filed yet`}
+              </Badge>
+            )}
           {/* "Owned" is not worth a badge: it is what being in the collection
               means, and a label repeated on every card stops being read. The
               exceptions still are — wanted, lent, preordered and sold each say
