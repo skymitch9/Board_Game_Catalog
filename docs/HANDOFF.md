@@ -25,6 +25,7 @@ not repeated here. The state:
 | Reused, not rewritten | `matchExistingTitle` (now index-backed) and `isConfidentMatch`, both in `packages/core` |
 | Cost | **two D1 reads per request**, no per-title round trip |
 | Migration | **none** — nothing about this is stored |
+| Deployed | `3162e8fa-d650-4873-9f18-04420f20648b` (commits `50c4b14`, `d0aa235`) |
 
 **Verified locally against two seeded jobs sharing a title** (`npm run dev:worker`,
 no Access). Adding *Wingspan* from job A made job B's row read *"Added from
@@ -674,8 +675,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `324cc0e8-a60b-4f77-a080-ba9d043f7ce3` — wanted split from preordered everywhere (2026-08-06), at 100% |
-| Previous version | `e71840f0-d0a0-4bb4-ad57-4a3568e07417` — the details lookup stops dying quietly (2026-08-06) |
+| Deployed version | `3162e8fa-d650-4873-9f18-04420f20648b` — scan-job ownership computed on read (2026-08-06), at 100% |
+| Previous version | `cfa81473-5fd2-4436-8d5b-664d02fdc02a` — the same change without the provenance guard |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
