@@ -52,6 +52,21 @@ export const SOURCE_TIERS = ['official', 'crowdfunding', 'retail', 'community'] 
 export type SourceTier = (typeof SOURCE_TIERS)[number];
 
 /**
+ * What a `research_run` row can be a run *of*.
+ *
+ * Three of these name a source tier and one does not. `details` is the cheap
+ * open-web pass behind "Fill in missing details" — one search, a handful of
+ * facts printed on the box, written straight onto the item rather than staged
+ * as findings. It is a different kind of run, not a fourth place to look, which
+ * is why it is a separate list from `SOURCE_TIERS` rather than an addition to
+ * it: nothing may treat 'details' as somewhere a claim came from.
+ *
+ * Must match the CHECK constraint in migration 0018.
+ */
+export const RUN_TIERS = ['official', 'crowdfunding', 'retail', 'details'] as const;
+export type RunTier = (typeof RUN_TIERS)[number];
+
+/**
  * How two standalone items relate to each other without nesting.
  * - same_family: the same game reworked — a different setting or ruleset built
  *   on the same bones, by the same publisher. Catan: New Energies and CATAN:

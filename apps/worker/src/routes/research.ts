@@ -19,12 +19,12 @@ import {
   finishRun,
   findingCounts,
   getItem,
+  latestDetailsRuns,
   listFindings,
   listItemsNeedingDetails,
   listRuns,
   reviewFinding,
   saveFindings,
-  updateItem,
 } from '@bgc/db';
 import {
   ENRICH_CENTS_EACH,
@@ -32,12 +32,15 @@ import {
   ResearchError,
   TIER_SPECS,
   domainsForTier,
-  enrichItem,
   estimateTierCents,
-  fieldsToFill,
   runTier,
 } from '@bgc/research';
 import type { AppBindings } from '../env.js';
+import {
+  claimDetailsRun,
+  runDetailsInBackground,
+  toDetailsRun,
+} from '../lib/details-run.js';
 import { requireCapability } from '../middleware/auth.js';
 
 const RESEARCH_TIERS = SOURCE_TIERS.filter((t) => t !== 'community');
@@ -209,12 +212,35 @@ export const researchRoutes = new Hono<AppBindings>()
   })
 
   /**
-   * Fill in one game's blanks from the open web.
+   * The outcome of every game that has been looked up.
+   *
+   * One row per item, newest attempt only. This is what makes the queue survive
+   * a reload: the running cost, what each run filled in and what is still going
+   * all come back from the table rather than from React state that a navigation
+   * throws away.
+   */
+  .get('/details-runs', requireCapability('read'), async (c) => {
+    const runs = await latestDetailsRuns(c.env.DB);
+    return c.json({ runs: runs.map(toDetailsRun) });
+  })
+
+  /**
+   * Fill in one game's blanks from the open web — in the background.
+   *
+   * Answers with a run id straight away rather than holding the request open
+   * for the tens of seconds a Claude web search takes. That wait was not the
+   * real problem: a connection dropping mid-call paid for the lookup and lost
+   * the answer, because nothing but the response held it. The work now runs
+   * under `waitUntil` and reports through `research_run`, so closing the tab
+   * costs nothing — see `lib/details-run.ts`.
    *
    * Gaps only — anything already recorded is left alone, because a value you
-   * typed is better evidence than one a model found, and a catalog that
-   * quietly rewrites your entries is one you stop trusting. The response says
-   * exactly which fields moved.
+   * typed is better evidence than one a model found, and a catalog that quietly
+   * rewrites your entries is one you stop trusting.
+   *
+   * A second request while one is in flight gets the run already working rather
+   * than starting another; the queue page polls, and an unguarded route would
+   * buy the same answer twice.
    */
   .post('/:id/details', requireCapability('runResearch'), async (c) => {
     const id = idParam(c.req.param('id'));
@@ -223,36 +249,24 @@ export const researchRoutes = new Hono<AppBindings>()
     const item = await getItem(c.env.DB, id);
     if (!item) return c.json({ error: 'not_found' }, 404);
 
-    try {
-      const { fields, usage } = await enrichItem(c.env.ANTHROPIC_API_KEY, {
-        name: item.name,
-        yearPublished: item.yearPublished,
-        bggId: item.bggId,
-        publisher: item.publisher,
-      });
-
-      if (fields.notFound) {
-        return c.json({
-          item,
-          filled: {},
-          found: fields,
-          usage,
-          detail: fields.note ?? 'That game could not be identified confidently.',
-        });
-      }
-
-      const patch = fieldsToFill(item, fields);
-      const updated =
-        Object.keys(patch).length > 0 ? await updateItem(c.env.DB, id, patch) : item;
-
-      return c.json({ item: updated, filled: patch, found: fields, usage });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (err instanceof ResearchError) {
-        return c.json({ error: 'lookup_failed', detail: message }, err.status as 400);
-      }
-      return c.json({ error: 'lookup_failed', detail: message }, 502);
+    // Checked here rather than left to fail in the background: no key is a
+    // misconfiguration the caller can act on, and recording it as a failed run
+    // would put an error on a game that has nothing wrong with it.
+    if (!c.env.ANTHROPIC_API_KEY) {
+      return c.json(
+        { error: 'lookup_failed', detail: 'No Anthropic API key configured (see docs/SETUP.md).' },
+        503,
+      );
     }
+
+    const user = c.get('user');
+    const { run, alreadyRunning } = await claimDetailsRun(c.env.DB, id, user?.id ?? null);
+
+    if (!alreadyRunning) {
+      c.executionCtx.waitUntil(runDetailsInBackground(c.env, run.id, id));
+    }
+
+    return c.json({ run: toDetailsRun(run), alreadyRunning }, alreadyRunning ? 200 : 202);
   })
 
   /** Accept or reject one finding. The only thing review does is mark the row. */

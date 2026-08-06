@@ -9,22 +9,32 @@
  * The tables come from migration 0001; this is the first code to use them.
  */
 
-import type { SourceTier } from '@bgc/core';
+import type { RunTier, SourceTier } from '@bgc/core';
 
 export type ResearchTier = Exclude<SourceTier, 'community'>;
 export type RunStatus = 'queued' | 'running' | 'done' | 'error';
 export type ReviewState = 'pending' | 'accepted' | 'rejected';
 
+/** What a details run changed, stored on the run so it survives the request. */
+export interface DetailsResult {
+  /** Column-ish field names — `publisher`, `yearPublished` — and their values. */
+  filled: Record<string, string | number>;
+  /** Why nothing was filled, when nothing was. */
+  detail: string | null;
+}
+
 export interface ResearchRun {
   id: number;
   itemId: number;
-  tier: ResearchTier;
+  tier: RunTier;
   model: string | null;
   effort: string | null;
   status: RunStatus;
   errorMessage: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Only a details run writes this; a tiered run stages findings instead. */
+  result: DetailsResult | null;
   triggeredBy: number | null;
   startedAt: string | null;
   finishedAt: string | null;
@@ -58,6 +68,7 @@ interface RunRow {
   error_message: string | null;
   input_tokens: number | null;
   output_tokens: number | null;
+  result_json: string | null;
   triggered_by: number | null;
   started_at: string | null;
   finished_at: string | null;
@@ -83,18 +94,30 @@ function mapRun(r: RunRow): ResearchRun {
   return {
     id: r.id,
     itemId: r.item_id,
-    tier: r.tier as ResearchTier,
+    tier: r.tier as RunTier,
     model: r.model,
     effort: r.effort,
     status: r.status as RunStatus,
     errorMessage: r.error_message,
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
+    result: parseResult(r.result_json),
     triggeredBy: r.triggered_by,
     startedAt: r.started_at,
     finishedAt: r.finished_at,
     createdAt: r.created_at,
   };
+}
+
+/** Unreadable JSON is treated as no result rather than failing the read. */
+function parseResult(raw: string | null): DetailsResult | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DetailsResult>;
+    return { filled: parsed.filled ?? {}, detail: parsed.detail ?? null };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -137,14 +160,14 @@ function mapFinding(r: FindingRow): ResearchFinding {
 }
 
 const RUN_COLUMNS = `id, item_id, tier, model, effort, status, error_message,
-  input_tokens, output_tokens, triggered_by, started_at, finished_at, created_at`;
+  input_tokens, output_tokens, result_json, triggered_by, started_at, finished_at, created_at`;
 
 const FINDING_COLUMNS = `id, run_id, item_id, field, value_json, source_tier,
   source_url, confidence, review_state, reviewed_by, reviewed_at, created_at`;
 
 export async function createRun(
   db: D1Database,
-  input: { itemId: number; tier: ResearchTier; model: string; effort: string; triggeredBy: number | null },
+  input: { itemId: number; tier: RunTier; model: string; effort: string; triggeredBy: number | null },
 ): Promise<ResearchRun> {
   const row = await db
     .prepare(
@@ -163,7 +186,13 @@ export async function finishRun(
   db: D1Database,
   id: number,
   outcome:
-    | { status: 'done'; inputTokens: number; outputTokens: number }
+    | {
+        status: 'done';
+        inputTokens: number;
+        outputTokens: number;
+        /** A details run's outcome. Omitted by the tiered pass, which stages findings. */
+        result?: DetailsResult;
+      }
     | { status: 'error'; errorMessage: string },
 ): Promise<ResearchRun | null> {
   const row =
@@ -172,10 +201,15 @@ export async function finishRun(
           .prepare(
             `UPDATE research_run
                 SET status = 'done', input_tokens = ?2, output_tokens = ?3,
-                    finished_at = datetime('now')
+                    result_json = ?4, finished_at = datetime('now')
               WHERE id = ?1 RETURNING ${RUN_COLUMNS}`,
           )
-          .bind(id, outcome.inputTokens, outcome.outputTokens)
+          .bind(
+            id,
+            outcome.inputTokens,
+            outcome.outputTokens,
+            outcome.result ? JSON.stringify(outcome.result) : null,
+          )
           .first<RunRow>()
       : await db
           .prepare(
@@ -187,6 +221,56 @@ export async function finishRun(
           .first<RunRow>();
 
   return row ? mapRun(row) : null;
+}
+
+/**
+ * The run still working on this item, if there is one.
+ *
+ * The queue page polls, and a poll that arrives while a lookup is in flight
+ * must not start a second one — two Claude calls for one game is money spent
+ * twice for one answer. A run killed with its invocation (see the subrequest
+ * ceiling in the scan-job notes) would otherwise block the item forever, so
+ * staleness is the caller's to judge from `startedAt`; this only reports what
+ * the row says.
+ */
+export async function activeDetailsRun(
+  db: D1Database,
+  itemId: number,
+): Promise<ResearchRun | null> {
+  const row = await db
+    .prepare(
+      `SELECT ${RUN_COLUMNS} FROM research_run
+        WHERE item_id = ?1 AND tier = 'details' AND status IN ('queued', 'running')
+        ORDER BY id DESC LIMIT 1`,
+    )
+    .bind(itemId)
+    .first<RunRow>();
+  return row ? mapRun(row) : null;
+}
+
+/**
+ * The most recent details run for each item that has one.
+ *
+ * One row per item rather than a history: the queue shows a list of games and
+ * what happened to each, and an older attempt on a game since filled in is not
+ * an outcome anyone is looking at. The history is still in the table.
+ */
+export async function latestDetailsRuns(
+  db: D1Database,
+  limit = 300,
+): Promise<ResearchRun[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT ${RUN_COLUMNS} FROM research_run r
+        WHERE r.tier = 'details'
+          AND r.id = (SELECT MAX(id) FROM research_run
+                       WHERE item_id = r.item_id AND tier = 'details')
+        ORDER BY r.id DESC
+        LIMIT ?`,
+    )
+    .bind(limit)
+    .all<RunRow>();
+  return results.map(mapRun);
 }
 
 export async function saveFindings(

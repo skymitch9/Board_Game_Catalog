@@ -12,6 +12,7 @@ import type {
   CreateCopyInput,
   CreateItemInput,
   CreateRelationInput,
+  DetailsRun,
   HealthResponse,
   Item,
   ItemDetail,
@@ -292,13 +293,22 @@ export const api = {
       '/api/research/needs-details',
     ),
 
-  fillItemDetails: (id: number) =>
+  /**
+   * Start a lookup. Returns as soon as the run exists, not when it finishes.
+   *
+   * The work happens on the server under `waitUntil`, so this resolving means
+   * "it is running", never "it is done" — poll `detailsRuns()` for the outcome.
+   * `alreadyRunning` says the server handed back a run that was already in
+   * flight rather than starting a second one.
+   */
+  startItemDetails: (id: number) =>
     post(`/api/research/${id}/details`, {}) as Promise<{
-      item: Item;
-      filled: Record<string, string | number>;
-      detail?: string;
-      usage: { inputTokens: number; outputTokens: number; estimatedCents: number };
+      run: DetailsRun;
+      alreadyRunning: boolean;
     }>,
+
+  /** The latest run for every game that has been looked up. */
+  detailsRuns: () => req<{ runs: DetailsRun[] }>('/api/research/details-runs'),
 
   // --- Scan Jobs (photo queue) ----------------------------------------------
 

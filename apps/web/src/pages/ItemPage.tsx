@@ -4,6 +4,7 @@ import {
   RELATION_TYPES,
   detailGaps,
   isTrustedMatch,
+  type DetailsRun,
   type InheritedDetail,
   type ItemDetail,
   type MeResponse,
@@ -364,6 +365,33 @@ function inWords(labels: string[]): string {
   return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }
 
+/** Between polls while a web lookup runs. Matches the details queue's. */
+const RUN_POLL_MS = 2500;
+/** Give up *watching* after two minutes. The run itself is unaffected. */
+const RUN_POLL_TRIES = 48;
+
+/**
+ * Wait for one background lookup to land, or give up watching it.
+ *
+ * Returns null on giving up rather than throwing, and the distinction matters:
+ * the run has not failed, this page has merely stopped watching. Saying "it
+ * failed" would be a lie about work still in progress and would invite paying
+ * for it a second time.
+ */
+async function waitForDetailsRun(itemId: number, runId: number): Promise<DetailsRun | null> {
+  for (let i = 0; i < RUN_POLL_TRIES; i++) {
+    await new Promise((resolve) => setTimeout(resolve, RUN_POLL_MS));
+    try {
+      const { runs } = await api.detailsRuns();
+      const run = runs.find((r) => r.itemId === itemId && r.id === runId);
+      if (run && run.status !== 'queued' && run.status !== 'running') return run;
+    } catch {
+      // A dropped poll is not an outcome; try again.
+    }
+  }
+  return null;
+}
+
 /**
  * Fill in what nobody has got round to typing.
  *
@@ -461,19 +489,35 @@ function LookupDetails({
    * on every blank field would be silly. It is also the only thing that finds a
    * publisher — the free sources carry none at all, which is why a scanned
    * collection has an empty publisher on every game.
+   *
+   * The lookup itself runs on the server, so this waits on a run rather than on
+   * a request. Leaving the page mid-wait no longer throws the answer away — the
+   * run finishes, the item is filled in, and reopening it shows the result.
    */
   async function runWeb() {
     setBusy(true);
     setError(null);
     setNote(null);
     try {
-      const res = await api.fillItemDetails(item.id);
-      const filled = Object.keys(res.filled);
-      if (filled.length === 0) {
-        setNote(res.detail ?? 'Nothing new was found on the web either.');
+      const { run } = await api.startItemDetails(item.id);
+      setNote(
+        'Searching the web. This takes up to a minute — you can leave this page, it carries on.',
+      );
+
+      const finished = await waitForDetailsRun(item.id, run.id);
+      if (!finished) {
+        setNote('Still searching. It carries on without this page — look again shortly.');
         return;
       }
-      onFilled(`Filled in ${inWords(filled)} from the web.`);
+      if (finished.status === 'error') {
+        setNote(finished.errorMessage ?? 'The lookup failed.');
+        return;
+      }
+      if (finished.filled.length === 0) {
+        setNote(finished.detail ?? 'Nothing new was found on the web either.');
+        return;
+      }
+      onFilled(`Filled in ${inWords(finished.filled)} from the web.`);
     } catch (err) {
       setError(err);
     } finally {

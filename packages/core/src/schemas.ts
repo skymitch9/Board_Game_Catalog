@@ -339,6 +339,49 @@ export interface WishlistEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Filling in details — a paid lookup that outlives the request that asked
+// ---------------------------------------------------------------------------
+
+/**
+ * One background "fill in the blanks" lookup, as the queue page sees it.
+ *
+ * The whole reason this is a row and not a response body: the call takes tens
+ * of seconds, and it used to be held open inside the request. A phone locking
+ * mid-lookup paid for the search and threw the answer away. The run is written
+ * before the call starts and finished after it lands, so navigating away costs
+ * nothing — come back and the outcome is here.
+ *
+ * `filled` and `detail` are the two possible outcomes of a *successful* run, and
+ * they are not the same as an error: "that game could not be identified" is an
+ * answer, and a run that answers it is `done`.
+ */
+export interface DetailsRun {
+  id: number;
+  itemId: number;
+  status: 'queued' | 'running' | 'done' | 'error';
+  /** Only for `error` — the lookup itself failed, rather than finding nothing. */
+  errorMessage: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  /**
+   * What this run cost, in cents, from its own token counts.
+   *
+   * Computed server-side because the price of a model is not something a
+   * browser should hold an opinion about — and because the queue page's running
+   * total has to keep meaning the same thing after a reload, when the numbers
+   * come back from the database rather than from the response that produced
+   * them.
+   */
+  estimatedCents: number;
+  /** Field names as a person would say them: "publisher", "year". */
+  filled: string[];
+  /** Said when nothing was filled, so the row explains itself. */
+  detail: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Cover health — every thumbnail is somebody else's file
 // ---------------------------------------------------------------------------
 

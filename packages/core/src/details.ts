@@ -88,6 +88,21 @@ export const DETAIL_FIELD_LABEL: Record<DetailField, string> = {
 };
 
 /**
+ * Every field a details lookup can write, as a person would say it.
+ *
+ * A superset of `DETAIL_FIELD_LABEL`, because what a run *fills* and what the
+ * queue *asks for* are not the same set: `maxPlayers` is written when the model
+ * finds it, but is never a gap on its own — a game missing only its upper
+ * player count is not worth 1.4¢, and `minPlayers` stands for the pair in the
+ * queue. Both therefore read as "players", and a run that filled both says it
+ * once.
+ */
+export const FILLED_FIELD_LABEL: Record<string, string> = {
+  ...DETAIL_FIELD_LABEL,
+  maxPlayers: 'players',
+};
+
+/**
  * The fields a blank child resolves from its nearest ancestor with a value.
  *
  * Deliberately short. Everything else on the list either describes a game being
