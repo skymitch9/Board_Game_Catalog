@@ -493,6 +493,10 @@ textarea { resize: vertical; }
   gap: 0.75rem; margin: 1rem 0 0;
 }
 .pager__where { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* The same control in both places — only the space around it differs, because
+   the top set sits between the filter card and the result count rather than
+   under the last card on the page. */
+.pager--top { margin: 0.85rem 0 0.25rem; }
 @media (max-width: 400px) {
   .pager { gap: 0.4rem; }
   .pager .btn { padding: 0.45rem 0.6rem; }

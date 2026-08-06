@@ -3,6 +3,7 @@ import {
   DETAIL_FIELD_LABEL,
   RELATION_TYPES,
   detailGaps,
+  fillableFieldsFor,
   isTrustedMatch,
   type DetailsRun,
   type InheritedDetail,
@@ -363,6 +364,20 @@ const FILLABLE: { key: FillableKey; label: string }[] = [
   { key: 'thumbnailUrl', label: 'cover image' },
 ];
 
+/**
+ * The same list, minus anything this row cannot have.
+ *
+ * `fillableFieldsFor` is the policy, shared with the paid lookup and the queue,
+ * so this button and that one cannot come to different conclusions about whether
+ * a playmat wants a description. `thumbnailUrl` is not in the policy and is
+ * always offered: a photograph of the thing is exactly what the owner said stood
+ * in for the words.
+ */
+function fillableFor(item: ItemDetail): { key: FillableKey; label: string }[] {
+  const allowed: readonly string[] = fillableFieldsFor(item.kind, item.gameSystem);
+  return FILLABLE.filter(({ key }) => key === 'thumbnailUrl' || allowed.includes(key));
+}
+
 const isBlank = (v: string | number | null): boolean =>
   v == null || (typeof v === 'string' && v.trim() === '');
 
@@ -434,8 +449,12 @@ function LookupDetails({
 
   // What a lookup could write into. A field answered by the game upstairs is
   // excluded: without that, every playmat in the catalog would offer to fill in
-  // a publisher directly under a subtitle already displaying one.
-  const missing = FILLABLE.filter(({ key }) => isBlank(item[key]) && !(key in item.inherited));
+  // a publisher directly under a subtitle already displaying one. A field this
+  // kind of row cannot have is excluded too — a dice tray is not a dice game,
+  // however confidently a name search says otherwise.
+  const missing = fillableFor(item).filter(
+    ({ key }) => isBlank(item[key]) && !(key in item.inherited),
+  );
 
   // What this row is asked for and does not have — the queue's own test, so the
   // page and the queue can never disagree about whether a record is finished.

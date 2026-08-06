@@ -37,7 +37,7 @@
  * time from the browser for that reason.
  */
 
-import { DETAIL_FIELDS, FILLED_FIELD_LABEL, detailGaps, type DetailsRun } from '@bgc/core';
+import { FILLED_FIELD_LABEL, FILL_FIELDS, detailGaps, type DetailsRun } from '@bgc/core';
 import {
   activeDetailsRun,
   createRun,
@@ -90,7 +90,7 @@ export function toDetailsRun(run: ResearchRun): DetailsRun {
   // filled the same things read identically.
   const filledKeys = Object.keys(run.result?.filled ?? {});
   const labels: string[] = [];
-  for (const field of [...DETAIL_FIELDS, 'maxPlayers']) {
+  for (const field of FILL_FIELDS) {
     if (!filledKeys.includes(field)) continue;
     const label = FILLED_FIELD_LABEL[field] ?? field;
     if (!labels.includes(label)) labels.push(label);
@@ -208,8 +208,12 @@ export async function runDetailsInBackground(
       return;
     }
 
-    // Gaps only. Anything already recorded is left alone, because a value
-    // someone typed is better evidence than one a model found.
+    // Gaps only, and only fields this kind of row can have. Anything already
+    // recorded is left alone, because a value someone typed is better evidence
+    // than one a model found; anything impossible is dropped whatever the model
+    // returned, because the model is asked the same six questions about a dice
+    // tray as about a game. `fillableFieldsFor` in `packages/core/src/details.ts`
+    // is the one place that decides.
     const patch = fieldsToFill(item, fields);
     if (Object.keys(patch).length > 0) await updateItem(env.DB, itemId, patch);
 

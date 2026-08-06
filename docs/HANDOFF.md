@@ -2,6 +2,62 @@
 
 Everything needed to continue or finish this without Claude.
 
+## A dice tray is not a dice game — built 2026-08-06
+
+*"maybe we remove the desc of accessories all together, the name and potential
+photo should be enough information for what something is. This is mainly a
+catalog of things i own"* — the owner.
+
+**The queue was already innocent. The lookups were not.** `detailFieldsFor` has
+never asked an accessory for a description: everything with a parent is asked for
+nothing, and the three parentless accessories are asked only for publisher and
+publisher site. Measured on production's 760 rows through
+`GET /api/research/needs-details`, before **and** after: **80 rows — 78 base, 2
+accessory (Excursion Tiles 1, Pangea Gaming Table)**, the same rows with the same
+"missing:" lines. Nothing left the queue because nothing accessory-shaped was in
+it. Do not expect a number to move; the SQL is generated from `detailGapBranches`
+and that function's output is unchanged.
+
+What *was* broken is the other direction, and it was reproduced live against a
+copy of production's data. One click of **Free lookup** on
+*Dice Throne Vanguard: Accessory Pack - Druid*:
+
+> Filled in year, min players, max players, play time, description and cover
+> image from "Dice Throne: Vanguard".
+
+The accessory pack came away **2–4 players, 30 minutes** and the base game's
+marketing copy. The identical click on its sibling *Accessory Pack - Duelist*
+after the change filled **year and cover image**, and nothing else.
+
+**The new decision is `fillableFieldsFor` in `packages/core/src/details.ts`**:
+what a row may *hold*, as opposed to what it is *asked* for. `accessory`, `promo`
+and `upgrade` refuse `description`, `minPlayers`, `maxPlayers` and `playtimeMin`;
+a row with a `game_system` refuses the three player/time fields and keeps its
+description. It gates all three writers:
+
+| Writer | Where |
+|---|---|
+| The paid details run | `fieldsToFill`, `packages/research/src/enrich.ts` |
+| The free by-name lookup on an item page | `fillableFor`, `apps/web/src/pages/ItemPage.tsx` |
+| Adding a scanned candidate as an accessory | `addCandidate`, `apps/web/src/pages/ScanPage.tsx` |
+
+- **`expansion` is deliberately not on the list.** *Catan: Starfarers – 5-6
+  Player Extension* is an expansion whose entire purpose is to change the number
+  this would have refused to record.
+- **`promo` and `upgrade` were added on judgement, not instruction.** The owner
+  said accessories. A promo card and a set of metal coins are the same shape —
+  1 of 48 promos carries a description — but if that is wrong, deleting the two
+  strings from `A_THING_NOT_A_GAME` reverses it and nothing else changes.
+- **`yearPublished` is still allowed on an accessory.** A playmat really was
+  printed in a year; unlike a player count it is not an invention. It is allowed
+  in, never asked for.
+- **The three existing accessory descriptions were left alone.** This changes
+  what gets asked and written, never what is stored.
+
+The collection page also grew a **second pager above the list**, from the same
+state and handlers as the bottom one (`Pager` in `apps/web/src/components/ui.tsx`);
+neither renders when there is only one page.
+
 ## Right now — 2026-08-06 (evening)
 
 **Working tree clean, pushed, migrated and deployed.** Head `b783883`,

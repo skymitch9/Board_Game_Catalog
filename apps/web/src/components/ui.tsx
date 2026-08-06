@@ -125,6 +125,70 @@ export function ConfirmButton({
   );
 }
 
+/**
+ * The page controls. Rendered twice — once above the list, once below it.
+ *
+ * Twice, because the owner's complaint was having to scroll the whole page down
+ * to reach "Next" and then straight back up to read the result. One component,
+ * because two copies of this markup would drift: the first divergence would be
+ * a fix applied to the bottom set and not the top, and nobody would notice until
+ * the two disagreed about which page they were on.
+ *
+ * `position` is not decoration. Two identically-labelled navs are a maze to a
+ * screen reader — "navigation, Collection pages" twice, with no way to tell
+ * which one the cursor is in — so the nav and both buttons say which set they
+ * belong to.
+ *
+ * Renders nothing at all when there is one page. Controls that can only be
+ * pressed to no effect are worse than absent ones.
+ */
+export function Pager({
+  page,
+  pageSize,
+  pageCount,
+  total,
+  onPage,
+  position,
+}: {
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  total: number;
+  onPage: (next: number) => void;
+  position: 'top' | 'bottom';
+}) {
+  if (pageCount <= 1) return null;
+
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  return (
+    <nav className={`pager pager--${position}`} aria-label={`Pagination, ${position} of list`}>
+      <button
+        type="button"
+        className="btn btn-quiet"
+        disabled={page <= 1}
+        aria-label={`Previous page (${position} pagination)`}
+        onClick={() => onPage(page - 1)}
+      >
+        ← Previous
+      </button>
+      <span className="pager__where">
+        {from}–{to} of {total}
+      </span>
+      <button
+        type="button"
+        className="btn btn-quiet"
+        disabled={page >= pageCount}
+        aria-label={`Next page (${position} pagination)`}
+        onClick={() => onPage(page + 1)}
+      >
+        Next →
+      </button>
+    </nav>
+  );
+}
+
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="empty">

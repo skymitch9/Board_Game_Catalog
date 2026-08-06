@@ -14,7 +14,7 @@
  * tray"*. The answer is "whoever publishes Dice Throne Vanguard", and it is
  * already in the database one row up.
  *
- * ## The two decisions, kept separate
+ * ## The three decisions, kept separate
  *
  * 1. **What a child may inherit** (`INHERITED_FIELDS`) — resolved at read time
  *    from the nearest ancestor that has a value. Nothing is written to the
@@ -24,17 +24,37 @@
  * 2. **What a row is asked for at all** (`detailFieldsFor`) — the gap test the
  *    queue runs on. A field that inherits is never a gap on a child, and a field
  *    that is meaningless for a kind is never a gap either.
+ * 3. **What may be written into a row at all** (`fillableFieldsFor`) — the
+ *    stronger claim, and the one that was missing. See below.
+ *
+ * ## Not asked is not the same as never written
+ *
+ * Decisions 2 and 3 look like the same decision and are not, which is how a
+ * dice tray ended up able to acquire a description of a dice game. The queue has
+ * never asked an accessory for one — an accessory is filed under its game, and
+ * anything with a parent is asked for nothing at all. But a lookup fired *at one
+ * item* from its own page filled **every blank field the model returned**, and
+ * "Dice Throne Vanguard: Dice Tray" searched by name finds Dice Throne Vanguard.
+ * The tray is then a dice game for 2–6 players taking 40 minutes, sourced
+ * plausibly, dated today and indistinguishable from a fact.
+ *
+ * The owner's instruction is the general form of that: *"maybe we remove the
+ * desc of accessories all together, the name and potential photo should be
+ * enough information for what something is. This is mainly a catalog of things i
+ * own"*. So a field a kind cannot have is now refused on the way **in**, not
+ * merely left off the shopping list — `fillableFieldsFor` gates both the paid
+ * details run (`fieldsToFill`) and the free by-name lookup on the item page.
  *
  * ## The field-by-field reasoning
  *
- * | Field | Inherits | Demanded of |
- * |---|---|---|
- * | `publisher` | **yes** | items with no parent |
- * | `publisherUrl` | **yes** | items with no parent |
- * | `yearPublished` | no | base games |
- * | `minPlayers` | no | base games |
- * | `playtimeMin` | no | base games |
- * | `description` | no | base games |
+ * | Field | Inherits | Demanded of | Refused on |
+ * |---|---|---|---|
+ * | `publisher` | **yes** | items with no parent | — |
+ * | `publisherUrl` | **yes** | items with no parent | — |
+ * | `yearPublished` | no | base games | — |
+ * | `minPlayers` / `maxPlayers` | no | base games | accessories, promos, upgrades, rulesets |
+ * | `playtimeMin` | no | base games | accessories, promos, upgrades, rulesets |
+ * | `description` | no | base games | accessories, promos, upgrades |
  *
  * - **publisher / publisherUrl inherit.** The owner's instruction, verbatim:
  *   *"I dont super care if an expansion or accessory has a different
@@ -88,13 +108,20 @@ export const DETAIL_FIELD_LABEL: Record<DetailField, string> = {
 };
 
 /**
+ * Every field a details lookup can write.
+ *
+ * A superset of `DETAIL_FIELDS`, because what a run *fills* and what the queue
+ * *asks for* are not the same set: `maxPlayers` is written when the model finds
+ * it, but is never a gap on its own — a game missing only its upper player count
+ * is not worth 1.4¢, and `minPlayers` stands for the pair in the queue.
+ */
+export const FILL_FIELDS = [...DETAIL_FIELDS, 'maxPlayers'] as const;
+export type FillField = (typeof FILL_FIELDS)[number];
+
+/**
  * Every field a details lookup can write, as a person would say it.
  *
- * A superset of `DETAIL_FIELD_LABEL`, because what a run *fills* and what the
- * queue *asks for* are not the same set: `maxPlayers` is written when the model
- * finds it, but is never a gap on its own — a game missing only its upper
- * player count is not worth 1.4¢, and `minPlayers` stands for the pair in the
- * queue. Both therefore read as "players", and a run that filled both says it
+ * Both player counts read as "players", so a run that filled the pair says it
  * once.
  */
 export const FILLED_FIELD_LABEL: Record<string, string> = {
@@ -127,23 +154,83 @@ export interface DetailSubject {
 }
 
 /**
- * Fields a roleplaying book is never asked for.
+ * The facts that describe a game while it is being played.
  *
- * **A rulebook is not a game with a duration.** The Player's Handbook has no
- * player count and no playing time, and neither does Ryoko's Guide or a Cosmere
- * campaign book; a session is as long as the table wants and the party is as big
- * as it turns up. Asking bought a confident invention — "3–6 players, 240
- * minutes" — at 1.4¢ a book, and there are 79 rows carrying `D&D 5e (2014)`
- * alone.
- *
- * Keyed on `game_system` being set at all rather than on a list of systems: the
- * column exists precisely to say "this is a thing played under a ruleset", and a
- * hardcoded list would need editing every time the owner buys a new one.
- *
- * The other four are still asked. A book has a publisher, a publisher's site, a
- * year and a description, and all four are worth having.
+ * **A rulebook is not a game with a duration**, and neither is a dice tray. The
+ * Player's Handbook has no player count and no playing time; a session is as
+ * long as the table wants and the party is as big as it turns up. Asking bought
+ * a confident invention — "3–6 players, 240 minutes" — at 1.4¢ a book, and there
+ * are 79 rows carrying `D&D 5e (2014)` alone.
  */
-const NOT_ASKED_OF_A_RULESET: readonly DetailField[] = ['minPlayers', 'playtimeMin'];
+const OF_A_GAME_IN_PLAY: readonly FillField[] = ['minPlayers', 'maxPlayers', 'playtimeMin'];
+
+/**
+ * Kinds that are a thing you own rather than a game you play.
+ *
+ * *"the name and potential photo should be enough information for what
+ * something is. This is mainly a catalog of things i own"* — the owner, about
+ * accessories, and it decides the whole set. A sleeve pack, a playmat, a promo
+ * card and a set of metal coins are all objects belonging to a game rather than
+ * games, so none of them has a player count, a length, or a description that is
+ * not just its game's description wearing the wrong name.
+ *
+ * The measured case for it: of **356 accessories only 3 carry a description**
+ * and of **48 promos only 1** — after months of cataloguing, so it is not a
+ * field anyone was going to fill. What the field did do was give a lookup
+ * somewhere to put a plausible sentence: "Dice Throne Vanguard: Dice Tray"
+ * matches Dice Throne Vanguard by name, and the tray becomes a dice game for
+ * 2–6 players.
+ *
+ * **`expansion` is deliberately absent.** An expansion can genuinely have its
+ * own description, and — the case that settles it — its own player count: this
+ * catalog holds *Catan: Starfarers – 5-6 Player Extension*, an expansion whose
+ * entire purpose is to change the number this would have refused to record.
+ */
+const A_THING_NOT_A_GAME: readonly (ItemKind | string)[] = ['accessory', 'promo', 'upgrade'];
+
+/**
+ * The facts that cannot exist for this row, whoever asks and whatever they find.
+ *
+ * Two independent reasons, and a row can carry both. `gameSystem` is keyed on
+ * being set at all rather than on a list of systems: the column exists precisely
+ * to say "this is played under a ruleset", and a hardcoded list would need
+ * editing every time the owner buys a new one.
+ *
+ * A ruleset keeps its description — a rulebook is a thing there is something to
+ * say about — while an accessory does not.
+ */
+export function impossibleFields(
+  kind: ItemKind | string,
+  gameSystem?: string | null,
+): FillField[] {
+  const impossible = new Set<FillField>();
+  if (A_THING_NOT_A_GAME.includes(kind)) {
+    impossible.add('description');
+    for (const field of OF_A_GAME_IN_PLAY) impossible.add(field);
+  }
+  if (!isBlankDetail(gameSystem)) {
+    for (const field of OF_A_GAME_IN_PLAY) impossible.add(field);
+  }
+  // Rebuilt from FILL_FIELDS so the order is the order everything else reports.
+  return FILL_FIELDS.filter((field) => impossible.has(field));
+}
+
+/**
+ * The facts a lookup may write into this row.
+ *
+ * The gate on the way *in*, applied to whatever a lookup came back with rather
+ * than to what it was sent to find. `detailFieldsFor` is the shopping list;
+ * this is the door. Unasked-for and refused are different, and only the second
+ * one stops a playmat acquiring its game's blurb from a lookup somebody fired
+ * at it by hand.
+ */
+export function fillableFieldsFor(
+  kind: ItemKind | string,
+  gameSystem?: string | null,
+): FillField[] {
+  const impossible = impossibleFields(kind, gameSystem);
+  return FILL_FIELDS.filter((field) => !impossible.includes(field));
+}
 
 /**
  * The facts this row is asked for.
@@ -154,7 +241,10 @@ const NOT_ASKED_OF_A_RULESET: readonly DetailField[] = ['minPlayers', 'playtimeM
  * a publisher; the day its game turns up and `adoptOrphans` re-parents it, it
  * stops being asked, with nothing to clean up.
  *
- * `gameSystem` narrows it further — see `NOT_ASKED_OF_A_RULESET`.
+ * `kind` and `gameSystem` narrow it further — see `impossibleFields`. Nothing
+ * impossible can survive here, though in practice the two rules barely meet: a
+ * parentless non-base row is only ever asked for the two inheritable fields,
+ * and neither of those is ever impossible.
  */
 export function detailFieldsFor(
   kind: ItemKind | string,
@@ -162,9 +252,9 @@ export function detailFieldsFor(
   gameSystem?: string | null,
 ): DetailField[] {
   if (hasParent) return [];
-  const asked = kind === 'base' ? [...DETAIL_FIELDS] : [...INHERITED_FIELDS];
-  if (isBlankDetail(gameSystem)) return asked;
-  return asked.filter((f) => !NOT_ASKED_OF_A_RULESET.includes(f));
+  const asked: DetailField[] = kind === 'base' ? [...DETAIL_FIELDS] : [...INHERITED_FIELDS];
+  const impossible = impossibleFields(kind, gameSystem);
+  return asked.filter((field) => !impossible.includes(field));
 }
 
 /** True for null, undefined, and a string of nothing but spaces. */

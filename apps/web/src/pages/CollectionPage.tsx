@@ -5,7 +5,7 @@ import { useAsync, useDebounced } from '../hooks';
 import { Link } from '../router';
 import { GroupCard, ItemCard, KIND_LABEL } from '../components/ItemTree';
 import { ExportLinks } from '../components/QuickAdd';
-import { EmptyState, ErrorBox, Spinner } from '../components/ui';
+import { EmptyState, ErrorBox, Pager, Spinner } from '../components/ui';
 
 /**
  * The filter dropdown's value: one string covering both axes.
@@ -71,6 +71,16 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     page,
   ]);
 
+  // Every page change lands at the top of the list, whichever set of controls
+  // was pressed — pressing "Next" at the bottom and being left staring at the
+  // end of a page you have not read yet is the bug this avoids.
+  //
+  // Instant, not smooth: there is no animation here to hold back for
+  // `prefers-reduced-motion`, and a half-second glide up the length of a
+  // twenty-five card list would only delay the content arriving. Note that
+  // `behavior: 'auto'` defers to CSS `scroll-behavior`, which this app never
+  // sets to `smooth`; if that ever changes, this becomes an animation and will
+  // need the motion query.
   const goToPage = (next: number) => {
     setPage(next);
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -283,6 +293,16 @@ export function CollectionPage({ me }: { me: MeResponse }) {
 
       {items.state === 'ok' && items.data.entries.length > 0 && (
         <>
+          {/* Above the list as well as below it, directly under the filters, so
+              paging does not require reading to the bottom first. */}
+          <Pager
+            page={items.data.page}
+            pageSize={items.data.pageSize}
+            pageCount={items.data.pageCount}
+            total={items.data.total}
+            onPage={goToPage}
+            position="top"
+          />
           <p className="result-count muted">
             {/* The count is every match, not the page. Saying "25 games" while
                 paging through 107 would read as a filter nobody applied.
@@ -312,31 +332,14 @@ export function CollectionPage({ me }: { me: MeResponse }) {
             )}
           </div>
 
-          {items.data.pageCount > 1 && (
-            <nav className="pager" aria-label="Collection pages">
-              <button
-                type="button"
-                className="btn btn-quiet"
-                disabled={items.data.page <= 1}
-                onClick={() => goToPage(items.data.page - 1)}
-              >
-                ← Previous
-              </button>
-              <span className="pager__where">
-                {(items.data.page - 1) * items.data.pageSize + 1}–
-                {Math.min(items.data.page * items.data.pageSize, items.data.total)} of{' '}
-                {items.data.total}
-              </span>
-              <button
-                type="button"
-                className="btn btn-quiet"
-                disabled={items.data.page >= items.data.pageCount}
-                onClick={() => goToPage(items.data.page + 1)}
-              >
-                Next →
-              </button>
-            </nav>
-          )}
+          <Pager
+            page={items.data.page}
+            pageSize={items.data.pageSize}
+            pageCount={items.data.pageCount}
+            total={items.data.total}
+            onPage={goToPage}
+            position="bottom"
+          />
         </>
       )}
     </>

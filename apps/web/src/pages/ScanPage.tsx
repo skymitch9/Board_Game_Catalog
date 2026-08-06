@@ -4,6 +4,7 @@ import {
   PHOTO_LONG_EDGE,
   SHELF_LONG_EDGE,
   classifyShelfResults,
+  fillableFieldsFor,
   type BarcodeCandidate,
   type ClassifiedItem,
   type ItemKind,
@@ -211,6 +212,16 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
         const kind = overrideKind ?? 'base';
         const parentItemId = kind === 'base' ? null : (overrideParentId ?? null);
 
+        // A candidate describes *a game*, and this row may not be one. The
+        // lookup that produced it was given a title read off a box, so adding
+        // "Dice Throne Vanguard: Dice Tray" as an accessory would otherwise
+        // create it with 2–6 players, a 40 minute playing time and a
+        // description of a dice game. Same policy, and the same one function,
+        // as the paid details lookup — `packages/core/src/details.ts`.
+        const allowed: readonly string[] = fillableFieldsFor(kind, null);
+        const ifAllowed = <T,>(field: string, value: T): T | null =>
+          allowed.includes(field) ? value : null;
+
         const { item } = await api.createItem({
           name: candidate.name,
           kind,
@@ -220,10 +231,10 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
           yearPublished: candidate.yearPublished,
           publisher: candidate.publisher,
           thumbnailUrl: candidate.thumbnailUrl,
-          minPlayers: candidate.minPlayers,
-          maxPlayers: candidate.maxPlayers,
-          playtimeMin: candidate.playtimeMin,
-          description: candidate.description,
+          minPlayers: ifAllowed('minPlayers', candidate.minPlayers),
+          maxPlayers: ifAllowed('maxPlayers', candidate.maxPlayers),
+          playtimeMin: ifAllowed('playtimeMin', candidate.playtimeMin),
+          description: ifAllowed('description', candidate.description),
         });
 
         // Scanning a game means you own it — create a copy so it counts.

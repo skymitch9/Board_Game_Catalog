@@ -19,6 +19,7 @@
  * catalog that quietly rewrites your entries is one you stop trusting.
  */
 
+import { fillableFieldsFor, type FillField, type ItemKind } from '@bgc/core';
 import {
   RESEARCH_MODEL,
   ResearchError,
@@ -179,14 +180,28 @@ Leave anything you cannot confirm as null.`,
 }
 
 /**
- * The subset of found fields that this item is actually missing.
+ * The subset of found fields that this item is actually missing, and may have.
  *
- * Gap-filling made explicit rather than left to the caller to remember: an
- * enrichment that overwrote a hand-typed publisher would be the kind of quiet
- * damage nobody notices until the value they corrected is wrong again.
+ * Two rules, and they refuse for different reasons:
+ *
+ * 1. **Gaps only.** An enrichment that overwrote a hand-typed publisher would be
+ *    the kind of quiet damage nobody notices until the value they corrected is
+ *    wrong again.
+ * 2. **Only what this kind of row can have.** `fillableFieldsFor` is the policy —
+ *    a dice tray has no player count and no description of its own, and a
+ *    rulebook has no playing time. The model is asked the same six questions
+ *    whatever it is pointed at, so without this the *answers* land wherever
+ *    there is a blank column: searching "Dice Throne Vanguard: Dice Tray" by
+ *    name finds Dice Throne Vanguard, and the tray becomes a dice game for 2–6
+ *    players. Refusing on the way in is what makes that impossible rather than
+ *    merely unlikely.
  */
 export function fieldsToFill(
   current: {
+    /** Decides what this row may hold at all. */
+    kind: ItemKind | string;
+    /** A ruleset the row is played under, which has no player count. */
+    gameSystem?: string | null;
     publisher?: string | null;
     publisherUrl?: string | null;
     yearPublished?: number | null;
@@ -201,17 +216,20 @@ export function fieldsToFill(
   const blank = (v: string | number | null | undefined): boolean =>
     v == null || (typeof v === 'string' && v.trim() === '');
 
-  if (blank(current.publisher) && found.publisher) patch['publisher'] = found.publisher;
-  if (blank(current.publisherUrl) && found.publisherUrl) {
-    patch['publisherUrl'] = found.publisherUrl;
-  }
-  if (blank(current.yearPublished) && found.yearPublished) {
-    patch['yearPublished'] = found.yearPublished;
-  }
-  if (blank(current.minPlayers) && found.minPlayers) patch['minPlayers'] = found.minPlayers;
-  if (blank(current.maxPlayers) && found.maxPlayers) patch['maxPlayers'] = found.maxPlayers;
-  if (blank(current.playtimeMin) && found.playtimeMin) patch['playtimeMin'] = found.playtimeMin;
-  if (blank(current.description) && found.description) patch['description'] = found.description;
+  const allowed = fillableFieldsFor(current.kind, current.gameSystem);
+  const fill = (field: FillField, value: string | number | null): void => {
+    if (!allowed.includes(field)) return;
+    if (!blank(current[field]) || !value) return;
+    patch[field] = value;
+  };
+
+  fill('publisher', found.publisher);
+  fill('publisherUrl', found.publisherUrl);
+  fill('yearPublished', found.yearPublished);
+  fill('minPlayers', found.minPlayers);
+  fill('maxPlayers', found.maxPlayers);
+  fill('playtimeMin', found.playtimeMin);
+  fill('description', found.description);
 
   return patch;
 }
