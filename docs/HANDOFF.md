@@ -2,16 +2,49 @@
 
 Everything needed to continue or finish this without Claude.
 
-## Right now — 2026-08-06
+## Right now — 2026-08-06 (evening)
 
-**Working tree is clean, committed, pushed, migrated and deployed.** Head
-`34c1ecf`, production version **`b7f6fc59-e7f2-49e7-be34-ec9132d6be11`**,
-migrations through `0019_item_series` applied local *and* production. The newest
-commit is UI only and needed no migration.
+**Working tree clean, pushed, migrated and deployed.** Head `b783883`,
+production version **`75a32bf6-39c3-450e-8e56-c936dbd5e8bf`**, migrations
+through `0020_run_inputs` applied local *and* production.
 
-Production: **738 items** (114 top-level), 146 of them carrying
-`series = 'Dice Throne'`. Another agent is writing rows, which is why item
-totals in this document move between 736 and 739.
+Two things shipped today, in two commits, deliberately not batched:
+
+| Commit | Version | What |
+|---|---|---|
+| `fd7b142` | `f0b32c75-45d0-48f1-9733-7a53723affe5` | The collection header down to one button; Related games and Missing details moved to the nav and hidden when empty |
+| `b783883` | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` | "Ask once, re-ask when the world changes" — the three-layer details policy (migration 0020) |
+
+### ⚠️ The bulk details fill was NOT run, on purpose
+
+Two of three trial runs **stalled at `running` with no error** — items 383 and
+488, four minutes each — while item 92 completed in ~20s for 1.7¢. That is the
+subrequest-ceiling silent kill, the same failure that made a shelf scan look
+busy for twenty minutes. Firing 88 runs into it would stop the queue dead while
+looking healthy. **Total spend so far: 1.7¢.**
+
+Diagnosis to do first: whether `enrichItem` with web search now exceeds the
+eight subrequests budgeted in the header of `apps/worker/src/lib/details-run.ts`.
+Fifty is the free-plan ceiling and every D1 call counts alongside every fetch.
+The two stalled runs recover on their own the next time either item is asked —
+`claimDetailsRun` closes anything quiet for five minutes.
+
+Opinions the owner should decide on are collected in
+[`covers-wanted.md`](covers-wanted.md), including why the Dice Throne player
+counts were **not** copied across by hand.
+
+### Queue numbers, measured
+
+| | Queue |
+|---|---|
+| Before the policy | **92** |
+| After the policy deployed | **89** |
+| After the fill | not run |
+
+Layer 1 removed exactly three rulebooks (Auroboros, Bergin's Book of Beasts,
+Cosmere Mistborn Handbook) and narrowed what fourteen others are asked for.
+Layer 2 removed nothing and could not have — `research_run` was empty, so
+nothing had ever been asked. It pays from the second pass onward.
 
 **All five tasks are shipped.**
 1. ✅ Shelf enrichment fix — chunked, resumable, error recorded, retry/stop
@@ -221,13 +254,13 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `b7f6fc59-e7f2-49e7-be34-ec9132d6be11` — ratings above the family list, one add door, lazy thumbnails (2026-08-06), at 100% |
-| Previous version | `e4589bf1-66c5-4be1-9ad0-1c83084c3aad` — accepting a guess at review (2026-08-06) |
+| Deployed version | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` — the three-layer details policy (2026-08-06), at 100% |
+| Previous version | `f0b32c75-45d0-48f1-9733-7a53723affe5` — the collection header down to one button (2026-08-06) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
-| Migrations applied | `0001_init` … `0019_item_series` (local **and** production) |
+| Migrations applied | `0001_init` … `0020_run_inputs` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
