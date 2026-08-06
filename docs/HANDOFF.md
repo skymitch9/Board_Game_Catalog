@@ -2,6 +2,51 @@
 
 Everything needed to continue or finish this without Claude.
 
+## "262 wanted" over a wishlist of 25 — 2026-08-06
+
+**Shipped.** Commits `88ca86a` and `29c12b5`, production version
+**`324cc0e8-a60b-4f77-a080-ba9d043f7ce3`**. No migration, no data touched.
+
+*"why does the site say 262 wanted but the wishlist is like 20 items"* — the
+owner, and both numbers were internally correct. `262 = 26 wanted units + 236
+preordered units`, while `/wishlist` lists the 25 genuinely `wanted` rows. Two
+different sets under one word, and 236 of the 262 were pledges already paid for.
+
+**The fold lived in three places, not one**, which is the part worth carrying
+forward — the header was merely where it was noticed:
+
+| Where | What it fed |
+|---|---|
+| `collectionStats`, `packages/db/src/items.ts` | the collection header |
+| `summarizeTree`, `packages/core/src/schemas.ts` | every game card |
+| `summariseGroups`, `packages/db/src/items.ts` | every group card |
+
+The Ascension card read **"22 items · 45 wanted"** — forty-three of the
+forty-five were pledges. A card claiming to want twice as many things as it
+holds is the same error as the header's 262, repeated once per line.
+
+Now: header reads **"25 wanted · 204 on the way"** with the wanted figure
+**linking to `/wishlist`**, and cards read "4 wanted · 9 on the way".
+
+### ⚠️ Rows and units differ on purpose — do not "tidy" this
+
+- **Header figures are rows.** `wantedEntries` / `preorderedEntries` are
+  `COUNT(*)`, because the header **links to `/wishlist`** and that page counts
+  rows — "25 games wanted", with a `×2` on the single entry we want two of.
+- **Card figures are units.** `owned` beside them must be units or the
+  multi-copy `×N` feature disappears from the card.
+
+The rule that reconciles them: **a number counts what the thing it links to
+counts.** Card figures link nowhere. Make the header count units and it says 26
+above a list of 25, which is where this started.
+
+`collectionStats` has exactly one caller, `GET /api/meta`. Nothing else consumed
+`wantedCopies`.
+
+An earlier agent spotted the disagreement while building the wishlist and
+resolved it by *not linking* the header to the page. Right instinct, wrong
+resolution — a visibly wrong number is worse than an unlinked one.
+
 ## The lookup that died quietly — fixed, and the fill is done — 2026-08-06
 
 **Shipped.** Commit `e355873`, production version
@@ -431,8 +476,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `e71840f0-d0a0-4bb4-ad57-4a3568e07417` — the details lookup stops dying quietly (2026-08-06), at 100% |
-| Previous version | `915ce9c4-8901-4838-85ae-57cca17491fd` — a dice tray is not a dice game, plus the top pager (2026-08-06) |
+| Deployed version | `324cc0e8-a60b-4f77-a080-ba9d043f7ce3` — wanted split from preordered everywhere (2026-08-06), at 100% |
+| Previous version | `e71840f0-d0a0-4bb4-ad57-4a3568e07417` — the details lookup stops dying quietly (2026-08-06) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
