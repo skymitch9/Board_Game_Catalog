@@ -5,8 +5,10 @@ Everything needed to continue or finish this without Claude.
 Stable reference lives alongside this file and is not duplicated here:
 [`access/`](access/README.md) (endpoints, key names, quotas) and
 [`info/`](info/README.md) (how and why things work).
-**Last updated:** 2026-08-07. Everything is committed and deployed; the working
-tree is clean. Database was cleared and collection restarted fresh on 08-05.
+**Last updated:** 2026-08-08. Everything is committed, pushed and deployed; the
+working tree is clean. Database was cleared and collection restarted fresh on
+08-05, and is being written to by a separate data-only agent — item totals in
+this document move between 736 and 737 for that reason.
 
 **Newest first:**
 [children inherit from their parent](#children-inherit-from-their-parent--built-2026-08-08)
@@ -32,6 +34,9 @@ Nothing is in flight. The most recent commits:
 
 | Commit | What |
 |---|---|
+| `2d50224` | Stop paying to be told a dice tray's publisher — the queue, 695 → 78 |
+| `5a35e83` | Stop calling a gaming table an unfinished record |
+| `d105209` | Say what else exists for a game, and what we do not have |
 | `36cb936` | Show the four things the catalog knew and never said |
 | `bfa01bb` | Make the collection page work at 640 items |
 | `117d47e` | Make room for roleplaying books (migration 0015) |
@@ -126,8 +131,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `32d5cacc-ab38-42f1-8764-d2016292dd45` — the four hidden columns (2026-08-07) |
-| Previous version | `00c1a732-29fb-4281-9126-4dc41b90ec9d` — collection paging (2026-08-07) |
+| Deployed version | `eed45840-e358-473a-83e9-b880c10605f5` — children inherit from their parent (2026-08-08), at 100% |
+| Previous version | `32d5cacc-ab38-42f1-8764-d2016292dd45` — the four hidden columns (2026-08-07) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
