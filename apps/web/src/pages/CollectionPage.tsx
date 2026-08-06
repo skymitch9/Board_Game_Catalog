@@ -90,14 +90,29 @@ export function CollectionPage({ me }: { me: MeResponse }) {
         </div>
         {canEdit && (
           <div className="head-actions">
-            {/* Two doors, because they answer different questions. "Add games"
-                is bulk intake: photograph a shelf, sort it out afterwards.
-                "Check a game" is the one-off — point it at a single box and it
-                says whether this is already on a shelf at home, which is the
-                question you have in a shop and the one the catalog exists to
-                answer. Adding it is what you do *after* the answer is no. */}
+            {/*
+              Three doors, and the middle one exists because the first two were
+              not enough.
+
+              "Add games" is bulk intake and "Check a game" is the one-off
+              in-a-shop question — that split is still right, and neither has
+              moved. What was wrong is that barcode scanning lived *only* behind
+              "Check a game", so the fastest and most exact way to add a game
+              was hidden behind a button that sounded like it only answered a
+              question. The owner went looking for it under "Add games" and
+              concluded the feature had been removed.
+
+              So barcode scanning is now a first-class tab of Add games — the
+              first one, since a code is the only exact identification here —
+              and this button is a direct way in. It goes to the same page as
+              "Add games", named for what you do rather than for the queue you
+              end up in.
+            */}
             <Link to="/scan-jobs" className="btn btn-primary">
               + Add games
+            </Link>
+            <Link to="/scan-jobs?add=barcode" className="btn btn-quiet">
+              Scan a barcode
             </Link>
             <Link to="/scan" className="btn btn-quiet">
               Check a game

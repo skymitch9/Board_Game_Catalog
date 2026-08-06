@@ -31,9 +31,9 @@ function Routes({ me }: { me: MeResponse }) {
     case 'newItem':
       return <NewItemPage parentId={route.parentId} />;
     case 'scan':
-      return <ScanPage me={me} />;
+      return <ScanPage me={me} initialMode={route.mode} />;
     case 'scanJobs':
-      return <ScanJobsPage me={me} />;
+      return <ScanJobsPage me={me} add={route.add} />;
     case 'scanJobReview':
       return <ScanJobReviewPage id={route.id} me={me} />;
     case 'retag':

@@ -92,7 +92,9 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 1rem; margin: 1rem 0;
 }
-.head-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+/* Wraps because there are now five of these and a phone is 360px wide. Without
+   it the row simply ran off the right-hand edge. */
+.head-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; flex-shrink: 0; }
 
 .crumbs {
   display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
@@ -681,6 +683,40 @@ code {
    --------------------------------------------------------------------------- */
 
 .scan-jobs-page { max-width: 700px; margin: 0 auto; }
+
+/* The add-mode tabs reuse .scan-modes/.scan-mode from the check screen; only
+   the spacing below them is new here. */
+.scan-jobs-page .scan-modes { margin-bottom: 0.9rem; }
+
+.barcode-queue { display: flex; flex-direction: column; gap: 0.75rem; }
+.barcode-queue__bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+}
+.barcode-queue__done {
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+
+/* The running list. Newest first, so the row that just appeared is the one
+   under your thumb — this is read while looking at boxes, not at the phone. */
+.scanned-list { list-style: none; padding: 0; margin: 0; }
+.scanned-row {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
+}
+.scanned-row:last-child { border-bottom: none; }
+.scanned-row__body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.scanned-row__body code { word-break: break-all; }
+/* Three outcomes, three colours, so the list is legible at a glance: queued is
+   the good case, already-owned is the duplicate check working rather than an
+   error, and an unknown code is neither. */
+.scanned-row--queued { border-left-color: var(--good); }
+.scanned-row--check { border-left-color: var(--transit); }
+.scanned-row--owned { border-left-color: var(--accent); }
+.scanned-row--unknown, .scanned-row--unreachable { border-left-color: var(--warn); }
+.scanned-row--error { border-left-color: var(--bad); }
 
 .photo-uploader { padding: 0.5rem 0; }
 .upload-area {

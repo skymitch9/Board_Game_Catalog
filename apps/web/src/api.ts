@@ -250,6 +250,12 @@ export const api = {
       usage: ResearchUsage;
     }>,
 
+  /**
+   * Attach a barcode to an item — the write that makes the *next* scan of that
+   * box instant and offline. Also the point at which the match can be given
+   * back to GameUPC: pass `contribute` when there was no `updateUrl` to hand,
+   * which is the case for a code nobody had catalogued.
+   */
   linkBarcode: (data: {
     itemId: number;
     barcode: string;
@@ -257,6 +263,8 @@ export const api = {
     editionName?: string | null;
     bggId?: number | null;
     updateUrl?: string | null;
+    contribute?: boolean;
+    name?: string | null;
   }) => post('/api/barcode/link', data) as Promise<{ barcode: string; contributed: boolean }>,
 
   /** One box, read from a photo. ~3-5s, no web search. */
@@ -301,6 +309,22 @@ export const api = {
 
   createScanJob: (data: { data: string; mediaType: string; mode: 'shelf' | 'single' }) =>
     post('/api/scan-jobs', data) as Promise<{ job: ScanJob }>,
+
+  /**
+   * Put one scanned barcode on the queue.
+   *
+   * Pass the `jobId` the previous scan returned and a stack of boxes becomes a
+   * single job with one line each; omit it and a new batch opens. `duplicate`
+   * comes back true when the code was already on that job, which is the server
+   * refusing to turn one box left in front of the camera into five entries.
+   */
+  scanBarcodeToQueue: (barcode: string, jobId?: number | null) =>
+    post('/api/scan-jobs/barcode', { barcode, jobId: jobId ?? null }) as Promise<{
+      job: ScanJob;
+      index: number;
+      title: EnrichedTitle;
+      duplicate: boolean;
+    }>,
 
   enrichScanJob: (id: number) =>
     post(`/api/scan-jobs/${id}/enrich`, {}) as Promise<{ job: ScanJob }>,
@@ -356,7 +380,7 @@ export interface CacheStats {
 export interface ScanJob {
   id: number;
   status: 'uploaded' | 'reading' | 'read' | 'enriching' | 'review' | 'done' | 'failed';
-  mode: 'shelf' | 'single';
+  mode: 'shelf' | 'single' | 'barcode';
   photoKey: string;
   rawTitles: string | null;
   enriched: string | null;
@@ -392,6 +416,19 @@ export interface EnrichedTitle {
   dismissed?: boolean;
   /** Set when a retry searched with corrected text rather than what was read. */
   relookedUpAs?: string | null;
+
+  // --- Only ever set on a barcode-sourced row -------------------------------
+
+  /** The code that was scanned. Absent on anything that came from a photo. */
+  barcode?: string | null;
+  /** The lookup services could not be reached — not the same as knowing nothing. */
+  lookupFailed?: boolean;
+  /** How many we hold, when the code is already on something in the collection. */
+  ownedQuantity?: number | null;
+  /** GameUPC's write-back endpoint, so confirming the match can be given back. */
+  updateUrl?: string | null;
+  /** Plausible but unconfirmed: shown, and left unticked for a human to judge. */
+  needsConfirmation?: boolean;
 }
 
 export interface ResearchUsage {

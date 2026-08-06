@@ -8,6 +8,13 @@ import { useCallback, useEffect, useState } from 'react';
  * (see apps/worker/src/index.ts).
  */
 
+/** The tabs on /scan and on /scan-jobs. Kept here so `parse` can validate them. */
+export type ScanMode = 'barcode' | 'photo' | 'shelf' | 'manual';
+export type AddMode = 'barcode' | 'shelf' | 'single';
+
+const SCAN_MODES: readonly ScanMode[] = ['barcode', 'photo', 'shelf', 'manual'];
+const ADD_MODES: readonly AddMode[] = ['barcode', 'shelf', 'single'];
+
 export type Route =
   | { name: 'collection' }
   | { name: 'item'; id: number }
@@ -15,12 +22,21 @@ export type Route =
   | { name: 'editItem'; id: number }
   | { name: 'people' }
   | { name: 'wishlist' }
-  | { name: 'scan' }
-  | { name: 'scanJobs' }
+  // `?mode=` and `?add=` let an entry point elsewhere land on the right tab,
+  // rather than on the right page and the wrong one. Both are optional and both
+  // fall back to the page's own default, so an unrecognised value is harmless.
+  | { name: 'scan'; mode: ScanMode | null }
+  | { name: 'scanJobs'; add: AddMode | null }
   | { name: 'scanJobReview'; id: number }
   | { name: 'retag' }
   | { name: 'detailsQueue' }
   | { name: 'notFound' };
+
+/** A query parameter, but only if it is one of the values the page understands. */
+function pick<T extends string>(search: string, key: string, allowed: readonly T[]): T | null {
+  const raw = new URLSearchParams(search).get(key);
+  return raw && (allowed as readonly string[]).includes(raw) ? (raw as T) : null;
+}
 
 function parse(pathname: string, search: string): Route {
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
@@ -30,14 +46,19 @@ function parse(pathname: string, search: string): Route {
   if (parts[0] === 'people' && parts.length === 1) return { name: 'people' };
   if (parts[0] === 'wishlist' && parts.length === 1) return { name: 'wishlist' };
   // One flat route, no hash segments: a standalone PWA on iOS re-prompts for
-  // camera permission on every route change (WebKit #215884).
-  if (parts[0] === 'scan' && parts.length === 1) return { name: 'scan' };
+  // camera permission on every route change (WebKit #215884). The tab is a
+  // query parameter for the same reason — changing it must not change the path.
+  if (parts[0] === 'scan' && parts.length === 1) {
+    return { name: 'scan', mode: pick(search, 'mode', SCAN_MODES) };
+  }
 
   if (parts[0] === 'retag' && parts.length === 1) return { name: 'retag' };
   if (parts[0] === 'details' && parts.length === 1) return { name: 'detailsQueue' };
 
   if (parts[0] === 'scan-jobs') {
-    if (parts.length === 1) return { name: 'scanJobs' };
+    if (parts.length === 1) {
+      return { name: 'scanJobs', add: pick(search, 'add', ADD_MODES) };
+    }
     const id = Number(parts[1]);
     if (Number.isInteger(id) && id > 0) return { name: 'scanJobReview', id };
   }

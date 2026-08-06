@@ -1,10 +1,16 @@
 /**
- * Scan jobs — photo upload queue with progressive enrichment.
+ * Scan jobs — the intake queue.
  *
- * Upload a photo → store in R2 → vision reads titles (async via waitUntil) →
- * free lookups enrich → results land in 'review' for the user to confirm.
+ * Two ways in, one queue, one review screen:
  *
- * Multiple photos can be uploaded in succession; each gets its own job.
+ * - **A photo.** Upload → vision reads titles (async via `waitUntil`) → free
+ *   lookups enrich → the job lands in `review`. Each photo is its own job.
+ * - **A barcode.** Exact, so there is nothing to read: the code resolves
+ *   against our own `edition.barcode` table and then the free services, and one
+ *   title is appended to a job that stays open for the next scan. A stack of
+ *   boxes is therefore *one* job with N titles, not N jobs — otherwise ten
+ *   boxes would mean ten round trips through the review screen, which is the
+ *   thing bulk intake exists to avoid.
  */
 
 import { Hono } from 'hono';
@@ -27,39 +33,15 @@ import {
 } from '@bgc/db';
 import { isPhotoMediaType, readShelf, identifyFromPhoto, type PhotoMediaType } from '@bgc/research';
 import type { AppBindings, Env } from '../env.js';
+import { resolveScannedBarcode, validateBarcode, type ScannedTitle } from '../lib/barcode-scan.js';
 import { cachedResolve } from '../lib/resolve-title.js';
 import { requireCapability } from '../middleware/auth.js';
 
 /**
- * One line of a read photo, as it stands after enrichment and any review.
- *
- * `addedItemId` and `dismissed` are the outcome fields — everything else is
- * what was read or looked up. A title with neither set is unfinished business,
- * which is the state the whole screen exists to make visible.
+ * One line of an intake job. Declared in `lib/barcode-scan.ts` because both
+ * producers — a photographed spine and a scanned code — have to agree on it.
  */
-interface EnrichedTitle {
-  title: string;
-  confidence: string;
-  position: number;
-  alreadyOwned: boolean;
-  existingItemId: number | null;
-  existingName: string | null;
-  bggId: number | null;
-  resolvedName: string | null;
-  thumbnailUrl: string | null;
-  publisher: string | null;
-  yearPublished: number | null;
-  similarity: number | null;
-  proposedKind: string | null;
-  proposedParentId: number | null;
-  proposedParentName: string | null;
-  inferredParentName: string | null;
-  reason: string | null;
-  addedItemId?: number | null;
-  dismissed?: boolean;
-  /** Set when a retry searched with corrected text rather than the spine's. */
-  relookedUpAs?: string | null;
-}
+type EnrichedTitle = ScannedTitle;
 
 /** Titles still wanting a decision — not added, not dismissed, not already owned. */
 function countOutstanding(titles: EnrichedTitle[]): number {
@@ -102,6 +84,16 @@ const uploadSchema = z.object({
   data: z.string().min(64),
   mediaType: z.string().refine(isPhotoMediaType, 'unsupported image type'),
   mode: z.enum(['shelf', 'single']).default('shelf'),
+});
+
+/**
+ * `jobId` is the batch this scan belongs to. The client sends back whatever the
+ * previous scan returned, so a session of scanning appends to one job; omitting
+ * it opens a new one, which is what the first scan of a session does.
+ */
+const barcodeScanSchema = z.object({
+  barcode: z.string().trim().min(8).max(20),
+  jobId: z.number().int().positive().nullable().optional(),
 });
 
 export const scanJobRoutes = new Hono<AppBindings>()
@@ -155,6 +147,60 @@ export const scanJobRoutes = new Hono<AppBindings>()
     );
 
     return c.json({ job }, 201);
+  })
+
+  /**
+   * One scanned barcode → one line on an open job.
+   *
+   * Registered before `/:id/...` and matched as a literal, so a job can never
+   * be called "barcode". Nothing here is deferred to `waitUntil`: the whole
+   * ladder is fast and free, and the person scanning wants the name back before
+   * they put the box down.
+   */
+  .post('/barcode', async (c) => {
+    const parsed = barcodeScanSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+    }
+    const checked = validateBarcode(parsed.data.barcode);
+    if (!checked.ok) return c.json({ error: 'bad_request', detail: checked.detail }, 400);
+    const code = checked.code;
+
+    // Find the batch, or open one. A finished job is never appended to — its
+    // outstanding count has already been dealt with and reopening it would make
+    // "all sorted" untrue after the fact.
+    let job = parsed.data.jobId ? await getScanJob(c.env.DB, parsed.data.jobId) : null;
+    if (job && (job.mode !== 'barcode' || job.status === 'done')) job = null;
+    if (!job) job = await createScanJob(c.env.DB, { photoKey: NOT_STORED, mode: 'barcode' });
+
+    const titles: EnrichedTitle[] = job.enriched ? JSON.parse(job.enriched) : [];
+    const already = titles.findIndex((t) => t.barcode === code);
+
+    /*
+     * The same code twice.
+     *
+     * The client already refuses to re-submit a code it has accepted this
+     * session, but a box left in front of the camera is the single most likely
+     * way this feature turns one game into five queue entries, so the server
+     * refuses too — one barcode is one line, whatever arrives.
+     *
+     * The exception is a line whose lookup never reached a service. Pointing the
+     * camera at that box again is the obvious way to ask again, so it re-runs
+     * in place rather than answering with the failure it already recorded.
+     */
+    if (already >= 0 && !titles[already]!.lookupFailed) {
+      return c.json({ job, index: already, title: titles[already], duplicate: true });
+    }
+
+    const index = already >= 0 ? already : titles.length;
+    titles[index] = { ...(await resolveScannedBarcode(c.env, code, index + 1)) };
+
+    // Straight to `review`: there is no reading step to wait for.
+    const updated = await updateScanJobStatus(c.env.DB, job.id, 'review', {
+      enriched: JSON.stringify(titles),
+    });
+
+    return c.json({ job: updated ?? job, index, title: titles[index], duplicate: false }, 201);
   })
 
   // --- Manually trigger enrichment (for jobs stuck at 'read') ---------------
@@ -259,6 +305,11 @@ export const scanJobRoutes = new Hono<AppBindings>()
     entry.yearPublished = best?.yearPublished ?? null;
     entry.similarity = similarity;
     entry.relookedUpAs = query === entry.title ? null : query;
+    // We reached a service and it answered, so whatever this row said about an
+    // unreachable lookup is no longer true — including when the answer is that
+    // nothing matches. Leaving the flag set would keep offering a retry for a
+    // question that has now been asked properly.
+    entry.lookupFailed = false;
 
     const updated = await updateScanJobStatus(c.env.DB, id, job.status, {
       enriched: JSON.stringify(titles),

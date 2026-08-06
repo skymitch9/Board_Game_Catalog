@@ -66,6 +66,25 @@ export interface ScanLoopOptions {
    * the wrong barcode to a game.
    */
   confirmations?: number;
+  /**
+   * Keep decoding after a hit, for bulk intake.
+   *
+   * The default stops the loop on the first code, which is right for the
+   * one-off "do I own this?" question — the answer is on screen and the camera
+   * has no further job. Scanning a stack of boxes is the opposite: stopping
+   * means a tap between every box.
+   */
+  continuous?: boolean;
+  /**
+   * Codes to skip entirely.
+   *
+   * Consulted *before* the streak is counted, which is the point: a box still
+   * sitting in front of the camera after being accepted would otherwise rebuild
+   * its two confirmations within a couple of hundred milliseconds and be
+   * accepted again, and again. Rejecting inside `onScan` instead would work but
+   * would spin the decoder for as long as the box is in frame.
+   */
+  ignore?: (code: string) => boolean;
 }
 
 /**
@@ -76,8 +95,9 @@ export interface ScanLoopOptions {
  * `requestAnimationFrame` loop.
  */
 export function startScanLoop(options: ScanLoopOptions): () => void {
-  const { video, onScan, onError } = options;
+  const { video, onScan, onError, ignore } = options;
   const needed = options.confirmations ?? 2;
+  const continuous = options.continuous ?? false;
 
   let stopped = false;
   let busy = false;
@@ -102,6 +122,8 @@ export function startScanLoop(options: ScanLoopOptions): () => void {
         const code = normaliseBarcode(result.rawValue);
         // Reject a bad check digit here rather than after a round trip.
         if (!isPlausibleBarcode(code)) continue;
+        // A code the caller has already dealt with never builds a streak.
+        if (ignore?.(code)) continue;
 
         if (code === lastCode) {
           streak += 1;
@@ -111,9 +133,17 @@ export function startScanLoop(options: ScanLoopOptions): () => void {
         }
 
         if (streak >= needed) {
-          stopped = true;
+          if (!continuous) {
+            stopped = true;
+            onScan({ code, format: result.format });
+            return;
+          }
+          // Clear the streak before handing the code over, so the next box
+          // starts from zero rather than inheriting this one's confirmations.
+          lastCode = '';
+          streak = 0;
           onScan({ code, format: result.format });
-          return;
+          return; // this tick is done; the scheduler keeps the loop running
         }
       }
     } catch (err) {

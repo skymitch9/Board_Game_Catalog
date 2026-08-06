@@ -48,6 +48,24 @@ export function mapCopyRow(r: CopyRow): Copy {
   };
 }
 
+/**
+ * How many of this item we actually hold.
+ *
+ * Sums `quantity` rather than counting rows: one row can stand for several
+ * identical copies. Only `owned` counts — a wanted or preordered copy is not
+ * something you are holding, which matters because the caller is a barcode scan
+ * answering "do I already have this, and how many?".
+ */
+export async function countOwnedCopies(db: D1Database, itemId: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COALESCE(SUM(quantity), 0) AS n FROM copy WHERE item_id = ? AND status = 'owned'`,
+    )
+    .bind(itemId)
+    .first<{ n: number }>();
+  return Number(row?.n ?? 0);
+}
+
 export async function getCopy(db: D1Database, id: number): Promise<Copy | null> {
   const row = await db.prepare('SELECT * FROM copy WHERE id = ?').bind(id).first<CopyRow>();
   return row ? mapCopyRow(row) : null;

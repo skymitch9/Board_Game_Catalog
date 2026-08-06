@@ -312,6 +312,48 @@ async function fileToPhotoViaImage(file: File, longEdge: number): Promise<Captur
   }
 }
 
+/**
+ * A picked file as something a decoder can read, plus a way to release it.
+ *
+ * The same two-decoder dance as `fileToPhoto` and for the same reason: the
+ * bitmap path refuses HEIC outright, which is what an iPhone camera roll is
+ * full of, and the `<img>` path decodes it natively because the system codec is
+ * right there. Deliberately **not** downscaled — a barcode is thin bars, and
+ * throwing pixels away before decoding is throwing away the signal.
+ */
+export async function fileToImageSource(
+  file: File,
+): Promise<{ source: CanvasImageSource; release: () => void }> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      return { source: bitmap, release: () => bitmap.close() };
+    } catch {
+      // Falls through to the <img> path, which handles what this rejects.
+    }
+  }
+
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () =>
+        reject(
+          new CameraError(
+            'unknown',
+            'That image could not be read. Try taking a new photo instead of picking one from the library.',
+          ),
+        );
+      img.src = url;
+    });
+    return { source: img, release: () => URL.revokeObjectURL(url) };
+  } catch (err) {
+    URL.revokeObjectURL(url);
+    throw err;
+  }
+}
+
 function toBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

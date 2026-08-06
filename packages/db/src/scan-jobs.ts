@@ -1,8 +1,15 @@
 /**
- * Scan jobs — photo upload queue with progressive enrichment.
+ * Scan jobs — the intake queue, and everything that lands in it.
  *
  * A photo is uploaded → vision reads titles → free lookups enrich →
  * results land in a review queue for the user to confirm.
+ *
+ * A **barcode** job skips the first two steps entirely: the code is exact, so
+ * there is nothing to read and nothing to guess at. It goes straight to
+ * `review` carrying one title per scan, appended as the codes come in. That is
+ * why `mode` is a third value (migration 0017) rather than a photo job with a
+ * fake image — a barcode job has no photo, never calls vision, and costs
+ * nothing, and the review screen needs to be able to show you which code it was.
  */
 
 export type ScanJobStatus =
@@ -14,7 +21,7 @@ export type ScanJobStatus =
   | 'done'
   | 'failed';
 
-export type ScanJobMode = 'shelf' | 'single';
+export type ScanJobMode = 'shelf' | 'single' | 'barcode';
 
 export interface ScanJob {
   id: number;

@@ -17,15 +17,20 @@ import { CameraStage } from '../components/CameraStage';
 import { QuickAdd } from '../components/QuickAdd';
 import { KIND_LABEL } from '../components/ItemTree';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
-import { Link, navigate } from '../router';
+import { Link, navigate, type ScanMode } from '../router';
 
 /**
- * Adding a game: by barcode, by photo, by shelf, or by hand.
+ * Checking **one** game: by barcode, by photo, by shelf, or by hand.
  *
- * This is the one way in. There used to be three — a Scan page, an Add page and
- * a Quick add panel on the collection — which meant choosing a route before
- * knowing which would work. Now the choice is a tab, and switching costs
- * nothing.
+ * The one-off screen. It answers "am I already holding something I own?" — the
+ * question you have standing in a shop — and lets you add the game when the
+ * answer is no. Bulk intake is a different job and lives on `/scan-jobs`, where
+ * barcodes and photos both feed a queue and nothing is confirmed at scan time.
+ *
+ * The two used to be the same screen and should not be: this one stops on the
+ * first answer and shows it, which is exactly wrong for working through a
+ * stack, and the queue never answers a question, which is exactly wrong when
+ * you are standing in front of a till.
  *
  * The ordering here reflects what things actually cost. A barcode lookup hits
  * the local table and two free services and comes back in about a second. A
@@ -37,7 +42,7 @@ import { Link, navigate } from '../router';
  * and dropped; nothing reaches the camera roll and nothing is kept server-side.
  */
 
-type Mode = 'barcode' | 'photo' | 'shelf' | 'manual';
+type Mode = ScanMode;
 
 const MODES: { id: Mode; label: string; blurb: string }[] = [
   { id: 'barcode', label: 'Barcode', blurb: 'Fastest when the box has one. Free.' },
@@ -46,8 +51,10 @@ const MODES: { id: Mode; label: string; blurb: string }[] = [
   { id: 'manual', label: 'Manually', blurb: 'Type the name. Looks the rest up as you go.' },
 ];
 
-export function ScanPage({ me }: { me: MeResponse }) {
-  const [mode, setMode] = useState<Mode>('barcode');
+export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mode | null }) {
+  // `/scan?mode=photo` lands on the right tab. Barcode stays the default: it is
+  // the only exact identification here, and it is free.
+  const [mode, setMode] = useState<Mode>(initialMode ?? 'barcode');
   const [active, setActive] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -263,19 +270,27 @@ export function ScanPage({ me }: { me: MeResponse }) {
   return (
     <div className="scan-page">
       {/*
-        "Check", not "Add", because the first question is nearly always whether
-        you already own the thing — standing in a shop, holding a box you half
-        recognise. Answering that is useful on its own, and the barcode path
-        already answers it instantly from the local table. Adding is what
-        follows when the answer turns out to be no.
+        "Check", not "Add", because the first question here is nearly always
+        whether you already own the thing — standing in a shop, holding a box you
+        half recognise. Answering that is useful on its own, and the barcode path
+        answers it instantly from the local table. Adding is what follows when
+        the answer turns out to be no.
+
+        That framing was also, for a while, the only place barcode scanning
+        lived, which meant the fastest and most accurate way to add a game was
+        hidden behind a button that sounded like it only answered a question.
+        It is not any more — /scan-jobs scans barcodes continuously onto the
+        queue — so the line below points at it rather than leaving anyone with a
+        stack of boxes to add them one at a time from here.
       */}
       <header className="scan-header">
         <h1>Check a game</h1>
         <Link to="/">Back to collection</Link>
       </header>
       <p className="muted scan-header__blurb">
-        Scan, photograph or type a game to see whether it is already in your
-        collection — and add it if it is not.
+        Scan, photograph or type <em>one</em> game to see whether it is already
+        in your collection — and add it if it is not. Got a stack?{' '}
+        <Link to="/scan-jobs?add=barcode">Scan them onto the queue</Link> instead.
       </p>
 
       <div className="scan-modes" role="tablist">

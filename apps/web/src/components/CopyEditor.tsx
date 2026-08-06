@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import { COPY_FORMATS, COPY_STATUSES, type Copy, type CopyFormat, type CopyStatus } from '@bgc/core';
 import { api } from '../api';
+import { formatDate } from '../lib/dates';
 import { Badge, ConfirmButton, DigitalTag, ErrorBox, Field } from './ui';
 import { STATUS_TONE } from './ItemTree';
 
 /**
  * "Added 4 Aug 2026". The clock time a row was typed in is noise, so only the
  * date shows; `addedAt` is a UTC instant, so let the browser localise it.
+ *
+ * Through `formatDate` rather than `new Date(iso)`: SQLite's timestamps carry no
+ * zone marker, and parsing one directly reads a UTC instant as local time.
  */
-function formatAdded(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
+const formatAdded = (iso: string): string =>
+  formatDate(iso, { year: 'numeric', month: 'short', day: 'numeric' });
 
 interface FormState {
   quantity: string;

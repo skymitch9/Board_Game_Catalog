@@ -7,6 +7,7 @@ import type {
 } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
+import { parseStamp } from '../lib/dates';
 import { Badge, ErrorBox, Spinner } from './ui';
 
 /**
@@ -432,11 +433,13 @@ function singular(word: string): string {
 /** "3 days ago", or the date once that stops being useful. */
 function formatWhen(iso: string | null): string {
   if (!iso) return 'never';
-  // SQLite hands back "YYYY-MM-DD HH:MM:SS" in UTC with no zone marker; without
-  // the Z, browsers read it as local time and a check made an hour ago reads as
-  // being in the future.
-  const when = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`);
-  if (Number.isNaN(when.getTime())) return iso;
+  // `parseStamp`, not `new Date`: SQLite hands back "YYYY-MM-DD HH:MM:SS" in UTC
+  // with no zone marker, and without the Z a browser reads it as local time — a
+  // check made an hour ago then reads as being in the future. This used to be
+  // handled inline here and nowhere else, which is how two other screens ended
+  // up displaying every timestamp shifted by the viewer's offset.
+  const when = parseStamp(iso);
+  if (!when) return iso;
 
   const days = Math.floor((Date.now() - when.getTime()) / 86_400_000);
   if (days <= 0) return 'today';

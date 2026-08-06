@@ -8,12 +8,20 @@ import {
   type ItemKind,
   type MeResponse,
 } from '@bgc/core';
-import { api, type EnrichedTitle, type ScanJob } from '../api';
+import { api, ApiError, type EnrichedTitle, type ScanJob } from '../api';
 import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
+import { formatDateTime } from '../lib/dates';
+import { BarcodeQueue } from '../components/BarcodeQueue';
 import { KIND_LABEL } from '../components/ItemTree';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
-import { Link } from '../router';
+import { Link, type AddMode } from '../router';
+
+const MODE_LABEL: Record<ScanJob['mode'], string> = {
+  shelf: 'Shelf photo',
+  single: 'Single box',
+  barcode: 'Barcodes',
+};
 
 const STATUS_LABEL: Record<ScanJob['status'], string> = {
   uploaded: 'Uploading',
@@ -73,8 +81,60 @@ const isDoubtful = (t: EnrichedTitle): boolean =>
  * "this game is on my shelf", not "and it is that other game" — so the title
  * survives and the lookup's identity does not.
  */
+/**
+ * What a person typed for a barcode row, when they typed something.
+ *
+ * A photographed spine falls back to the text that was read off the box, which
+ * is a real name. A barcode row's `title` is thirteen digits, so it has no such
+ * fallback — the typed name is it.
+ *
+ * "Name it here" has to keep working when the lookup *still* knows nothing
+ * afterwards, and for this catalog that is the ordinary case rather than the
+ * edge: most of it is crowdfunding, and those boxes are in no retail database
+ * whatever you call them. It also has to survive a **doubtful** answer, which
+ * is the case that caught this out: typing a real name and getting back a
+ * one-word match left the row offering to add the barcode "on its own".
+ */
+const typedName = (t: EnrichedTitle): string | null =>
+  t.barcode ? (t.relookedUpAs ?? null) : null;
+
 const effectiveName = (t: EnrichedTitle): string =>
-  isDoubtful(t) ? t.title : (t.resolvedName ?? t.title);
+  isDoubtful(t)
+    ? (typedName(t) ?? t.title)
+    : (t.resolvedName ?? typedName(t) ?? t.title);
+
+/**
+ * Would this row enter the collection named after its own barcode?
+ *
+ * Asked of the name that would actually be saved rather than of the fields that
+ * produce it, so every route to the same bad outcome is covered by one check.
+ */
+const isNameless = (t: EnrichedTitle): boolean =>
+  t.barcode != null && effectiveName(t) === t.barcode;
+
+/**
+ * Should this row be ticked for you?
+ *
+ * Two different reasons not to be, and they are not the same reason:
+ *
+ * - **doubtful** — the *identity* is not trustworthy. A spine read matched
+ *   something that only shares a word, so ticking it saves the title alone.
+ * - **needsConfirmation** — the identity is probably right but nobody has
+ *   confirmed it. A GameUPC barcode hit banded `medium` is the case: for a real
+ *   Ticket to Ride code the right answer came back first, at `medium`, ahead of
+ *   fourteen wrong ones. Dropping its BGG id would throw away a cover and a
+ *   publisher for a game the owner is about to confirm by looking at the box.
+ *
+ * So they share "leave it unticked" and nothing else.
+ *
+ * The third case is a barcode nothing resolved. A spine read that resolves to
+ * nothing still has a *name* on it, read off the box, and adding it under that
+ * name is right. A barcode has thirteen digits — ticking one by default put
+ * "653341070005" in the collection as a game, which is what `isNameless` is
+ * for. Type a name over it and it ticks itself, because it now has one.
+ */
+const autoTicked = (t: EnrichedTitle): boolean =>
+  !isDoubtful(t) && !t.needsConfirmation && !isNameless(t);
 
 const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
   uploaded: 'neutral',
@@ -86,12 +146,30 @@ const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'k
   failed: 'wanted',
 };
 
-export function ScanJobsPage({ me }: { me: MeResponse }) {
+/**
+ * The three ways onto the queue, ordered by how certain each one is.
+ *
+ * **Barcode is first because it is the only exact identification this app
+ * has.** A code carries a check digit and names one printing; reading a title
+ * off a box is a guess, and this catalog has had Brink, Iliad and Moon matched
+ * to the wrong games at a perfect 1.00 similarity. The photo paths are the
+ * fallback for boxes with no code — which is a large slice of a mostly
+ * crowdfunded collection, so they are not a lesser feature, just a later rung.
+ */
+const ADD_MODES: { id: AddMode; label: string; blurb: string }[] = [
+  { id: 'barcode', label: 'Barcode', blurb: 'Exact, free, and keeps scanning. Best when the box has one.' },
+  { id: 'shelf', label: 'Shelf photo', blurb: 'Reads every spine at once. Best for bulk.' },
+  { id: 'single', label: 'One box', blurb: 'Reads the title off a single cover.' },
+];
+
+export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null }) {
   const [jobs, refresh] = useAsync(() => api.scanJobs(), []);
   const [live, setLive] = useState<ScanJob[] | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [mode, setMode] = useState<'shelf' | 'single'>('shelf');
+  // Barcode by default, and `?add=` lets an entry point elsewhere land straight
+  // on the right one — the collection page's "Scan a barcode" button does.
+  const [mode, setMode] = useState<AddMode>(add ?? 'barcode');
 
   // The polled copy once there is one, else the first load. Kept separate from
   // `useAsync` on purpose: its refresh drops back to `loading`, which would
@@ -119,7 +197,9 @@ export function ScanJobsPage({ me }: { me: MeResponse }) {
   const upload = useCallback(async (data: string, mediaType: string) => {
     setUploading(true);
     try {
-      await api.createScanJob({ data, mediaType, mode });
+      // Narrowed rather than cast: the uploader is only mounted on a photo tab,
+      // and `createScanJob` genuinely has no barcode meaning.
+      await api.createScanJob({ data, mediaType, mode: mode === 'single' ? 'single' : 'shelf' });
       reload();
     } finally {
       setUploading(false);
@@ -137,9 +217,9 @@ export function ScanJobsPage({ me }: { me: MeResponse }) {
         <div>
           <h1>Add games</h1>
           <p className="subtitle">
-            Photograph your shelves. Each photo is read and looked up, then waits here until
-            you have dealt with everything on it — nothing disappears because you only got
-            through half.
+            Scan barcodes or photograph your shelves. Everything lands in the same queue
+            below and waits there until you have dealt with it — nothing disappears
+            because you only got through half.
           </p>
         </div>
         <Link to="/" className="btn btn-quiet">Collection</Link>
@@ -148,25 +228,32 @@ export function ScanJobsPage({ me }: { me: MeResponse }) {
       {error != null && <ErrorBox error={error} what="Upload" />}
 
       <section className="card">
-        <div className="section-head">
-          <h2>Upload photos</h2>
-          <select
-            value={mode}
-            onChange={(e) => setMode(e.target.value as 'shelf' | 'single')}
-            aria-label="Photo mode"
-          >
-            <option value="shelf">Shelf (many spines)</option>
-            <option value="single">Single box</option>
-          </select>
+        <div className="scan-modes" role="tablist">
+          {ADD_MODES.map((m) => (
+            <button
+              key={m.id}
+              role="tab"
+              aria-selected={mode === m.id}
+              className={mode === m.id ? 'scan-mode scan-mode--on' : 'scan-mode'}
+              onClick={() => setMode(m.id)}
+            >
+              <strong>{m.label}</strong>
+              <span className="muted">{m.blurb}</span>
+            </button>
+          ))}
         </div>
 
-        <PhotoUploader
-          mode={mode}
-          uploading={uploading}
-          onPhoto={upload}
-          onError={setError}
-          onStart={() => setError(null)}
-        />
+        {mode === 'barcode' ? (
+          <BarcodeQueue onQueueChanged={reload} onWantPhoto={() => setMode('single')} />
+        ) : (
+          <PhotoUploader
+            mode={mode}
+            uploading={uploading}
+            onPhoto={upload}
+            onError={setError}
+            onStart={() => setError(null)}
+          />
+        )}
       </section>
 
       <section className="card">
@@ -285,10 +372,11 @@ function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
     <li className="job-row">
       <div className="job-row__info">
         <Badge tone={STATUS_TONE[job.status]}>{STATUS_LABEL[job.status]}</Badge>
-        <span className="job-row__time">
-          {new Date(job.createdAt).toLocaleString()}
-        </span>
-        <span className="muted">{job.mode === 'shelf' ? 'Shelf' : 'Single box'}</span>
+        {/* Through `formatDateTime`, because the column is SQLite's own
+            "YYYY-MM-DD HH:MM:SS" with no zone marker — `new Date()` read that as
+            local time and every row here displayed the wrong clock. */}
+        <span className="job-row__time">{formatDateTime(job.createdAt)}</span>
+        <span className="muted">{MODE_LABEL[job.mode]}</span>
         {/* The number that decides whether this photo still wants you. */}
         {isReviewable && outstanding !== null && (
           <span className={outstanding > 0 ? 'job-row__left' : 'muted small'}>
@@ -408,7 +496,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       new Set(
         fresh
           .map((_, i) => i)
-          .filter((i) => !isSettled(i) && !isDoubtful(fresh[i]!)),
+          .filter((i) => !isSettled(i) && autoTicked(fresh[i]!)),
       ),
     );
     return <Spinner />;
@@ -463,7 +551,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
 
     // Base games first.
     const pending = [...selected!]
-      .filter((i) => !isSettled(i))
+      .filter((i) => !isSettled(i) && !isNameless(fresh[i]!))
       .sort((a, b) => (getKind(a) === 'base' ? 0 : 1) - (getKind(b) === 'base' ? 0 : 1));
 
     const batchIds: Record<number, number> = {};
@@ -518,17 +606,49 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
         await api.createCopy(item.id, {
           quantity: 1,
           status: 'owned',
-          // A photograph is of a physical thing by construction.
+          // A photograph — or a barcode — is of a physical thing by construction.
           format: 'physical',
           isSleeved: false,
           isPunched: false,
         });
 
+        /*
+         * Keep the code, when there was one.
+         *
+         * This is the write that closes the loop: scanning the same box again
+         * answers "already in your collection" from our own table, instantly
+         * and with no network. Without it the barcode is thrown away the moment
+         * the game is added, and every rescan pays the full ladder again.
+         *
+         * `contribute` offers the mapping back to GameUPC. It matters most for
+         * exactly the codes that arrived here unresolved — nobody has
+         * catalogued those, which is why the lookup came back empty.
+         *
+         * Best-effort throughout: the game is added either way, and a barcode
+         * already spoken for (409) is information, not a failure of this add.
+         */
+        if (t.barcode) {
+          await api
+            .linkBarcode({
+              itemId: item.id,
+              barcode: t.barcode,
+              bggId: doubtful ? null : t.bggId,
+              updateUrl: t.updateUrl ?? null,
+              contribute: true,
+              name: effectiveName(t),
+            })
+            .catch(() => undefined);
+        }
+
         batchIds[i] = item.id;
         setResults((r) => ({ ...r, [i]: { itemId: item.id } }));
         added.push({ index: freshEntries[i]!.originalIndex, addedItemId: item.id });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        // `detail`, not `message`. An ApiError's message is "API 409", which is
+        // what this row said when the catalog refused a duplicate — the useful
+        // sentence ("Ticket to Ride is already in the collection.") was in the
+        // body all along and never reached the screen.
+        const msg = err instanceof ApiError ? err.detail : String(err);
         setResults((r) => ({ ...r, [i]: { error: msg } }));
       }
     }
@@ -590,7 +710,13 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
     const outcome = outcomeOf(i);
     return outcome !== null && 'itemId' in outcome;
   }).length;
-  const pendingCount = [...selected].filter((i) => !isSettled(i)).length;
+  // Nameless rows are excluded rather than refused: "Select all" reaches them,
+  // and adding one would file a dog bed's barcode as a game called
+  // 653341070005. Leaving them out keeps the button's count honest and keeps
+  // the row fixable — it says on its face that it needs a name.
+  const pendingCount = [...selected].filter(
+    (i) => !isSettled(i) && !isNameless(fresh[i]!),
+  ).length;
 
   return (
     <div className="scan-jobs-page">
@@ -676,7 +802,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                   className={
                     dismissed
                       ? 'candidate candidate--dismissed'
-                      : doubtful
+                      : doubtful || t.needsConfirmation
                         ? 'candidate candidate--doubtful'
                         : 'candidate'
                   }
@@ -708,7 +834,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       <span className="candidate__doubt">
                         Closest match was &quot;{t.resolvedName}&quot;, which is
                         different enough that it is probably not the same game.
-                        Tick it to add &quot;{t.title}&quot; on its own.
+                        Tick it to add &quot;{effectiveName(t)}&quot; on its own.
                       </span>
                     ) : (
                       t.resolvedName &&
@@ -716,9 +842,31 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                         <span className="muted">read as &quot;{t.title}&quot;</span>
                       )
                     )}
+                    {/* A different kind of not-sure from `doubtful`: the name is
+                        probably right, nobody has confirmed it, and the person
+                        holding the box can settle it in a second. */}
+                    {!doubtful && t.needsConfirmation && (
+                      <span className="candidate__doubt">
+                        Nobody has confirmed this barcode. Check it against the box
+                        before ticking it.
+                      </span>
+                    )}
                     {t.publisher && !doubtful && <span className="muted">{t.publisher}</span>}
                     {t.relookedUpAs && (
                       <span className="muted small">looked up as &quot;{t.relookedUpAs}&quot;</span>
+                    )}
+                    {/* Which code this was. Worth showing plainly: it is the
+                        thing that will be saved against the game, and on an
+                        unresolved row it is the only fact anyone has. */}
+                    {t.barcode && (
+                      <span className="muted small">
+                        <code>{t.barcode}</code>
+                        {/* The full explanation lives in `reason` below; this is
+                            only the one thing `reason` cannot say, because it is
+                            about what happens next rather than what was found. */}
+                        {unresolved &&
+                          ' — name it here and it is saved against the game, and offered back to GameUPC.'}
+                      </span>
                     )}
 
                     {/*
@@ -758,8 +906,9 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                         </button>
                         {unresolved && (
                           <span className="muted small">
-                            Nothing found for this one — it will be added under the name
-                            read off the spine.
+                            {t.barcode
+                              ? 'Nothing found for this code, so there is no name to add it under yet — type one above.'
+                              : 'Nothing found for this one — it will be added under the name read off the spine.'}
                           </span>
                         )}
                       </div>
@@ -838,7 +987,16 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
             {owned.map((t, i) => (
               <li key={i}>
                 <Link to={`/items/${t.existingItemId}`}>{t.existingName}</Link>{' '}
-                <span className="muted">read as &quot;{t.title}&quot;</span>
+                {/* A scanned code and a read spine are different evidence, and
+                    the duplicate check working is worth saying out loud. */}
+                {t.barcode ? (
+                  <span className="muted">
+                    scanned <code>{t.barcode}</code>
+                    {t.ownedQuantity != null && t.ownedQuantity > 0 && ` · ${t.ownedQuantity} held`}
+                  </span>
+                ) : (
+                  <span className="muted">read as &quot;{t.title}&quot;</span>
+                )}
               </li>
             ))}
           </ul>

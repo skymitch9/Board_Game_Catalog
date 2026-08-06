@@ -41,7 +41,10 @@ migrations_dir = "../../migrations"
 # missing list with nobody doing anything. 83 rooted games with a `bgg_id` cost
 # 5 requests and ~6 seconds to re-sweep, so weekly is a rounding error.
 #
-# Monday 05:41 UTC. Minute 41 keeps it off :00 and :30, where the cover check
+# 05:41 UTC on day-of-week 1. Cloudflare's dashboard renders that as **Sunday**,
+# not Monday — an earlier version of this comment said Monday and was wrong.
+# Which day it lands on does not matter; do not "fix" the expression to chase the
+# comment. Minute 41 keeps it off :00 and :30, where the cover check
 # lives — two cron invocations in the same minute would compete for the same
 # subrequest budget. The handler in src/index.ts dispatches on the expression,
 # so **this string must match COMPONENT_REFRESH_CRON in

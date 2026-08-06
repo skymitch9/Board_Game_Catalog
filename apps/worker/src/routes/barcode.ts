@@ -1,10 +1,17 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { isPlausibleBarcode, normaliseBarcode, type BarcodeCandidate } from '@bgc/core';
-import { contributeGameUpc, gameUpcConfig, resolveBarcode } from '@bgc/barcode';
+import type { BarcodeCandidate } from '@bgc/core';
+import {
+  contributeGameUpc,
+  gameUpcConfig,
+  lookupGameUpc,
+  resolveBarcode,
+  type GameUpcConfig,
+} from '@bgc/barcode';
 import { BarcodeConflict, findByBarcode, linkBarcode } from '@bgc/db';
 import { ResearchError, identifyBarcode } from '@bgc/research';
 import type { AppBindings } from '../env.js';
+import { validateBarcode } from '../lib/barcode-scan.js';
 import { requireCapability } from '../middleware/auth.js';
 
 /**
@@ -31,6 +38,17 @@ const linkSchema = z.object({
   /** BGG id of the candidate the user picked, so we can thank GameUPC for it. */
   bggId: z.number().int().positive().nullable().optional(),
   updateUrl: z.string().url().nullable().optional(),
+  /**
+   * Ask GameUPC for a write-back endpoint when the caller has none.
+   *
+   * The scan screen already holds one, because the lookup that found the game
+   * returned it. Naming an *unknown* barcode at review is the case with no
+   * endpoint to hand — and it is the most valuable contribution there is, since
+   * by definition nobody has catalogued that code yet.
+   */
+  contribute: z.boolean().optional(),
+  /** The name to offer GameUPC when discovering an endpoint. */
+  name: z.string().trim().min(1).max(200).nullable().optional(),
 });
 
 const identifySchema = z.object({
@@ -52,17 +70,27 @@ async function contributorId(email: string): Promise<string> {
     .join('');
 }
 
-function validate(raw: string): { ok: true; code: string } | { ok: false; detail: string } {
-  const code = normaliseBarcode(raw);
-  if (!code) return { ok: false, detail: 'That does not look like a barcode.' };
-  if (!isPlausibleBarcode(code)) {
-    return {
-      ok: false,
-      detail:
-        'That barcode failed its check digit, which usually means a misread. Try scanning again.',
-    };
+/**
+ * Find GameUPC's write-back endpoint for a barcode we are about to link.
+ *
+ * Best-effort and free: one search against the code we hold, taking the
+ * endpoint offered for the BGG id the user actually chose. Returns null for
+ * every kind of disappointment, because a contribution that cannot be made must
+ * never affect the catalog write that has already succeeded.
+ */
+async function discoverUpdateUrl(
+  config: GameUpcConfig,
+  barcode: string,
+  bggId: number,
+  name: string | null,
+): Promise<string | null> {
+  if (!name) return null;
+  try {
+    const hit = await lookupGameUpc(config, barcode, { search: name, searchMode: 'quality' });
+    return hit.updateUrls[bggId] ?? null;
+  } catch {
+    return null;
   }
-  return { ok: true, code };
 }
 
 export const barcodeRoutes = new Hono<AppBindings>()
@@ -74,7 +102,7 @@ export const barcodeRoutes = new Hono<AppBindings>()
    * you most want while standing in a shop.
    */
   .get('/:code', requireCapability('read'), async (c) => {
-    const checked = validate(c.req.param('code'));
+    const checked = validateBarcode(c.req.param('code'));
     if (!checked.ok) return c.json({ error: 'bad_request', detail: checked.detail }, 400);
 
     const local = await findByBarcode(c.env.DB, checked.code);
@@ -107,7 +135,7 @@ export const barcodeRoutes = new Hono<AppBindings>()
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
-    const checked = validate(parsed.data.barcode);
+    const checked = validateBarcode(parsed.data.barcode);
     if (!checked.ok) return c.json({ error: 'bad_request', detail: checked.detail }, 400);
 
     try {
@@ -146,7 +174,7 @@ export const barcodeRoutes = new Hono<AppBindings>()
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
-    const checked = validate(parsed.data.barcode);
+    const checked = validateBarcode(parsed.data.barcode);
     if (!checked.ok) return c.json({ error: 'bad_request', detail: checked.detail }, 400);
 
     let match;
@@ -178,15 +206,24 @@ export const barcodeRoutes = new Hono<AppBindings>()
       throw err;
     }
 
-    // Best-effort contribution back to the shared database.
+    // Best-effort contribution back to the shared database. Everything below
+    // this line runs after our own write has succeeded and cannot fail it.
     let contributed = false;
     const config = gameUpcConfig(c.env);
-    if (config && parsed.data.updateUrl) {
-      contributed = await contributeGameUpc(
-        config,
-        parsed.data.updateUrl,
-        await contributorId(c.get('user').email),
-      );
+    if (config) {
+      const url =
+        parsed.data.updateUrl ??
+        (parsed.data.contribute && parsed.data.bggId
+          ? await discoverUpdateUrl(
+              config,
+              checked.code,
+              parsed.data.bggId,
+              parsed.data.name ?? match.item.name,
+            )
+          : null);
+      if (url) {
+        contributed = await contributeGameUpc(config, url, await contributorId(c.get('user').email));
+      }
     }
 
     return c.json({ barcode: checked.code, match, contributed });
