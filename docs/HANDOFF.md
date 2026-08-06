@@ -5,7 +5,7 @@ Everything needed to continue or finish this without Claude.
 ## Right now — 2026-08-06
 
 **Working tree is clean, committed, pushed, migrated and deployed.** Head
-`733367f`, production version **`fb39d82e-7ed3-452e-ad08-902e98809bd7`**,
+`13c5e88`, production version **`e4589bf1-66c5-4be1-9ad0-1c83084c3aad`**,
 migrations through `0019_item_series` applied local *and* production.
 
 Production: **738 items** (114 top-level), 146 of them carrying
@@ -85,6 +85,8 @@ restarted fresh on 08-05, and is being written to by a separate data-only
 agent — item totals in this document move between 736 and 739 for that reason.
 
 **Newest first:**
+[accepting a guess](#accepting-a-guess--built-2026-08-06) — the review screen
+could only ever say no. Then
 [folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
 — Dice Throne's eleven cards become one, and the same mechanism reaches the 79
 D&D 5e rows scattered across nine trees. Then
@@ -113,6 +115,7 @@ Nothing is in flight. The most recent commits:
 
 | Commit | What |
 |---|---|
+| `13c5e88` | Let a person say "yes, that is the game" |
 | `733367f` | Fold a line of eleven boxes into one entry, without moving a box (migration 0019) |
 | `c496fb1` | Stop a lookup dying when the phone locks (migration 0018) |
 | `2d50224` | Stop paying to be told a dice tray's publisher — the queue, 695 → 78 |
@@ -212,8 +215,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `fb39d82e-7ed3-452e-ad08-902e98809bd7` — series grouping and linked parent labels (2026-08-06), at 100% |
-| Previous version | `9dae0863-72fd-4159-bf31-21325f3aacb8` — the details lookup in the background (2026-08-06) |
+| Deployed version | `e4589bf1-66c5-4be1-9ad0-1c83084c3aad` — accepting a guess at review (2026-08-06), at 100% |
+| Previous version | `fb39d82e-7ed3-452e-ad08-902e98809bd7` — series grouping and linked parent labels (2026-08-06) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
@@ -499,6 +502,62 @@ routes the weekly refresh silently into the cover check.
 > note said 10); production is untouched, and
 > `rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local` resets
 > local outright.
+
+---
+
+## Accepting a guess — built 2026-08-06
+
+*"we need an option to accept a guess, in one of the photos it guessed the name
+of a dnd board game but wasn't sure. It was correct but I had no way of
+confirming with it"* — the owner.
+
+The confidence band stays load-bearing: GameUPC answers an unknown code with
+fifteen confident-looking guesses, so `medium` is shown and deliberately not
+ticked. What was missing was the other half. When the guess is right, the only
+route into the catalog was to retype the name, throwing away the BoardGameGeek
+id, publisher, year and cover that came with the match.
+
+| Piece | Where |
+|---|---|
+| `TitleSuggestion`, `toSuggestions`, `ScannedTitle.candidates` / `.acceptedMatch` | `apps/worker/src/lib/barcode-scan.ts` |
+| `cachedResolveAll` — the same lookup, keeping the runners-up | `apps/worker/src/lib/resolve-title.ts` |
+| `POST /api/scan-jobs/:id/titles/:index/accept` | `apps/worker/src/routes/scan-jobs.ts` |
+| `wantsHumanCall`, `needsRelookupToAccept`, `acceptMatch`, the copy note | `apps/web/src/pages/ScanJobsPage.tsx` |
+
+- **Suggestions are trimmed, and the difference was measured.** Five whole
+  `BarcodeCandidate`s made one job's `enriched` blob **23 KB**, almost all
+  BoardGameGeek description prose — and that blob is returned for up to fifty
+  jobs on a poll firing every 2.5 seconds while anything is working. Trimmed to
+  name, year, publisher, cover and band: **2.3 KB**. Do not put the descriptions
+  back.
+- **Accepting re-classifies against the name chosen.** A runner-up brings its own
+  proposed parent — accept "Catan: Seafarers" over a top answer of "Catan" and
+  the row must propose Catan as its parent rather than rooting itself beside it —
+  and its own `reason`, which otherwise still read "nobody has confirmed this
+  code" directly under a line saying somebody had.
+- **The copy records that a human decided**: *"Identity confirmed by hand at
+  review on 2026-08-06 — the lookup was not confident."* A verified lookup and an
+  accepted guess are not the same evidence and nothing else would tell them apart
+  later.
+- **The lookup cache now stores a list.** Old single-object entries are read as a
+  one-element list rather than invalidated, so existing entries stay useful and
+  simply offer no alternatives until they expire.
+- ⚠️ **Jobs enriched before this carry no suggestions.** The six sitting at
+  review in production are in exactly that state; those rows say so and point at
+  "Look up again", which re-asks and stores the list.
+
+**Stop** now appears only where it stops something — `uploaded`, `reading`,
+`enriching`, and a job parked at `read` with titles still to look up, because
+that one *is* working: the queue page asks for its next chunk on its own, and
+dropping Stop there would leave a 73-title shelf with no way out between passes.
+It used to show on every job that was not `done`, including one at `review`
+waiting for you.
+
+Verified in Chrome against production's data: `824968717615` (medium, five
+suggestions, top accepted, refused on add as already in the collection — the
+duplicate guard) and `9780306406157`, a textbook ISBN with no resolved name at
+all, whose **third** suggestion was accepted and became item 786 with BGG 295945,
+KOSMOS, 2020, its cover and the note.
 
 ---
 
