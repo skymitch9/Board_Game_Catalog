@@ -52,21 +52,12 @@ await (await fetch('/api/components/backfill', {method:'POST'})).json()
 The weekly cron fires Sunday 4:00 PM and will do it unattended. Only worth doing
 by hand if you want the shopping list before then.
 
-## 4. Deadpool's description needs an edit
+## 4. Rename HELLDIVERS 2: Mystery Expansions when the box arrives
 
-Item 722. He has no page on `dicethrone.com`, so it uses publisher box copy from
-The Op, which ends *"…requires an additional Dice Throne hero or co-op expansion
-to play"* — pack-level phrasing rather than character flavour. Every other hero
-took its own copy. Recorded on the copy notes.
-
-## 5. Two small identity calls
-
-**HELLDIVERS 2: Mystery Expansions** (id 414) — the Gamefound campaign contains
-no occurrence of "mystery" at all. It is a placeholder row for unrevealed
-content. Rename it, delete it, or leave it until the pledge ships.
-
-**Excursion Tiles 2's year** — sources contradict each other and the set was
-never delivered, so it is blank rather than guessed.
+Item 414, kept deliberately. The Gamefound campaign names no such product, so
+this row is a placeholder for content not yet revealed — and the owner wants the
+reminder that **the pledge will deliver an extra item under a name nobody has
+yet**. Rename it from what is actually in the box.
 
 ---
 
