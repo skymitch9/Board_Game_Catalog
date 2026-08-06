@@ -118,7 +118,17 @@ export function CollectionPage({ me }: { me: MeResponse }) {
               {meta.data.stats.baseGames} game{meta.data.stats.baseGames !== 1 ? 's' : ''}
               {meta.data.stats.expansions > 0 && ` · ${meta.data.stats.expansions} expansion${meta.data.stats.expansions !== 1 ? 's' : ''}`}
               {meta.data.stats.accessories > 0 && ` · ${meta.data.stats.accessories} accessor${meta.data.stats.accessories !== 1 ? 'ies' : 'y'}`}
-              {meta.data.stats.wantedCopies > 0 && ` · ${meta.data.stats.wantedCopies} wanted`}
+              {/* Two numbers, not one. Together they used to read "262 wanted"
+                  over a wishlist of 25 — see `collectionStats`. The wanted
+                  figure links, because it now counts what /wishlist counts. */}
+              {meta.data.stats.wantedEntries > 0 && (
+                <>
+                  {' · '}
+                  <Link to="/wishlist">{meta.data.stats.wantedEntries} wanted</Link>
+                </>
+              )}
+              {meta.data.stats.preorderedEntries > 0 &&
+                ` · ${meta.data.stats.preorderedEntries} on the way`}
               {meta.data.stats.digitalCopies > 0 && ` · ${meta.data.stats.digitalCopies} digital`}
               {meta.data.stats.duplicatedItems > 0 && (
                 <>

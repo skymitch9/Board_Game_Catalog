@@ -1326,7 +1326,26 @@ export async function collectionStats(db: D1Database): Promise<{
   accessories: number;
   totalItems: number;
   ownedCopies: number;
-  wantedCopies: number;
+  /**
+   * Things we might buy — **rows, not units**, and separate from `preordered`.
+   *
+   * These two were one number, `wanted + preordered` summed over `quantity`,
+   * and it read 262 on the home screen while `/wishlist` listed 25 things. Both
+   * were internally right and they described different sets under one word:
+   * 236 of the 262 were pledges already paid for, which is not a shopping list.
+   * A pre-order drowning the wishlist twelve to one makes both useless.
+   *
+   * Rows rather than `SUM(quantity)` because this figure **links to
+   * `/wishlist`**, and that page counts rows — "25 games wanted", with a `×2`
+   * against the one entry we want two of. `ownedCopies` next door is still
+   * units, and that is not an inconsistency to tidy away: nothing links to it,
+   * and "how many boxes do I own" really is a different question from "how many
+   * lines are on my list". A number that links somewhere must count what the
+   * place it links to counts, or this recurs.
+   */
+  wantedEntries: number;
+  /** Paid for and on its way. Not a wishlist entry, and never was. */
+  preorderedEntries: number;
   duplicatedItems: number;
   /** Licences rather than objects — the D&D Beyond half of the shelf. */
   digitalCopies: number;
@@ -1340,8 +1359,10 @@ export async function collectionStats(db: D1Database): Promise<{
          (SELECT COUNT(*) FROM item)                                         AS total_items,
          (SELECT COALESCE(SUM(quantity), 0) FROM copy
            WHERE status IN ('owned','lent'))                                 AS owned_copies,
-         (SELECT COALESCE(SUM(quantity), 0) FROM copy
-           WHERE status IN ('wanted','preordered'))                          AS wanted_copies,
+         -- COUNT, not SUM(quantity): these two are list lengths, and the
+         -- wishlist page they link to counts rows. See the doc comment above.
+         (SELECT COUNT(*) FROM copy WHERE status = 'wanted')                 AS wanted_entries,
+         (SELECT COUNT(*) FROM copy WHERE status = 'preordered')             AS preordered_entries,
          (SELECT COUNT(*) FROM (
             SELECT item_id FROM copy WHERE status IN ('owned','lent')
              GROUP BY item_id HAVING SUM(quantity) > 1))                     AS duplicated_items,
@@ -1354,7 +1375,8 @@ export async function collectionStats(db: D1Database): Promise<{
       accessories: number;
       total_items: number;
       owned_copies: number;
-      wanted_copies: number;
+      wanted_entries: number;
+      preordered_entries: number;
       duplicated_items: number;
       digital_copies: number;
     }>();
@@ -1365,7 +1387,8 @@ export async function collectionStats(db: D1Database): Promise<{
     accessories: row?.accessories ?? 0,
     totalItems: row?.total_items ?? 0,
     ownedCopies: row?.owned_copies ?? 0,
-    wantedCopies: row?.wanted_copies ?? 0,
+    wantedEntries: row?.wanted_entries ?? 0,
+    preorderedEntries: row?.preordered_entries ?? 0,
     duplicatedItems: row?.duplicated_items ?? 0,
     digitalCopies: row?.digital_copies ?? 0,
   };

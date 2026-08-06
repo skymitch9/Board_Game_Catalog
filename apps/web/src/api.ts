@@ -80,7 +80,10 @@ export interface CollectionStats {
   accessories: number;
   totalItems: number;
   ownedCopies: number;
-  wantedCopies: number;
+  /** Wishlist rows — the same thing `/wishlist` counts, so the two agree. */
+  wantedEntries: number;
+  /** Paid for and on its way. Deliberately not folded into `wantedEntries`. */
+  preorderedEntries: number;
   /** Items we hold more than one of. */
   duplicatedItems: number;
   /** Licences rather than objects. */
