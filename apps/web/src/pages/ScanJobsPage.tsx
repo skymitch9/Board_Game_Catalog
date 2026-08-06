@@ -8,7 +8,7 @@ import {
   type ItemKind,
   type MeResponse,
 } from '@bgc/core';
-import { api, ApiError, type EnrichedTitle, type ScanJob } from '../api';
+import { api, ApiError, type EnrichedTitle, type ScanJob, type TitleOwnership } from '../api';
 import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
 import { formatDateTime } from '../lib/dates';
@@ -34,12 +34,19 @@ const STATUS_LABEL: Record<ScanJob['status'], string> = {
   failed: 'Failed',
 };
 
-/** Titles still wanting a decision. Drives "4 left" on a job row. */
+/**
+ * Titles still wanting a decision. Drives "4 still to sort" on a job row.
+ *
+ * `ownership` rather than `alreadyOwned`: the first is what the catalog says
+ * now, the second is what it said when the photo was read. Two photographs of
+ * one shelf share boxes, and this number used to keep counting a game the owner
+ * had already dealt with on the other photo.
+ */
 function outstandingOf(job: ScanJob): number | null {
   if (!job.enriched) return null;
   try {
     const titles = JSON.parse(job.enriched) as EnrichedTitle[];
-    return titles.filter((t) => !t.alreadyOwned && !t.addedItemId && !t.dismissed).length;
+    return titles.filter((t) => !t.ownership && !t.addedItemId && !t.dismissed).length;
   } catch {
     return null;
   }
@@ -199,6 +206,35 @@ const needsRelookupToAccept = (t: EnrichedTitle): boolean =>
   !t.acceptedMatch &&
   (t.candidates?.length ?? 0) === 0 &&
   (isDoubtful(t) || !!t.needsConfirmation);
+
+/**
+ * Why this row wants nothing from you — in the words that make it read as
+ * progress rather than as a loss.
+ *
+ * The owner's complaint was that two photographs of one shelf argued with each
+ * other: resolve a box on one and the other went on offering it. It no longer
+ * does — but a row that silently changed its mind and now says "already yours"
+ * is only half an answer, and the missing half is *you* did that, a minute ago,
+ * on the other photo.
+ */
+function ownershipNote(o: TitleOwnership, jobMode: ScanJob['mode']): string {
+  if (o.via === 'catalog') return 'Already in your collection';
+  if (o.via === 'this-job') {
+    return jobMode === 'barcode'
+      ? 'Added from another scan in this batch'
+      : 'Added from another line on this photo';
+  }
+  return o.jobMode === 'barcode' ? 'Added from a barcode scan' : 'Added from another photo';
+}
+
+function OwnershipNote({ o, jobMode }: { o: TitleOwnership; jobMode: ScanJob['mode'] }) {
+  return (
+    <span className="muted small">
+      {ownershipNote(o, jobMode)} &mdash;{' '}
+      <Link to={`/items/${o.itemId}`}>{o.name}</Link>
+    </span>
+  );
+}
 
 const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
   uploaded: 'neutral',
@@ -675,11 +711,20 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   // The original index travels with each row: it is the address the server
   // stores outcomes against, and `fresh` is a filtered view whose positions
   // do not match it.
+  //
+  // A row belongs in the "already owned" list only if it was owned when the
+  // photo was read *and* the catalog still holds it. The second half matters
+  // because ownership is now answered fresh: a game deleted since is genuinely
+  // outstanding again, and hiding it in a list headed "already in your
+  // collection" would be the same stale claim in the other direction.
+  //
+  // Rows that became owned *after* enrichment stay in the list below instead,
+  // ticked off and saying why — see `isSettled`.
   const freshEntries = titles
     .map((t, originalIndex) => ({ t, originalIndex }))
-    .filter((e) => !e.t.alreadyOwned);
+    .filter((e) => !(e.t.alreadyOwned && e.t.ownership));
   const fresh = freshEntries.map((e) => e.t);
-  const owned = titles.filter((t) => t.alreadyOwned);
+  const owned = titles.filter((t) => t.alreadyOwned && t.ownership);
 
   /** What already happened to this row, whether this visit or a previous one. */
   const outcomeOf = (i: number): { itemId: number } | { error: string } | null => {
@@ -689,8 +734,23 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
     return persisted ? { itemId: persisted } : null;
   };
 
-  const isSettled = (i: number): boolean => outcomeOf(i) !== null || !!fresh[i]?.dismissed;
+  /*
+   * Settled, by any of the three routes there are.
+   *
+   * `ownership` is the one that is not a decision made here: the game reached
+   * the catalog some other way — most often the *other* photograph of this same
+   * shelf — and asking about it again would be asking the owner to decide
+   * something they have already decided.
+   *
+   * The row stays where it is rather than moving to the "already owned" list
+   * below, on purpose. It is index-addressed (`freshEntries` carries the
+   * server's index for it) and, more importantly, a row that vanishes reads as
+   * lost work where a row that ticks itself and says why reads as progress.
+   */
+  const isSettled = (i: number): boolean =>
+    outcomeOf(i) !== null || !!fresh[i]?.dismissed || !!fresh[i]?.ownership;
   const outstanding = fresh.filter((_, i) => !isSettled(i));
+  const resolvedElsewhere = fresh.filter((t) => t.ownership).length;
 
   // Initialise selection on first render. Anything already dealt with stays
   // out of it, and doubtful matches start unticked — adding a wrong game is
@@ -965,6 +1025,9 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
             {fresh.length} new title{fresh.length === 1 ? '' : 's'} found
             {owned.length > 0 && ` \u00b7 ${owned.length} already owned`}
             {addedCount > 0 && ` \u00b7 ${addedCount} added`}
+            {/* Said out loud, because it is the number that changed while the
+                owner was working on a different photo. */}
+            {resolvedElsewhere > 0 && ` \u00b7 ${resolvedElsewhere} settled elsewhere`}
           </p>
         </div>
         <Link to="/scan-jobs" className="btn btn-quiet">Back to queue</Link>
@@ -1033,12 +1096,16 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
               const doubtful = isDoubtful(t);
               const dismissed = !!t.dismissed;
               const unresolved = t.resolvedName == null;
+              // Dealt with somewhere else since this photo was read. Every
+              // control below is suppressed for it: there is nothing left to
+              // decide, and offering to add it again is the whole bug.
+              const settled = !result && !dismissed ? (t.ownership ?? null) : null;
 
               return (
                 <li
                   key={i}
                   className={
-                    dismissed
+                    dismissed || settled
                       ? 'candidate candidate--dismissed'
                       : doubtful || t.needsConfirmation
                         ? 'candidate candidate--doubtful'
@@ -1051,6 +1118,8 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                     </span>
                   ) : dismissed ? (
                     <span className="shelf-outcome" aria-hidden="true">&ndash;</span>
+                  ) : settled ? (
+                    <span className="shelf-outcome" aria-hidden="true">&#10003;</span>
                   ) : (
                     <input
                       type="checkbox"
@@ -1068,6 +1137,10 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
 
                   <div className="candidate__body">
                     <strong>{effectiveName(t)}</strong>
+                    {/* First line under the name, because it is the answer to
+                        "what am I looking at" — everything else on this row is
+                        about a decision that no longer needs making. */}
+                    {settled && <OwnershipNote o={settled} jobMode={job.mode} />}
                     {doubtful ? (
                       <span className="candidate__doubt">
                         Closest match was &quot;{t.resolvedName}&quot;, which is
@@ -1130,7 +1203,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       the wrong game) and none of them would have survived
                       being read out loud next to the box.
                     */}
-                    {!result && !dismissed && wantsHumanCall(t) && (
+                    {!result && !dismissed && !settled && wantsHumanCall(t) && (
                       <div className="candidate__accept">
                         <span className="muted small">
                           {t.barcode
@@ -1174,7 +1247,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       </div>
                     )}
 
-                    {!result && !dismissed && needsRelookupToAccept(t) && (
+                    {!result && !dismissed && !settled && needsRelookupToAccept(t) && (
                       <span className="muted small">
                         This one was looked up before suggestions were kept. Press
                         &ldquo;Look up again&rdquo; and you can accept a match rather than
@@ -1191,7 +1264,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       Correcting the text and asking again fixes both the misread
                       spine and the lookup that simply had a bad day.
                     */}
-                    {!result && !dismissed && (
+                    {!result && !dismissed && !settled && (
                       <div className="candidate__repair">
                         <input
                           type="text"
@@ -1233,7 +1306,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
 
                     {dismissed && <span className="muted small">Set aside.</span>}
 
-                    {!result && !dismissed && (
+                    {!result && !dismissed && !settled && (
                       <div className="shelf-classify__controls">
                         <select
                           value={kind}
@@ -1303,7 +1376,10 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
           <ul className="child-list">
             {owned.map((t, i) => (
               <li key={i}>
-                <Link to={`/items/${t.existingItemId}`}>{t.existingName}</Link>{' '}
+                {/* The freshly resolved item, not the one enrichment wrote
+                    down: a game renamed since would otherwise be listed under
+                    a name the catalog no longer uses. */}
+                <Link to={`/items/${t.ownership!.itemId}`}>{t.ownership!.name}</Link>{' '}
                 {/* A scanned code and a read spine are different evidence, and
                     the duplicate check working is worth saying out loud. */}
                 {t.barcode ? (
@@ -1313,6 +1389,16 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                   </span>
                 ) : (
                   <span className="muted">read as &quot;{t.title}&quot;</span>
+                )}
+                {/* Where it came from, when it did not simply predate the
+                    photo. "Already owned" is true and unhelpful if the reason
+                    is that the owner added it from the other photo minutes
+                    ago. */}
+                {t.ownership!.via !== 'catalog' && (
+                  <span className="muted small">
+                    {' · '}
+                    {ownershipNote(t.ownership!, job.mode).toLowerCase()}
+                  </span>
                 )}
               </li>
             ))}

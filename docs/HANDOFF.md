@@ -2,6 +2,50 @@
 
 Everything needed to continue or finish this without Claude.
 
+## Two photos of one shelf stop arguing — 2026-08-06
+
+*"if items are in a queue and scanned and another photo is in the queue and
+scanned and they share games, when the game is resolved in 1 its not known to the
+other item waiting processing"* — the owner. Overlapping shelf photos are normal;
+resolving a box on one job left the other still offering it as new.
+
+**The job now stores the reading and the decision; ownership is computed.**
+`alreadyOwned` was a snapshot taken during enrichment and nothing revisited it.
+`addedItemId` and `dismissed` are still stored — they are things a person did —
+but *is this game in the catalog* is a fact about the catalog, and is answered
+when the job is read. Same trade as `inheritCover` and `resolveInheritedDetails`,
+which is why it took no new mechanism.
+
+Design and the gotchas live in [`info/scan-queue.md`](info/scan-queue.md) and are
+not repeated here. The state:
+
+| | |
+|---|---|
+| New file | `apps/worker/src/lib/scan-ownership.ts` — the entire decision |
+| Reused, not rewritten | `matchExistingTitle` (now index-backed) and `isConfidentMatch`, both in `packages/core` |
+| Cost | **two D1 reads per request**, no per-title round trip |
+| Migration | **none** — nothing about this is stored |
+
+**Verified locally against two seeded jobs sharing a title** (`npm run dev:worker`,
+no Access). Adding *Wingspan* from job A made job B's row read *"Added from
+another photo — Wingspan"* on its next read, with no reload trick and no polling
+change; job A's second *Everdell* line settled itself in the same response that
+recorded the first; a dismissed *Scythe* stayed dismissed with *Scythe* sitting in
+the catalog; a spine read *ZORBLAX QUANDARY* resolved to *Quandary* was **not**
+matched against a catalogued *Quandary*, because `isConfidentMatch` rejects the
+fragment; and `SELECT instr(enriched,'ownership')` stayed **0** — nothing is
+persisted. Screens checked in Chrome.
+
+⚠️ **The six jobs this was written for are gone.** Production now holds **one**
+scan job (id 7, `done`, 36 titles, 0 outstanding), so nothing visible changes
+today — this pays from the next multi-photo session onward.
+
+⚠️ **Orphaned `wrangler dev` processes were holding ports 8787 and 5173-5176**,
+from sessions on 08-05 and 08-06. `npm run dev:worker` silently moved to 8791 and
+Vite to 5177, and Vite's proxy still points at 8787 — so the UI talked to a dead
+worker reporting `database: down`. Kill the *node* parent, not the `workerd`
+child; workerd respawns.
+
 ## Everything has a picture now — 2026-08-06
 
 *"for 161 just use the base game photo, maybe we should use that as a default

@@ -132,6 +132,51 @@ export async function listReviewableJobs(db: D1Database): Promise<ScanJob[]> {
   return results.map(mapRow);
 }
 
+/** Which job turned a scanned title into which catalog item. */
+export interface AddedItemSource {
+  itemId: number;
+  jobId: number;
+  mode: ScanJobMode;
+}
+
+/**
+ * Every "this title became that item" a review screen has ever recorded.
+ *
+ * Read so a job can say *why* one of its rows is already resolved. "Already
+ * yours" is not enough when the reason is that the owner added it from a
+ * different photo two minutes ago — that reads as the app losing their work,
+ * where "added from another photo" reads as progress.
+ *
+ * ⚠️ **This is derived from decisions, never from a snapshot.** `addedItemId` is
+ * a thing a person did and is stored; whether the catalog holds the game is a
+ * fact about the catalog and is computed. Do not be tempted to write a
+ * `resolvedFrom` column — that is the bug this whole change is undoing.
+ *
+ * Done in SQL with `json_each` rather than by parsing fifty `enriched` blobs in
+ * the Worker, because those blobs run to 23 KB apiece and the answer is two
+ * integers per added game. `json_valid` guards the join: one malformed row
+ * would otherwise fail the whole statement and take the queue screen with it.
+ */
+export async function listAddedItemSources(db: D1Database): Promise<AddedItemSource[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT CAST(json_extract(t.value, '$.addedItemId') AS INTEGER) AS item_id,
+              j.id   AS job_id,
+              j.mode AS mode
+       FROM scan_job j, json_each(j.enriched) t
+       WHERE j.enriched IS NOT NULL
+         AND json_valid(j.enriched)
+         AND json_extract(t.value, '$.addedItemId') IS NOT NULL`,
+    )
+    .all<{ item_id: number; job_id: number; mode: string }>();
+
+  return results.map((r) => ({
+    itemId: r.item_id,
+    jobId: r.job_id,
+    mode: r.mode as ScanJobMode,
+  }));
+}
+
 export async function updateScanJobStatus(
   db: D1Database,
   id: number,

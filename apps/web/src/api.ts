@@ -466,6 +466,15 @@ export interface EnrichedTitle {
   addedItemId?: number | null;
   /** Deliberately not wanted — distinct from simply not dealt with yet. */
   dismissed?: boolean;
+  /**
+   * Whether the catalog holds this game **now**, and how it got there.
+   *
+   * Computed by the server on every read and never stored. `alreadyOwned` above
+   * is what enrichment found when the photo was processed, which stopped being
+   * true the moment the owner dealt with the same box on another photo — this
+   * is the answer to ask.
+   */
+  ownership?: TitleOwnership | null;
   /** Set when a retry searched with corrected text rather than what was read. */
   relookedUpAs?: string | null;
   /**
@@ -496,6 +505,27 @@ export interface EnrichedTitle {
   updateUrl?: string | null;
   /** Plausible but unconfirmed: shown, and left unticked for a human to judge. */
   needsConfirmation?: boolean;
+}
+
+/**
+ * A queued title that turns out to be in the catalog, and why.
+ *
+ * The "why" is the part that matters on screen. *Already yours* is not enough
+ * when the reason is that you added it from a different photo two minutes ago —
+ * without saying so, the row reads as the app having lost your work rather than
+ * as work you have already done.
+ */
+export interface TitleOwnership {
+  itemId: number;
+  name: string;
+  /**
+   * `catalog` — it was in the collection by some other route: a barcode, a
+   * typed name, an earlier session. `this-job` / `other-job` — a review screen
+   * put it there, this one or another.
+   */
+  via: 'catalog' | 'this-job' | 'other-job';
+  /** How that other job took it in, so the note can say "photo" or "scan". */
+  jobMode: 'shelf' | 'single' | 'barcode' | null;
 }
 
 /**

@@ -23,6 +23,9 @@ import {
 import { gameUpcConfig, resolveBarcode } from '@bgc/barcode';
 import { countOwnedCopies, findByBarcode, listItemNames } from '@bgc/db';
 import type { Env } from '../env.js';
+// Type-only, so nothing links the two files at runtime: `scan-ownership.ts`
+// imports `ScannedTitle` from here, and this import is erased.
+import type { ResolvedOwnership } from './scan-ownership.js';
 
 /**
  * One line of an intake job, as it stands after enrichment and any review.
@@ -57,6 +60,17 @@ export interface ScannedTitle {
   dismissed?: boolean;
   /** Set when a retry searched with corrected text rather than what was read. */
   relookedUpAs?: string | null;
+
+  /**
+   * Whether the catalog holds this game **now**. Computed on every read, and
+   * deliberately never stored — see `scan-ownership.ts`.
+   *
+   * `alreadyOwned` above is the answer enrichment got at the time, kept because
+   * it is what stopped a lookup being paid for; it is not the answer the review
+   * screen should be shown. Two photographs of one shelf share boxes, and the
+   * second job used to keep offering a game the first had already added.
+   */
+  ownership?: ResolvedOwnership | null;
 
   /**
    * The runners-up, best first, including the one currently on the row.

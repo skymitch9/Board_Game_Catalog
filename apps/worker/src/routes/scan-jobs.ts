@@ -41,6 +41,12 @@ import {
   type ScannedTitle,
 } from '../lib/barcode-scan.js';
 import { cachedResolveAll } from '../lib/resolve-title.js';
+import {
+  countOutstanding,
+  ownershipContext,
+  shouldAutoClose,
+  withFreshOwnership,
+} from '../lib/scan-ownership.js';
 import { requireCapability } from '../middleware/auth.js';
 
 /**
@@ -66,11 +72,6 @@ function isStale(job: { status: string; processedAt: string | null }): boolean {
   // but relying on the runtime's zone for correctness is how this bites later.
   const at = Date.parse(toIso(job.processedAt));
   return Number.isNaN(at) || Date.now() - at > STALE_AFTER_MS;
-}
-
-/** Titles still wanting a decision — not added, not dismissed, not already owned. */
-function countOutstanding(titles: EnrichedTitle[]): number {
-  return titles.filter((t) => !t.alreadyOwned && !t.addedItemId && !t.dismissed).length;
 }
 
 const titleUpdatesSchema = z.object({
@@ -129,23 +130,45 @@ const acceptSchema = z.object({
 export const scanJobRoutes = new Hono<AppBindings>()
   .use('*', requireCapability('editCatalog'))
 
-  // --- List all jobs -------------------------------------------------------
+  /**
+   * --- List all jobs -------------------------------------------------------
+   *
+   * Ownership is answered here, against the catalog as it stands, rather than
+   * trusted from what enrichment wrote — so "3 still to sort" counts what is
+   * still genuinely unsorted after everything the owner has done since. And a
+   * job the last of whose titles was settled from another photo closes itself,
+   * because nothing else is ever going to write to it.
+   */
   .get('/', async (c) => {
     // Validate rather than cast: an unrecognised ?status= should list
     // everything, not silently match no rows.
     const raw = c.req.query('status');
     const status = statusSchema.safeParse(raw);
-    const jobs = await listScanJobs(c.env.DB, status.success ? { status: status.data } : undefined);
+    const [listed, ctx] = await Promise.all([
+      listScanJobs(c.env.DB, status.success ? { status: status.data } : undefined),
+      ownershipContext(c.env.DB),
+    ]);
+
+    const jobs = [];
+    for (const job of listed) {
+      const settled = shouldAutoClose(job, ctx);
+      if (settled) await updateScanJobStatus(c.env.DB, job.id, 'done');
+      jobs.push(withFreshOwnership(settled ? { ...job, status: 'done' as const } : job, ctx));
+    }
     return c.json({ jobs });
   })
 
   // --- Get a single job ----------------------------------------------------
+  //
+  // No auto-close here, deliberately: this is the review screen's own fetch,
+  // and a page that marks itself finished as you open it is disconcerting even
+  // when it is right. The queue does it a moment later, once you go back.
   .get('/:id', async (c) => {
     const id = Number(c.req.param('id'));
     if (!id || !Number.isInteger(id)) return c.json({ error: 'bad_request' }, 400);
     const job = await getScanJob(c.env.DB, id);
     if (!job) return c.json({ error: 'not_found' }, 404);
-    return c.json({ job });
+    return c.json({ job: withFreshOwnership(job, await ownershipContext(c.env.DB)) });
   })
 
   // --- Upload a photo and start processing ---------------------------------
@@ -219,7 +242,13 @@ export const scanJobRoutes = new Hono<AppBindings>()
      * in place rather than answering with the failure it already recorded.
      */
     if (already >= 0 && !titles[already]!.lookupFailed) {
-      return c.json({ job, index: already, title: titles[already], duplicate: true });
+      const ctx = await ownershipContext(c.env.DB);
+      return c.json({
+        job: withFreshOwnership(job, ctx),
+        index: already,
+        title: titles[already],
+        duplicate: true,
+      });
     }
 
     const index = already >= 0 ? already : titles.length;
@@ -230,7 +259,17 @@ export const scanJobRoutes = new Hono<AppBindings>()
       enriched: JSON.stringify(titles),
     });
 
-    return c.json({ job: updated ?? job, index, title: titles[index], duplicate: false }, 201);
+    // After the write, never before it — the resolved copy is for reading only.
+    const ctx = await ownershipContext(c.env.DB);
+    return c.json(
+      {
+        job: withFreshOwnership(updated ?? job, ctx),
+        index,
+        title: titles[index],
+        duplicate: false,
+      },
+      201,
+    );
   })
 
   /**
@@ -332,21 +371,29 @@ export const scanJobRoutes = new Hono<AppBindings>()
      * the easy ones* and took the unfinished rows with it — the rows worth
      * coming back to were exactly the ones not in that batch. This fires when
      * `countOutstanding` reaches zero, which means every title has been added,
-     * dismissed or was already owned. There is nothing left to come back to,
-     * and the queue should not keep asking.
+     * dismissed, or is in the catalog already. There is nothing left to come
+     * back to, and the queue should not keep asking.
      *
      * `done`, not deleted: the row is the only record of which photo produced
      * which items, and the history view that would show it does not exist yet.
+     *
+     * The count is taken *after* the write, so this add's own items are in the
+     * catalog by the time ownership is resolved — which is what lets a second
+     * line naming the same game on this same photo settle itself.
      */
-    const outstanding = countOutstanding(titles);
-    const updated = await updateScanJobStatus(
-      c.env.DB,
-      id,
-      outstanding === 0 ? 'done' : job.status,
-      { enriched: JSON.stringify(titles) },
-    );
+    const written =
+      (await updateScanJobStatus(c.env.DB, id, job.status, {
+        enriched: JSON.stringify(titles),
+      })) ?? job;
 
-    return c.json({ job: updated, outstanding });
+    const ctx = await ownershipContext(c.env.DB);
+    const outstanding = countOutstanding(titles, id, ctx);
+    const updated =
+      outstanding === 0
+        ? ((await updateScanJobStatus(c.env.DB, id, 'done')) ?? written)
+        : written;
+
+    return c.json({ job: withFreshOwnership(updated, ctx), outstanding });
   })
 
   /**
@@ -411,7 +458,15 @@ export const scanJobRoutes = new Hono<AppBindings>()
       enriched: JSON.stringify(titles),
     });
 
-    return c.json({ job: updated, title: entry, found: best !== null });
+    // A corrected name is a new question about the catalog too: "Wingsapn"
+    // matched nothing, "Wingspan" may well be a game the owner already added
+    // from the other photo. Resolving on the way out asks it.
+    const ctx = await ownershipContext(c.env.DB);
+    return c.json({
+      job: updated ? withFreshOwnership(updated, ctx) : null,
+      title: entry,
+      found: best !== null,
+    });
   })
 
   /**
@@ -495,7 +550,10 @@ export const scanJobRoutes = new Hono<AppBindings>()
       enriched: JSON.stringify(titles),
     });
 
-    return c.json({ job: updated, title: entry });
+    // Accepting settles what the row *is*, which can settle whether we have it:
+    // a `medium` guess nobody trusted may name a game the catalog already holds.
+    const ctx = await ownershipContext(c.env.DB);
+    return c.json({ job: updated ? withFreshOwnership(updated, ctx) : null, title: entry });
   })
 
   // --- Mark a job as done (user reviewed) -----------------------------------

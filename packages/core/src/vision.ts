@@ -111,16 +111,41 @@ export function matchExistingTitle<T extends { id: number; name: string }>(
   title: string,
   existing: readonly T[],
 ): T | null {
+  return matchIndexedTitle(buildTitleIndex(existing), title);
+}
+
+/**
+ * The catalog's names, folded once, ready to be asked about repeatedly.
+ *
+ * `matchExistingTitle` normalises every name it is given on every call, which is
+ * right for one question and wrong for seventy: a shelf photo asked against 760
+ * items re-folds 53,000 strings. Building the index once and asking it N times
+ * is the same decision, made the same way — this exists so nobody writes a
+ * second, faster, subtly different matcher when the loop starts to hurt.
+ */
+export interface TitleIndex<T> {
+  entries: { item: T; key: string }[];
+}
+
+export function buildTitleIndex<T extends { id: number; name: string }>(
+  existing: readonly T[],
+): TitleIndex<T> {
+  return { entries: existing.map((item) => ({ item, key: normaliseTitle(item.name) })) };
+}
+
+/** `matchExistingTitle`, against a pre-folded catalog. Identical rules. */
+export function matchIndexedTitle<T extends { id: number; name: string }>(
+  index: TitleIndex<T>,
+  title: string,
+): T | null {
   const target = normaliseTitle(title);
   if (target.length < 2) return null;
 
-  const indexed = existing.map((item) => ({ item, key: normaliseTitle(item.name) }));
-
-  const exact = indexed.find((e) => e.key === target);
+  const exact = index.entries.find((e) => e.key === target);
   if (exact) return exact.item;
 
   return (
-    indexed
+    index.entries
       .filter((e) => {
         if (e.key.length < 3) return false;
         const contains = e.key.includes(target) || target.includes(e.key);
