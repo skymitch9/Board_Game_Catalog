@@ -374,7 +374,7 @@ const FILLABLE: { key: FillableKey; label: string }[] = [
  * in for the words.
  */
 function fillableFor(item: ItemDetail): { key: FillableKey; label: string }[] {
-  const allowed: readonly string[] = fillableFieldsFor(item.kind, item.gameSystem);
+  const allowed: readonly string[] = fillableFieldsFor(item.kind, item.gameSystem, item.publisher);
   return FILLABLE.filter(({ key }) => key === 'thumbnailUrl' || allowed.includes(key));
 }
 

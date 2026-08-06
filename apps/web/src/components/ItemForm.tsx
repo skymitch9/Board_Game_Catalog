@@ -1,5 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { ITEM_KINDS, type CreateItemInput, type Item, type ItemKind } from '@bgc/core';
+import {
+  ITEM_KINDS,
+  TRADITIONAL_PUBLISHER,
+  type CreateItemInput,
+  type Item,
+  type ItemKind,
+} from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { navigate } from '../router';
@@ -151,7 +157,14 @@ export function ItemDetailFields({
   return (
     <>
       <div className="row-2">
-        <Field label="Publisher">
+        {/* The hint is the only place the folk-game marker is discoverable.
+            "Traditional" is a real policy input — see NO_PUBLISHER_EXISTS in
+            packages/core/src/details.ts — and typing it says "there is no
+            publisher", which stops the details queue paying to find one. */}
+        <Field
+          label="Publisher"
+          hint={`Nobody published it? Type "${TRADITIONAL_PUBLISHER}"`}
+        >
           <input
             value={value.publisher}
             onChange={(e) => onChange({ publisher: e.target.value })}

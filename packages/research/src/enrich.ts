@@ -285,7 +285,7 @@ export function fieldsToFill(
   const blank = (v: string | number | null | undefined): boolean =>
     v == null || (typeof v === 'string' && v.trim() === '');
 
-  const allowed = fillableFieldsFor(current.kind, current.gameSystem);
+  const allowed = fillableFieldsFor(current.kind, current.gameSystem, current.publisher);
   const fill = (field: FillField, value: string | number | null): void => {
     if (!allowed.includes(field)) return;
     if (!blank(current[field]) || !value) return;

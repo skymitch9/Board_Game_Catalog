@@ -1015,8 +1015,19 @@ const DETAIL_COLUMN: Record<DetailField, string> = {
 /** Mirrors `isBlankDetail`. `trim()` on an integer yields its digits, never ''. */
 const blankSql = (column: string) => `(${column} IS NULL OR trim(${column}) = '')`;
 
-/** `game_system` set, or not. The other half of what a row is asked for. */
+/** `game_system` set, or not. The second of the three columns the policy reads. */
 const HAS_SYSTEM_SQL = `NOT ${blankSql('game_system')}`;
+
+/**
+ * The third: a publisher field that says *there is no publisher*.
+ *
+ * ⚠️ **Mirrors `isTraditionalPublisher`** in `packages/core/src/details.ts` and
+ * must keep mirroring it — the spellings live there, in `NO_PUBLISHER_EXISTS`,
+ * and this is the same closed set written as SQL. `IFNULL` first so a NULL
+ * publisher is plainly false rather than NULL, which `NOT` would swallow and
+ * quietly drop every unresearched row out of the queue.
+ */
+const TRADITIONAL_SQL = `lower(trim(IFNULL(publisher, ''))) IN ('traditional', 'public domain', '(public domain)')`;
 
 /**
  * The gap test of `detailGaps`, as SQL, generated rather than restated.
@@ -1032,7 +1043,7 @@ const HAS_SYSTEM_SQL = `NOT ${blankSql('game_system')}`;
  * reason to queue the row again.
  */
 function detailGapsSql(gapFilter?: (field: DetailField) => string): string {
-  const branches = detailGapBranches().map(({ kind, hasSystem, fields }) => {
+  const branches = detailGapBranches().map(({ kind, hasSystem, traditional, fields }) => {
     const gaps = fields
       .map((field) => {
         const blank = blankSql(DETAIL_COLUMN[field]);
@@ -1040,7 +1051,8 @@ function detailGapsSql(gapFilter?: (field: DetailField) => string): string {
       })
       .join(' OR ');
     const system = hasSystem ? HAS_SYSTEM_SQL : blankSql('game_system');
-    return `(kind = '${kind}' AND ${system} AND (${gaps}))`;
+    const folk = traditional ? TRADITIONAL_SQL : `NOT ${TRADITIONAL_SQL}`;
+    return `(kind = '${kind}' AND ${system} AND ${folk} AND (${gaps}))`;
   });
   return `parent_item_id IS NULL AND (${branches.join('\n            OR ')})`;
 }
@@ -1089,8 +1101,9 @@ const INPUTS_CHANGED = `(
  * Three layers, and they compose in this order because that is their order of
  * value:
  *
- * 1. **Never ask what cannot exist.** `detailGapsSql` is now system-aware, so a
- *    rulebook is not asked for a player count it does not have.
+ * 1. **Never ask what cannot exist.** `detailGapsSql` reads `kind`,
+ *    `game_system` and `publisher`, so a rulebook is not asked for a player
+ *    count it does not have and a folk game is not asked who published it.
  * 2. **Do not re-ask unless an input changed.** A completed run excludes the
  *    row until one of the four recorded inputs differs.
  * 3. **Per field, not per item.** The exclusion covers only the fields that run

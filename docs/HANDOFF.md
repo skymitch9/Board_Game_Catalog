@@ -2,6 +2,94 @@
 
 Everything needed to continue or finish this without Claude.
 
+## The queue empties by design, not by having been asked — 2026-08-06
+
+*"exclude the impossible fields so the queue can empty"* — the owner. The queue
+already read **0**, but only because layer 2 remembered asking two rows and
+finding nothing. Rebuild the run history and it came back.
+
+### What the research found, and it was mostly good news
+
+The list of "impossible" cases was checked against production's 760 rows before
+any code was written. **Layer 1 already excluded every class on it.** Measured
+with the run history deleted, so layer 2 could not help:
+
+| Claimed impossible | Already excluded? | By what |
+|---|---|---|
+| Playing time on 19 RPG books | **yes** | `game_system` is set on all 19 |
+| Player count on 6 reference books | **yes** | the same rule — it covers `minPlayers`/`maxPlayers`/`playtimeMin` together |
+| Excursion Tiles 1 & 2, Pangea Gaming Table | **yes**, and they were never in the queue | `kind = 'accessory'`, and all three already carry a publisher and a publisher site |
+
+So the 19 playtime gaps and the 6 player-count gaps are **real blanks in the
+table that the queue correctly never asks about** — they show as blanks on the
+item page and cost nothing. Nothing needed adding for them.
+
+**With the run history cleared, layer 1 left exactly two rows**: Go Fish
+(publisher, publisher site, year) and Divine Dungeon the Game (playing time).
+
+### The one rule added: a game nobody published
+
+`publisher = 'Traditional'` (or `Public Domain`, or BGG's `(Public Domain)`) now
+means *there is no publisher*, and layer 1 refuses **publisher, publisher site
+and year** on such a row. `NO_PUBLISHER_EXISTS` in `packages/core/src/details.ts`,
+mirrored as `TRADITIONAL_SQL` in `packages/db/src/items.ts` the same way
+`blankSql` mirrors `isBlankDetail`.
+
+- **It is a marker the owner types, not a heuristic.** `publisher IS NULL AND
+  year IS NULL` describes an unresearched row exactly as well as a folk game, so
+  no rule computed from the other columns can tell them apart. Somebody has to
+  know. The Publisher field on the edit form now carries the hint
+  *"Nobody published it? Type "Traditional""* — that hint is the only place the
+  convention is discoverable, so do not delete it.
+- **No migration and no new column.** The value goes in the ordinary publisher
+  box and reads correctly on the item page: *Publisher: Traditional*.
+- **An exact, closed set of spellings, not `LIKE '%public domain%'`.** A modern
+  game *released into* the public domain has a website and a year, and a fuzzy
+  match would refuse both.
+- **Production data changed by one row**: `UPDATE item SET publisher =
+  'Traditional' WHERE id = 801` (Go Fish). Reverse it by clearing the field.
+
+### Divine Dungeon the Game stays in layer 2, on purpose
+
+Its playing time is published nowhere, including Mountaindale Press's own store.
+That is **one item, not a class** — there is no column that makes it a class
+without inventing one for a single row, and it is exactly what "asked once,
+found nothing" is for. If the publisher ever prints a number, changing the row's
+name or BGG id re-opens it; nothing else has to.
+
+**So the honest target was 1, not 0**, and that is what the proof below shows.
+
+### Queue, measured through `GET /api/research/needs-details`
+
+Against a local D1 loaded with a read-only copy of production (760 items, 761
+copies, 11 research runs) in `apps/worker/.wrangler/qsandbox`:
+
+| | With run history | Run history deleted |
+|---|---|---|
+| Before | **0** | **2** — Go Fish, Divine Dungeon |
+| After, marker not yet set | — | **2** — the rule is inert until someone opts a row in |
+| **After** | **0** | **1** — Divine Dungeon only |
+
+The middle row is the one worth keeping: the new rule changed nothing until the
+marker was typed, so it cannot have quietly dropped a row that was merely
+unresearched.
+
+### ⚠️ Loading a production snapshot into a local D1 needs three tricks
+
+The recipe in [folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
+no longer works as written. All three failures present as the same unhelpful
+line — *"Durable Object was reset and rolled back … FOREIGN KEY constraint
+failed"* — with the whole import silently rolled back to zero rows:
+
+1. **Split the dump one table per file and load `item` first.** `copy` inserted
+   before `item` fails.
+2. **Re-add `PRAGMA defer_foreign_keys=TRUE;` to the top of *each* file.**
+   wrangler batches the statements, and the pragma does not survive the batch it
+   was issued in — `item` alone fails without it, because a child row can precede
+   its parent.
+3. **Insert an `app_user` row before `research_run`.** `research_run.triggered_by`
+   references it, and the export does not include the users table.
+
 ## "262 wanted" over a wishlist of 25 — 2026-08-06
 
 **Shipped.** Commits `88ca86a` and `29c12b5`, production version

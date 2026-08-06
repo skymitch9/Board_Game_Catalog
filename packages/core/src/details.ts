@@ -49,9 +49,9 @@
  *
  * | Field | Inherits | Demanded of | Refused on |
  * |---|---|---|---|
- * | `publisher` | **yes** | items with no parent | — |
- * | `publisherUrl` | **yes** | items with no parent | — |
- * | `yearPublished` | no | base games | — |
+ * | `publisher` | **yes** | items with no parent | traditional games |
+ * | `publisherUrl` | **yes** | items with no parent | traditional games |
+ * | `yearPublished` | no | base games | traditional games |
  * | `minPlayers` / `maxPlayers` | no | base games | accessories, promos, upgrades, rulesets |
  * | `playtimeMin` | no | base games | accessories, promos, upgrades, rulesets |
  * | `description` | no | base games | accessories, promos, upgrades |
@@ -74,6 +74,12 @@
  * - **description never inherits.** A dice tray is not described by the base
  *   game's description. Copying it would be actively misleading rather than
  *   merely unhelpful.
+ * - **A traditional game refuses all three published-thing fields.** Nobody
+ *   published Go Fish, so there is no publisher, no publisher site and no year
+ *   of publication to find, and the queue must know that before it pays to
+ *   discover it. See `NO_PUBLISHER_EXISTS` — the marker is a value the owner
+ *   types into the ordinary publisher box, because no rule computed from the
+ *   other columns can tell a folk game from a row nobody has researched yet.
  *
  * ## Why a child is asked for nothing
  *
@@ -189,19 +195,65 @@ const OF_A_GAME_IN_PLAY: readonly FillField[] = ['minPlayers', 'maxPlayers', 'pl
 const A_THING_NOT_A_GAME: readonly (ItemKind | string)[] = ['accessory', 'promo', 'upgrade'];
 
 /**
+ * The facts that exist only because somebody published the thing.
+ *
+ * Go Fish has none of them. It is a folk game: no company made it, so there is
+ * no company website, and it was not published in a year — it was played before
+ * anyone wrote it down. The catalog has an entry for it because the owner owns a
+ * deck of cards and plays it, which is the honest reason for the row.
+ */
+const OF_A_PUBLISHED_THING: readonly FillField[] = ['publisher', 'publisherUrl', 'yearPublished'];
+
+/**
+ * The publisher values that mean *there is no publisher*, not *nobody has looked*.
+ *
+ * The distinction the item table could not previously draw, and the whole reason
+ * Go Fish kept coming back to the queue. A blank publisher is a question; this is
+ * an answer, and it is one the owner writes in the ordinary publisher box — no
+ * new column, no new checkbox, no new concept.
+ *
+ * ⚠️ **Mirrored in SQL** by `TRADITIONAL_SQL` in `packages/db/src/items.ts`, the
+ * same way `blankSql` mirrors `isBlankDetail`. An exact, closed set of spellings
+ * rather than a fuzzy match, because both halves have to agree exactly and a
+ * `LIKE '%public domain%'` would also catch a modern game *released into* the
+ * public domain — which has a website and a year, and would then be refused both.
+ *
+ * `(Public Domain)` is BoardGameGeek's own spelling, parentheses included, so a
+ * copy-paste from the page the row came from lands on the right rule.
+ */
+const NO_PUBLISHER_EXISTS: readonly string[] = ['traditional', 'public domain', '(public domain)'];
+
+/** The value to type into the publisher box to say a game is a folk game. */
+export const TRADITIONAL_PUBLISHER = 'Traditional';
+
+/** True when the publisher field says "there is no publisher to find". */
+export function isTraditionalPublisher(publisher?: string | null): boolean {
+  return NO_PUBLISHER_EXISTS.includes((publisher ?? '').trim().toLowerCase());
+}
+
+/**
  * The facts that cannot exist for this row, whoever asks and whatever they find.
  *
- * Two independent reasons, and a row can carry both. `gameSystem` is keyed on
- * being set at all rather than on a list of systems: the column exists precisely
- * to say "this is played under a ruleset", and a hardcoded list would need
- * editing every time the owner buys a new one.
+ * Three independent reasons, and a row can carry more than one. Each is keyed on
+ * a column that already exists and already means what the rule needs it to mean,
+ * rather than on a list of item names — a hardcoded list would need editing
+ * every time the owner buys something.
  *
- * A ruleset keeps its description — a rulebook is a thing there is something to
- * say about — while an accessory does not.
+ * - **`kind`** — an accessory is a thing you own, not a game you play.
+ * - **`gameSystem`** — the column exists precisely to say "this is played under a
+ *   ruleset", and a rulebook has no duration and no party size. A ruleset keeps
+ *   its description, because a rulebook is a thing there is something to say
+ *   about; an accessory does not.
+ * - **`publisher`, when it says nobody published it** — see `NO_PUBLISHER_EXISTS`.
+ *   This one is *opt-in by the owner* and that is deliberate: no heuristic can
+ *   tell a folk game from an unresearched row, since `publisher IS NULL AND year
+ *   IS NULL` describes both. Somebody has to know, and the person who owns the
+ *   deck of cards is the one who does.
  */
 export function impossibleFields(
   kind: ItemKind | string,
   gameSystem?: string | null,
+  publisher?: string | null,
 ): FillField[] {
   const impossible = new Set<FillField>();
   if (A_THING_NOT_A_GAME.includes(kind)) {
@@ -210,6 +262,9 @@ export function impossibleFields(
   }
   if (!isBlankDetail(gameSystem)) {
     for (const field of OF_A_GAME_IN_PLAY) impossible.add(field);
+  }
+  if (isTraditionalPublisher(publisher)) {
+    for (const field of OF_A_PUBLISHED_THING) impossible.add(field);
   }
   // Rebuilt from FILL_FIELDS so the order is the order everything else reports.
   return FILL_FIELDS.filter((field) => impossible.has(field));
@@ -227,8 +282,9 @@ export function impossibleFields(
 export function fillableFieldsFor(
   kind: ItemKind | string,
   gameSystem?: string | null,
+  publisher?: string | null,
 ): FillField[] {
-  const impossible = impossibleFields(kind, gameSystem);
+  const impossible = impossibleFields(kind, gameSystem, publisher);
   return FILL_FIELDS.filter((field) => !impossible.includes(field));
 }
 
@@ -241,19 +297,21 @@ export function fillableFieldsFor(
  * a publisher; the day its game turns up and `adoptOrphans` re-parents it, it
  * stops being asked, with nothing to clean up.
  *
- * `kind` and `gameSystem` narrow it further — see `impossibleFields`. Nothing
- * impossible can survive here, though in practice the two rules barely meet: a
- * parentless non-base row is only ever asked for the two inheritable fields,
- * and neither of those is ever impossible.
+ * `kind`, `gameSystem` and `publisher` narrow it further — see
+ * `impossibleFields`. A parentless non-base row is only ever asked for the two
+ * inheritable fields, and a traditional game is the one case where those are
+ * refused too: such a row is asked for nothing at all and leaves the queue
+ * outright.
  */
 export function detailFieldsFor(
   kind: ItemKind | string,
   hasParent: boolean,
   gameSystem?: string | null,
+  publisher?: string | null,
 ): DetailField[] {
   if (hasParent) return [];
   const asked: DetailField[] = kind === 'base' ? [...DETAIL_FIELDS] : [...INHERITED_FIELDS];
-  const impossible = impossibleFields(kind, gameSystem);
+  const impossible = impossibleFields(kind, gameSystem, publisher);
   return asked.filter((field) => !impossible.includes(field));
 }
 
@@ -264,9 +322,12 @@ export function isBlankDetail(value: string | number | null | undefined): boolea
 
 /** What this row is asked for and does not have. Empty means "not in the queue". */
 export function detailGaps(item: DetailSubject): DetailField[] {
-  return detailFieldsFor(item.kind, item.parentItemId != null, item.gameSystem).filter((field) =>
-    isBlankDetail(item[field]),
-  );
+  return detailFieldsFor(
+    item.kind,
+    item.parentItemId != null,
+    item.gameSystem,
+    item.publisher,
+  ).filter((field) => isBlankDetail(item[field]));
 }
 
 /**
@@ -277,20 +338,39 @@ export function detailGaps(item: DetailSubject): DetailField[] {
  * be a second implementation of the decision, and the two would drift the first
  * time a kind was added.
  *
- * Two branches per kind now — with a `game_system` and without — because the
- * answer differs between them and the generator must produce both. `hasSystem`
- * is what the SQL turns into a predicate on the column.
+ * One branch per combination of the three columns the policy reads — `kind`,
+ * whether a `game_system` is set, and whether the publisher says nobody
+ * published it — because the answer differs between them and the generator must
+ * produce every case. `hasSystem` and `traditional` are what the SQL turns into
+ * predicates on the columns.
+ *
+ * Combinations that end up asking for nothing are dropped rather than emitted
+ * with an empty `(...)`, which is also how a traditional non-base row leaves the
+ * queue: both of the fields it could have been asked for are refused.
  */
 export function detailGapBranches(): {
   kind: ItemKind;
   hasSystem: boolean;
+  traditional: boolean;
   fields: DetailField[];
 }[] {
-  const branches: { kind: ItemKind; hasSystem: boolean; fields: DetailField[] }[] = [];
+  const branches: {
+    kind: ItemKind;
+    hasSystem: boolean;
+    traditional: boolean;
+    fields: DetailField[];
+  }[] = [];
   for (const kind of ITEM_KINDS) {
     for (const hasSystem of [false, true]) {
-      const fields = detailFieldsFor(kind, false, hasSystem ? 'a ruleset' : null);
-      if (fields.length > 0) branches.push({ kind, hasSystem, fields });
+      for (const traditional of [false, true]) {
+        const fields = detailFieldsFor(
+          kind,
+          false,
+          hasSystem ? 'a ruleset' : null,
+          traditional ? TRADITIONAL_PUBLISHER : null,
+        );
+        if (fields.length > 0) branches.push({ kind, hasSystem, traditional, fields });
+      }
     }
   }
   return branches;
