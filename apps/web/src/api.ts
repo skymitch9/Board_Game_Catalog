@@ -13,7 +13,7 @@ import type {
   HealthResponse,
   Item,
   ItemDetail,
-  ItemNode,
+  ItemPage,
   ItemQuery,
   MeResponse,
   Rating,
@@ -96,8 +96,22 @@ export const api = {
 
   meta: () => req<{ stats: CollectionStats }>('/api/meta'),
 
-  items: (query: ItemQuery = {}) =>
-    req<{ items: ItemNode[] }>(`/api/items${toQueryString(query)}`),
+  /**
+   * One page of game trees. `total` is every match, not the page — see ItemPage.
+   *
+   * The page size is the server's, so there is no way to ask for all 107 groups
+   * at once; anything that needs every item wants a different endpoint.
+   */
+  items: (query: ItemQuery = {}) => req<ItemPage>(`/api/items${toQueryString(query)}`),
+
+  /**
+   * Every item's id, name and kind. The list `items()` cannot give you.
+   *
+   * Matching read spine text against the collection needs all of it — a paged
+   * browse would match against the first page and call everything else new.
+   */
+  itemNames: () =>
+    req<{ items: { id: number; name: string; kind: string }[] }>('/api/item-names'),
   item: (id: number) => req<{ item: ItemDetail }>(`/api/items/${id}`),
 
   /**

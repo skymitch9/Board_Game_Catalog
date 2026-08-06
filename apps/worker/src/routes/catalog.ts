@@ -24,6 +24,7 @@ import {
   getItemDetail,
   getRelatedItems,
   listCoverCandidates,
+  listItemNames,
   listItemTrees,
   listRelationPairs,
   listTopLevelItems,
@@ -56,7 +57,23 @@ export const catalogRoutes = new Hono<AppBindings>()
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
-    return c.json({ items: await listItemTrees(c.env.DB, parsed.data) });
+    // One page of trees plus the full match count — `total` deliberately counts
+    // every matching group, not the ones on this page, so the header can say
+    // "40 games" while showing 25 of them.
+    return c.json(await listItemTrees(c.env.DB, parsed.data));
+  })
+
+  /**
+   * Every item's id, name and kind — nothing else.
+   *
+   * Exists because `/items` is paged. Shelf classification needs the whole
+   * catalog to match spine text against, and a paged browse endpoint cannot
+   * answer that: it would silently match against the first 25 groups and report
+   * every other game you own as new. Three columns over 640 rows is a few tens
+   * of kilobytes, against the megabyte a page of whole trees costs.
+   */
+  .get('/item-names', async (c) => {
+    return c.json({ items: await listItemNames(c.env.DB) });
   })
 
   .get('/items/:id', async (c) => {

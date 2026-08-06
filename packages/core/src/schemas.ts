@@ -134,9 +134,33 @@ export const itemQuerySchema = z.object({
   uncatalogued: z.coerce.boolean().optional(),
   /** Only trees containing something we hold more than one of. */
   duplicates: z.coerce.boolean().optional(),
+  /** 1-based. The size of a page is the server's decision, not the caller's. */
+  page: z.coerce.number().int().min(1).optional(),
 });
 
 export type ItemQuery = z.infer<typeof itemQuerySchema>;
+
+/**
+ * Split a search box into the words that must all be found.
+ *
+ * "catan seafarers" is two facts about one game tree, and they live in different
+ * rows: the first is the base game's name, the second an expansion's. Treating
+ * the box as one string requires them adjacent in a single field, which they
+ * never are. Every term has to match *something* in the tree; no term has to
+ * match the same thing as another.
+ *
+ * Lowercased here so the SQL and the "why did this match" check downstream
+ * cannot drift apart on case.
+ */
+export function searchTerms(q: string | undefined | null): string[] {
+  if (!q) return [];
+  return q
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
 
 // ---------------------------------------------------------------------------
 // Response shapes
@@ -199,6 +223,32 @@ export interface Rating {
 export interface ItemNode extends Item {
   copies: Copy[];
   children: ItemNode[];
+  /**
+   * Why this tree is in the results, when the answer is not the game itself.
+   *
+   * Set only on a root, only when searching, and only when the root's own name,
+   * publisher and designers do not account for every term. Searching "seafarers"
+   * and being handed "Catan" looks arbitrary until the row says the match was on
+   * "Catan: Seafarers" — which is the expansion you were looking for, filed
+   * where it belongs.
+   */
+  matchedChildren?: { id: number; name: string }[];
+}
+
+/**
+ * One page of game trees, and how many there are in total.
+ *
+ * `total` counts every matching tree, not the ones on this page: the header
+ * needs to say "40 games" while showing 25 of them, and a count that shrank to
+ * the page size would make paging look like filtering.
+ */
+export interface ItemPage {
+  items: ItemNode[];
+  total: number;
+  /** 1-based, and clamped to the last page when asked for one past the end. */
+  page: number;
+  pageSize: number;
+  pageCount: number;
 }
 
 export interface ItemDetail extends Item {

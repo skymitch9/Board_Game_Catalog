@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ownedCount, summarizeTree, type Copy, type ItemNode } from '@bgc/core';
 import { Link } from '../router';
 import { Badge } from './ui';
@@ -10,13 +11,52 @@ const KIND_LABEL: Record<ItemNode['kind'], string> = {
   upgrade: 'Upgrade',
 };
 
-const STATUS_TONE: Record<Copy['status'], 'owned' | 'wanted' | 'lent' | 'sold' | 'neutral'> = {
+/** Plural forms for the collapsed summary — "3 expansions, 8 accessories". */
+const KIND_PLURAL: Record<ItemNode['kind'], [string, string]> = {
+  base: ['base game', 'base games'],
+  expansion: ['expansion', 'expansions'],
+  accessory: ['accessory', 'accessories'],
+  promo: ['promo', 'promos'],
+  upgrade: ['upgrade', 'upgrades'],
+};
+
+/**
+ * `preordered` has its own colour, and does not share `wanted`'s.
+ *
+ * They mean opposite things about your wallet — one is a decision still to make,
+ * the other is money already spent on a box in the post — and the collection
+ * holds 145 of the second against 5 of the first. Sharing amber made the far
+ * commoner state wear the colour that means "you do not have this".
+ */
+const STATUS_TONE: Record<
+  Copy['status'],
+  'owned' | 'wanted' | 'preordered' | 'lent' | 'sold' | 'neutral'
+> = {
   owned: 'owned',
   wanted: 'wanted',
-  preordered: 'wanted',
+  preordered: 'preordered',
   lent: 'lent',
   sold: 'sold',
 };
+
+/**
+ * Which groups the reader has opened, for the life of the tab.
+ *
+ * Module-level rather than component state because the card is unmounted and
+ * rebuilt every time the collection is re-fetched — opening a group, tapping
+ * into a game and coming back would otherwise close it again. Deliberately not
+ * persisted to storage: this is where you were a moment ago, not a preference.
+ */
+const openGroups = new Map<number, boolean>();
+
+/**
+ * Below this many descendants a group starts open.
+ *
+ * The control is itself a row: collapsing one or two children replaces two lines
+ * with one line and a click, which is not a saving. Three is where the summary
+ * starts describing something you would otherwise have to read.
+ */
+const AUTO_EXPAND_UP_TO = 2;
 
 /** Condensed copy state for a row: "2 owned · lent". */
 function copySummary(copies: Copy[]): {
@@ -58,16 +98,54 @@ function copySummary(copies: Copy[]): {
   };
 }
 
+/** "12 items: 3 expansions, 8 accessories, 1 promo". */
+function describeChildren(node: ItemNode): { count: number; text: string } {
+  const counts = new Map<ItemNode['kind'], number>();
+  let count = 0;
+  const walk = (n: ItemNode) => {
+    for (const child of n.children) {
+      count += 1;
+      counts.set(child.kind, (counts.get(child.kind) ?? 0) + 1);
+      walk(child);
+    }
+  };
+  walk(node);
+
+  const breakdown = (Object.keys(KIND_PLURAL) as ItemNode['kind'][])
+    .filter((k) => counts.has(k))
+    .map((k) => `${counts.get(k)} ${KIND_PLURAL[k][counts.get(k) === 1 ? 0 : 1]}`)
+    .join(', ');
+
+  return { count, text: `${count} item${count === 1 ? '' : 's'}: ${breakdown}` };
+}
+
 function ChildRow({ node, depth }: { node: ItemNode; depth: number }) {
   const summary = copySummary(node.copies);
+  /*
+    The same argument the card badge makes, applied one level down: an owned
+    child says "owned" and nothing else, so a game with twelve accessories used
+    to say it twelve times. Only the exceptions are worth the ink — wanted, lent,
+    preordered, sold, and having nothing recorded at all. The duplicate flag
+    stays either way, because two of something is a fact about the shelf.
+  */
+  const status = summary.tone === null ? { tone: null, text: 'not catalogued' } : summary.notable;
+
   return (
     <>
       <Link to={`/items/${node.id}`} className="child-row" style={{ paddingLeft: 12 + depth * 16 }}>
         <span className="child-kind">{KIND_LABEL[node.kind]}</span>
         <span className="child-name">{node.name}</span>
-        <span className={summary.tone ? `child-status tone-${STATUS_TONE[summary.tone]}` : 'child-status muted'}>
-          {summary.duplicated && <span className="dupe-flag" title="More than one">×{ownedCount(node.copies)}</span>}
-          {summary.text}
+        <span
+          className={
+            status?.tone ? `child-status tone-${STATUS_TONE[status.tone]}` : 'child-status muted'
+          }
+        >
+          {summary.duplicated && (
+            <span className="dupe-flag" title="More than one">
+              ×{ownedCount(node.copies)}
+            </span>
+          )}
+          {status?.text}
         </span>
       </Link>
       {node.children.map((c) => (
@@ -80,6 +158,16 @@ function ChildRow({ node, depth }: { node: ItemNode; depth: number }) {
 export function ItemCard({ node }: { node: ItemNode }) {
   const stats = summarizeTree(node);
   const own = copySummary(node.copies);
+  const brood = describeChildren(node);
+
+  const [open, setOpen] = useState(
+    () => openGroups.get(node.id) ?? brood.count <= AUTO_EXPAND_UP_TO,
+  );
+  const toggle = () => {
+    const next = !open;
+    openGroups.set(node.id, next);
+    setOpen(next);
+  };
 
   return (
     <article className="card item-card">
@@ -128,6 +216,16 @@ export function ItemCard({ node }: { node: ItemNode }) {
         </span>
       </Link>
 
+      {/* Why this group is in the results at all. Searching "seafarers" and
+          being handed "Catan" is correct — that is where Seafarers is filed —
+          but without this the result looks arbitrary, and the match is hidden
+          behind a collapsed list. */}
+      {node.matchedChildren && node.matchedChildren.length > 0 && (
+        <p className="match-why">
+          Matched <span>{node.matchedChildren.map((m) => m.name).join(', ')}</span>
+        </p>
+      )}
+
       {stats.duplicates.length > 0 && (
         <div className="dupe-strip" title="You hold more than one of these">
           {stats.duplicates.map((d) => (
@@ -138,12 +236,27 @@ export function ItemCard({ node }: { node: ItemNode }) {
         </div>
       )}
 
-      {node.children.length > 0 && (
-        <div className="children">
-          {node.children.map((c) => (
-            <ChildRow key={c.id} node={c} depth={0} />
-          ))}
-        </div>
+      {brood.count > 0 && (
+        <>
+          <button
+            type="button"
+            className="children-toggle"
+            aria-expanded={open}
+            aria-controls={`children-${node.id}`}
+            onClick={toggle}
+          >
+            <span className="children-toggle__caret" aria-hidden="true" data-open={open}>
+              ▸
+            </span>
+            <span>{brood.text}</span>
+          </button>
+          {/* The container is always in the tree so `aria-controls` always
+              points at something; its rows are not, so a collapsed group of 53
+              books costs no render. */}
+          <div className="children" id={`children-${node.id}`} hidden={!open}>
+            {open && node.children.map((c) => <ChildRow key={c.id} node={c} depth={0} />)}
+          </div>
+        </>
       )}
 
       <footer className="item-foot">

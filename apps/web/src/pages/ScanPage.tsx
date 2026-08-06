@@ -620,15 +620,11 @@ function ShelfResult({
   // Run classification once on first render.
   if (!classifyRan) {
     setClassifyRan(true);
-    api.items().then((res) => {
-      const flat: { id: number; name: string; kind: string }[] = [];
-      function walk(nodes: typeof res.items) {
-        for (const n of nodes) {
-          flat.push({ id: n.id, name: n.name, kind: n.kind });
-          if (n.children) walk(n.children);
-        }
-      }
-      walk(res.items);
+    // `itemNames`, not `items`: the browse endpoint is paged, and classifying a
+    // shelf against one page of it would report everything past group 25 as a
+    // game you do not own.
+    api.itemNames().then((res) => {
+      const flat = res.items;
       setExistingItems(flat);
 
       const freshItems = fresh.map((m) => ({

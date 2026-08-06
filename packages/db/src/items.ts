@@ -4,11 +4,13 @@ import type {
   Item,
   ItemDetail,
   ItemNode,
+  ItemPage,
   ItemQuery,
   Rating,
   UpdateItemInput,
   WishlistEntry,
 } from '@bgc/core';
+import { COLLECTION_PAGE_SIZE, searchTerms } from '@bgc/core';
 import { getRelatedItems } from './relations.js';
 import { preserveDisplacedCover } from './editions.js';
 import { mapCopyRow, toIso, type CopyRow } from './copies.js';
@@ -73,20 +75,43 @@ export function toSortName(name: string): string {
     .replace(/^(the|a|an)\s+/, '');
 }
 
+/** The fields a search term is looked for in, for one item alias. */
+function termClause(alias: string): string {
+  return `(lower(${alias}.name) LIKE ? OR lower(${alias}.publisher) LIKE ?
+           OR lower(${alias}.designers) LIKE ?)`;
+}
+
+/** True when this item's own text accounts for the term. Mirrors `termClause`. */
+function itemMatchesTerm(item: Item, term: string): boolean {
+  return [item.name, item.publisher, item.designers].some(
+    (field) => field != null && field.toLowerCase().includes(term),
+  );
+}
+
 /**
- * Builds the subquery selecting root_game_ids whose tree matches the filters.
+ * The FROM/WHERE that selects the game trees matching the filters.
  *
  * Filtering on the *tree* rather than the item is deliberate: searching for an
  * expansion should surface its base game too, otherwise you get an orphaned
  * result with no context.
+ *
+ * Each search term gets its own EXISTS over the tree, and the terms are ANDed.
+ * That is what lets "catan seafarers" find the Catan group: the two words are
+ * satisfied by two different rows in it. Putting both words in one LIKE would
+ * require them adjacent in a single field, which they are not — and pushing the
+ * AND down onto one item row would require one row to contain both, which is
+ * the same mistake wearing different clothes.
  */
 function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
 
-  if (query.q) {
-    where.push('(lower(i2.name) LIKE ? OR lower(i2.publisher) LIKE ? OR lower(i2.designers) LIKE ?)');
-    const like = `%${query.q.toLowerCase()}%`;
+  for (const term of searchTerms(query.q)) {
+    where.push(
+      `EXISTS (SELECT 1 FROM item t
+                WHERE t.root_game_id = i2.root_game_id AND ${termClause('t')})`,
+    );
+    const like = `%${term}%`;
     params.push(like, like, like);
   }
   if (query.kind) {
@@ -115,10 +140,13 @@ function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } 
     );
   }
 
-  const sql = `SELECT DISTINCT i2.root_game_id
-                 FROM item i2
-                 LEFT JOIN copy c2 ON c2.item_id = i2.id
-                 ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+  // The join to the root is what makes paging orderable: a page has to be the
+  // same 25 groups every time it is asked for, in an order a person recognises,
+  // and only the root carries the name the group is filed under.
+  const sql = `FROM item i2
+               JOIN item r ON r.id = i2.root_game_id
+               LEFT JOIN copy c2 ON c2.item_id = i2.id
+               ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
   return { sql, params };
 }
 
@@ -146,22 +174,61 @@ function buildTrees(items: Item[], copiesByItem: Map<number, Copy[]>): ItemNode[
   return roots;
 }
 
-export async function listItemTrees(db: D1Database, query: ItemQuery): Promise<ItemNode[]> {
+/** How many matching children a result may name before it stops being a hint. */
+const MAX_MATCH_REASONS = 3;
+
+/**
+ * One page of matching game trees.
+ *
+ * Paged on the *roots*, then the page's trees are fetched whole. The alternative
+ * — fetching every matching item and slicing afterwards — would have assembled
+ * all 640 rows to hand back 25 groups, which is the cost this exists to avoid.
+ *
+ * Four reads: the total, this page's root ids, then the items and copies for
+ * those roots. The last two are batched; the first two cannot be, because the
+ * ids decide what the others ask for.
+ */
+export async function listItemTrees(db: D1Database, query: ItemQuery): Promise<ItemPage> {
   const roots = matchingRootsSql(query);
+  const pageSize = COLLECTION_PAGE_SIZE;
 
-  const itemsStmt = db
-    .prepare(`SELECT ${ITEM_COLUMNS} FROM item WHERE root_game_id IN (${roots.sql})`)
-    .bind(...roots.params);
+  const counted = await db
+    .prepare(`SELECT COUNT(DISTINCT i2.root_game_id) AS total ${roots.sql}`)
+    .bind(...roots.params)
+    .first<{ total: number }>();
+  const total = counted?.total ?? 0;
 
-  const copiesStmt = db
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  // Asking for page 9 of 5 gets the last page, not an empty one. A stale link or
+  // a filter that narrowed under you should land somewhere, not nowhere.
+  const page = Math.min(Math.max(query.page ?? 1, 1), pageCount);
+
+  if (total === 0) return { items: [], total, page: 1, pageSize, pageCount: 1 };
+
+  const { results: idRows } = await db
     .prepare(
-      `SELECT c.* FROM copy c
-         JOIN item i ON i.id = c.item_id
-        WHERE i.root_game_id IN (${roots.sql})`,
+      `SELECT DISTINCT i2.root_game_id AS id, COALESCE(r.sort_name, r.name) AS ord
+       ${roots.sql}
+        ORDER BY ord, id
+        LIMIT ? OFFSET ?`,
     )
-    .bind(...roots.params);
+    .bind(...roots.params, pageSize, (page - 1) * pageSize)
+    .all<{ id: number; ord: string }>();
 
-  const batched = await db.batch([itemsStmt, copiesStmt]);
+  const ids = idRows.map((r) => r.id);
+  if (ids.length === 0) return { items: [], total, page, pageSize, pageCount };
+  const holes = ids.map(() => '?').join(',');
+
+  const batched = await db.batch([
+    db.prepare(`SELECT ${ITEM_COLUMNS} FROM item WHERE root_game_id IN (${holes})`).bind(...ids),
+    db
+      .prepare(
+        `SELECT c.* FROM copy c
+           JOIN item i ON i.id = c.item_id
+          WHERE i.root_game_id IN (${holes})`,
+      )
+      .bind(...ids),
+  ]);
   const itemRows = (batched[0]?.results ?? []) as ItemRow[];
   const copyRows = (batched[1]?.results ?? []) as CopyRow[];
 
@@ -174,7 +241,52 @@ export async function listItemTrees(db: D1Database, query: ItemQuery): Promise<I
     else copiesByItem.set(copy.itemId, [copy]);
   }
 
-  return buildTrees(items, copiesByItem);
+  const trees = buildTrees(items, copiesByItem);
+  attachMatchReasons(trees, searchTerms(query.q));
+  return { items: trees, total, page, pageSize, pageCount };
+}
+
+/**
+ * Say which child put a tree in the results, when the base game did not.
+ *
+ * Searching "seafarers" and being handed "Catan" is correct — that is where
+ * Seafarers lives — but it reads as a bug unless the row says so. Computed from
+ * the trees already in hand rather than re-queried: every item of every returned
+ * tree is here, so a second round trip would be asking the database something we
+ * just read.
+ *
+ * A root that accounts for every term on its own gets nothing, because there is
+ * nothing to explain.
+ */
+function attachMatchReasons(roots: ItemNode[], terms: string[]): void {
+  if (terms.length === 0) return;
+
+  for (const root of roots) {
+    // Only the terms the base game does not account for need explaining.
+    // Searching "catan knights", Catan explains "catan" by itself; naming every
+    // child with "Catan" in it would bury the one that explains "knights".
+    const unexplained = terms.filter((term) => !itemMatchesTerm(root, term));
+    if (unexplained.length === 0) continue;
+
+    const scored: { id: number; name: string; hits: number }[] = [];
+    const walk = (node: ItemNode) => {
+      for (const child of node.children) {
+        const hits = unexplained.filter((term) => itemMatchesTerm(child, term)).length;
+        if (hits > 0) scored.push({ id: child.id, name: child.name, hits });
+        walk(child);
+      }
+    };
+    walk(root);
+
+    // Most of the missing terms first: one child that answers the whole query
+    // is a better explanation than three that each answer a word of it.
+    scored.sort((a, b) => b.hits - a.hits || a.name.localeCompare(b.name));
+    if (scored.length > 0) {
+      root.matchedChildren = scored
+        .slice(0, MAX_MATCH_REASONS)
+        .map(({ id, name }) => ({ id, name }));
+    }
+  }
 }
 
 export async function getItem(db: D1Database, id: number): Promise<Item | null> {

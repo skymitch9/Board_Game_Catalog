@@ -21,6 +21,20 @@ export const COPY_STATUSES = ['owned', 'wanted', 'preordered', 'lent', 'sold'] a
 export type CopyStatus = (typeof COPY_STATUSES)[number];
 
 /**
+ * How many game trees one page of the collection holds.
+ *
+ * Fixed on the server rather than sent by the client: the cost being paged is
+ * assembling whole trees, and one group can be a base game with fifty-three
+ * books under it. Letting a caller ask for 500 would hand it the exact payload
+ * this exists to prevent.
+ *
+ * 25 because a group is a card, not a row — at a phone's width a card runs two
+ * to three lines even collapsed, so 25 is already a long scroll, and 107 groups
+ * lands in five pages rather than a paging exercise of its own.
+ */
+export const COLLECTION_PAGE_SIZE = 25;
+
+/**
  * Research source priority: official publisher first, then crowdfunding, then
  * retail. `community` covers BGG itself. Lower index wins on conflict.
  */

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { COPY_STATUSES, ITEM_KINDS, type ItemQuery, type MeResponse } from '@bgc/core';
 import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
@@ -13,8 +13,15 @@ export function CollectionPage({ me }: { me: MeResponse }) {
   const [kind, setKind] = useState('');
   const [uncatalogued, setUncatalogued] = useState(false);
   const [duplicates, setDuplicates] = useState(false);
+  const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebounced(search);
+
+  // Any change to what is being filtered invalidates where you were in it —
+  // page 4 of the whole catalog is not page 4 of a search for "catan".
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, status, kind, uncatalogued, duplicates]);
 
   const query: ItemQuery = {
     ...(debouncedSearch ? { q: debouncedSearch } : {}),
@@ -22,6 +29,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     ...(kind ? { kind: kind as ItemQuery['kind'] } : {}),
     ...(uncatalogued ? { uncatalogued: true } : {}),
     ...(duplicates ? { duplicates: true } : {}),
+    ...(page > 1 ? { page } : {}),
   };
 
   // Nothing on this page writes any more — adding happens on /scan, editing on
@@ -33,7 +41,13 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     kind,
     uncatalogued,
     duplicates,
+    page,
   ]);
+
+  const goToPage = (next: number) => {
+    setPage(next);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
 
   const canEdit = me.capabilities.includes('editCatalog');
   const filtersActive = Boolean(
@@ -173,8 +187,12 @@ export function CollectionPage({ me }: { me: MeResponse }) {
       {items.state === 'ok' && items.data.items.length > 0 && (
         <>
           <p className="result-count muted">
-            {items.data.items.length} game{items.data.items.length === 1 ? '' : 's'}
+            {/* The count is every match, not the page. Saying "25 games" while
+                paging through 107 would read as a filter nobody applied. */}
+            {items.data.total} game{items.data.total === 1 ? '' : 's'}
             {filtersActive && ' matching'}
+            {items.data.pageCount > 1 &&
+              ` · page ${items.data.page} of ${items.data.pageCount}`}
             {canEdit && <ExportLinks />}
           </p>
           <div className="item-list">
@@ -182,6 +200,32 @@ export function CollectionPage({ me }: { me: MeResponse }) {
               <ItemCard key={node.id} node={node} />
             ))}
           </div>
+
+          {items.data.pageCount > 1 && (
+            <nav className="pager" aria-label="Collection pages">
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={items.data.page <= 1}
+                onClick={() => goToPage(items.data.page - 1)}
+              >
+                ← Previous
+              </button>
+              <span className="pager__where">
+                {(items.data.page - 1) * items.data.pageSize + 1}–
+                {Math.min(items.data.page * items.data.pageSize, items.data.total)} of{' '}
+                {items.data.total}
+              </span>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={items.data.page >= items.data.pageCount}
+                onClick={() => goToPage(items.data.page + 1)}
+              >
+                Next →
+              </button>
+            </nav>
+          )}
         </>
       )}
     </>
