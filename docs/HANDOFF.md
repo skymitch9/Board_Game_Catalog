@@ -726,7 +726,23 @@ this will use BGG's expansion links for definitive results.
 
 ---
 
-## 🚨 Cron triggers do not fire in production — nothing scheduled has ever run
+## Cron triggers — were silently unregistered, FIXED and now firing
+
+> **RESOLVED 2026-08-06.** Everything below describes the outage as found; it is
+> kept because the diagnosis is the lesson. **Both crons run normally now** —
+> `cover_check` has passed **437 rows**, growing 20 per run, and a `wrangler
+> tail` capture caught `"*/30 * * * *" - Ok` with
+> `cover check {"checked":20,"ok":20,"dead":0}` firing on schedule.
+>
+> The cause was that `wrangler deploy` reported registering the triggers while
+> Cloudflare never scheduled them. Fixed with `npx wrangler triggers deploy`
+> followed by a full deploy.
+>
+> **The rule it produced: a cron is not working until something it writes has
+> rows.** Never treat deploy output as proof. The weekly component sweep
+> (`41 5 * * 1`, which Cloudflare reads as **Sunday**) has still not had a
+> scheduled run, so `game_component` stays empty until it fires or someone calls
+> `POST /api/components/backfill`.
 
 **Found 2026-08-06 while trying to bootstrap the component data.** This is not
 about the new feature; it invalidates a claim this document has been making
@@ -1757,7 +1773,16 @@ blank would be waste.
 
 ## Blocked, waiting on you
 
-### 1. BoardGameGeek token — phase 2
+> **Current list of what actually needs a person lives in
+> [`open-questions.md`](open-questions.md).** This section is the older
+> setup-level backlog; item 1 below is done.
+
+### 1. BoardGameGeek token — ✅ DONE
+
+**The token is set** in both `wrangler secret` and `apps/worker/.dev.vars`, and
+has been in use all session — 153 items carry a `bgg_id` and 1,060 printings have
+been imported through it. The rest of this entry is kept only as the recipe, in
+case it ever needs reissuing.
 
 BGG closed its XML API in **July 2025**; registration and a bearer token are now
 required. The client is written and token-aware; without the token every lookup
