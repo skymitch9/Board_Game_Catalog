@@ -29,6 +29,7 @@ import {
   getScanJob,
   listItemNames,
   listScanJobs,
+  toIso,
   updateScanJobStatus,
 } from '@bgc/db';
 import { isPhotoMediaType, readShelf, identifyFromPhoto, type PhotoMediaType } from '@bgc/research';
@@ -42,6 +43,25 @@ import { requireCapability } from '../middleware/auth.js';
  * producers — a photographed spine and a scanned code — have to agree on it.
  */
 type EnrichedTitle = ScannedTitle;
+
+/**
+ * How long a job may sit at `enriching` before we call it dead.
+ *
+ * A chunk of eight lookups takes a couple of seconds and stamps `processed_at`
+ * when it lands, so anything past this has stopped rather than slowed down.
+ */
+const STALE_AFTER_MS = 90_000;
+
+/** Has this job's enrichment stopped beating? */
+function isStale(job: { status: string; processedAt: string | null }): boolean {
+  if (job.status !== 'enriching') return false;
+  if (!job.processedAt) return true;
+  // `toIso` because SQLite writes "YYYY-MM-DD HH:MM:SS" with no zone marker,
+  // and Date.parse reads that shape as local time — which on a Worker is UTC,
+  // but relying on the runtime's zone for correctness is how this bites later.
+  const at = Date.parse(toIso(job.processedAt));
+  return Number.isNaN(at) || Date.now() - at > STALE_AFTER_MS;
+}
 
 /** Titles still wanting a decision — not added, not dismissed, not already owned. */
 function countOutstanding(titles: EnrichedTitle[]): number {
@@ -203,19 +223,62 @@ export const scanJobRoutes = new Hono<AppBindings>()
     return c.json({ job: updated ?? job, index, title: titles[index], duplicate: false }, 201);
   })
 
-  // --- Manually trigger enrichment (for jobs stuck at 'read') ---------------
+  /**
+   * Enrich the next chunk — the continue button, and the retry button.
+   *
+   * This used to accept a job **only** at status `read`, which meant a job that
+   * died at `enriching` had no way out at all: the three that stalled had to be
+   * moved back by hand with SQL. Anything not terminal is now acceptable.
+   *
+   * `enriching` is only accepted once it has stopped beating. A chunk takes a
+   * few seconds and touches `processed_at` when it lands, so a run in flight is
+   * left alone and a run that was killed is not — without that check, a retry
+   * would race a live invocation and enrich the same titles twice.
+   */
   .post('/:id/enrich', async (c) => {
     const id = Number(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request' }, 400);
 
     const job = await getScanJob(c.env.DB, id);
     if (!job) return c.json({ error: 'not_found' }, 404);
-    if (job.status !== 'read') {
-      return c.json({ error: 'bad_request', detail: `Job is ${job.status}, not 'read'` }, 400);
+
+    if (job.status === 'done') {
+      return c.json({ error: 'bad_request', detail: 'That job is finished.' }, 400);
+    }
+    if (!job.rawTitles) {
+      return c.json(
+        { error: 'bad_request', detail: 'Nothing was read from that photo, so there is nothing to look up.' },
+        400,
+      );
+    }
+    if (job.status === 'enriching' && !isStale(job)) {
+      // Not an error: the answer to "please continue" is that it already is.
+      return c.json({ job, running: true });
     }
 
     c.executionCtx.waitUntil(processEnrichment(c.env, job.id));
-    return c.json({ job: { ...job, status: 'enriching' } });
+    return c.json({ job: { ...job, status: 'enriching' }, running: true });
+  })
+
+  /**
+   * Stop a job without throwing away what it read.
+   *
+   * The only control here used to be Delete, which takes the titles with it —
+   * so abandoning a photo that was going wrong meant losing the reading that had
+   * already been paid for. This marks it finished instead: it leaves the active
+   * queue, and every title it found is still on the row.
+   */
+  .post('/:id/cancel', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request' }, 400);
+
+    const job = await getScanJob(c.env.DB, id);
+    if (!job) return c.json({ error: 'not_found' }, 404);
+
+    const updated = await updateScanJobStatus(c.env.DB, id, 'done', {
+      error: job.error ?? 'Stopped before it finished.',
+    });
+    return c.json({ job: updated });
   })
 
   /**
@@ -252,11 +315,28 @@ export const scanJobRoutes = new Hono<AppBindings>()
       if (update.dismissed !== undefined) entry.dismissed = update.dismissed;
     }
 
-    const updated = await updateScanJobStatus(c.env.DB, id, job.status, {
-      enriched: JSON.stringify(titles),
-    });
+    /*
+     * Close the job when, and only when, nothing on it is still waiting.
+     *
+     * This is not the auto-close that was removed. That one fired on *adding
+     * the easy ones* and took the unfinished rows with it — the rows worth
+     * coming back to were exactly the ones not in that batch. This fires when
+     * `countOutstanding` reaches zero, which means every title has been added,
+     * dismissed or was already owned. There is nothing left to come back to,
+     * and the queue should not keep asking.
+     *
+     * `done`, not deleted: the row is the only record of which photo produced
+     * which items, and the history view that would show it does not exist yet.
+     */
+    const outstanding = countOutstanding(titles);
+    const updated = await updateScanJobStatus(
+      c.env.DB,
+      id,
+      outstanding === 0 ? 'done' : job.status,
+      { enriched: JSON.stringify(titles) },
+    );
 
-    return c.json({ job: updated, outstanding: countOutstanding(titles) });
+    return c.json({ job: updated, outstanding });
   })
 
   /**
@@ -397,11 +477,155 @@ async function processVision(
   }
 }
 
-/** Step 2: Resolve titles through free lookups and classify. */
+/**
+ * Step 2: resolve titles through free lookups and classify — a chunk at a time.
+ *
+ * **Why this is not one pass.** It used to `Promise.all` over every title at
+ * once. Measured against production on 2026-08-06, the three shelves that died
+ * held 73, 55 and 39 titles and the three that finished held 3, 2 and 3:
+ *
+ *   job 5, 6, 7   5976 / 5814 / 3101 chars of titles   stuck at `enriching`
+ *   job 3, 4, 8    313 /  168 /  325 chars             reached `review`
+ *
+ * A Worker on the free plan gets **50 subrequests per invocation**, and every
+ * D1 call counts as one alongside every fetch. One title costs about four — a
+ * lookup-cache read, GameUPC, BoardGameGeek hydration, a cache write — so 73
+ * titles is roughly 290. Exceeding the cap **terminates** the invocation rather
+ * than throwing into a catch, and that kills `waitUntil` with it: no error was
+ * recorded and `enriched` was never written. A stall with an empty error column
+ * is indistinguishable from "still working", which is why the owner waited
+ * twenty minutes before asking.
+ *
+ * So: one bounded chunk per invocation, written when it finishes, resuming from
+ * whatever is already in `enriched`. A photo that blows up now loses at most one
+ * chunk, and a large shelf finishes across several invocations instead of dying
+ * in the first.
+ *
+ * Splitting the *photograph* into pieces — which was also suggested — would not
+ * help here. Vision already succeeds on all 73 titles; it is only the
+ * per-title enrichment that runs out of budget.
+ */
+
+/** Free-plan ceiling is 50 subrequests per invocation. Stay well inside it. */
+const SUBREQUEST_BUDGET = 40;
+/** Cache read, GameUPC, BoardGameGeek hydration, cache write. */
+const SUBREQUESTS_PER_TITLE = 4;
+/** Reading the job, listing item names, and the status and progress writes. */
+const SUBREQUESTS_FIXED = 5;
+
+/**
+ * Titles per invocation. Eight, from (40 - 5) / 4 rounded down.
+ *
+ * Do not raise this to make a big shelf finish in fewer passes. The pass that
+ * exceeds the ceiling is not slow, it is *silently killed*, which is the entire
+ * failure this replaces. Continuing is cheap: the queue page asks for the next
+ * chunk on its own.
+ */
+const TITLES_PER_RUN = Math.floor(
+  (SUBREQUEST_BUDGET - SUBREQUESTS_FIXED) / SUBREQUESTS_PER_TITLE,
+);
+
+/** One title: are we holding it already, and if not, what is it? */
+async function enrichOne(
+  env: Env,
+  deps: { gameUpc: ReturnType<typeof gameUpcConfig>; bggToken: string | undefined },
+  existing: { id: number; name: string; kind: string }[],
+  title: ShelfTitle,
+): Promise<EnrichedTitle> {
+  const base = {
+    title: title.text,
+    confidence: title.confidence,
+    position: title.position,
+    proposedKind: null as string | null,
+    proposedParentId: null as number | null,
+    proposedParentName: null as string | null,
+    inferredParentName: null as string | null,
+    reason: null as string | null,
+  };
+
+  const owned = matchExistingTitle(title.text, existing);
+  if (owned) {
+    return {
+      ...base,
+      alreadyOwned: true,
+      existingItemId: owned.id,
+      existingName: owned.name,
+      bggId: null,
+      resolvedName: null,
+      thumbnailUrl: null,
+      publisher: null,
+      yearPublished: null,
+      similarity: null,
+    };
+  }
+
+  let best: BarcodeCandidate | null = null;
+  try {
+    best = await cachedResolve(env.DB, deps, title.text);
+  } catch {
+    // Not fatal. The title still shows for review under the name read off the
+    // spine, which is a real name whatever the databases think of it.
+  }
+
+  return {
+    ...base,
+    alreadyOwned: false,
+    existingItemId: null,
+    existingName: null,
+    bggId: best?.bggId ?? null,
+    resolvedName: best?.name ?? null,
+    thumbnailUrl: best?.thumbnailUrl ?? null,
+    publisher: best?.publisher ?? null,
+    yearPublished: best?.yearPublished ?? null,
+    // Kept rather than enforced: the review screen shows a weak match and
+    // leaves it unticked, which tells the truth about what was found instead of
+    // quietly discarding a name that is on the shelf.
+    similarity: best ? titleSimilarity(best.name, title.text) : null,
+  };
+}
+
+/**
+ * Decide kind and parent across everything resolved so far.
+ *
+ * Pure, and makes no subrequests, so it is cheap to redo on every chunk — and it
+ * has to be redone, because a title's proposed parent can be a sibling that only
+ * turns up in a later chunk.
+ */
+function classifyAll(
+  rows: EnrichedTitle[],
+  existing: { id: number; name: string; kind: string }[],
+): EnrichedTitle[] {
+  const fresh = rows
+    .filter((r) => !r.alreadyOwned)
+    .map((r) => ({ name: r.resolvedName ?? r.title, bggId: r.bggId, thumbnailUrl: r.thumbnailUrl }));
+  const classified = classifyShelfResults(fresh, existing);
+
+  let idx = 0;
+  return rows.map((r) => {
+    if (r.alreadyOwned) {
+      return {
+        ...r,
+        proposedKind: null,
+        proposedParentId: null,
+        proposedParentName: null,
+        inferredParentName: null,
+        reason: null,
+      };
+    }
+    const cls = classified[idx++];
+    return {
+      ...r,
+      proposedKind: cls?.proposedKind ?? 'base',
+      proposedParentId: cls?.proposedParentId ?? null,
+      proposedParentName: cls?.proposedParentName ?? null,
+      inferredParentName: cls?.inferredParentName ?? null,
+      reason: cls?.reason ?? null,
+    };
+  });
+}
+
 async function processEnrichment(env: Env, jobId: number): Promise<void> {
   try {
-    await updateScanJobStatus(env.DB, jobId, 'enriching');
-
     const job = await getScanJob(env.DB, jobId);
     if (!job || !job.rawTitles) {
       await failJob(env, jobId, 'No raw titles to enrich');
@@ -409,97 +633,48 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
     }
 
     const titles: ShelfTitle[] = JSON.parse(job.rawTitles);
+    // Resume from whatever survived. Truncated rather than trusted: a shorter
+    // `enriched` is progress, a longer one means `raw_titles` changed underneath
+    // it, and redoing a few lookups is cheaper than reasoning about that.
+    const soFar: EnrichedTitle[] = job.enriched ? JSON.parse(job.enriched) : [];
+    soFar.length = Math.min(soFar.length, titles.length);
+    const done = soFar.length;
+
+    if (done >= titles.length) {
+      // Nothing left to do — somebody asked again for a job already finished.
+      await updateScanJobStatus(env.DB, jobId, 'review', {
+        enriched: JSON.stringify(classifyAll(soFar, await listItemNames(env.DB))),
+      });
+      return;
+    }
+
+    // `enriching` now stamps `processed_at`, so a finished chunk is a heartbeat
+    // and a job that has stopped beating can be told from one still working.
+    await updateScanJobStatus(env.DB, jobId, 'enriching');
+
     const existing = await listItemNames(env.DB);
     const deps = { gameUpc: gameUpcConfig(env), bggToken: env.BGG_API_TOKEN };
 
-    // For each title: check if owned, then try free lookups.
-    const enrichedResults = await Promise.all(
-      titles.map(async (title) => {
-        const owned = matchExistingTitle(title.text, existing);
-        if (owned) {
-          return {
-            title: title.text,
-            confidence: title.confidence,
-            position: title.position,
-            alreadyOwned: true,
-            existingItemId: owned.id,
-            existingName: owned.name,
-            bggId: null as number | null,
-            resolvedName: null as string | null,
-            thumbnailUrl: null as string | null,
-            publisher: null as string | null,
-            yearPublished: null as number | null,
-            similarity: null as number | null,
-          };
-        }
-
-        // Try free resolution.
-        let best: BarcodeCandidate | null = null;
-        try {
-          best = await cachedResolve(env.DB, deps, title.text);
-        } catch {
-          // Lookup failure is not fatal — the title still shows for review.
-        }
-
-        return {
-          title: title.text,
-          confidence: title.confidence,
-          position: title.position,
-          alreadyOwned: false,
-          existingItemId: null as number | null,
-          existingName: null as string | null,
-          bggId: best?.bggId ?? null,
-          resolvedName: best?.name ?? null,
-          thumbnailUrl: best?.thumbnailUrl ?? null,
-          publisher: best?.publisher ?? null,
-          yearPublished: best?.yearPublished ?? null,
-          // Kept rather than enforced: the review screen shows a weak match and
-          // leaves it unticked, which tells the truth about what was found
-          // instead of quietly discarding a name that is on the shelf.
-          similarity: best ? titleSimilarity(best.name, title.text) : null,
-        };
-      }),
+    const stop = Math.min(titles.length, done + TITLES_PER_RUN);
+    const chunk = await Promise.all(
+      titles.slice(done, stop).map((t) => enrichOne(env, deps, existing, t)),
     );
+    soFar.push(...chunk);
 
-    // Classify the non-owned items (expansion detection).
-    const freshItems = enrichedResults
-      .filter((r) => !r.alreadyOwned)
-      .map((r) => ({
-        name: r.resolvedName ?? r.title,
-        bggId: r.bggId,
-        thumbnailUrl: r.thumbnailUrl,
-      }));
+    const enriched = JSON.stringify(classifyAll(soFar, existing));
 
-    const classified = classifyShelfResults(freshItems, existing);
+    if (soFar.length >= titles.length) {
+      await updateScanJobStatus(env.DB, jobId, 'review', { enriched });
+      return;
+    }
 
-    // Merge classification back into enriched results.
-    let classIdx = 0;
-    const finalResults = enrichedResults.map((r) => {
-      if (r.alreadyOwned) {
-        return {
-          ...r,
-          proposedKind: null,
-          proposedParentId: null,
-          proposedParentName: null,
-          inferredParentName: null,
-          reason: null,
-        };
-      }
-      const cls = classified[classIdx++];
-      return {
-        ...r,
-        proposedKind: cls?.proposedKind ?? 'base',
-        proposedParentId: cls?.proposedParentId ?? null,
-        proposedParentName: cls?.proposedParentName ?? null,
-        inferredParentName: cls?.inferredParentName ?? null,
-        reason: cls?.reason ?? null,
-      };
-    });
-
-    await updateScanJobStatus(env.DB, jobId, 'review', {
-      enriched: JSON.stringify(finalResults),
-    });
+    // Paused, not failed, and deliberately back at `read`: the status means
+    // "titles read, not all enriched", which is exactly true, and it is the
+    // status `/enrich` already accepts, so continuing needs no new mechanism.
+    await updateScanJobStatus(env.DB, jobId, 'read', { enriched });
   } catch (err) {
+    // Whatever chunks were written stay written — `failJob` sets the status and
+    // the error and touches nothing else.
     await failJob(env, jobId, (err as Error).message);
   }
 }

@@ -326,8 +326,20 @@ export const api = {
       duplicate: boolean;
     }>,
 
+  /**
+   * Look up the next chunk of a photo's titles.
+   *
+   * Not "start enrichment" — enrichment is bounded per invocation, so this is
+   * called repeatedly until the job reaches `review`. Also the retry: it
+   * accepts any job that is not finished, including one whose invocation was
+   * killed partway.
+   */
   enrichScanJob: (id: number) =>
-    post(`/api/scan-jobs/${id}/enrich`, {}) as Promise<{ job: ScanJob }>,
+    post(`/api/scan-jobs/${id}/enrich`, {}) as Promise<{ job: ScanJob; running: boolean }>,
+
+  /** Stop a job, keeping the titles it read. Distinct from deleting the row. */
+  cancelScanJob: (id: number) =>
+    post(`/api/scan-jobs/${id}/cancel`, {}) as Promise<{ job: ScanJob }>,
 
   completeScanJob: (id: number) =>
     post(`/api/scan-jobs/${id}/done`, {}) as Promise<{ job: ScanJob }>,

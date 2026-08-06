@@ -738,7 +738,11 @@ code {
 .job-row:last-child { border-bottom: none; }
 .job-row__info { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .job-row__time { font-size: 0.8rem; color: var(--muted); }
-.job-row__actions { display: flex; align-items: center; gap: 0.5rem; }
+.job-row__actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+/* Finished jobs, kept but out of the way. */
+.job-archive { margin-top: 0.75rem; }
+.job-archive > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
 
 /* --- Expansion picker --- */
 .expansion-picker { margin-bottom: 1rem; }

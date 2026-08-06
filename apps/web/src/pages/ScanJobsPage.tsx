@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ITEM_KINDS,
   isConfidentMatch,
@@ -14,7 +14,7 @@ import { fileToPhoto } from '../lib/camera';
 import { formatDateTime } from '../lib/dates';
 import { BarcodeQueue } from '../components/BarcodeQueue';
 import { KIND_LABEL } from '../components/ItemTree';
-import { Badge, ErrorBox, Spinner } from '../components/ui';
+import { Badge, ConfirmButton, ErrorBox, Spinner } from '../components/ui';
 import { Link, type AddMode } from '../router';
 
 const MODE_LABEL: Record<ScanJob['mode'], string> = {
@@ -55,6 +55,34 @@ const IN_FLIGHT: ReadonlySet<ScanJob['status']> = new Set([
   'read',
   'enriching',
 ]);
+
+/**
+ * How far through its titles a photo has got.
+ *
+ * Enrichment is bounded per invocation — a Worker gets 50 subrequests and one
+ * title costs about four — so a 73-title shelf arrives over several passes. This
+ * is what makes those passes visible instead of looking like a stall, which is
+ * exactly what the old all-or-nothing version looked like when it died.
+ *
+ * Null for a barcode job: it has no `raw_titles`, because there was nothing to
+ * read.
+ */
+function progressOf(job: ScanJob): { done: number; total: number } | null {
+  if (!job.rawTitles) return null;
+  try {
+    const total = (JSON.parse(job.rawTitles) as unknown[]).length;
+    const done = job.enriched ? (JSON.parse(job.enriched) as unknown[]).length : 0;
+    return { done, total };
+  } catch {
+    return null;
+  }
+}
+
+/** More titles to look up. */
+const isUnfinished = (job: ScanJob): boolean => {
+  const p = progressOf(job);
+  return p != null && p.done < p.total && job.status !== 'done';
+};
 
 /** Slow enough not to be a nuisance, quick enough that a shelf read feels live. */
 const POLL_MS = 2500;
@@ -191,6 +219,38 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
     refresh();
   }, [refresh]);
 
+  /**
+   * Ask for the next chunk, automatically, until the photo is finished.
+   *
+   * Keyed on `${id}:${done}` rather than on the id alone, which is the whole
+   * safety of it: each distinct point of progress is asked for exactly once, so
+   * a chunk that advances triggers the next one and a chunk that does not
+   * advance stops rather than spinning. The Retry button clears the keys, which
+   * is what makes it mean "try that again" rather than "try it once ever".
+   */
+  const attemptedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!shown) return;
+    for (const job of shown) {
+      // `enriching` belongs to a pass already running; the server refuses a
+      // second one anyway, and stale jobs come back to `read` on retry.
+      if (job.status !== 'read' || !isUnfinished(job)) continue;
+      const key = `${job.id}:${progressOf(job)?.done ?? 0}`;
+      if (attemptedRef.current.has(key)) continue;
+      attemptedRef.current.add(key);
+      void api.enrichScanJob(job.id).catch(() => undefined);
+    }
+  }, [shown]);
+
+  const retry = useCallback(async (id: number) => {
+    for (const key of [...attemptedRef.current]) {
+      if (key.startsWith(`${id}:`)) attemptedRef.current.delete(key);
+    }
+    await api.enrichScanJob(id).catch(() => undefined);
+    reload();
+  }, [reload]);
+
   // Deliberately does not swallow its own failures: the uploader below runs the
   // decode and the upload in one loop, and both fail the same way to the person
   // holding the phone, so both are reported from one place.
@@ -205,6 +265,11 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
       setUploading(false);
     }
   }, [mode, reload]);
+
+  // A job you have finished with should stop competing for attention, without
+  // its row being thrown away — see the note by the archive below.
+  const active = (shown ?? []).filter((j) => j.status !== 'done');
+  const finished = (shown ?? []).filter((j) => j.status === 'done');
 
   const canEdit = me.capabilities.includes('editCatalog');
   if (!canEdit) {
@@ -272,14 +337,34 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
           <ErrorBox error={jobs.error} what="Could not load jobs" />
         )}
         {shown !== null && shown.length === 0 && (
-          <p className="muted">No photos uploaded yet. Take some pictures of your shelves above.</p>
+          <p className="muted">Nothing on the queue. Scan a barcode or photograph a shelf above.</p>
         )}
-        {shown !== null && shown.length > 0 && (
+        {active.length > 0 && (
           <ul className="job-list">
-            {shown.map((job) => (
-              <JobRow key={job.id} job={job} onChanged={reload} />
+            {active.map((job) => (
+              <JobRow key={job.id} job={job} onChanged={reload} onRetry={retry} />
             ))}
           </ul>
+        )}
+        {active.length === 0 && finished.length > 0 && (
+          <p className="muted">Everything on the queue has been dealt with.</p>
+        )}
+
+        {/*
+          Finished jobs leave the active queue but are not deleted. Deleting
+          would take the titles with it, and with no history view yet that is
+          the only record of which photo produced which items — keep the row and
+          hide it, rather than losing what it knew.
+        */}
+        {finished.length > 0 && (
+          <details className="job-archive">
+            <summary>{finished.length} finished</summary>
+            <ul className="job-list">
+              {finished.map((job) => (
+                <JobRow key={job.id} job={job} onChanged={reload} onRetry={retry} />
+              ))}
+            </ul>
+          </details>
         )}
       </section>
     </div>
@@ -360,18 +445,36 @@ function PhotoUploader({
   );
 }
 
-function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
+function JobRow({
+  job,
+  onChanged,
+  onRetry,
+}: {
+  job: ScanJob;
+  onChanged: () => void;
+  onRetry: (id: number) => void;
+}) {
   // Anything with titles on it can be opened, including a finished job — see
   // the note on the review page. Only a job with nothing read has no inside.
   const isReviewable = job.enriched != null;
   const isFailed = job.status === 'failed';
   const isProcessing = ['uploaded', 'reading', 'enriching'].includes(job.status);
   const outstanding = outstandingOf(job);
+  const progress = progressOf(job);
+  const unfinished = isUnfinished(job);
 
   return (
     <li className="job-row">
       <div className="job-row__info">
         <Badge tone={STATUS_TONE[job.status]}>{STATUS_LABEL[job.status]}</Badge>
+        {/* Progress, not a spinner. A shelf arrives over several passes, and a
+            number that moves is the difference between "working" and the stall
+            that used to look identical to it. */}
+        {progress && unfinished && (
+          <span className="muted small">
+            {progress.done} of {progress.total} looked up
+          </span>
+        )}
         {/* Through `formatDateTime`, because the column is SQLite's own
             "YYYY-MM-DD HH:MM:SS" with no zone marker — `new Date()` read that as
             local time and every row here displayed the wrong clock. */}
@@ -400,17 +503,44 @@ function JobRow({ job, onChanged }: { job: ScanJob; onChanged: () => void }) {
         {job.status === 'done' && (
           <span className="muted small">Reviewed</span>
         )}
-        <button
-          type="button"
+
+        {/* Retry, because a job that stopped partway used to have no way out at
+            all — the three that stalled had to be moved back with SQL. */}
+        {(isFailed || unfinished) && (
+          <button
+            type="button"
+            className="btn btn-quiet btn-xs"
+            onClick={() => onRetry(job.id)}
+          >
+            Retry
+          </button>
+        )}
+
+        {/* Stop, keeping the titles. Delete was the only control here, and it
+            takes the reading with it. */}
+        {job.status !== 'done' && (
+          <button
+            type="button"
+            className="btn btn-quiet btn-xs"
+            onClick={async () => {
+              await api.cancelScanJob(job.id);
+              onChanged();
+            }}
+          >
+            Stop
+          </button>
+        )}
+
+        <ConfirmButton
           className="btn btn-quiet btn-xs"
-          onClick={async () => {
+          confirmLabel="Delete, losing the titles?"
+          onConfirm={async () => {
             await api.deleteScanJob(job.id);
             onChanged();
           }}
-          aria-label="Delete job"
         >
           Delete
-        </button>
+        </ConfirmButton>
       </div>
     </li>
   );

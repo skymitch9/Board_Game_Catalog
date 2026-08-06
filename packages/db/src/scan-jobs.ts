@@ -142,7 +142,21 @@ export async function updateScanJobStatus(
   const binds: unknown[] = [id, status];
   let idx = 3;
 
-  if (status === 'read' || status === 'review' || status === 'done') {
+  /*
+   * `processed_at` is the heartbeat, which is why `enriching` is in this list.
+   *
+   * Enrichment now runs a bounded chunk at a time and re-enters this function on
+   * every one, so a job that is genuinely working keeps moving the timestamp
+   * forward. Without that there is no way to tell a job mid-lookup from one
+   * whose invocation was killed — and being unable to tell them apart is what
+   * left three shelves sitting at `enriching` for twenty minutes looking busy.
+   */
+  if (
+    status === 'read' ||
+    status === 'enriching' ||
+    status === 'review' ||
+    status === 'done'
+  ) {
     sets.push(`processed_at = datetime('now')`);
   }
   if (status === 'done') {

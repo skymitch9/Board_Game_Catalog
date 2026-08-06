@@ -2,6 +2,57 @@
 
 Everything needed to continue or finish this without Claude.
 
+## Right now — 2026-08-06, written as usage ran low
+
+**Working tree is clean.** The shelf-enrichment fix is committed; migration
+`0017_scan_job_barcode.sql` must be applied to production **before** the deploy
+that carries it (`npm run db:migrate`).
+
+Production: **739 items** (114 top-level), 740 copies — 510 owned, 204
+preordered, 26 wanted. 133 with a BGG id, 350 with a cover, 972 printings, 77
+relations. All four integrity invariants are 0.
+
+**One agent, five tasks, in this order:**
+1. Shelf enrichment fix — chunked, resumable, error recorded, retry/cancel
+   buttons, auto-remove sorted jobs *(done, committed)*
+2. Background the details call using the existing `research_run` table
+3. Barcode continuous-intake refinements
+4. Timezone parsing helper
+5. `series` column + linked parent labels
+
+A separate agent is researching Dice Throne playmats.
+
+**Do yourself:** `game_component` is empty and the weekly cron next fires Sun 9
+Aug. From a signed-in browser console, ~8 runs covers the catalog:
+`await (await fetch('/api/components/backfill',{method:'POST'})).json()`.
+And retry scan jobs **5, 6, 7** once the enrichment fix ships — they sit at
+`read` with titles intact and `enriched` empty.
+
+**Two discoveries worth keeping:**
+- `wrangler deploy` printed "Deployed … triggers" for weeks while Cloudflare's
+  Cron Events log showed **no events at all**. Fixed with
+  `npx wrangler triggers deploy` plus a full deploy. **A cron is not working
+  until something it writes has rows** — `cover_check` now has 40.
+- Workers cap subrequests per invocation (**50 free**, 1000 paid). Leading
+  suspect for shelf enrichment dying: every job over ~25 titles failed, every one
+  under ~8 succeeded, and the worker is *terminated* rather than throwing, so
+  `scan_job.error` stayed empty.
+
+**TODO — linking related games needs a search box, not an id.** The "Related
+games" screen asks for the other item's numeric id. Nobody knows an id; the owner
+has to go and look it up, which makes linking painful enough to avoid. Replace it
+with a type-ahead that searches existing items by name and resolves to the id
+behind the scenes. `/api/items` already supports multi-term search, and
+`/api/item-names` returns the whole catalog cheaply (41 KB for 640 rows) — it was
+added for the shelf scanner and is exactly what a picker needs.
+
+**Open decisions:** Dice Throne shape (`docs/dice-throne-shape.md`, mock at
+`claude.ai/code/artifact/38ad3545-2a66-4212-a828-4b6ae702bc37`; owner chose
+options 2+3) · ~56 `same_family` relatives on every Dice Throne page · five
+BackerKit near-misses staged in `scratchpad/backerkit2-nearmisses.{md,sql}` ·
+`createItemSchema` cannot create a standalone accessory · the Deadpool playmat is
+wishlisted but unconfirmed to exist.
+
 Stable reference lives alongside this file and is not duplicated here:
 [`access/`](access/README.md) (endpoints, key names, quotas) and
 [`info/`](info/README.md) (how and why things work).
