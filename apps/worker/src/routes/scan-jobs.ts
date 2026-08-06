@@ -34,8 +34,13 @@ import {
 } from '@bgc/db';
 import { isPhotoMediaType, readShelf, identifyFromPhoto, type PhotoMediaType } from '@bgc/research';
 import type { AppBindings, Env } from '../env.js';
-import { resolveScannedBarcode, validateBarcode, type ScannedTitle } from '../lib/barcode-scan.js';
-import { cachedResolve } from '../lib/resolve-title.js';
+import {
+  resolveScannedBarcode,
+  toSuggestions,
+  validateBarcode,
+  type ScannedTitle,
+} from '../lib/barcode-scan.js';
+import { cachedResolveAll } from '../lib/resolve-title.js';
 import { requireCapability } from '../middleware/auth.js';
 
 /**
@@ -114,6 +119,11 @@ const uploadSchema = z.object({
 const barcodeScanSchema = z.object({
   barcode: z.string().trim().min(8).max(20),
   jobId: z.number().int().positive().nullable().optional(),
+});
+
+/** Which suggestion the person picked. 0 is the one already on the row. */
+const acceptSchema = z.object({
+  candidate: z.number().int().min(0).max(20).default(0),
 });
 
 export const scanJobRoutes = new Hono<AppBindings>()
@@ -370,12 +380,13 @@ export const scanJobRoutes = new Hono<AppBindings>()
     if (!query) return c.json({ error: 'bad_request', detail: 'nothing to look up' }, 400);
 
     const deps = { gameUpc: gameUpcConfig(c.env), bggToken: c.env.BGG_API_TOKEN };
-    let best: BarcodeCandidate | null = null;
+    let candidates: BarcodeCandidate[] = [];
     try {
-      best = await cachedResolve(c.env.DB, deps, query, { force: true });
+      candidates = await cachedResolveAll(c.env.DB, deps, query, { force: true });
     } catch (err) {
       return c.json({ error: 'lookup_failed', detail: (err as Error).message }, 502);
     }
+    const best = candidates[0] ?? null;
 
     const similarity = best ? titleSimilarity(best.name, query) : null;
     entry.bggId = best?.bggId ?? null;
@@ -384,6 +395,11 @@ export const scanJobRoutes = new Hono<AppBindings>()
     entry.publisher = best?.publisher ?? null;
     entry.yearPublished = best?.yearPublished ?? null;
     entry.similarity = similarity;
+    entry.candidates = toSuggestions(candidates);
+    // A fresh answer is a fresh question: whatever was accepted was accepted
+    // about the *previous* identity, and carrying the flag over would mark a
+    // name nobody has looked at as human-confirmed.
+    entry.acceptedMatch = false;
     entry.relookedUpAs = query === entry.title ? null : query;
     // We reached a service and it answered, so whatever this row said about an
     // unreachable lookup is no longer true — including when the answer is that
@@ -396,6 +412,90 @@ export const scanJobRoutes = new Hono<AppBindings>()
     });
 
     return c.json({ job: updated, title: entry, found: best !== null });
+  })
+
+  /**
+   * "I have looked at the box. It is that one."
+   *
+   * The answer the review screen could not give. A `medium`-confidence barcode
+   * hit, or a name that only loosely matches a read spine, is shown untrusted
+   * and unticked — correctly, because GameUPC answers an unknown code with
+   * fifteen confident-looking guesses. But when the guess is *right*, the only
+   * route into the catalog was to retype the name by hand, which threw away the
+   * BoardGameGeek id, publisher, year and cover that came with it.
+   *
+   * Accepting promotes a candidate to the row's identity and carries everything
+   * the lookup found. `candidate` selects from the runners-up, because the top
+   * answer being wrong does not mean the list is.
+   *
+   * The catalog is not touched here: this settles what the row *claims*, and
+   * adding it is still the ordinary `POST /api/items` the review screen makes.
+   */
+  .post('/:id/titles/:index/accept', async (c) => {
+    const id = Number(c.req.param('id'));
+    const index = Number(c.req.param('index'));
+    if (!id || !Number.isInteger(index) || index < 0) {
+      return c.json({ error: 'bad_request' }, 400);
+    }
+
+    const parsed = acceptSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+    }
+
+    const job = await getScanJob(c.env.DB, id);
+    if (!job || !job.enriched) return c.json({ error: 'not_found' }, 404);
+
+    const titles = JSON.parse(job.enriched) as EnrichedTitle[];
+    const entry = titles[index];
+    if (!entry) return c.json({ error: 'not_found' }, 404);
+
+    const chosen = entry.candidates?.[parsed.data.candidate];
+    if (!chosen) {
+      return c.json(
+        { error: 'bad_request', detail: 'That suggestion is no longer on this row.' },
+        400,
+      );
+    }
+
+    entry.resolvedName = chosen.name;
+    entry.bggId = chosen.bggId;
+    entry.publisher = chosen.publisher;
+    entry.yearPublished = chosen.yearPublished;
+    entry.thumbnailUrl = chosen.thumbnailUrl;
+    // A person's eyes on the box beat any similarity score, so the row stops
+    // being judged by one. `acceptedMatch` is what the review screen reads to
+    // treat it as confident, and what the copy's notes record afterwards.
+    entry.similarity = 1;
+    entry.needsConfirmation = false;
+    entry.acceptedMatch = true;
+
+    /*
+     * Re-classify against the name just chosen, rather than keeping what was
+     * decided about the old one.
+     *
+     * Two things would otherwise be wrong, and the second is not cosmetic. The
+     * `reason` still read "Nobody has confirmed this code — check it against the
+     * box", directly under a line saying a person had. And the proposed parent
+     * belonged to a different game: accept "Catan: Seafarers" over a top answer
+     * of "Catan" and the row must now propose Catan as its parent, not root
+     * itself beside it.
+     */
+    const [classified] = classifyShelfResults(
+      [{ name: chosen.name, bggId: chosen.bggId, thumbnailUrl: chosen.thumbnailUrl }],
+      await listItemNames(c.env.DB),
+    );
+    entry.proposedKind = classified?.proposedKind ?? chosen.kind ?? 'base';
+    entry.proposedParentId = classified?.proposedParentId ?? null;
+    entry.proposedParentName = classified?.proposedParentName ?? null;
+    entry.inferredParentName = classified?.inferredParentName ?? null;
+    entry.reason = classified?.reason ?? null;
+
+    const updated = await updateScanJobStatus(c.env.DB, id, job.status, {
+      enriched: JSON.stringify(titles),
+    });
+
+    return c.json({ job: updated, title: entry });
   })
 
   // --- Mark a job as done (user reviewed) -----------------------------------
@@ -559,13 +659,14 @@ async function enrichOne(
     };
   }
 
-  let best: BarcodeCandidate | null = null;
+  let candidates: BarcodeCandidate[] = [];
   try {
-    best = await cachedResolve(env.DB, deps, title.text);
+    candidates = await cachedResolveAll(env.DB, deps, title.text);
   } catch {
     // Not fatal. The title still shows for review under the name read off the
     // spine, which is a real name whatever the databases think of it.
   }
+  const best = candidates[0] ?? null;
 
   return {
     ...base,
@@ -577,6 +678,10 @@ async function enrichOne(
     thumbnailUrl: best?.thumbnailUrl ?? null,
     publisher: best?.publisher ?? null,
     yearPublished: best?.yearPublished ?? null,
+    // Kept so a weak top answer is not the end of the conversation: the box the
+    // owner is holding is often the second name on the list. Trimmed, because
+    // this blob rides on every poll of the queue — see `toSuggestions`.
+    candidates: toSuggestions(candidates),
     // Kept rather than enforced: the review screen shows a weak match and
     // leaves it unticked, which tells the truth about what was found instead of
     // quietly discarding a name that is on the shelf.

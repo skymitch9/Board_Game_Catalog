@@ -304,6 +304,25 @@ textarea { resize: vertical; }
 }
 .group-card__head:hover { background: var(--bg); }
 
+/*
+  Suggestions a person can accept, on a row the lookup was not sure about.
+
+  Deliberately verbose per row — name, year, publisher, BGG id — because a wrong
+  accept writes a bad identity into the catalog, and this project has matched
+  Brink, Iliad and Moon to the wrong games at a perfect 1.00 similarity. A
+  decision made from a bare name is the same decision that produced those.
+*/
+.candidate__accept {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  margin: 0.4rem 0; padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.suggest-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
+.suggest { display: flex; align-items: center; gap: 0.5rem; }
+.suggest__thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
+.suggest__body { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.suggest__body strong { font-size: 0.87rem; }
+
 .children { border-top: 1px solid var(--line); }
 .child-row {
   display: flex; align-items: center; gap: 0.6rem;

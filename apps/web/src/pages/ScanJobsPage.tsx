@@ -97,6 +97,10 @@ const POLL_MS = 2500;
  */
 const isDoubtful = (t: EnrichedTitle): boolean =>
   t.resolvedName != null &&
+  // A person who looked at the box outranks any similarity score. This is the
+  // whole point of accepting a match: the row stops being judged by a rule that
+  // exists to guess in the absence of a human, once a human has answered.
+  !t.acceptedMatch &&
   // Judged from the names themselves rather than the stored score, so the
   // fragment rule applies here too — and so a re-lookup is judged against the
   // text it actually searched with, not the spine's original misreading.
@@ -163,6 +167,37 @@ const isNameless = (t: EnrichedTitle): boolean =>
  */
 const autoTicked = (t: EnrichedTitle): boolean =>
   !isDoubtful(t) && !t.needsConfirmation && !isNameless(t);
+
+/**
+ * Is this row waiting on a judgement only a person holding the box can make?
+ *
+ * Three ways to get here and one answer to all of them: show what was found and
+ * let the owner say yes. Before this, "no" was the only answer the screen could
+ * express — a weak match could be dismissed or retyped, and retyping threw away
+ * the BoardGameGeek id, publisher, year and cover that came with it.
+ *
+ * The third case is the one the owner actually hit: a barcode banded `low`,
+ * where the row carries no `resolvedName` at all but the guesses are still on
+ * it. The app knew the name and had no way to be told it was right.
+ */
+const wantsHumanCall = (t: EnrichedTitle): boolean =>
+  !t.acceptedMatch &&
+  (t.candidates?.length ?? 0) > 0 &&
+  (isDoubtful(t) || !!t.needsConfirmation || t.resolvedName == null);
+
+/**
+ * An unconfirmed row from before suggestions were kept.
+ *
+ * Rows enriched by the old code carry a match and no candidate list, so there
+ * is nothing to offer — and the owner has six real jobs sitting at review in
+ * exactly that state. Pressing "Look up again" re-asks and stores the list, so
+ * the way out is one click; without saying so, the screen would simply look
+ * like it lacked the feature on the rows that need it most.
+ */
+const needsRelookupToAccept = (t: EnrichedTitle): boolean =>
+  !t.acceptedMatch &&
+  (t.candidates?.length ?? 0) === 0 &&
+  (isDoubtful(t) || !!t.needsConfirmation);
 
 const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
   uploaded: 'neutral',
@@ -463,6 +498,17 @@ function JobRow({
   const progress = progressOf(job);
   const unfinished = isUnfinished(job);
 
+  /**
+   * Is there anything left to stop?
+   *
+   * The three processing statuses, plus a job parked at `read` with titles still
+   * to look up — that one *is* working, because the queue page asks for its next
+   * chunk on its own, and dropping Stop there would leave a 73-title shelf with
+   * no way out between chunks. `review`, `done` and `failed` have nothing in
+   * flight; a failed job is set aside with Delete, or restarted with Retry.
+   */
+  const isWorking = isProcessing || (job.status === 'read' && unfinished);
+
   return (
     <li className="job-row">
       <div className="job-row__info">
@@ -517,8 +563,15 @@ function JobRow({
         )}
 
         {/* Stop, keeping the titles. Delete was the only control here, and it
-            takes the reading with it. */}
-        {job.status !== 'done' && (
+            takes the reading with it.
+
+            Only while there is something to stop. It used to show on every job
+            that was not `done` — including one sitting at `review` waiting for
+            you, and one that had already failed — where pressing it does
+            nothing you would recognise as stopping. A control that does not act
+            is worse than no control: it invites the click and then has to
+            explain itself. */}
+        {isWorking && (
           <button
             type="button"
             className="btn btn-quiet btn-xs"
@@ -740,6 +793,14 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
           format: 'physical',
           isSleeved: false,
           isPunched: false,
+          // Written down because the two are not the same evidence, and a month
+          // from now nothing else would tell them apart: a verified lookup said
+          // this is the game, an accepted guess means somebody read the box and
+          // agreed. If the identity is ever questioned, this is where the
+          // question starts.
+          notes: t.acceptedMatch
+            ? `Identity confirmed by hand at review on ${new Date().toISOString().slice(0, 10)} — the lookup was not confident.`
+            : null,
         });
 
         /*
@@ -815,6 +876,32 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       });
     } catch (err) {
       setError(err);
+    }
+  }
+
+  /**
+   * "I have looked at the box. It is that one."
+   *
+   * Promotes a suggestion to the row's identity on the server, so the decision
+   * survives a reload and is recorded on the copy when the game is added. The
+   * row ticks itself afterwards: a person who just confirmed a match should not
+   * then have to remember to select it.
+   */
+  async function acceptMatch(i: number, candidate: number) {
+    setBusyRow(i);
+    setError(null);
+    try {
+      const { job: saved } = await api.acceptScanJobTitle(
+        id,
+        freshEntries[i]!.originalIndex,
+        candidate,
+      );
+      setLive(saved);
+      setSelected((prev) => new Set(prev!).add(i));
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusyRow(null);
     }
   }
 
@@ -999,6 +1086,76 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       </span>
                     )}
 
+                    {/* Said plainly, because it is a claim about the catalog:
+                        this identity was not established by a lookup, it was
+                        established by a person looking at a box. The same
+                        sentence is written onto the copy when the game is
+                        added. */}
+                    {t.acceptedMatch && (
+                      <span className="muted small">
+                        Confirmed by hand — the lookup was not sure.
+                      </span>
+                    )}
+
+                    {/*
+                      The answer the screen used not to have.
+
+                      A weak match could be dismissed or retyped, and retyping
+                      threw away the BoardGameGeek id, publisher, year and cover
+                      that came with it. Each suggestion says its name, year and
+                      publisher, because a wrong accept writes a bad identity
+                      into the catalog — this project has done that three times
+                      (Brink, Iliad and Moon, all perfect 1.00 name matches to
+                      the wrong game) and none of them would have survived
+                      being read out loud next to the box.
+                    */}
+                    {!result && !dismissed && wantsHumanCall(t) && (
+                      <div className="candidate__accept">
+                        <span className="muted small">
+                          {t.barcode
+                            ? 'Nobody has confirmed this code. If one of these is the box in your hand, say so:'
+                            : 'Not sure enough to tick for you. If one of these is the game, say so:'}
+                        </span>
+                        <ul className="suggest-list">
+                          {t.candidates!.map((cand, ci) => (
+                            <li key={`${cand.bggId ?? cand.name}-${ci}`} className="suggest">
+                              {cand.thumbnailUrl && (
+                                <img src={cand.thumbnailUrl} alt="" className="suggest__thumb" />
+                              )}
+                              <span className="suggest__body">
+                                <strong>{cand.name}</strong>
+                                <span className="muted small">
+                                  {[
+                                    cand.yearPublished ? String(cand.yearPublished) : null,
+                                    cand.publisher,
+                                    cand.bggId ? `BGG ${cand.bggId}` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ') || 'no other details'}
+                                </span>
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-quiet btn-xs"
+                                disabled={adding || busyRow === i}
+                                onClick={() => void acceptMatch(i, ci)}
+                              >
+                                Yes, this one
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {!result && !dismissed && needsRelookupToAccept(t) && (
+                      <span className="muted small">
+                        This one was looked up before suggestions were kept. Press
+                        &ldquo;Look up again&rdquo; and you can accept a match rather than
+                        retyping it.
+                      </span>
+                    )}
+
                     {/*
                       The repair bench for one row.
                       Vision reading the spine correctly and the lookup coming
@@ -1034,7 +1191,11 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                         >
                           Not wanted
                         </button>
-                        {unresolved && (
+                        {/* Suppressed when suggestions are on offer above: the
+                            row is not empty, it is unconfirmed, and telling
+                            somebody "nothing was found" directly beneath a list
+                            of what was found reads as a broken screen. */}
+                        {unresolved && !wantsHumanCall(t) && (
                           <span className="muted small">
                             {t.barcode
                               ? 'Nothing found for this code, so there is no name to add it under yet — type one above.'

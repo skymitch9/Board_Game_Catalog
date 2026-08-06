@@ -18,6 +18,7 @@ import {
   matchExistingTitle,
   normaliseBarcode,
   type BarcodeCandidate,
+  type ItemKind,
 } from '@bgc/core';
 import { gameUpcConfig, resolveBarcode } from '@bgc/barcode';
 import { countOwnedCopies, findByBarcode, listItemNames } from '@bgc/db';
@@ -57,6 +58,29 @@ export interface ScannedTitle {
   /** Set when a retry searched with corrected text rather than what was read. */
   relookedUpAs?: string | null;
 
+  /**
+   * The runners-up, best first, including the one currently on the row.
+   *
+   * Kept because the top answer being wrong does not mean the lookup knew
+   * nothing: GameUPC returns a ranked list and the box in the owner's hand is
+   * often second. Without these, a review screen can only say no.
+   */
+  candidates?: TitleSuggestion[];
+  /**
+   * A person looked at the box and said this identification is right.
+   *
+   * The one thing the review screen could not express. A `medium`-confidence
+   * hit or a weak name match was shown, correctly, as untrustworthy — and there
+   * was no way to answer "I have checked, it is that one", so the only route
+   * into the catalog was to retype a name the app already knew and throw away
+   * the BoardGameGeek id, publisher, year and cover that came with it.
+   *
+   * Set only by an explicit human action, never inferred, and carried onto the
+   * copy's notes so a later session can tell an accepted guess from a verified
+   * lookup.
+   */
+  acceptedMatch?: boolean;
+
   /** The code that was scanned. Absent on anything that came from a photo. */
   barcode?: string | null;
   /**
@@ -74,6 +98,49 @@ export interface ScannedTitle {
    * review — see the confidence discussion in `resolveScannedBarcode`.
    */
   needsConfirmation?: boolean;
+}
+
+/** Runners-up kept on a row, matching the title path's `KEEP_CANDIDATES`. */
+const KEEP_CANDIDATES = 5;
+
+/**
+ * A suggestion, trimmed to what a person needs to recognise a box.
+ *
+ * **Not the whole `BarcodeCandidate`, and the difference is measured.** One
+ * Ticket to Ride scan with five full candidates made a job's `enriched` blob
+ * **23 KB**, almost all of it BoardGameGeek description prose. That blob is
+ * returned by `listScanJobs` for up to fifty jobs, on a poll that fires every
+ * 2.5 seconds while anything is working — so a shelf of seventy titles would
+ * have put megabytes over the wire a minute. Name, year, publisher and a
+ * thumbnail are what the decision is made from; the descriptions are what the
+ * item's own lookup is for.
+ */
+export interface TitleSuggestion {
+  name: string;
+  bggId: number | null;
+  publisher: string | null;
+  yearPublished: number | null;
+  thumbnailUrl: string | null;
+  kind: ItemKind;
+  /** The band the source gave it, so a weak guess still says it is weak. */
+  confidence: string;
+}
+
+export function toSuggestion(c: BarcodeCandidate): TitleSuggestion {
+  return {
+    name: c.name,
+    bggId: c.bggId,
+    publisher: c.publisher,
+    yearPublished: c.yearPublished,
+    thumbnailUrl: c.thumbnailUrl,
+    kind: c.kind,
+    confidence: c.confidence,
+  };
+}
+
+/** The top few, trimmed. One call site's worth of decision, in one place. */
+export function toSuggestions(candidates: BarcodeCandidate[]): TitleSuggestion[] {
+  return candidates.slice(0, KEEP_CANDIDATES).map(toSuggestion);
 }
 
 export type BarcodeCheck = { ok: true; code: string } | { ok: false; detail: string };
@@ -219,7 +286,13 @@ export async function resolveScannedBarcode(
     return {
       ...base,
       title: code,
-      reason: `No database confidently knows this code. The closest guess was "${best.name}", which is too weak to trust — name it here, or photograph the box instead.`,
+      // The guesses are carried even here, unticked and unclaimed. Fifteen
+      // wrong ones is what an unknown code looks like — but the sixteenth case
+      // is a real box whose code nobody has catalogued well, and a person
+      // holding it can settle in a second what no database can. Offering the
+      // list is not the same as believing it.
+      candidates: toSuggestions(resolved.candidates),
+      reason: `No database confidently knows this code. The closest guess was "${best.name}", which is too weak to trust — check the list against the box, name it here, or photograph the box instead.`,
     };
   }
   const needsConfirmation = !resolved.verified && best.confidence !== 'high';
@@ -270,6 +343,7 @@ export async function resolveScannedBarcode(
     // spine reads has nothing to measure. 1 says exactly that; whether the row
     // is ticked is decided by `needsConfirmation` instead.
     similarity: 1,
+    candidates: toSuggestions(resolved.candidates),
     proposedKind: classified?.proposedKind ?? best.kind ?? 'base',
     proposedParentId: classified?.proposedParentId ?? null,
     proposedParentName: classified?.proposedParentName ?? null,

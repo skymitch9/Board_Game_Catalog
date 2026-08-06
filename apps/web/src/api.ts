@@ -372,6 +372,19 @@ export const api = {
       outstanding: number;
     }>,
 
+  /**
+   * "I have looked at the box — it is that one."
+   *
+   * Promotes a suggestion to the row's identity, carrying the BoardGameGeek id,
+   * publisher, year and cover with it. `candidate` indexes the row's own list,
+   * so a runner-up can be chosen over the top answer.
+   */
+  acceptScanJobTitle: (id: number, index: number, candidate: number) =>
+    post(`/api/scan-jobs/${id}/titles/${index}/accept`, { candidate }) as Promise<{
+      job: ScanJob;
+      title: EnrichedTitle;
+    }>,
+
   /** Ask again about one title, optionally with corrected text. */
   relookupScanJobTitle: (id: number, index: number, q?: string) =>
     post(
@@ -446,6 +459,21 @@ export interface EnrichedTitle {
   dismissed?: boolean;
   /** Set when a retry searched with corrected text rather than what was read. */
   relookedUpAs?: string | null;
+  /**
+   * The runners-up, best first, including the one on the row.
+   *
+   * The top answer being wrong does not mean the lookup knew nothing — the free
+   * databases return a ranked list and the box in your hand is often second.
+   */
+  candidates?: TitleSuggestion[];
+  /**
+   * A person looked at the box and confirmed this identification.
+   *
+   * Never inferred. It is the one answer the review screen used not to have:
+   * before it, saying "yes, it really is that game" meant retyping the name and
+   * throwing away the id, publisher, year and cover that came with the match.
+   */
+  acceptedMatch?: boolean;
 
   // --- Only ever set on a barcode-sourced row -------------------------------
 
@@ -459,6 +487,23 @@ export interface EnrichedTitle {
   updateUrl?: string | null;
   /** Plausible but unconfirmed: shown, and left unticked for a human to judge. */
   needsConfirmation?: boolean;
+}
+
+/**
+ * A suggestion on a scan-job row, trimmed to what a person recognises a box by.
+ *
+ * Deliberately **not** the whole `BarcodeCandidate`: five full ones made a
+ * single job's payload 23 KB of BoardGameGeek prose, and the queue polls that
+ * blob every 2.5 seconds while anything is working.
+ */
+export interface TitleSuggestion {
+  name: string;
+  bggId: number | null;
+  publisher: string | null;
+  yearPublished: number | null;
+  thumbnailUrl: string | null;
+  kind: string;
+  confidence: string;
 }
 
 export interface ResearchUsage {

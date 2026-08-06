@@ -18,6 +18,16 @@ import { getCachedEntry, putCached } from '@bgc/db';
  * The vision route and the scan-job queue both want precisely this, and had a
  * copy each.
  */
+/**
+ * How many runners-up are worth keeping.
+ *
+ * The review screen offers them when the top answer looks wrong, and a list
+ * nobody will read to the bottom is just payload — the whole `enriched` blob
+ * rides on every poll of the queue.
+ */
+const KEEP_CANDIDATES = 5;
+
+/** The best answer, and the runners-up a person may prefer at review. */
 export async function cachedResolve(
   db: D1Database,
   deps: ResolveDeps,
@@ -34,30 +44,60 @@ export async function cachedResolve(
     force?: boolean;
   },
 ): Promise<BarcodeCandidate | null> {
+  return (await cachedResolveAll(db, deps, title, options))[0] ?? null;
+}
+
+/**
+ * The same lookup, keeping the runners-up.
+ *
+ * The review screen needs them because the top answer being wrong does not mean
+ * the lookup knew nothing — GameUPC hands back a ranked list, and the game the
+ * owner is holding is often second. Offering only the winner made "no" the
+ * owner's only available answer.
+ *
+ * **The cache entry can be either shape.** It used to hold a single candidate;
+ * it now holds the list. A stored object is read as a one-element list rather
+ * than being invalidated, so a week of existing entries stay useful and simply
+ * offer no alternatives until they expire.
+ */
+export async function cachedResolveAll(
+  db: D1Database,
+  deps: ResolveDeps,
+  title: string,
+  options?: { force?: boolean },
+): Promise<BarcodeCandidate[]> {
   if (!options?.force) {
-    const cached = await getCachedEntry<BarcodeCandidate | null>(db, 'title', title);
-    if (cached) return cached.value;
+    const cached = await getCachedEntry<BarcodeCandidate[] | BarcodeCandidate | null>(
+      db,
+      'title',
+      title,
+    );
+    if (cached) {
+      const value = cached.value;
+      if (value == null) return [];
+      return Array.isArray(value) ? value : [value];
+    }
   }
 
   // With no GameUPC config there is no ladder to run, and `resolveTitle` says
   // so by returning nothing. Caching that would pin a week of empty answers in
   // place the moment a key is configured, so leave the cache untouched.
-  if (!deps.gameUpc) return null;
+  if (!deps.gameUpc) return [];
 
   const hit = await resolveTitle(deps, title);
-  const best = hit.candidates[0] ?? null;
+  const candidates = hit.candidates.slice(0, KEEP_CANDIDATES);
 
   // A lookup that could not run tells us nothing about the game, so it must not
   // be remembered as if it had. Caching a quota exhaustion or a 5xx would pin
   // "this game does not exist" in place for a week — and the week you are most
   // likely to blow the shared UPCitemdb quota is the week you are bulk-scanning
   // a shelf, which is exactly when you can least afford it.
-  if (hit.failed) return best;
+  if (hit.failed) return candidates;
 
   // Only cache once BGG hydration has had its chance, or a week of lookups
   // would be pinned to the un-hydrated shape from before the token arrived.
-  if (best === null || hit.bggHydrated || !deps.bggToken) {
-    await putCached(db, 'title', title, best);
+  if (candidates.length === 0 || hit.bggHydrated || !deps.bggToken) {
+    await putCached(db, 'title', title, candidates.length > 0 ? candidates : null);
   }
-  return best;
+  return candidates;
 }
