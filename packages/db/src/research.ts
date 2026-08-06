@@ -346,6 +346,44 @@ export async function finishRun(
 }
 
 /**
+ * How long a details run may sit unfinished before it is called dead.
+ *
+ * One lookup is a single Claude call with web search — measured at 17 to 73
+ * seconds. Three minutes is well past the slowest of those and well short of
+ * being a nuisance.
+ */
+const STALE_AFTER_MINUTES = 3;
+
+/**
+ * Close every details run that stopped without saying so. Returns how many.
+ *
+ * A killed run is the failure this project keeps producing: the invocation is
+ * *terminated* rather than thrown, so the `catch` that would have written an
+ * error never runs, and the row stays `running` for ever. Production held two
+ * such rows for eleven hours. That is worse than a plain failure, because
+ * `activeDetailsRun` then reports the item as busy and the queue's driver waits
+ * on it — a bulk fill would stop dead while looking healthy.
+ *
+ * So staleness is settled on *read*, in one statement, rather than only when
+ * somebody happens to re-ask that particular game. `error` does not count as
+ * "asked" in the three-layer policy, so a swept row is simply offered again.
+ */
+export async function closeStaleDetailsRuns(db: D1Database): Promise<number> {
+  const { meta } = await db
+    .prepare(
+      `UPDATE research_run
+          SET status = 'error',
+              error_message = 'The lookup stopped before it finished. Ask again.',
+              finished_at = datetime('now')
+        WHERE tier = 'details'
+          AND status IN ('queued', 'running')
+          AND COALESCE(started_at, created_at) < datetime('now', '-${STALE_AFTER_MINUTES} minutes')`,
+    )
+    .run();
+  return meta.changes ?? 0;
+}
+
+/**
  * The run still working on this item, if there is one.
  *
  * The queue page polls, and a poll that arrives while a lookup is in flight
@@ -381,6 +419,10 @@ export async function latestDetailsRuns(
   db: D1Database,
   limit = 300,
 ): Promise<ResearchRun[]> {
+  // Before reading, not after: this is the read the queue page polls, so it is
+  // the moment a run that died silently becomes a run that visibly failed.
+  await closeStaleDetailsRuns(db);
+
   const { results } = await db
     .prepare(
       `SELECT ${RUN_COLUMNS} FROM research_run r

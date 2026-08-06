@@ -1,26 +1,48 @@
 /**
- * "Fill in missing details", in the background.
+ * "Fill in missing details" — one game, one Claude call, one run row.
  *
- * ## Why this is not a request any more
+ * ## Where this work runs, and the mistake that is worth not repeating
  *
- * `POST /api/research/:id/details` used to `await enrichItem` inline. That is a
- * Claude call with web search — tens of seconds — held open inside an HTTP
- * request, and the owner reported it as "taking a while". It was not stuck; it
- * was synchronous. The real cost was worse than the wait: if the connection
- * dropped mid-call, the lookup was still paid for and its answer was thrown
- * away, because nothing but the response held it.
+ * Three designs, in order:
  *
- * So the work moved to `executionCtx.waitUntil` and reports through
- * `research_run` — the table built for exactly this and, until now, never
- * written to. The route answers immediately with a run id; the queue page polls
- * it. Closing the tab costs nothing.
+ * 1. **Awaited inside the request.** Correct, but nothing held the answer: a
+ *    connection dropping mid-call paid for the search and lost it.
+ * 2. **Handed to `executionCtx.waitUntil`.** This is the one that broke. A
+ *    `waitUntil` task is only allowed to run for about thirty seconds *after
+ *    the response is returned*, and the route returns in 0.25s — so the whole
+ *    lookup was living on that budget. Measured, a lookup takes **17 to 73
+ *    seconds**. Roughly half of them were cancelled, and the cancellation is
+ *    silent: no exception, nothing reaches the `catch`, and the row stays
+ *    `running` for ever. Production said so plainly in `wrangler tail` —
+ *
+ *      (warn) waitUntil() tasks did not complete within the allowed time
+ *      after invocation end and have been cancelled.
+ *
+ *    — while `research_run` id 3 sat at `running` for eleven hours. Two of the
+ *    three trial runs died this way, which is why the bulk fill was never run.
+ * 3. **Awaited inside the request *and* registered with `waitUntil`.** What it
+ *    does now. Awaiting means the invocation has not ended, so the thirty-second
+ *    budget never starts and a 70-second lookup is fine; registering the same
+ *    promise with `waitUntil` means that if the caller *does* vanish, the work
+ *    still gets that budget to finish and write itself down instead of being
+ *    dropped on the floor. The failure of (1) and the failure of (2) are covered
+ *    by the same promise.
+ *
+ * Three things now guarantee a run cannot go quiet, and they are deliberately
+ * layered because each catches what the one before it cannot:
+ *
+ * | Guard | Catches |
+ * |---|---|
+ * | `ENRICH_TIMEOUT_MS` aborts the Claude call | a lookup that runs away — it throws, so it is recorded |
+ * | the `catch` below | anything thrown, from anywhere |
+ * | `closeStaleDetailsRuns` on read | the invocation being killed outright, when no code of ours gets to run at all |
  *
  * ## Subrequest arithmetic
  *
  * A Worker gets 50 subrequests per invocation and every D1 call counts
  * alongside every fetch. Exceeding it *terminates* the invocation rather than
- * throwing, taking `waitUntil` with it — which is what killed shelf enrichment
- * and left jobs looking busy for twenty minutes. One details run costs:
+ * throwing — which is what killed shelf enrichment and left jobs looking busy
+ * for twenty minutes. One details run costs:
  *
  * | Step | Subrequests |
  * |---|---|
@@ -32,14 +54,16 @@
  *
  * One item per invocation, so this is comfortably inside the ceiling and there
  * is nothing to chunk. **If a "fill in these ten" path is ever added, it must
- * not share an invocation**: ten of these is ~80, which is past the cap, and
- * the failure would be silent. The queue page drives the list one game at a
- * time from the browser for that reason.
+ * not share an invocation**: ten of these is ~80, past the cap, and the failure
+ * would be silent. The queue page drives the list one game at a time from the
+ * browser for that reason — and now that each POST waits for its own answer,
+ * that page *is* the bulk mechanism.
  */
 
 import { FILLED_FIELD_LABEL, FILL_FIELDS, detailGaps, type DetailsRun } from '@bgc/core';
 import {
   activeDetailsRun,
+  closeStaleDetailsRuns,
   createRun,
   detailsRunInputs,
   finishRun,
@@ -49,28 +73,6 @@ import {
 } from '@bgc/db';
 import { RESEARCH_MODEL, enrichItem, estimateCents, fieldsToFill } from '@bgc/research';
 import type { Env } from '../env.js';
-
-/**
- * How long a run may sit unfinished before we call it dead.
- *
- * An enrichment call is tens of seconds, not minutes, and the only way one goes
- * quiet without recording anything is its invocation being killed — the
- * subrequest ceiling terminates rather than throws, so the `catch` below never
- * runs. Without this, one such run would block its item from ever being
- * retried, which is precisely the trap the scan queue had to be dug out of.
- */
-const STALE_AFTER_MS = 5 * 60_000;
-
-/** Has this run stopped without saying so? */
-function isStale(run: ResearchRun): boolean {
-  const stamp = run.startedAt ?? run.createdAt;
-  // SQLite writes "YYYY-MM-DD HH:MM:SS" with no zone marker and `Date.parse`
-  // reads that as local time. On a Worker local *is* UTC, but relying on the
-  // runtime's zone for correctness is how this bites the day it runs anywhere
-  // else, so the marker is added explicitly.
-  const at = Date.parse(stamp.includes('T') ? stamp : `${stamp.replace(' ', 'T')}Z`);
-  return Number.isNaN(at) || Date.now() - at > STALE_AFTER_MS;
-}
 
 /**
  * The run row as the browser sees it: money and outcome, no plumbing.
@@ -116,23 +118,19 @@ export function toDetailsRun(run: ResearchRun): DetailsRun {
  *
  * The queue page polls, and an unguarded route would let a poll that lands
  * mid-lookup start a second Claude call for the same game — money spent twice
- * for one answer. A run that has gone quiet past `STALE_AFTER_MS` is closed as
- * an error first, so a killed invocation costs one retry rather than blocking
- * the item forever.
+ * for one answer. Anything that has gone quiet is swept to `error` first, so a
+ * killed invocation costs one retry rather than blocking the item forever;
+ * after that sweep, a run still reported as active really is one.
  */
 export async function claimDetailsRun(
   db: D1Database,
   itemId: number,
   triggeredBy: number | null,
 ): Promise<{ run: ResearchRun; alreadyRunning: boolean }> {
+  await closeStaleDetailsRuns(db);
+
   const existing = await activeDetailsRun(db, itemId);
-  if (existing) {
-    if (!isStale(existing)) return { run: existing, alreadyRunning: true };
-    await finishRun(db, existing.id, {
-      status: 'error',
-      errorMessage: 'The lookup stopped before it finished. Asked again.',
-    });
-  }
+  if (existing) return { run: existing, alreadyRunning: true };
 
   // Stamped before the call, not after: the record is of what the lookup had
   // to work from. An item edited while a run was in flight would otherwise be
@@ -154,31 +152,33 @@ export async function claimDetailsRun(
 }
 
 /**
- * Do the lookup and write the outcome down. Never throws.
+ * Do the lookup, write the outcome down, and hand back the finished row.
+ * Never throws.
  *
- * Handed to `waitUntil`, so nothing is listening: an exception escaping here
- * would leave the run at `running` forever with no error recorded — the exact
- * shape of failure that made a stalled shelf indistinguishable from a working
- * one. Everything is funnelled into `finishRun`.
+ * The same promise is awaited by the route *and* registered with `waitUntil`,
+ * so it must survive having no listener: an exception escaping here would leave
+ * the run at `running` forever with no error recorded — the exact shape of
+ * failure that made a stalled shelf indistinguishable from a working one.
+ * Everything is funnelled into `finishRun`, whose row is the return value, so
+ * the caller reports what the database says rather than what it hoped.
  *
  * "That game could not be identified" is **not** an error. It is an answer, and
  * a run that reaches it is `done` with a sentence explaining itself; treating it
  * as a failure would offer a retry that is guaranteed to cost the same money and
  * return the same nothing.
  */
-export async function runDetailsInBackground(
+export async function runDetailsLookup(
   env: Env,
   runId: number,
   itemId: number,
-): Promise<void> {
+): Promise<ResearchRun | null> {
   try {
     const item = await getItem(env.DB, itemId);
     if (!item) {
-      await finishRun(env.DB, runId, {
+      return await finishRun(env.DB, runId, {
         status: 'error',
         errorMessage: 'That game was deleted while the lookup was running.',
       });
-      return;
     }
 
     const { fields, usage } = await enrichItem(env.ANTHROPIC_API_KEY, {
@@ -195,7 +195,7 @@ export async function runDetailsInBackground(
     const asked = detailGaps(item);
 
     if (fields.notFound) {
-      await finishRun(env.DB, runId, {
+      return await finishRun(env.DB, runId, {
         status: 'done',
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -205,7 +205,6 @@ export async function runDetailsInBackground(
           detail: fields.note ?? 'That game could not be identified confidently.',
         },
       });
-      return;
     }
 
     // Gaps only, and only fields this kind of row can have. Anything already
@@ -217,7 +216,7 @@ export async function runDetailsInBackground(
     const patch = fieldsToFill(item, fields);
     if (Object.keys(patch).length > 0) await updateItem(env.DB, itemId, patch);
 
-    await finishRun(env.DB, runId, {
+    return await finishRun(env.DB, runId, {
       status: 'done',
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
@@ -229,9 +228,12 @@ export async function runDetailsInBackground(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await finishRun(env.DB, runId, { status: 'error', errorMessage: message }).catch(() => {
-      // The database is the only place left to report to. If that is gone too
-      // there is nothing useful to do but stop.
-    });
+    return await finishRun(env.DB, runId, { status: 'error', errorMessage: message }).catch(
+      () => {
+        // The database is the only place left to report to. If that is gone too
+        // there is nothing useful to do but stop.
+        return null;
+      },
+    );
   }
 }

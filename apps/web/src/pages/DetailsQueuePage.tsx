@@ -14,14 +14,20 @@ import { Link } from '../router';
  * pipeline, whose official tier needs a publisher's website before it can
  * search anything.
  *
- * ## The lookups run on the server, not in this tab
+ * ## The answer lives in the database, not in this tab
  *
- * Each one is a Claude call with web search — tens of seconds. It used to be
- * held open inside the request, so a phone locking or a tab closing paid for
- * the search and lost the answer. Now the server answers with a run id and does
- * the work under `waitUntil`; this page polls `research_run` for the outcome.
- * **Navigating away no longer costs anything** — the run finishes, the item is
- * filled in, and coming back shows what happened.
+ * Each lookup is a Claude call with web search — measured at 17 to 73 seconds —
+ * and the POST that starts it now waits for it. **The outcome is written to
+ * `research_run` before the response is sent**, which is the property that
+ * matters: this page polls that table, so a run whose response never arrived
+ * (a phone locking, a tab closing, a flaky connection) still shows up here as a
+ * finished run. What is *not* true any more is that a lookup started here
+ * survives indefinitely on its own — see `lib/details-run.ts` for the thirty
+ * seconds of grace it gets, and why the request is held open instead.
+ *
+ * A run that dies with no outcome recorded is closed as an error on the next
+ * poll rather than sitting at `running` for ever, so the driver below can never
+ * be left waiting on something that is not coming back.
  *
  * ## One at a time, still
  *
@@ -45,9 +51,20 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
   const [running, setRunning] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  /**
+   * Lookups whose POST has not come back yet.
+   *
+   * Load-bearing, and the reason is easy to miss: the POST now *waits* for its
+   * lookup, so for the 20–70 seconds it is in flight there is no `running` row
+   * in `runs` to notice. Without this counter the driver below would see
+   * "nothing active", start the next game, and keep going — firing the whole
+   * queue off in parallel, which is exactly what the one-at-a-time rule exists
+   * to prevent and what the 50-subrequest ceiling punishes.
+   */
+  const [inFlight, setInFlight] = useState<ReadonlySet<number>>(new Set());
 
   const items: NeedsDetails[] = state.state === 'ok' ? state.data.items : [];
-  const anyActive = Object.values(runs).some((r) => isActive(r));
+  const anyActive = inFlight.size > 0 || Object.values(runs).some((r) => isActive(r));
 
   const loadRuns = useCallback(async () => {
     try {
@@ -83,15 +100,27 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
   const start = useCallback(
     async (itemId: number) => {
       startedRef.current.add(itemId);
+      setInFlight((s) => new Set(s).add(itemId));
       try {
         const { run } = await api.startItemDetails(itemId);
         setRuns((r) => ({ ...r, [itemId]: run }));
       } catch (err) {
         setError(err);
         startedRef.current.delete(itemId);
+        // The request failed, but the lookup behind it may not have: the server
+        // registers the work with `waitUntil` before answering, so a dropped
+        // connection can still end in a finished run. Ask the table rather than
+        // assuming, or the next press would buy the same answer twice.
+        void loadRuns();
+      } finally {
+        setInFlight((s) => {
+          const next = new Set(s);
+          next.delete(itemId);
+          return next;
+        });
       }
     },
-    [],
+    [loadRuns],
   );
 
   /**
@@ -230,6 +259,7 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
                 key={item.id}
                 item={item}
                 run={runs[item.id]}
+                pending={inFlight.has(item.id)}
                 busy={running}
                 onFill={() => void start(item.id)}
                 onRetry={() => retry(item.id)}
@@ -255,18 +285,21 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
 function QueueRow({
   item,
   run,
+  pending,
   busy,
   onFill,
   onRetry,
 }: {
   item: NeedsDetails;
   run: DetailsRun | undefined;
+  /** This row's POST is still open. There is no run row to show yet. */
+  pending: boolean;
   busy: boolean;
   onFill: () => void;
   onRetry: () => void;
 }) {
-  const active = isActive(run);
-  const failed = run?.status === 'error';
+  const active = pending || isActive(run);
+  const failed = !pending && run?.status === 'error';
 
   return (
     <li className="candidate">
@@ -296,7 +329,7 @@ function QueueRow({
 
       {active && <Spinner label="" />}
 
-      {!run && (
+      {!run && !pending && (
         <button
           type="button"
           className="btn btn-quiet btn-xs"

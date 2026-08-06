@@ -302,12 +302,18 @@ export const api = {
     ),
 
   /**
-   * Start a lookup. Returns as soon as the run exists, not when it finishes.
+   * Run a lookup, and wait for it. **20 to 70 seconds** — do not add a timeout.
    *
-   * The work happens on the server under `waitUntil`, so this resolving means
-   * "it is running", never "it is done" — poll `detailsRuns()` for the outcome.
+   * It used to answer immediately and finish under `waitUntil`; that budget is
+   * about thirty seconds and half of these lookups outlast it, silently. So the
+   * server holds the request open now and the returned run is the *finished*
+   * one. Polling `detailsRuns()` still works and is still worth doing — if this
+   * promise never resolves because the connection dropped, the answer is in the
+   * database anyway.
+   *
    * `alreadyRunning` says the server handed back a run that was already in
-   * flight rather than starting a second one.
+   * flight rather than starting a second one; that one *is* unfinished, and
+   * only the poll will say how it ended.
    */
   startItemDetails: (id: number) =>
     post(`/api/research/${id}/details`, {}) as Promise<{

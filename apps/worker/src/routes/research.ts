@@ -36,11 +36,7 @@ import {
   runTier,
 } from '@bgc/research';
 import type { AppBindings } from '../env.js';
-import {
-  claimDetailsRun,
-  runDetailsInBackground,
-  toDetailsRun,
-} from '../lib/details-run.js';
+import { claimDetailsRun, runDetailsLookup, toDetailsRun } from '../lib/details-run.js';
 import { requireCapability } from '../middleware/auth.js';
 
 const RESEARCH_TIERS = SOURCE_TIERS.filter((t) => t !== 'community');
@@ -225,14 +221,21 @@ export const researchRoutes = new Hono<AppBindings>()
   })
 
   /**
-   * Fill in one game's blanks from the open web — in the background.
+   * Fill in one game's blanks from the open web.
    *
-   * Answers with a run id straight away rather than holding the request open
-   * for the tens of seconds a Claude web search takes. That wait was not the
-   * real problem: a connection dropping mid-call paid for the lookup and lost
-   * the answer, because nothing but the response held it. The work now runs
-   * under `waitUntil` and reports through `research_run`, so closing the tab
-   * costs nothing — see `lib/details-run.ts`.
+   * **This request is slow on purpose — 20 to 70 seconds — and that is the
+   * fix, not the bug.** It used to answer in 0.25s and do the work under
+   * `executionCtx.waitUntil`, which sounds strictly better and is not: a
+   * `waitUntil` task gets about thirty seconds *after the response is
+   * returned*, and roughly half of these lookups take longer than that. The
+   * cancellation is silent, so those runs sat at `running` for ever. Awaiting
+   * keeps the invocation open, and an invocation doing I/O has no such clock.
+   *
+   * The same promise is still handed to `waitUntil`, which now does the job it
+   * was reached for in the first place: if the caller disconnects mid-lookup,
+   * the work keeps its thirty seconds and writes down whatever it reaches
+   * rather than being dropped. Either way the answer lands in `research_run`,
+   * so the queue page's poll finds it even if this response never arrives.
    *
    * Gaps only — anything already recorded is left alone, because a value you
    * typed is better evidence than one a model found, and a catalog that quietly
@@ -262,11 +265,17 @@ export const researchRoutes = new Hono<AppBindings>()
     const user = c.get('user');
     const { run, alreadyRunning } = await claimDetailsRun(c.env.DB, id, user?.id ?? null);
 
-    if (!alreadyRunning) {
-      c.executionCtx.waitUntil(runDetailsInBackground(c.env, run.id, id));
-    }
+    // Somebody else's lookup is already paying for this answer. Say so and get
+    // out of the way; the caller polls for the outcome like everyone else.
+    if (alreadyRunning) return c.json({ run: toDetailsRun(run), alreadyRunning: true }, 200);
 
-    return c.json({ run: toDetailsRun(run), alreadyRunning }, alreadyRunning ? 200 : 202);
+    const work = runDetailsLookup(c.env, run.id, id);
+    // Registered *and* awaited. See the note above: the await is what buys the
+    // time, the registration is what saves the answer if this caller vanishes.
+    c.executionCtx.waitUntil(work);
+    const finished = await work;
+
+    return c.json({ run: toDetailsRun(finished ?? run), alreadyRunning: false }, 200);
   })
 
   /** Accept or reject one finding. The only thing review does is mark the row. */

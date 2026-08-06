@@ -19,6 +19,7 @@
  * catalog that quietly rewrites your entries is one you stop trusting.
  */
 
+import { APIUserAbortError } from '@anthropic-ai/sdk';
 import { fillableFieldsFor, type FillField, type ItemKind } from '@bgc/core';
 import {
   RESEARCH_MODEL,
@@ -28,6 +29,44 @@ import {
   usageOf,
   type Usage,
 } from './client.js';
+
+/**
+ * How long one lookup may take before it is stopped and called a failure.
+ *
+ * This is not a guess at how long the model needs — it is the ceiling the
+ * *caller* survives. `POST /api/research/:id/details` does this work under
+ * `executionCtx.waitUntil`, and Cloudflare cancels a `waitUntil` task that is
+ * still running about thirty seconds after the response was returned. That
+ * cancellation is silent: no exception, nothing reaches a `catch`, and the run
+ * row sits at `running` for ever. Production said so in as many words —
+ *
+ *   (warn) waitUntil() tasks did not complete within the allowed time after
+ *   invocation end and have been cancelled.
+ *
+ * — while `research_run` id 3 stayed `running` for eleven hours.
+ *
+ * So the call is stopped *before* the platform stops it, because a lookup that
+ * throws is a lookup that gets written down. **Anything raised above the
+ * platform's budget re-opens the silent failure**; if a longer lookup is ever
+ * wanted, the work has to leave `waitUntil` first.
+ */
+export const ENRICH_TIMEOUT_MS = 60_000;
+
+/**
+ * An `AbortSignal.timeout` firing, however it reached us.
+ *
+ * Three spellings on purpose. The SDK wraps an aborted request in its own
+ * `APIUserAbortError`, whose `message` is the unhelpful "Request was aborted."
+ * and whose `name` is plain `Error` — so neither a name check nor the message
+ * alone is enough, and a bare `instanceof` misses a `DOMException` raised
+ * before the SDK gets involved.
+ */
+function isAbort(err: unknown): boolean {
+  if (err instanceof APIUserAbortError) return true;
+  if (typeof err !== 'object' || err === null) return false;
+  const name = (err as { name?: unknown }).name;
+  return name === 'AbortError' || name === 'TimeoutError';
+}
 
 /** The fields worth asking about: printed on the box, and rarely disputed. */
 export interface EnrichedFields {
@@ -136,38 +175,68 @@ export async function enrichItem(
     .filter(Boolean)
     .join('\n');
 
-  const stream = client.messages.stream({
-    model: RESEARCH_MODEL,
-    max_tokens: 8000,
-    thinking: { type: 'adaptive' },
-    output_config: {
-      // Cheap on purpose. These are dull, well-agreed facts, and the money in
-      // this app belongs in the tiered research pass, not in filling a year in.
-      effort: 'low',
-      format: { type: 'json_schema', schema: ENRICH_SCHEMA },
-    },
-    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-    tools: [
-      // No allowed_domains here, unlike the tiered pass: the whole job is to
-      // *find* the publisher, so restricting the search to a domain we do not
-      // know yet would be circular.
-      { type: 'web_search_20260209', name: 'web_search', max_uses: 4 },
-      { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3 },
-    ],
-    messages: [
-      {
-        role: 'user',
-        content: `${identity}
+  const stream = client.messages.stream(
+    {
+      model: RESEARCH_MODEL,
+      // Six short facts and a two-sentence description. Measured output is
+      // 550–1800 tokens; 8000 was headroom nobody used, and every token the
+      // model is allowed is time this call is allowed to take.
+      max_tokens: 3000,
+      thinking: { type: 'adaptive' },
+      output_config: {
+        // Cheap on purpose. These are dull, well-agreed facts, and the money in
+        // this app belongs in the tiered research pass, not in filling a year in.
+        effort: 'low',
+        format: { type: 'json_schema', schema: ENRICH_SCHEMA },
+      },
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      tools: [
+        // No allowed_domains here, unlike the tiered pass: the whole job is to
+        // *find* the publisher, so restricting the search to a domain we do not
+        // know yet would be circular.
+        //
+        // These two numbers are a **time** budget, not a subrequest one: search
+        // and fetch run on Anthropic's side, so they cost the Worker nothing in
+        // subrequests and everything in wall clock. Measured on the three games
+        // that have been through this call: 4 searches + 3 fetches took 39s,
+        // 57s and 73s; 2 searches and no fetch took 18s and 22s but lost facts
+        // worth having — *Before the Stroke of Midnight* came back with a
+        // publication year at the higher budget and null at the lower, and the
+        // year is the only thing that row is queued for. Three and one is the
+        // setting that kept the answers and halved the clock.
+        { type: 'web_search_20260209', name: 'web_search', max_uses: 3 },
+        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 1 },
+      ],
+      messages: [
+        {
+          role: 'user',
+          content: `${identity}
 
 Find this game's publisher and their website, the year it was published, the
 player count, a typical playing time, and a one or two sentence description.
 
+Answer from the search results themselves; do not open pages one at a time.
 Leave anything you cannot confirm as null.`,
-      },
-    ],
-  });
+        },
+      ],
+    },
+    // A lookup that runs away must *fail*, not vanish. Without this the promise
+    // stays pending until something outside kills it, and on a Worker that kill
+    // is silent — see `runDetailsInBackground`. Aborting throws, which lands in
+    // a catch and gets written down. No retry: a timeout retried twice is three
+    // times the wall clock this exists to bound.
+    { signal: AbortSignal.timeout(ENRICH_TIMEOUT_MS), maxRetries: 0 },
+  );
 
-  const message = await stream.finalMessage();
+  const message = await stream.finalMessage().catch((err: unknown) => {
+    if (isAbort(err)) {
+      throw new ResearchError(
+        `The lookup was still searching after ${Math.round(ENRICH_TIMEOUT_MS / 1000)}s and was stopped. Try again.`,
+        504,
+      );
+    }
+    throw err;
+  });
 
   if (message.stop_reason === 'pause_turn') {
     throw new ResearchError(
