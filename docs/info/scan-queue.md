@@ -14,7 +14,7 @@ screen no longer argues with itself when two photos share a box.
 | | Examples | Where it lives |
 |---|---|---|
 | **A decision a person made** | `addedItemId`, `dismissed`, `acceptedMatch`, `relookedUpAs` | stored in the blob, forever |
-| **A fact about the catalog** | whether we already own this game | **computed on every read** |
+| **A fact about the catalog** | whether we already own this game; what it is and what it belongs to | **computed on every read** |
 
 Ownership was the exception until 2026-08-06 and it was a bug. `alreadyOwned`
 was written during enrichment and never revisited, so it answered *"was this in
@@ -22,6 +22,15 @@ the catalog when the photo was processed"* — and shelves get photographed twic
 Resolve a box on one photo and the other went on offering it as new. The owner:
 *"when the game is resolved in 1 its not known to the other item waiting
 processing."*
+
+**The proposals were the same bug, one field over**, fixed the same day.
+`proposedKind`, `proposedParentId`, `proposedParentName`, `inferredParentName`
+and `reason` were also decided at enrichment and frozen, so an expansion whose
+base game you added from the *other* photo went on saying *"Wingspan is not in
+your collection — if this is an expansion, it will wait for it"* and offered no
+parent to file it under. `classifyShelfResults` is pure and makes no
+subrequests — enrichment already re-runs it on every chunk — so re-running it on
+a read costs nothing beyond the catalog names ownership already loads.
 
 This is the same trade `inheritCover` (`packages/core/src/covers.ts`) and
 `resolveInheritedDetails` already make, for the same reason: a copied fact is
@@ -51,9 +60,32 @@ rule; the three wrong-game matches this project has shipped — Brink, Iliad, Mo
 — all came from that kind of drift. Measured: a spine read "ZORBLAX QUANDARY"
 resolved to *Quandary* is **not** matched against a catalogued *Quandary*.
 
-`ownership` is attached by `withFreshOwnership` **on the way out of a route,
-after every write**. It is never stored — verified with
+`ownership` and the proposals are attached by `withFreshView` **on the way out of
+a route, after every write**. Neither is stored — verified with
 `SELECT instr(enriched,'ownership') FROM scan_job`, which must stay 0.
+
+## How the proposals are resolved
+
+`apps/worker/src/lib/scan-classify.ts` holds `classifyTitles`, and it is the
+*only* classifier — the enrichment pass calls it too. The two paths differ in one
+question, which is therefore the parameter:
+
+| Caller | "Is this row owned?" |
+|---|---|
+| `processEnrichment` → `classifyAll` | the `alreadyOwned` it just computed |
+| `withFreshView` (every read) | `resolveOwnership` against the catalog now |
+
+Order matters and is why both live in one function: an owned row takes no part in
+classification, and a row whose base game arrived from the other photograph must
+be classified against a catalog that now contains it.
+
+⚠️ **Classify by the name that would be saved, not by `resolvedName`.**
+`scanRowName` (`packages/core/src/barcode.ts`) is that name, and both the review
+screen's Add button and the classifier call it. They used to work it out
+separately and disagreed exactly where it hurt: a spine reading "Qwixomo: Tidal
+Reach" resolves to *Reach* — a doubtful one-word hit — so the classifier saw a
+name with no colon, proposed no parent, and the row was saved as "Qwixomo: Tidal
+Reach" anyway. Measured before and after on a seeded local job.
 
 ## What it costs
 
@@ -85,7 +117,8 @@ not hold it. Which means:
   outstanding at every point in it, so closing it would split one session into a
   job per box.
 - **A game deleted from the catalog puts its row back on the queue.** That is the
-  same rule in the other direction, and it is deliberate.
+  same rule in the other direction, and it is deliberate — and such a row is
+  re-classified rather than left with the blank proposals an owned row carries.
 
 ## What the screen says
 

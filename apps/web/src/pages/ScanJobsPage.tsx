@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ITEM_KINDS,
-  isConfidentMatch,
+  isDoubtfulMatch,
+  scanRowName,
   SHELF_LONG_EDGE,
   PHOTO_LONG_EDGE,
   type Item,
@@ -95,53 +96,17 @@ const isUnfinished = (job: ScanJob): boolean => {
 /** Slow enough not to be a nuisance, quick enough that a shelf read feels live. */
 const POLL_MS = 2500;
 
-/**
- * A lookup that only loosely matches what was read off the spine.
+/*
+ * Both of these used to be written out here.
  *
- * The free databases match on a single word, so "Zorblax Quandary" comes back
- * as *Quandary* with a real id, a year and cover art — indistinguishable, at a
- * glance, from a good match. These are still shown, because the title is on the
- * shelf whatever the database thinks, but they are not ticked for you.
+ * They now come from `@bgc/core`, because the server classifies each row by the
+ * name it would be saved under and this screen is what decides that name. Two
+ * copies of the rule meant the server could propose a parent for one name while
+ * the button saved another — see `scanRowName`. Nothing about the behaviour on
+ * this screen changed; the definition simply moved to where both callers are.
  */
-const isDoubtful = (t: EnrichedTitle): boolean =>
-  t.resolvedName != null &&
-  // A person who looked at the box outranks any similarity score. This is the
-  // whole point of accepting a match: the row stops being judged by a rule that
-  // exists to guess in the absence of a human, once a human has answered.
-  !t.acceptedMatch &&
-  // Judged from the names themselves rather than the stored score, so the
-  // fragment rule applies here too — and so a re-lookup is judged against the
-  // text it actually searched with, not the spine's original misreading.
-  !isConfidentMatch(t.resolvedName, t.relookedUpAs ?? t.title);
-
-/**
- * The name to actually save.
- *
- * A doubtful match falls back to what was read off the spine. Ticking one means
- * "this game is on my shelf", not "and it is that other game" — so the title
- * survives and the lookup's identity does not.
- */
-/**
- * What a person typed for a barcode row, when they typed something.
- *
- * A photographed spine falls back to the text that was read off the box, which
- * is a real name. A barcode row's `title` is thirteen digits, so it has no such
- * fallback — the typed name is it.
- *
- * "Name it here" has to keep working when the lookup *still* knows nothing
- * afterwards, and for this catalog that is the ordinary case rather than the
- * edge: most of it is crowdfunding, and those boxes are in no retail database
- * whatever you call them. It also has to survive a **doubtful** answer, which
- * is the case that caught this out: typing a real name and getting back a
- * one-word match left the row offering to add the barcode "on its own".
- */
-const typedName = (t: EnrichedTitle): string | null =>
-  t.barcode ? (t.relookedUpAs ?? null) : null;
-
-const effectiveName = (t: EnrichedTitle): string =>
-  isDoubtful(t)
-    ? (typedName(t) ?? t.title)
-    : (t.resolvedName ?? typedName(t) ?? t.title);
+const isDoubtful = isDoubtfulMatch;
+const effectiveName = scanRowName;
 
 /**
  * Would this row enter the collection named after its own barcode?

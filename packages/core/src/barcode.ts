@@ -233,6 +233,69 @@ export function isConfidentMatch(candidateName: string, searchedFor: string): bo
 }
 
 /**
+ * The fields any answer to "what is this queued row called" needs.
+ *
+ * Structural rather than the worker's `ScannedTitle` or the web app's
+ * `EnrichedTitle`, so both can ask without either depending on the other.
+ */
+export interface NameableScanRow {
+  /** What was read off the spine — or, for a barcode row, the digits. */
+  title: string;
+  resolvedName?: string | null;
+  /** What a person retyped and re-looked-up, if they did. */
+  relookedUpAs?: string | null;
+  barcode?: string | null;
+  /** A person looked at the box and said the match was right. */
+  acceptedMatch?: boolean | null;
+}
+
+/**
+ * A lookup that only loosely matches what was read off the spine.
+ *
+ * The free databases match on a single word, so "Zorblax Quandary" comes back as
+ * *Quandary* with a real id, a year and cover art — indistinguishable, at a
+ * glance, from a good match. Such a row is still shown, because the title is on
+ * the shelf whatever the database thinks, but its *identity* is not trusted.
+ *
+ * A person who looked at the box outranks any similarity score, which is what
+ * accepting a match means. And the comparison is made against the text actually
+ * searched with, so a re-lookup is not judged against the spine's original
+ * misreading.
+ */
+export function isDoubtfulMatch(row: NameableScanRow): boolean {
+  return (
+    row.resolvedName != null &&
+    !row.acceptedMatch &&
+    !isConfidentMatch(row.resolvedName, row.relookedUpAs ?? row.title)
+  );
+}
+
+/**
+ * The name this row would enter the collection under.
+ *
+ * **One answer, asked in three places**, which is the entire reason it lives
+ * here: the review screen saves under this name, the classifier decides kind and
+ * parent from it, and both used to work it out separately. They disagreed
+ * exactly where it hurt — a spine reading "Qwixomo: Tidal Reach" resolves to
+ * *Reach*, so the classifier saw a name with no colon in it, proposed no parent,
+ * and the row was then saved as "Qwixomo: Tidal Reach" anyway. The parent
+ * proposal the owner wanted was lost to two functions answering one question.
+ *
+ * A doubtful match falls back to what was read off the box: ticking such a row
+ * means "this game is on my shelf", not "and it is that other game" — so the
+ * title survives and the lookup's identity does not.
+ *
+ * A barcode row has no spine text to fall back to, only thirteen digits, so what
+ * a person typed over it is the only real name it will ever have.
+ */
+export function scanRowName(row: NameableScanRow): string {
+  const typed = row.barcode ? (row.relookedUpAs ?? null) : null;
+  return isDoubtfulMatch(row)
+    ? (typed ?? row.title)
+    : (row.resolvedName ?? typed ?? row.title);
+}
+
+/**
  * Re-rank candidates against the title we searched with.
  *
  * Only meaningful when candidates came from a *name* search rather than a direct

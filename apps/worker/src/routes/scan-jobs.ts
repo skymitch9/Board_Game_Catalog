@@ -41,11 +41,12 @@ import {
   type ScannedTitle,
 } from '../lib/barcode-scan.js';
 import { cachedResolveAll } from '../lib/resolve-title.js';
+import { classifyTitles } from '../lib/scan-classify.js';
 import {
   countOutstanding,
   ownershipContext,
   shouldAutoClose,
-  withFreshOwnership,
+  withFreshView,
 } from '../lib/scan-ownership.js';
 import { requireCapability } from '../middleware/auth.js';
 
@@ -153,7 +154,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
     for (const job of listed) {
       const settled = shouldAutoClose(job, ctx);
       if (settled) await updateScanJobStatus(c.env.DB, job.id, 'done');
-      jobs.push(withFreshOwnership(settled ? { ...job, status: 'done' as const } : job, ctx));
+      jobs.push(withFreshView(settled ? { ...job, status: 'done' as const } : job, ctx));
     }
     return c.json({ jobs });
   })
@@ -168,7 +169,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
     if (!id || !Number.isInteger(id)) return c.json({ error: 'bad_request' }, 400);
     const job = await getScanJob(c.env.DB, id);
     if (!job) return c.json({ error: 'not_found' }, 404);
-    return c.json({ job: withFreshOwnership(job, await ownershipContext(c.env.DB)) });
+    return c.json({ job: withFreshView(job, await ownershipContext(c.env.DB)) });
   })
 
   // --- Upload a photo and start processing ---------------------------------
@@ -244,7 +245,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
     if (already >= 0 && !titles[already]!.lookupFailed) {
       const ctx = await ownershipContext(c.env.DB);
       return c.json({
-        job: withFreshOwnership(job, ctx),
+        job: withFreshView(job, ctx),
         index: already,
         title: titles[already],
         duplicate: true,
@@ -263,7 +264,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
     const ctx = await ownershipContext(c.env.DB);
     return c.json(
       {
-        job: withFreshOwnership(updated ?? job, ctx),
+        job: withFreshView(updated ?? job, ctx),
         index,
         title: titles[index],
         duplicate: false,
@@ -393,7 +394,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
         ? ((await updateScanJobStatus(c.env.DB, id, 'done')) ?? written)
         : written;
 
-    return c.json({ job: withFreshOwnership(updated, ctx), outstanding });
+    return c.json({ job: withFreshView(updated, ctx), outstanding });
   })
 
   /**
@@ -463,7 +464,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
     // from the other photo. Resolving on the way out asks it.
     const ctx = await ownershipContext(c.env.DB);
     return c.json({
-      job: updated ? withFreshOwnership(updated, ctx) : null,
+      job: updated ? withFreshView(updated, ctx) : null,
       title: entry,
       found: best !== null,
     });
@@ -535,10 +536,20 @@ export const scanJobRoutes = new Hono<AppBindings>()
      * belonged to a different game: accept "Catan: Seafarers" over a top answer
      * of "Catan" and the row must now propose Catan as its parent, not root
      * itself beside it.
+     *
+     * The catalog comes from the ownership context rather than a `listItemNames`
+     * of its own — the same names, one D1 read instead of two, and no chance of
+     * this row being classified against a catalog the response then contradicts.
+     *
+     * Reading the context *before* the write is safe here and only here: this
+     * route writes to the job's own blob and never to the catalog or to any
+     * `addedItemId`, so nothing the context describes can change underneath it.
+     * The resolved copy below is still built from the post-write row.
      */
+    const ctx = await ownershipContext(c.env.DB);
     const [classified] = classifyShelfResults(
       [{ name: chosen.name, bggId: chosen.bggId, thumbnailUrl: chosen.thumbnailUrl }],
-      await listItemNames(c.env.DB),
+      ctx.items,
     );
     entry.proposedKind = classified?.proposedKind ?? chosen.kind ?? 'base';
     entry.proposedParentId = classified?.proposedParentId ?? null;
@@ -552,8 +563,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
 
     // Accepting settles what the row *is*, which can settle whether we have it:
     // a `medium` guess nobody trusted may name a game the catalog already holds.
-    const ctx = await ownershipContext(c.env.DB);
-    return c.json({ job: updated ? withFreshOwnership(updated, ctx) : null, title: entry });
+    return c.json({ job: updated ? withFreshView(updated, ctx) : null, title: entry });
   })
 
   // --- Mark a job as done (user reviewed) -----------------------------------
@@ -753,38 +763,18 @@ async function enrichOne(
  * Pure, and makes no subrequests, so it is cheap to redo on every chunk — and it
  * has to be redone, because a title's proposed parent can be a sibling that only
  * turns up in a later chunk.
+ *
+ * What it writes is a *starting point*, not the answer. Every read re-runs the
+ * same classifier against the catalog as it stands — see `scan-classify.ts` —
+ * because a proposal made here goes stale the moment anything is added
+ * elsewhere. `alreadyOwned` is the ownership answer available at this point in
+ * the pipeline; the read path passes the resolved one instead.
  */
 function classifyAll(
   rows: EnrichedTitle[],
   existing: { id: number; name: string; kind: string }[],
 ): EnrichedTitle[] {
-  const fresh = rows
-    .filter((r) => !r.alreadyOwned)
-    .map((r) => ({ name: r.resolvedName ?? r.title, bggId: r.bggId, thumbnailUrl: r.thumbnailUrl }));
-  const classified = classifyShelfResults(fresh, existing);
-
-  let idx = 0;
-  return rows.map((r) => {
-    if (r.alreadyOwned) {
-      return {
-        ...r,
-        proposedKind: null,
-        proposedParentId: null,
-        proposedParentName: null,
-        inferredParentName: null,
-        reason: null,
-      };
-    }
-    const cls = classified[idx++];
-    return {
-      ...r,
-      proposedKind: cls?.proposedKind ?? 'base',
-      proposedParentId: cls?.proposedParentId ?? null,
-      proposedParentName: cls?.proposedParentName ?? null,
-      inferredParentName: cls?.inferredParentName ?? null,
-      reason: cls?.reason ?? null,
-    };
-  });
+  return classifyTitles(rows, existing, (r) => r.alreadyOwned);
 }
 
 async function processEnrichment(env: Env, jobId: number): Promise<void> {

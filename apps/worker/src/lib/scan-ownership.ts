@@ -14,6 +14,10 @@
  * |---|---|---|
  * | `addedItemId`, `dismissed` | ✅ a decision a person made | |
  * | ownership | | ✅ a fact about the catalog |
+ * | kind and parent proposals | | ✅ also a fact about the catalog |
+ *
+ * The proposals joined this list second, and for the same reason — see
+ * `scan-classify.ts`. `withFreshView` resolves both.
  *
  * The catalog is the only authority on what is in the catalog, so ownership is
  * resolved when a job is *read* and never written back. This is the third time
@@ -47,6 +51,7 @@ import {
   type ScanJobMode,
 } from '@bgc/db';
 import type { ScannedTitle } from './barcode-scan.js';
+import { classifyTitles } from './scan-classify.js';
 
 interface CatalogItem {
   id: number;
@@ -55,6 +60,8 @@ interface CatalogItem {
 }
 
 export interface OwnershipContext {
+  /** The catalog as `classifyShelfResults` wants it — the same rows, unfolded. */
+  items: CatalogItem[];
   index: TitleIndex<CatalogItem>;
   byId: Map<number, CatalogItem>;
   /** itemId → the job whose review screen added it, when one did. */
@@ -103,6 +110,7 @@ export async function ownershipContext(db: D1Database): Promise<OwnershipContext
   }
 
   return {
+    items,
     index: buildTitleIndex(items),
     byId: new Map(items.map((i) => [i.id, i])),
     addedBy,
@@ -200,19 +208,32 @@ export function titlesOf(job: ScanJob): ScannedTitle[] | null {
 }
 
 /**
- * A job as it should be *read*: same stored rows, ownership answered afresh.
+ * A job as it should be *read*: the same stored rows, every claim about the
+ * catalog answered afresh.
  *
- * The only place `ownership` is ever set. Call it on the way out of a route,
- * after every write, and never before one.
+ * Two claims, resolved in this order because the second depends on the first:
+ *
+ * 1. **ownership** — is this game here already?
+ * 2. **classification** — if not, what is it and what does it belong to?
+ *
+ * The order is the whole reason they live in one function. A row that turns out
+ * to be owned takes no part in classification, and a row whose base game was
+ * added from the other photograph must be classified against a catalog that now
+ * contains it. Resolving either one from a stale copy of the other reintroduces
+ * the bug in miniature.
+ *
+ * The only place `ownership` and the proposal fields are set for display. Call
+ * it on the way out of a route, after every write, and never before one.
  */
-export function withFreshOwnership<T extends ScanJob>(job: T, ctx: OwnershipContext): T {
+export function withFreshView<T extends ScanJob>(job: T, ctx: OwnershipContext): T {
   const titles = titlesOf(job);
   if (!titles) return job;
+
+  const resolved = titles.map((t) => ({ ...t, ownership: resolveOwnership(t, job.id, ctx) }));
+
   return {
     ...job,
-    enriched: JSON.stringify(
-      titles.map((t) => ({ ...t, ownership: resolveOwnership(t, job.id, ctx) })),
-    ),
+    enriched: JSON.stringify(classifyTitles(resolved, ctx.items, (t) => t.ownership !== null)),
   };
 }
 
