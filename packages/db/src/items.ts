@@ -468,7 +468,10 @@ async function summariseGroups(
       .prepare(
         `${scoped.cte}SELECT k.gkey,
                 COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') THEN c.quantity END), 0) AS owned,
-                COALESCE(SUM(CASE WHEN c.status IN ('wanted','preordered') THEN c.quantity END), 0) AS wanted,
+                -- Apart, not together: a group card reading "45 wanted" over 22
+                -- items was every pledge in the tree counted as a wish.
+                COALESCE(SUM(CASE WHEN c.status = 'wanted' THEN c.quantity END), 0) AS wanted,
+                COALESCE(SUM(CASE WHEN c.status = 'preordered' THEN c.quantity END), 0) AS preordered,
                 COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') AND c.format = 'digital'
                                   THEN c.quantity END), 0) AS digital,
                 COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') AND c.format = 'physical'
@@ -492,6 +495,7 @@ async function summariseGroups(
     gkey: string;
     owned: number;
     wanted: number;
+    preordered: number;
     digital: number;
     physical: number;
   };
@@ -516,6 +520,7 @@ async function summariseGroups(
         items: 0,
         owned: 0,
         wanted: 0,
+        preordered: 0,
         digital: 0,
         physical: 0,
         members: [],
@@ -537,6 +542,7 @@ async function summariseGroups(
     if (!group) continue;
     group.owned = row.owned;
     group.wanted = row.wanted;
+    group.preordered = row.preordered;
     group.digital = row.digital;
     group.physical = row.physical;
   }

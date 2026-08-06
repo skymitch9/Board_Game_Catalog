@@ -332,7 +332,10 @@ export interface CollectionGroup {
   /** Rows across those lines' trees — 147, for Dice Throne. */
   items: number;
   owned: number;
+  /** Might buy. Kept apart from `preordered` — see `summarizeTree`. */
   wanted: number;
+  /** Paid for and on its way. */
+  preordered: number;
   /**
    * Copies held as a licence, and as a thing.
    *
@@ -632,16 +635,32 @@ export function ownedCount(copies: Copy[]): number {
     .reduce((sum, c) => sum + (c.quantity || 1), 0);
 }
 
-/** Aggregate shown on a collapsed base-game card. */
+/**
+ * Aggregate shown on a collapsed base-game card.
+ *
+ * **`wanted` and `preordered` are counted apart**, and folding them back
+ * together is the bug this replaced: an *Ascension* card read "45 wanted" over
+ * 22 items, because 45 was every pledge in the tree plus the two things anybody
+ * actually wanted. Might-buy and paid-for-and-shipping are not the same fact,
+ * and the card is where the difference is most visible.
+ *
+ * These are **units**, unlike the catalog-wide figures in `collectionStats`,
+ * which are rows. Not an oversight: `owned` beside them has to be units or the
+ * multi-copy `×N` feature disappears from the card, and a card is a summary of
+ * a shelf rather than of a list. The rule is that a number counts what the
+ * thing it links to counts — these link nowhere.
+ */
 export function summarizeTree(node: ItemNode): {
   owned: number;
   wanted: number;
+  preordered: number;
   totalItems: number;
   /** Items in this tree we hold more than one of. */
   duplicates: { id: number; name: string; count: number }[];
 } {
   let owned = 0;
   let wanted = 0;
+  let preordered = 0;
   let totalItems = 0;
   const duplicates: { id: number; name: string; count: number }[] = [];
 
@@ -653,11 +672,12 @@ export function summarizeTree(node: ItemNode): {
 
     for (const c of n.copies) {
       const q = c.quantity || 1;
-      if (c.status === 'wanted' || c.status === 'preordered') wanted += q;
+      if (c.status === 'wanted') wanted += q;
+      else if (c.status === 'preordered') preordered += q;
     }
     n.children.forEach(walk);
   };
   walk(node);
 
-  return { owned, wanted, totalItems, duplicates };
+  return { owned, wanted, preordered, totalItems, duplicates };
 }

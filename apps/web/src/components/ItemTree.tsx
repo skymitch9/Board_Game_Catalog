@@ -324,7 +324,10 @@ export function ItemCard({ node }: { node: ItemNode }) {
           {stats.totalItems} item{stats.totalItems === 1 ? '' : 's'}
         </span>
         {stats.owned > 0 && <span>{stats.owned} owned</span>}
+        {/* Two counts, because they answer different questions. This card used
+            to read "45 wanted" over 22 items: 43 of those were pledges. */}
         {stats.wanted > 0 && <span>{stats.wanted} wanted</span>}
+        {stats.preordered > 0 && <span>{stats.preordered} on the way</span>}
         <Link to={`/items/new?parent=${node.id}`} className="foot-action">
           + Add to this game
         </Link>
@@ -420,6 +423,7 @@ export function GroupCard({ group, onOpen }: { group: CollectionGroup; onOpen: (
         </span>
         {group.owned > 0 && <span>{group.owned} owned</span>}
         {group.wanted > 0 && <span>{group.wanted} wanted</span>}
+        {group.preordered > 0 && <span>{group.preordered} on the way</span>}
         <button type="button" className="foot-action linklike" onClick={onOpen}>
           Show these on their own
         </button>
