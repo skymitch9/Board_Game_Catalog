@@ -5,10 +5,13 @@ Everything needed to continue or finish this without Claude.
 Stable reference lives alongside this file and is not duplicated here:
 [`access/`](access/README.md) (endpoints, key names, quotas) and
 [`info/`](info/README.md) (how and why things work).
-**Last updated:** 2026-08-06. Everything is committed and deployed; the working
+**Last updated:** 2026-08-07. Everything is committed and deployed; the working
 tree is clean. Database was cleared and collection restarted fresh on 08-05.
 
-**Newest first:** the [cover picker](#the-cover-picker--built-2026-08-06) —
+**Newest first:** [the collection page at 640 items](#the-collection-page-at-640-items--built-2026-08-07)
+— paging, multi-term search, collapsed groups — and
+[the four columns that had no UI](#the-four-columns-that-had-no-ui--built-2026-08-07).
+Then the [cover picker](#the-cover-picker--built-2026-08-06) —
 printings, and choosing which one's artwork represents our copy. Before that,
 the [wishlist](#the-wishlist--built-2026-08-06) and
 [cover-image health](#cover-image-health--built-2026-08-06). If you read one
@@ -23,6 +26,9 @@ Nothing is in flight. The most recent commits:
 
 | Commit | What |
 |---|---|
+| `36cb936` | Show the four things the catalog knew and never said |
+| `bfa01bb` | Make the collection page work at 640 items |
+| `117d47e` | Make room for roleplaying books (migration 0015) |
 | `d47abd8` | Never overwrite a cover without keeping the one it replaced |
 | `5bac8d6` | Pick which printing's cover represents our copy |
 | `3aaa730` | Handoff refresh |
@@ -114,12 +120,13 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `4b56532d-b0db-4487-9f77-3194f20d774a` — the cover picker (2026-08-06) |
+| Deployed version | `32d5cacc-ab38-42f1-8764-d2016292dd45` — the four hidden columns (2026-08-07) |
+| Previous version | `00c1a732-29fb-4281-9126-4dc41b90ec9d` — collection paging (2026-08-07) |
 | Cron triggers | `*/30 * * * *` — the cover check. Confirmed registered in the deploy output |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
-| Migrations applied | `0001_init` … `0014_edition_source` (local **and** production) |
+| Migrations applied | `0001_init` … `0015_ttrpg_system_and_format` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -206,6 +213,115 @@ this will use BGG's expansion links for definitive results.
 
 **Header stats (2026-08-05).** Shows `N games · N expansions · N accessories`
 (only non-zero counts), replacing the old `games · items · owned`.
+
+---
+
+## The collection page at 640 items — built 2026-08-07
+
+The page was built for 47 games. The catalog now holds **640 items in 107
+groups**, and the list endpoint assembled every matching tree with no paging.
+
+**Measured, against a local D1 seeded to production's shape** (641 items, 107
+groups, a 53-child group):
+
+| | Bytes | Gzipped |
+|---|---|---|
+| `GET /api/items`, before | 444,129 | 26,041 |
+| `GET /api/items`, page 1 of 5 | 125,850 | 7,973 |
+| median page | 78,775 | 5,519 |
+
+The five pages sum to 444,418 — the difference is `total`/`page`/`pageSize`/
+`pageCount` repeated per page, which is the arithmetic working.
+
+| Piece | Where |
+|---|---|
+| `COLLECTION_PAGE_SIZE = 25` | `packages/core/src/constants.ts` |
+| `searchTerms`, `ItemPage`, `ItemNode.matchedChildren` | `packages/core/src/schemas.ts` |
+| Paging, term EXISTS, `attachMatchReasons` | `packages/db/src/items.ts` |
+| `GET /api/items` (returns the page, not `{items}`) | `apps/worker/src/routes/catalog.ts` |
+| The pager | `apps/web/src/pages/CollectionPage.tsx` |
+| The collapse control | `apps/web/src/components/ItemTree.tsx` |
+
+**Page size is the server's, not the caller's.** A client able to ask for 500
+would be handed exactly the payload this exists to prevent. `total` counts every
+match so the header reads "107 games" while showing 25, and a page past the end
+clamps to the last one rather than answering empty.
+
+**Search is now one EXISTS per word, ANDed over the tree.** "catan seafarers"
+finds the Catan group because the two words are satisfied by two different rows
+in it — one LIKE over the whole box needs them adjacent in one field, and
+pushing the AND onto a single item row needs one row to hold both. Tree-level
+matching is unchanged and still deliberate. A result says *why* when the hit was
+on a child, naming only the children that explain the terms the base game does
+not. Measured: `q=catan knights` went from 0 results to 1.
+
+**Groups start collapsed above two children.** The control is itself a row, so
+collapsing one or two replaces two lines with one line and a click. Open state
+lives in a module-level `Map` in `ItemTree.tsx` — the card is unmounted and
+rebuilt on every re-fetch, so component state would close what you opened the
+moment you came back from a game.
+
+### ⚠️ The trap this nearly walked into
+
+Shelf classification called `/api/items` to get the **whole catalog** to match
+spine text against. Paged, that would have matched against the first 25 groups
+and reported every other game you own as new — silently, with no error. It now
+calls **`GET /api/item-names`** (`listItemNames`, three columns, 41 KB against
+640 rows). **Anything that needs every item wants that route, not `items()`.**
+
+`preordered` also stopped sharing `wanted`'s amber: they mean opposite things
+about your wallet and the catalog holds 145 of one against 5 of the other, so
+the common state wore the colour for "you do not have this". New `--transit`
+token, cyan, both themes — 4.79:1 light, 6.82:1 dark.
+
+---
+
+## The four columns that had no UI — built 2026-08-07
+
+Migration 0015 and a bulk import left four populated columns invisible.
+
+| Column | Rows | Shown as |
+|---|---|---|
+| `item.source_url` | 525 | External link named after its host — "Kickstarter", "Gamefound", "BackerKit" — **beside** the publisher link, never instead of it |
+| `item.game_system` | 124 | Badge on the item page and card, plus a collection filter built from the distinct values with counts |
+| `copy.format` | 75 digital / 564 physical | A small `digital` tag on copy rows, cards and a parent's child list. `physical` is never labelled |
+| `requires` relation | 8 | A sentence at the top of the item page |
+
+**`source_url` is not `publisher_url`.** One is the publisher's own site, the
+other is where *this pledge* was made, and an item can have both. The edit form
+gives them two fields with two hints for that reason.
+
+**A digital tag appears only when *every* copy is digital** — a book owned in
+print as well can still be handed across the table, which is the question this
+answers.
+
+### The requires relation is directed, and two things make that true
+
+1. `getRelatedItems` returns **`outgoing`** — which end of the stored row you
+   are standing at. Without it the Player's Handbook lists eight supplements and
+   has no way to say it does not require them.
+2. `createRelation` **does not normalise the id order for `requires`**. That
+   normalisation (`lo, hi`) exists so the unique index catches a duplicate
+   offered either way round — right for a symmetric claim, and it silently
+   inverts this one. The Player's Handbook has a low id and eight dependants, so
+   sorting would have had it announcing it cannot be used without each of them.
+   `DIRECTIONAL_RELATIONS` in `packages/core/src/constants.ts` is the list;
+   `reimplements` arguably belongs in it and was left alone.
+
+It renders as **two different sentences** — "Requires: Player's Handbook" from
+the supplement, "Needed by …" from the core book, which never uses the word
+requires — and is deliberately left out of the "Related games" list, which would
+show it again without its direction.
+
+Verified both ends, and verified that a `requires` created through
+`POST /api/items/:id/relations` from a higher id to a lower one keeps its
+direction. That is precisely the case the old code flipped.
+
+> **Local D1 was seeded to production's shape to measure this and then cleaned
+> back out** — 86 items, 77 groups, 10 copies, as before. To redo it, generate
+> rows with `publisher = 'Seed Works'` and remove them with one DELETE. Local
+> cannot exercise the 640-item case on its own; do not conclude paging works
+> from a 66-item copy.
 
 ---
 
@@ -709,7 +825,14 @@ exactly one implementation of anything that makes a decision.
 | POST | `/api/scan-jobs/:id/done` | editCatalog — mark reviewed, clean up photo |
 | DELETE | `/api/scan-jobs/:id` | editCatalog — delete job and photo |
 
-`GET /api/items` accepts `q`, `status`, `kind`, `uncatalogued`, `duplicates`.
+| GET | `/api/item-names` | read — every item's id/name/kind. The list `/api/items` **cannot** give you, because that one is paged |
+
+`GET /api/items` accepts `q`, `status`, `kind`, `uncatalogued`, `duplicates`,
+`gameSystem` and `page`, and answers with
+`{ items, total, page, pageSize, pageCount }` — **not** `{ items }`. `total` is
+every match, not the page. Page size is fixed at 25 on the server.
+
+`GET /api/meta` answers `{ stats, gameSystems }`.
 
 ---
 
