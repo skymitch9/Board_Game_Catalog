@@ -116,6 +116,8 @@ export type InheritedField = (typeof INHERITED_FIELDS)[number];
 export interface DetailSubject {
   kind: ItemKind | string;
   parentItemId: number | null;
+  /** A ruleset the row belongs to — "D&D 5e (2014)", "Cypher System". */
+  gameSystem?: string | null;
   publisher?: string | null;
   publisherUrl?: string | null;
   yearPublished?: number | null;
@@ -125,17 +127,44 @@ export interface DetailSubject {
 }
 
 /**
- * The facts this kind of row is asked for.
+ * Fields a roleplaying book is never asked for.
+ *
+ * **A rulebook is not a game with a duration.** The Player's Handbook has no
+ * player count and no playing time, and neither does Ryoko's Guide or a Cosmere
+ * campaign book; a session is as long as the table wants and the party is as big
+ * as it turns up. Asking bought a confident invention — "3–6 players, 240
+ * minutes" — at 1.4¢ a book, and there are 79 rows carrying `D&D 5e (2014)`
+ * alone.
+ *
+ * Keyed on `game_system` being set at all rather than on a list of systems: the
+ * column exists precisely to say "this is a thing played under a ruleset", and a
+ * hardcoded list would need editing every time the owner buys a new one.
+ *
+ * The other four are still asked. A book has a publisher, a publisher's site, a
+ * year and a description, and all four are worth having.
+ */
+const NOT_ASKED_OF_A_RULESET: readonly DetailField[] = ['minPlayers', 'playtimeMin'];
+
+/**
+ * The facts this row is asked for.
  *
  * `hasParent` and not `kind === 'base'`, because the thing that makes a fact
  * free is having somewhere to inherit it from. An orphan expansion — one
  * catalogued before its game arrived — has no ancestor, so it is still asked for
  * a publisher; the day its game turns up and `adoptOrphans` re-parents it, it
  * stops being asked, with nothing to clean up.
+ *
+ * `gameSystem` narrows it further — see `NOT_ASKED_OF_A_RULESET`.
  */
-export function detailFieldsFor(kind: ItemKind | string, hasParent: boolean): DetailField[] {
+export function detailFieldsFor(
+  kind: ItemKind | string,
+  hasParent: boolean,
+  gameSystem?: string | null,
+): DetailField[] {
   if (hasParent) return [];
-  return kind === 'base' ? [...DETAIL_FIELDS] : [...INHERITED_FIELDS];
+  const asked = kind === 'base' ? [...DETAIL_FIELDS] : [...INHERITED_FIELDS];
+  if (isBlankDetail(gameSystem)) return asked;
+  return asked.filter((f) => !NOT_ASKED_OF_A_RULESET.includes(f));
 }
 
 /** True for null, undefined, and a string of nothing but spaces. */
@@ -145,23 +174,36 @@ export function isBlankDetail(value: string | number | null | undefined): boolea
 
 /** What this row is asked for and does not have. Empty means "not in the queue". */
 export function detailGaps(item: DetailSubject): DetailField[] {
-  return detailFieldsFor(item.kind, item.parentItemId != null).filter((field) =>
+  return detailFieldsFor(item.kind, item.parentItemId != null, item.gameSystem).filter((field) =>
     isBlankDetail(item[field]),
   );
 }
 
 /**
- * Every kind that can be asked for something, with what it is asked for.
+ * Every case that can be asked for something, with what it is asked for.
  *
  * Exported so the SQL that runs this test over 736 rows can be *generated* from
  * the policy rather than restating it. A `WHERE` clause typed out by hand would
  * be a second implementation of the decision, and the two would drift the first
  * time a kind was added.
+ *
+ * Two branches per kind now — with a `game_system` and without — because the
+ * answer differs between them and the generator must produce both. `hasSystem`
+ * is what the SQL turns into a predicate on the column.
  */
-export function detailGapBranches(): { kind: ItemKind; fields: DetailField[] }[] {
-  return ITEM_KINDS.map((kind) => ({ kind, fields: detailFieldsFor(kind, false) })).filter(
-    (b) => b.fields.length > 0,
-  );
+export function detailGapBranches(): {
+  kind: ItemKind;
+  hasSystem: boolean;
+  fields: DetailField[];
+}[] {
+  const branches: { kind: ItemKind; hasSystem: boolean; fields: DetailField[] }[] = [];
+  for (const kind of ITEM_KINDS) {
+    for (const hasSystem of [false, true]) {
+      const fields = detailFieldsFor(kind, false, hasSystem ? 'a ruleset' : null);
+      if (fields.length > 0) branches.push({ kind, hasSystem, fields });
+    }
+  }
+  return branches;
 }
 
 /** A value shown on a child that belongs to an ancestor, and where it came from. */

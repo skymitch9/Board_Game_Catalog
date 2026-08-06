@@ -1009,20 +1009,103 @@ const DETAIL_COLUMN: Record<DetailField, string> = {
 /** Mirrors `isBlankDetail`. `trim()` on an integer yields its digits, never ''. */
 const blankSql = (column: string) => `(${column} IS NULL OR trim(${column}) = '')`;
 
+/** `game_system` set, or not. The other half of what a row is asked for. */
+const HAS_SYSTEM_SQL = `NOT ${blankSql('game_system')}`;
+
 /**
  * The gap test of `detailGaps`, as SQL, generated rather than restated.
  *
  * The policy lives in `packages/core/src/details.ts` and this builds a `WHERE`
- * clause out of it, so adding a kind or changing what a kind owes moves both the
- * queue and the item page at once. Kind names are interpolated, which is safe
- * only because they come from the frozen `ITEM_KINDS` and never from a request.
+ * clause out of it, so adding a kind, or changing what a kind owes, or deciding
+ * a rulebook has no playing time, moves the queue and the item page together.
+ * Kind names are interpolated, which is safe only because they come from the
+ * frozen `ITEM_KINDS` and never from a request.
+ *
+ * `gapFilter` narrows which fields count as a gap and is what layer 3 uses: a
+ * field the last completed run already asked about and could not find is not a
+ * reason to queue the row again.
  */
-function detailGapsSql(): string {
-  const branches = detailGapBranches().map(({ kind, fields }) => {
-    const gaps = fields.map((field) => blankSql(DETAIL_COLUMN[field])).join(' OR ');
-    return `(kind = '${kind}' AND (${gaps}))`;
+function detailGapsSql(gapFilter?: (field: DetailField) => string): string {
+  const branches = detailGapBranches().map(({ kind, hasSystem, fields }) => {
+    const gaps = fields
+      .map((field) => {
+        const blank = blankSql(DETAIL_COLUMN[field]);
+        return gapFilter ? `(${blank} AND ${gapFilter(field)})` : blank;
+      })
+      .join(' OR ');
+    const system = hasSystem ? HAS_SYSTEM_SQL : blankSql('game_system');
+    return `(kind = '${kind}' AND ${system} AND (${gaps}))`;
   });
   return `parent_item_id IS NULL AND (${branches.join('\n            OR ')})`;
+}
+
+/**
+ * The most recent completed details run for the row being tested.
+ *
+ * A correlated subquery rather than a join, because the whole predicate below is
+ * "is there a reason to ask again", and that reads as one question about one
+ * row. `status = 'done'` only: an `error` run bought nothing and must never
+ * strand a row — that is the failure direction that would leave a game blank
+ * forever over one dropped connection.
+ */
+const LAST_DONE_RUN = `(
+        SELECT r.id FROM research_run r
+         WHERE r.item_id = item.id AND r.tier = 'details' AND r.status = 'done'
+         ORDER BY r.id DESC LIMIT 1
+      )`;
+
+/**
+ * Has anything changed since that run that could change the answer?
+ *
+ * The four inputs recorded by migration 0020, compared against the row as it is
+ * now. Costs a comparison and no tokens, which is the entire point: it turns
+ * "asked and found nothing" from *nothing exists* into *nothing existed then*.
+ *
+ * A NULL recorded input reads as changed. Rows written before 0020 have all four
+ * NULL, so the first pass after this ships re-opens them — the safe direction,
+ * since re-asking costs 1.4¢ and never asking again costs a game that stays
+ * blank forever.
+ */
+const INPUTS_CHANGED = `(
+        run.input_owned IS NULL
+     OR run.input_name IS NULL
+     OR run.input_name <> item.name
+     OR (run.input_owned = 0 AND EXISTS (
+           SELECT 1 FROM copy c WHERE c.item_id = item.id AND c.status = 'owned'
+        ))
+     OR IFNULL(run.input_bgg_id, -1) <> IFNULL(item.bgg_id, -1)
+     OR IFNULL(run.input_year, -1)   <> IFNULL(item.year_published, -1)
+      )`;
+
+/**
+ * The whole "is this worth asking about" test.
+ *
+ * Three layers, and they compose in this order because that is their order of
+ * value:
+ *
+ * 1. **Never ask what cannot exist.** `detailGapsSql` is now system-aware, so a
+ *    rulebook is not asked for a player count it does not have.
+ * 2. **Do not re-ask unless an input changed.** A completed run excludes the
+ *    row until one of the four recorded inputs differs.
+ * 3. **Per field, not per item.** The exclusion covers only the fields that run
+ *    asked about and did not find. A gap it never asked about — because the
+ *    policy has since changed, or because someone cleared a field — still
+ *    queues the row, and only for that field.
+ *
+ * Layer 3 rides inside layer 1's generator via `gapFilter`, which is why the
+ * fields are not restated here either.
+ */
+function needsDetailsSql(): string {
+  const notAlreadyAnswered = (field: DetailField) =>
+    `instr(IFNULL(run.unfilled, ''), ',${field},') = 0`;
+
+  return `${detailGapsSql()}
+        AND NOT EXISTS (
+          SELECT 1 FROM research_run run
+           WHERE run.id = ${LAST_DONE_RUN}
+             AND NOT ${INPUTS_CHANGED}
+             AND NOT (${detailGapsSql(notAlreadyAnswered)})
+        )`;
 }
 
 /**
@@ -1035,7 +1118,7 @@ function detailGapsSql(): string {
  * answering "who publishes the Dice Throne Vanguard dice tray" one tray at a
  * time.
  *
- * Two rules cut it to 78:
+ * Five rules cut it to a fraction of that. Two are about the record:
  *
  * 1. **Anything with a parent is skipped entirely.** Publisher and publisher
  *    site are read through from the nearest ancestor that has them
@@ -1049,6 +1132,10 @@ function detailGapsSql(): string {
  *    genuinely standalone accessories in the catalog. Neither has a player
  *    count worth buying.
  *
+ * The other three are `needsDetailsSql` above: never ask what cannot exist,
+ * do not re-ask unless an input changed, and exclude per field rather than per
+ * item. Read that comment before changing anything here.
+ *
  * Ordered by `sort_name` so a run works down the list in the order the
  * collection page shows it.
  */
@@ -1059,7 +1146,7 @@ export async function listItemsNeedingDetails(
   const { results } = await db
     .prepare(
       `SELECT ${ITEM_COLUMNS} FROM item
-        WHERE ${detailGapsSql()}
+        WHERE ${needsDetailsSql()}
         ORDER BY sort_name
         LIMIT ?`,
     )
@@ -1072,15 +1159,14 @@ export async function listItemsNeedingDetails(
  * How long that queue is, without building it.
  *
  * For the nav, which draws the "Missing details" link only when there is
- * something behind it. The same `WHERE` clause from the same generator, so a
- * count and a list cannot disagree about what is outstanding — the whole reason
- * `detailGapsSql` is generated from the policy in `packages/core/src/details.ts`
- * rather than restated. A `LIMIT`-less `COUNT(*)`, because the number on the
- * link is the whole queue and not the page of it a run would work through.
+ * something behind it. Literally the same predicate as the list — one call to
+ * `needsDetailsSql`, not a second copy of the rules — so the number on the link
+ * and the rows on the page cannot disagree. A `LIMIT`-less `COUNT(*)`, because
+ * the link counts the whole queue and not the page of it a run works through.
  */
 export async function countItemsNeedingDetails(db: D1Database): Promise<number> {
   const row = await db
-    .prepare(`SELECT COUNT(*) AS n FROM item WHERE ${detailGapsSql()}`)
+    .prepare(`SELECT COUNT(*) AS n FROM item WHERE ${needsDetailsSql()}`)
     .first<{ n: number }>();
   return row?.n ?? 0;
 }

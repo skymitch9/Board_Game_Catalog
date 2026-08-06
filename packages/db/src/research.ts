@@ -23,6 +23,24 @@ export interface DetailsResult {
   detail: string | null;
 }
 
+/**
+ * What the item looked like when a details run started.
+ *
+ * Recorded so the queue can tell "asked and found nothing" from "asked, before
+ * there was anything to find". A 2027 pre-order asked today has no page, no
+ * BoardGameGeek entry and no reviews; the same box asked the week it ships has
+ * all three. Comparing these four against the row as it is now costs a SQL
+ * predicate and re-opens the item for free — see `needsDetailsSql` in
+ * `items.ts` and migration 0020.
+ */
+export interface RunInputs {
+  /** Did any copy say we hold it? `preordered` → `owned` is the strongest signal. */
+  owned: boolean;
+  bggId: number | null;
+  name: string;
+  yearPublished: number | null;
+}
+
 export interface ResearchRun {
   id: number;
   itemId: number;
@@ -39,6 +57,10 @@ export interface ResearchRun {
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
+  /** Null on a run written before migration 0020, which reads as "unknown". */
+  inputs: RunInputs | null;
+  /** Fields this run asked about and could not find. */
+  unfilled: string[];
 }
 
 export interface ResearchFinding {
@@ -73,6 +95,11 @@ interface RunRow {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+  input_owned: number | null;
+  input_bgg_id: number | null;
+  input_name: string | null;
+  input_year: number | null;
+  unfilled: string | null;
 }
 
 interface FindingRow {
@@ -106,7 +133,30 @@ function mapRun(r: RunRow): ResearchRun {
     startedAt: r.started_at,
     finishedAt: r.finished_at,
     createdAt: r.created_at,
+    inputs:
+      r.input_owned == null && r.input_name == null
+        ? null
+        : {
+            owned: r.input_owned === 1,
+            bggId: r.input_bgg_id,
+            name: r.input_name ?? '',
+            yearPublished: r.input_year,
+          },
+    unfilled: splitUnfilled(r.unfilled),
   };
+}
+
+/**
+ * The comma-delimited `unfilled` column, back as a list.
+ *
+ * Stored with leading and trailing commas so `instr(unfilled, ',minPlayers,')`
+ * in the queue predicate is an exact test — without them `,minPlayers` would
+ * also match inside `,maxPlayers`. The empty strings that produces are dropped
+ * here rather than in SQL.
+ */
+function splitUnfilled(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw.split(',').filter((f) => f !== '');
 }
 
 /** Unreadable JSON is treated as no result rather than failing the read. */
@@ -160,26 +210,89 @@ function mapFinding(r: FindingRow): ResearchFinding {
 }
 
 const RUN_COLUMNS = `id, item_id, tier, model, effort, status, error_message,
-  input_tokens, output_tokens, result_json, triggered_by, started_at, finished_at, created_at`;
+  input_tokens, output_tokens, result_json, triggered_by, started_at, finished_at, created_at,
+  input_owned, input_bgg_id, input_name, input_year, unfilled`;
 
 const FINDING_COLUMNS = `id, run_id, item_id, field, value_json, source_tier,
   source_url, confidence, review_state, reviewed_by, reviewed_at, created_at`;
 
+/**
+ * Open a run, stamping the inputs it is about to work from.
+ *
+ * `inputs` is written here rather than at `finishRun` on purpose: the point of
+ * the record is what the lookup *had to go on*, and an item edited while a run
+ * was in flight would otherwise be stamped with the new value and never
+ * re-asked. The tiered pass passes none and stores NULLs, which is right — it
+ * stages findings and this exclusion does not apply to it.
+ */
 export async function createRun(
   db: D1Database,
-  input: { itemId: number; tier: RunTier; model: string; effort: string; triggeredBy: number | null },
+  input: {
+    itemId: number;
+    tier: RunTier;
+    model: string;
+    effort: string;
+    triggeredBy: number | null;
+    inputs?: RunInputs;
+  },
 ): Promise<ResearchRun> {
   const row = await db
     .prepare(
-      `INSERT INTO research_run (item_id, tier, model, effort, status, triggered_by, started_at)
-       VALUES (?1, ?2, ?3, ?4, 'running', ?5, datetime('now'))
+      `INSERT INTO research_run
+         (item_id, tier, model, effort, status, triggered_by, started_at,
+          input_owned, input_bgg_id, input_name, input_year)
+       VALUES (?1, ?2, ?3, ?4, 'running', ?5, datetime('now'), ?6, ?7, ?8, ?9)
        RETURNING ${RUN_COLUMNS}`,
     )
-    .bind(input.itemId, input.tier, input.model, input.effort, input.triggeredBy)
+    .bind(
+      input.itemId,
+      input.tier,
+      input.model,
+      input.effort,
+      input.triggeredBy,
+      input.inputs ? (input.inputs.owned ? 1 : 0) : null,
+      input.inputs?.bggId ?? null,
+      input.inputs?.name ?? null,
+      input.inputs?.yearPublished ?? null,
+    )
     .first<RunRow>();
 
   if (!row) throw new Error('Failed to create research run');
   return mapRun(row);
+}
+
+/**
+ * The four inputs, read off the item as it stands right now.
+ *
+ * One query, and `owned` is the interesting one: copy status is what says the
+ * thing physically exists, and an item can hold several copies, so the question
+ * is "does *any* of them say we hold it" rather than "what is the status".
+ *
+ * Null when the item is gone, which the caller treats as "do not stamp
+ * anything" rather than as an error — the run is about to fail on the missing
+ * item anyway and would only report it twice.
+ */
+export async function detailsRunInputs(
+  db: D1Database,
+  itemId: number,
+): Promise<RunInputs | null> {
+  const row = await db
+    .prepare(
+      `SELECT i.name AS name, i.bgg_id AS bgg_id, i.year_published AS year_published,
+              EXISTS (SELECT 1 FROM copy c
+                       WHERE c.item_id = i.id AND c.status = 'owned') AS owned
+         FROM item i WHERE i.id = ?1`,
+    )
+    .bind(itemId)
+    .first<{ name: string; bgg_id: number | null; year_published: number | null; owned: number }>();
+
+  if (!row) return null;
+  return {
+    owned: row.owned === 1,
+    bggId: row.bgg_id,
+    name: row.name,
+    yearPublished: row.year_published,
+  };
 }
 
 export async function finishRun(
@@ -192,6 +305,12 @@ export async function finishRun(
         outputTokens: number;
         /** A details run's outcome. Omitted by the tiered pass, which stages findings. */
         result?: DetailsResult;
+        /**
+         * Fields asked about and not found. Stored comma-delimited *with*
+         * leading and trailing commas, so the queue's `instr` test is exact —
+         * `,minPlayers,` cannot match inside `,maxPlayers,`.
+         */
+        unfilled?: string[];
       }
     | { status: 'error'; errorMessage: string },
 ): Promise<ResearchRun | null> {
@@ -201,7 +320,7 @@ export async function finishRun(
           .prepare(
             `UPDATE research_run
                 SET status = 'done', input_tokens = ?2, output_tokens = ?3,
-                    result_json = ?4, finished_at = datetime('now')
+                    result_json = ?4, unfilled = ?5, finished_at = datetime('now')
               WHERE id = ?1 RETURNING ${RUN_COLUMNS}`,
           )
           .bind(
@@ -209,6 +328,9 @@ export async function finishRun(
             outcome.inputTokens,
             outcome.outputTokens,
             outcome.result ? JSON.stringify(outcome.result) : null,
+            outcome.unfilled && outcome.unfilled.length > 0
+              ? `,${outcome.unfilled.join(',')},`
+              : null,
           )
           .first<RunRow>()
       : await db

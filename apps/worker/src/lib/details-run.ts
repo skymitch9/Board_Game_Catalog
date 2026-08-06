@@ -37,10 +37,11 @@
  * time from the browser for that reason.
  */
 
-import { DETAIL_FIELDS, FILLED_FIELD_LABEL, type DetailsRun } from '@bgc/core';
+import { DETAIL_FIELDS, FILLED_FIELD_LABEL, detailGaps, type DetailsRun } from '@bgc/core';
 import {
   activeDetailsRun,
   createRun,
+  detailsRunInputs,
   finishRun,
   getItem,
   updateItem,
@@ -133,6 +134,11 @@ export async function claimDetailsRun(
     });
   }
 
+  // Stamped before the call, not after: the record is of what the lookup had
+  // to work from. An item edited while a run was in flight would otherwise be
+  // stamped with the new value and never re-asked about it.
+  const inputs = await detailsRunInputs(db, itemId);
+
   const run = await createRun(db, {
     itemId,
     tier: 'details',
@@ -142,6 +148,7 @@ export async function claimDetailsRun(
     // research pass, not in filling a year in.
     effort: 'low',
     triggeredBy,
+    ...(inputs ? { inputs } : {}),
   });
   return { run, alreadyRunning: false };
 }
@@ -181,11 +188,18 @@ export async function runDetailsInBackground(
       publisher: item.publisher,
     });
 
+    // What this row was asked for, decided by the one policy that decides it.
+    // Recorded so the queue can exclude *these fields* next time rather than
+    // the whole item — a run that found a publisher and no playing time must
+    // not put the row back to be asked for the publisher it already has.
+    const asked = detailGaps(item);
+
     if (fields.notFound) {
       await finishRun(env.DB, runId, {
         status: 'done',
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
+        unfilled: asked,
         result: {
           filled: {},
           detail: fields.note ?? 'That game could not be identified confidently.',
@@ -203,6 +217,7 @@ export async function runDetailsInBackground(
       status: 'done',
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
+      unfilled: asked.filter((field) => !(field in patch)),
       result: {
         filled: patch,
         detail: Object.keys(patch).length > 0 ? null : 'Nothing new found.',
