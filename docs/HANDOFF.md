@@ -4,6 +4,10 @@ Everything needed to continue or finish this without Claude.
 
 ## A dice tray is not a dice game — built 2026-08-06
 
+**Shipped.** Commit `a0fa75c`, production version
+**`915ce9c4-8901-4838-85ae-57cca17491fd`**. No migration — code only, and no
+catalog data was touched.
+
 *"maybe we remove the desc of accessories all together, the name and potential
 photo should be enough information for what something is. This is mainly a
 catalog of things i own"* — the owner.
@@ -310,8 +314,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` — the three-layer details policy (2026-08-06), at 100% |
-| Previous version | `f0b32c75-45d0-48f1-9733-7a53723affe5` — the collection header down to one button (2026-08-06) |
+| Deployed version | `915ce9c4-8901-4838-85ae-57cca17491fd` — a dice tray is not a dice game, plus the top pager (2026-08-06), at 100% |
+| Previous version | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` — the three-layer details policy (2026-08-06) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
