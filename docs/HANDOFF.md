@@ -5,8 +5,9 @@ Everything needed to continue or finish this without Claude.
 ## Right now — 2026-08-06
 
 **Working tree is clean, committed, pushed, migrated and deployed.** Head
-`13c5e88`, production version **`e4589bf1-66c5-4be1-9ad0-1c83084c3aad`**,
-migrations through `0019_item_series` applied local *and* production.
+`34c1ecf`, production version **`b7f6fc59-e7f2-49e7-be34-ec9132d6be11`**,
+migrations through `0019_item_series` applied local *and* production. The newest
+commit is UI only and needed no migration.
 
 Production: **738 items** (114 top-level), 146 of them carrying
 `series = 'Dice Throne'`. Another agent is writing rows, which is why item
@@ -85,6 +86,9 @@ restarted fresh on 08-05, and is being written to by a separate data-only
 agent — item totals in this document move between 736 and 739 for that reason.
 
 **Newest first:**
+[what the screen puts first](#what-the-screen-puts-first--built-2026-08-06) —
+ratings above a fifty-five-row family list, one add door instead of three, and
+lazy thumbnails. Then
 [accepting a guess](#accepting-a-guess--built-2026-08-06) — the review screen
 could only ever say no. Then
 [folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
@@ -115,6 +119,8 @@ Nothing is in flight. The most recent commits:
 
 | Commit | What |
 |---|---|
+| `34c1ecf` | Ratings above the family list; one add door; lazy thumbnails |
+| `027a960` | Record the accept-a-guess deploy |
 | `13c5e88` | Let a person say "yes, that is the game" |
 | `733367f` | Fold a line of eleven boxes into one entry, without moving a box (migration 0019) |
 | `c496fb1` | Stop a lookup dying when the phone locks (migration 0018) |
@@ -215,8 +221,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `e4589bf1-66c5-4be1-9ad0-1c83084c3aad` — accepting a guess at review (2026-08-06), at 100% |
-| Previous version | `fb39d82e-7ed3-452e-ad08-902e98809bd7` — series grouping and linked parent labels (2026-08-06) |
+| Deployed version | `b7f6fc59-e7f2-49e7-be34-ec9132d6be11` — ratings above the family list, one add door, lazy thumbnails (2026-08-06), at 100% |
+| Previous version | `e4589bf1-66c5-4be1-9ad0-1c83084c3aad` — accepting a guess at review (2026-08-06) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
@@ -502,6 +508,58 @@ routes the weekly refresh silently into the cover check.
 > note said 10); production is untouched, and
 > `rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local` resets
 > local outright.
+
+---
+
+## What the screen puts first — built 2026-08-06
+
+Three ordering and naming fixes, no data touched (`34c1ecf`).
+
+**Ratings render above "Related games" on an item page.** Family is transitive
+and the whole Dice Throne line is one family, so a hero page lists ~55
+relatives. Measured in Chrome on *Dice Throne Hero: Black Panther*: the Ratings
+heading sat at **3184px**, below a relations list starting at 756px. It now sits
+at **749px**, with the relations list at 978px. The owner chose to keep the
+relatives — only the order moved, and `RelatedGames`' contents and its
+"no relations and cannot edit" guard are unchanged. Verified on a plain game
+(Scythe, no relations) too: the empty state still reads, nothing is doubled.
+
+**The collection header collapses from five buttons to four**, one clearly
+primary. `Scan a barcode` pointed at `/scan-jobs?add=barcode` — the tab
+`+ Add games` already opens on — and `Check a game` (`/scan`) opens the same tab
+strip over the same camera panel. Both are gone. The old split (bulk intake vs
+the in-shop "am I already holding this?") stopped being true when barcodes moved
+onto the queue: `BarcodeQueue` marks a code **"Already yours"** from our own
+table, on its own audio pitch. `/scan` is untouched and still reachable —
+**"Type a name"** opens it on the Manually tab, the one route the queue has no
+equivalent of, and the other three tabs are one tap from there. `?add=barcode`
+still works and is still used by the link *inside* `/scan`.
+
+**"Fill in details" → "Missing details."** A place, not an act. The owner pressed
+it expecting a lookup to run, landed on a list, and concluded the feature was
+broken. The buttons that do run a lookup live on that screen and keep their
+verbs ("Fill in N games", "Fill this one", "Look again").
+
+### ⚠️ Lazy thumbnails defer the hero art; they do not shrink it
+
+Every thumbnail rendered *in a list* now carries `loading="lazy"`, following the
+precedent `.thumb` already set in `ItemTree.tsx`: the related-games list
+(`ItemPage.tsx`), the expansion picker (`ItemForm.tsx`), and the candidate and
+suggestion lists on both scan screens. The item's own `.thumb-lg` is
+deliberately **not** lazy — it is the picture you opened the page to see.
+
+This landed because 45 Dice Throne hero rows now carry art served from
+`dicethrone.com` at **0.6–1.4 MB a PNG**, and `.thumb-sm` has no size rule of
+its own, so it falls through to `.thumb` and draws at **44px**. Confirmed in the
+browser: 7/7 list thumbnails on a hero page carry the attribute and none is
+fetched at first paint.
+
+**But laziness only helps the visit that does not scroll.** A family list read to
+the bottom still pulls every PNG at full size to render it at 44px, and a hero's
+family list is the thing you scroll. **The real fix is resizing at the data
+layer.** Do not swap the URLs for the Jetpack/Photon proxy (`i0.wp.com`) to get
+there — the publisher's own origin was chosen on purpose, and this project has
+already been bitten by expiring CDN URLs.
 
 ---
 
