@@ -4,39 +4,62 @@ Everything needed to continue or finish this without Claude.
 
 ## Right now — 2026-08-06, written as usage ran low
 
-**Working tree is clean.** The shelf-enrichment fix is committed; migration
-`0017_scan_job_barcode.sql` must be applied to production **before** the deploy
-that carries it (`npm run db:migrate`).
+**Working tree is clean, committed, migrated and deployed.** Head `d5f0c4b`,
+production version **`e531c5ca-0b09-48e5-8176-070120e11ba8`**, migrations
+through `0017_scan_job_barcode` applied local *and* production.
 
 Production: **739 items** (114 top-level), 740 copies — 510 owned, 204
 preordered, 26 wanted. 133 with a BGG id, 350 with a cover, 972 printings, 77
 relations. All four integrity invariants are 0.
 
-**One agent, five tasks, in this order:**
-1. Shelf enrichment fix — chunked, resumable, error recorded, retry/cancel
-   buttons, auto-remove sorted jobs *(done, committed)*
-2. Background the details call using the existing `research_run` table
-3. Barcode continuous-intake refinements
-4. Timezone parsing helper
-5. `series` column + linked parent labels
+**One agent, five tasks. Three shipped, two not started:**
+1. ✅ Shelf enrichment fix — chunked, resumable, error recorded, retry/stop
+   buttons, sorted jobs leave the queue (`d5f0c4b`)
+2. ⬜ **Background the details call** using the existing `research_run` table.
+   `POST /api/research/:id/details` still `await`s `enrichItem` inline — tens of
+   seconds held open in the request, and a dropped connection pays for the
+   lookup and loses the result. `research_run` has `item_id`, `tier`, `status`,
+   `error_message`, `started_at`, `finished_at`, `input_tokens`,
+   `output_tokens`, and **zero rows**, because this route never writes to it.
+   Return a run id immediately and poll it the way `ScanJobsPage` polls jobs.
+   Keep the token accounting — `/details` shows a cost estimate.
+3. ✅ Barcode continuous intake (`bd4ec00`)
+4. ✅ Timezone parsing — `apps/web/src/lib/dates.ts`, used by `CopyEditor`,
+   `Completeness` and `ScanJobsPage` (`bd4ec00`)
+5. ⬜ **`series` column + linked parent labels.** Next migration number is
+   **0018**. See `docs/dice-throne-shape.md`; also expose `game_system` through
+   the same grouping/filter mechanism, and do **not** re-parent anything.
 
 A separate agent is researching Dice Throne playmats.
 
 **Do yourself:** `game_component` is empty and the weekly cron next fires Sun 9
 Aug. From a signed-in browser console, ~8 runs covers the catalog:
 `await (await fetch('/api/components/backfill',{method:'POST'})).json()`.
-And retry scan jobs **5, 6, 7** once the enrichment fix ships — they sit at
-`read` with titles intact and `enriched` empty.
 
-**Two discoveries worth keeping:**
+Scan jobs 5, 6 and 7 **no longer need retrying — they finished on their own**
+the moment the fix went live: 73/73, 74/74 and 36/36, and they now sit at
+`review` with 24, 41 and 23 titles still to sort.
+
+**Three discoveries worth keeping:**
 - `wrangler deploy` printed "Deployed … triggers" for weeks while Cloudflare's
   Cron Events log showed **no events at all**. Fixed with
   `npx wrangler triggers deploy` plus a full deploy. **A cron is not working
   until something it writes has rows** — `cover_check` now has 40.
-- Workers cap subrequests per invocation (**50 free**, 1000 paid). Leading
-  suspect for shelf enrichment dying: every job over ~25 titles failed, every one
-  under ~8 succeeded, and the worker is *terminated* rather than throwing, so
-  `scan_job.error` stayed empty.
+- **The subrequest cap was the shelf killer, confirmed.** Workers allow 50 per
+  invocation on the free plan and every D1 call counts alongside every fetch;
+  one title costs about four, so a 73-title shelf wanted ~290. The invocation is
+  *terminated* rather than thrown, which takes `waitUntil` with it — hence an
+  empty `error` column and a job that looked busy for twenty minutes. The plan
+  was never confirmed from the dashboard, but 73 titles dying is only consistent
+  with the 50 ceiling; at 1000 it would have finished. Enrichment is now eight
+  titles per invocation, and **do not raise that number** — the pass that
+  exceeds the ceiling is not slow, it is silently killed.
+- **GameUPC does not answer an unknown barcode with nothing.** It answers with
+  fifteen guesses carrying real BGG ids, years and cover art. A textbook's ISBN
+  came back as *Labyrinth*; a dog bed's UPC as *Ten in a Bed*. The only thing
+  separating those from a real hit is the confidence band, and it separates them
+  cleanly: `verified`/`high` is trustworthy, `medium` needs a human, `low` is
+  noise. That band is load-bearing in `apps/worker/src/lib/barcode-scan.ts`.
 
 **TODO — linking related games needs a search box, not an id.** The "Related
 games" screen asks for the other item's numeric id. Nobody knows an id; the owner
