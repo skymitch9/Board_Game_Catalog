@@ -21,6 +21,7 @@ import {
   deleteItem,
   deleteRating,
   deleteRelation,
+  getGameCompleteness,
   getItemDetail,
   getRelatedItems,
   listCoverCandidates,
@@ -104,6 +105,27 @@ export const catalogRoutes = new Hono<AppBindings>()
     const covers = await listCoverCandidates(c.env.DB, id);
     if (!covers) return c.json({ error: 'not_found' }, 404);
     return c.json(covers);
+  })
+
+  /**
+   * What else exists for this game, and what we do not have.
+   *
+   * `read`, not `editCatalog`: it reads stored rows and makes no BoardGameGeek
+   * call. Filling those rows is `POST /api/components/backfill` and the weekly
+   * cron; nothing here ever fetches, which is the whole point of caching the
+   * component lists rather than looking them up live.
+   *
+   * Always answers for the game at the root of the tree, so asking from an
+   * expansion's page reports on its base game — components belong to the game,
+   * not to whichever row happened to be open.
+   */
+  .get('/items/:id/completeness', async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const completeness = await getGameCompleteness(c.env.DB, id);
+    if (!completeness) return c.json({ error: 'not_found' }, 404);
+    return c.json(completeness);
   })
 
   /**

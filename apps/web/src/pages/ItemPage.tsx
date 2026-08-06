@@ -11,6 +11,7 @@ import {
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Link, navigate } from '../router';
+import { Completeness } from '../components/Completeness';
 import { CopyForm, CopyRow } from '../components/CopyEditor';
 import { ItemForm } from '../components/ItemForm';
 import { KIND_LABEL, STATUS_TONE } from '../components/ItemTree';
@@ -233,6 +234,11 @@ export function ItemPage({
           </ul>
         )}
       </section>
+
+      {/* Only on the game itself. The report is always about the tree's root,
+          so rendering it on an expansion's page would repeat the base game's
+          answer under a heading that reads as being about the expansion. */}
+      {item.parentItemId == null && <Completeness item={item} canEdit={canEdit} />}
 
       <RelatedGames
         itemId={item.id}

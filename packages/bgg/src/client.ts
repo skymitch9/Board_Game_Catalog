@@ -134,6 +134,16 @@ export interface BggThing {
   description: string | null;
   thumbnailUrl: string | null;
   publisher: string | null;
+  /**
+   * Every publisher BoardGameGeek links, with its id.
+   *
+   * `publisher` above is the first name and is what the catalog stores for
+   * display. This is the whole set, and the ids are what the official /
+   * third-party split compares — a linked entity id cannot drift the way
+   * "Rebel Sp. z o.o." can. Most things carry several: the original publisher
+   * plus every localisation house.
+   */
+  publisherLinks: { id: number; name: string }[];
   designers: string | null;
   minPlayers: number | null;
   maxPlayers: number | null;
@@ -212,12 +222,42 @@ export async function search(
     .filter((r) => Number.isFinite(r.bggId) && r.name !== '');
 }
 
+/**
+ * Ids BoardGameGeek will accept in one `/thing` call.
+ *
+ * **Twenty is a hard ceiling, not a guideline.** Measured 2026-08-05: a request
+ * for 36 ids answered `400 Bad Request` outright — no partial result, no
+ * warning, just a failed call that a caller batching "about twenty" would read
+ * as BGG being down. Exported so every batching caller uses the same number.
+ */
+export const MAX_THING_IDS = 20;
+
+/**
+ * Fetch things by id, chunking at the ceiling above.
+ *
+ * The chunking is here rather than left to callers because the failure it
+ * prevents is silent at every call site: `hydrateFromBgg` passes however many
+ * candidates a barcode search produced, and GameUPC has returned 101 for one
+ * search. That call answered 400, the `catch` treated it as a BGG outage, and
+ * every candidate went un-hydrated with no error anywhere.
+ *
+ * Callers that care about the *number of requests* — anything running inside a
+ * Worker's subrequest budget — should still batch explicitly with
+ * `MAX_THING_IDS` so their arithmetic stays visible.
+ */
 export async function things(
   token: string,
   ids: number[],
   withVersions = true,
 ): Promise<BggThing[]> {
   if (ids.length === 0) return [];
+  if (ids.length > MAX_THING_IDS) {
+    const out: BggThing[] = [];
+    for (let i = 0; i < ids.length; i += MAX_THING_IDS) {
+      out.push(...(await things(token, ids.slice(i, i + MAX_THING_IDS), withVersions)));
+    }
+    return out;
+  }
 
   const params = new URLSearchParams({
     id: ids.join(','),
@@ -272,6 +312,7 @@ export async function things(
           : null,
       thumbnailUrl: typeof item['thumbnail'] === 'string' ? (item['thumbnail'] as string) : null,
       publisher: publishers[0]?.value ?? null,
+      publisherLinks: publishers.map((p) => ({ id: p.id, name: decodeEntities(p.value) })),
       designers: designers.map((d) => d.value).join(', ') || null,
       minPlayers: numAttr(item['minplayers'], 'value'),
       maxPlayers: numAttr(item['maxplayers'], 'value'),

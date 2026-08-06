@@ -6,6 +6,7 @@ export * from './ratings.js';
 export * from './import.js';
 export * from './barcodes.js';
 export * from './cache.js';
+export * from './components.js';
 export * from './covers.js';
 export * from './editions.js';
 export * from './relations.js';

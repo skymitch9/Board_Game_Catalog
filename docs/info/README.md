@@ -1,7 +1,7 @@
 # Information — Index
 
 > **Audience:** Claude sessions. **Status:** TRACKED.
-> Last verified: **2026-08-05**.
+> Last verified: **2026-08-06**.
 
 How and why things work. Stable design facts only — current state and work in
 flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
@@ -9,6 +9,7 @@ flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
 
 | File | Covers |
 |---|---|
+| [`completeness.md`](completeness.md) | "What am I missing" — how the official/third-party split is decided, why a BoardGameGeek id is the only proof of ownership, and the 20-id ceiling that answers 400 |
 | [`barcode-ladder.md`](barcode-ladder.md) | Why barcode resolution is tiered, what each rung buys, measured hit rates |
 | [`ios-camera.md`](ios-camera.md) | Every WebKit constraint the scanner works around, and why photos never reach the camera roll |
 | [`future-plans.md`](future-plans.md) | Deferred ideas, and the measurements that killed the ones already tried |

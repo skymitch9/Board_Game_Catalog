@@ -1,7 +1,9 @@
 import type {
   AppUser,
   BarcodeCandidate,
+  ComponentBackfillRun,
   CoverCandidates,
+  GameCompleteness,
   CoverCheckRun,
   CoverHealth,
   EditionBackfillRun,
@@ -178,6 +180,30 @@ export const api = {
     const qs = params.toString();
     return post(`/api/editions/backfill${qs ? `?${qs}` : ''}`, {}) as Promise<{
       run: EditionBackfillRun;
+    }>;
+  },
+
+  // --- What am I missing ----------------------------------------------------
+  // Read a cached answer; never look it up live. A BoardGameGeek call is ~1.1s
+  // and the lists barely change — the weekly cron is what keeps them current.
+
+  /** Official expansions and accessories that exist, versus what we hold. */
+  completeness: (itemId: number) =>
+    req<GameCompleteness>(`/api/items/${itemId}/completeness`),
+
+  /**
+   * Ask BoardGameGeek what exists. Idempotent, budgeted, meant to be re-run.
+   *
+   * Pass an itemId to check one game now instead of waiting for Monday.
+   */
+  backfillComponents: (opts: { itemId?: number; calls?: number; force?: boolean } = {}) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(opts)) {
+      if (v !== undefined) params.set(k, String(v));
+    }
+    const qs = params.toString();
+    return post(`/api/components/backfill${qs ? `?${qs}` : ''}`, {}) as Promise<{
+      run: ComponentBackfillRun;
     }>;
   },
 

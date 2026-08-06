@@ -33,8 +33,21 @@ migrations_dir = "../../migrations"
 # URLs at a time. Every half hour is ~960 probes a day against ~450 distinct
 # covers: roughly two full passes, which is often enough to notice a CDN change
 # within a day and rare enough to be a rounding error in anyone's traffic.
+#
+# And weekly, what BoardGameGeek says exists for the games we own.
+#
+# This is the half of "what am I missing" that cannot be got by remembering: a
+# publisher announces an expansion for a game on the shelf and it appears in the
+# missing list with nobody doing anything. 83 rooted games with a `bgg_id` cost
+# 5 requests and ~6 seconds to re-sweep, so weekly is a rounding error.
+#
+# Monday 05:41 UTC. Minute 41 keeps it off :00 and :30, where the cover check
+# lives — two cron invocations in the same minute would compete for the same
+# subrequest budget. The handler in src/index.ts dispatches on the expression,
+# so **this string must match COMPONENT_REFRESH_CRON in
+# src/lib/component-backfill.ts character for character.**
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/30 * * * *", "41 5 * * 1"]
 
 [vars]
 APP_VERSION = "0.1.0"

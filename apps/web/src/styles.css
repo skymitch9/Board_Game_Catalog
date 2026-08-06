@@ -750,3 +750,43 @@ code {
 .cover-card__meta { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .cover-card__label { font-size: 0.8rem; font-weight: 550; line-height: 1.25; }
 .cover-card__caption { font-size: 0.75rem; color: var(--muted); }
+
+/* --- what am I missing --------------------------------------------------- */
+/* The count leads and the names follow: "4 of 7" answers the question, the
+   names are the shopping list. Third-party lives behind the same collapse
+   control the collection page uses, so there is one such control, not two. */
+
+.completeness__section + .completeness__section { margin-top: 0.9rem; }
+.completeness__count { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.completeness__count strong { font-size: 1.05rem; }
+.completeness__done { color: var(--good); font-size: 0.85rem; }
+
+.completeness__list { list-style: none; margin: 0; padding: 0; }
+.completeness__row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.5rem;
+  padding: 0.4rem 0; border-bottom: 1px solid var(--line);
+  font-size: 0.88rem;
+}
+.completeness__row:last-child { border-bottom: none; }
+/* Still shown, deliberately: a row vanishing is indistinguishable from having
+   bought the thing. Dimmed says "BoardGameGeek stopped listing this", not "gone". */
+.completeness__row--stale { opacity: 0.6; }
+.completeness__name { flex: 1 1 14rem; min-width: 0; }
+.completeness__note {
+  flex: 1 1 100%; font-size: 0.78rem; color: var(--muted);
+}
+.completeness__note--block { margin: 0.5rem 0; }
+.completeness__want { flex: none; padding: 0.25rem 0.55rem; font-size: 0.78rem; }
+
+/* The toggle is a card-width row elsewhere; inside a card it needs its own
+   margins to reach the edges rather than floating in the padding. */
+.completeness__toggle {
+  margin: 0.9rem -1rem 0; width: calc(100% + 2rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.completeness__footnote {
+  margin: 0.9rem 0 0; padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.76rem; color: var(--muted);
+}

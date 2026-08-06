@@ -8,7 +8,9 @@ Stable reference lives alongside this file and is not duplicated here:
 **Last updated:** 2026-08-07. Everything is committed and deployed; the working
 tree is clean. Database was cleared and collection restarted fresh on 08-05.
 
-**Newest first:** [the collection page at 640 items](#the-collection-page-at-640-items--built-2026-08-07)
+**Newest first:** ["what am I missing"](#what-am-i-missing--built-2026-08-06) —
+the shopping list, cached and refreshed weekly. Then
+[the collection page at 640 items](#the-collection-page-at-640-items--built-2026-08-07)
 — paging, multi-term search, collapsed groups — and
 [the four columns that had no UI](#the-four-columns-that-had-no-ui--built-2026-08-07).
 Then the [cover picker](#the-cover-picker--built-2026-08-06) —
@@ -122,11 +124,11 @@ size).
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
 | Deployed version | `32d5cacc-ab38-42f1-8764-d2016292dd45` — the four hidden columns (2026-08-07) |
 | Previous version | `00c1a732-29fb-4281-9126-4dc41b90ec9d` — collection paging (2026-08-07) |
-| Cron triggers | `*/30 * * * *` — the cover check. Confirmed registered in the deploy output |
+| Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Both confirmed registered in the deploy output, and both confirmed *firing* via `wrangler dev --test-scheduled` |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
-| Migrations applied | `0001_init` … `0015_ttrpg_system_and_format` (local **and** production) |
+| Migrations applied | `0001_init` … `0016_game_components` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -213,6 +215,106 @@ this will use BGG's expansion links for definitive results.
 
 **Header stats (2026-08-05).** Shows `N games · N expansions · N accessories`
 (only non-zero counts), replacing the old `games · items · owned`.
+
+---
+
+## What am I missing — built 2026-08-06
+
+*Seven expansions exist, you have four, here are the three you do not.* The
+design facts live in [`info/completeness.md`](info/completeness.md) and are not
+repeated here; this is state and numbers.
+
+**Migration 0016** adds `game_component` (one row per known component per game)
+and `component_check` (per-game "has anyone ever asked"). Applied local **and**
+production.
+
+| Route | Capability |
+|---|---|
+| `GET /api/items/:id/completeness` | read — cached, never fetches |
+| `GET /api/components/status` | editCatalog — coverage, no BGG call |
+| `POST /api/components/backfill` | editCatalog — `?itemId=` `?calls=` `?force=` |
+| `POST /api/components/reclassify` | editCatalog — re-decide the split, **free** |
+
+### The matcher, on a case with a known answer
+
+Here to Slay (item 107, BGG 299252) — production's real tree, 22 rows, replayed
+against local dev. BoardGameGeek lists **13 expansions and 23 accessories, all
+official** (TeeTurtle / Unstable Games; third-party count is 0, which is right).
+
+Reported: **1 of 13 expansions, 1 of 23 accessories.** True answer for
+expansions is 3. The two it misses are `KS Exclusive Monster Expansion Pack`
+(BGG's `Monsters Expansion`) and `KS Exclusive Dragon Sorcerers Expansion Pack`
+(BGG's `Dragon Sorcerer Expansion`) — both scored 0.29 and 0.44 after the
+game-name strip and were counted missing. **That is the specified failure
+direction** and the fix is one field: type the BGG id on the edit screen.
+
+What it got right, and what the whole feature is for:
+
+> Missing: **Warriors & Druids Expansion**, **Berserkers & Necromancers**.
+
+The owner holds the play mats, standees and meeples for both and neither
+expansion. The fragment rule in `isConfidentMatch` is what stops
+"Warriors & Druids Play Mat Set" being read as the expansion.
+
+Ark Nova (BGG 342942), the third-party case: **4 official expansions**
+(3 already on the wishlist, `Promotion Team & Capybara` genuinely missing),
+**1 official accessory** (Portal Games' wooden tokens), **26 third-party** —
+including Kekpop Spiele's three 3D "expansions", which BoardGameGeek types as
+`boardgameexpansion`. Every verdict checked by hand and correct.
+
+### Numbers
+
+| | |
+|---|---|
+| Production items with a `bgg_id` | 128, of which **83 are rooted games** — the only ones this can answer for |
+| Components those 83 list | **1,148** (680 expansions, 468 accessories), 1,120 distinct ids |
+| Local catalog after a full pass | 1,137 components: **665 official**, **472 third-party**, 0 unclassified |
+| Game sweep | 5 BGG calls, 5.5s |
+| Classification sweep | ~56 calls, so it rotates — 8 runs cleared local |
+| Reclassify (no BGG call) | 1,137 rows in **0.57s** |
+
+**557 of 640 catalog rows can never have an answer** and say "No data", never
+"complete". That is the honest limitation and it is surfaced, not hidden.
+
+### Weekly refresh — verified firing, not just registered
+
+`crons = ["*/30 * * * *", "41 5 * * 1"]`. Monday 05:41 UTC; minute 41 stays off
+the cover check's `:00`/`:30`. One `scheduled` handler dispatching on
+`event.cron`.
+
+Exercised with `wrangler dev --test-scheduled`, both directions:
+
+```
+GET /__scheduled?cron=41+5+*+*+1   -> component refresh {"gamesChecked":2,...,"bggCalls":1}
+GET /__scheduled?cron=*/30+*+*+*+* -> cover check {"checked":20,"ok":20,...}
+```
+
+⚠️ **`COMPONENT_REFRESH_CRON` in `apps/worker/src/lib/component-backfill.ts`
+must stay character-identical to the `wrangler.toml` entry.** A stray space
+routes the weekly refresh silently into the cover check.
+
+### Things that will bite
+
+- **BoardGameGeek's `/thing` takes at most 20 ids.** 36 answers `400`, with no
+  partial result. `things()` now chunks — which also fixed a live silent bug in
+  `hydrateFromBgg`, where a 101-candidate search 400'd and the `catch` recorded
+  it as a BGG outage.
+- **Strip the game's name before comparing titles.** Full-string matching
+  produced nine hints for Here to Slay, eight of them wrong ("Central Play Mat"
+  → "Warriors & Druids Play Mat Set" at 0.71). After the strip: one hint, and it
+  is genuine.
+- **Take the best candidate, not the first.** `owned.find()` let list order pick
+  the winner among rows that all cleared the floor.
+- **Nothing is ever deleted.** A component BGG stops listing is stamped
+  `stale_at` and shown dimmed. A row disappearing looks exactly like the owner
+  having bought it.
+
+> **Local D1 was seeded and cleaned back out** — 86 items, `WAM Seed` rows gone,
+> item 111's `bgg_id` returned to NULL. **Two pre-existing `copy` rows on items
+> 111/112 were lost** in the cleanup (local shows 8 copies where the earlier
+> note said 10); production is untouched, and
+> `rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local` resets
+> local outright.
 
 ---
 
@@ -578,13 +680,12 @@ then press "Look up printings" in the cover picker and choose the retail cover �
 no forcing, no new code, and the collage survives either way because
 `updateItem` now preserves it.
 
-> **Leave room for the accessory split** (owner, 2026-08-06). Official
-> accessories are to count toward a future completeness figure; third-party ones
-> (Folded Space, Broken Token, generic sleeves) are not, but must stay checkable
-> behind something collapsible. Nothing here groups or displays accessories, so
-> nothing here forecloses it — but note that `edition.source` is about *where a
-> printing's record came from* and is a different axis entirely. Do not overload
-> it to mean "third-party".
+> **The accessory split — now built**, see
+> [what am I missing](#what-am-i-missing--built-2026-08-06). It lives in
+> `game_component.official`, decided by comparing BoardGameGeek *publisher ids*.
+> Note that `edition.source` is about *where a printing's record came from* and
+> is a different axis entirely — it was deliberately not overloaded to mean
+> "third-party", and must not be.
 
 > **Local dev carries one deliberate broken candidate**: item 36 ("Veiled Fate")
 > was given a Gamefound `source_url` and a nonexistent `test-cover.png` while
@@ -773,17 +874,19 @@ npm run secrets:push -- --dry # names and fingerprints only, sends nothing
 packages/core/    constants.ts (leaf) -> schemas.ts -> barcode.ts -> vision.ts -> index.ts
 packages/db/      users, health, items, copies, ratings, import, barcodes, cache,
                   relations, scan-jobs, covers (cover-link health),
-                  editions (printings, and the covers you choose between)
+                  editions (printings, and the covers you choose between),
+                  components (what else exists for a game, and who made it)
 packages/bgg/     BGG XML API2 client (throttled, retried, cached)
 packages/barcode/ free resolution: gameupc.ts, upcitemdb.ts, resolve.ts
 apps/worker/src/lib/ resolve-title.ts — the one cached title→candidate resolver
                   cover-check.ts — probes hotlinked covers; run by the cron
+                  component-backfill.ts — asks BGG what exists; run weekly by cron
                   edition-backfill.ts — fetches printings from BGG, ten ids a call
 packages/research/ Claude calls: client.ts, barcode.ts (paid rung), vision.ts
 apps/worker/      Hono routes + Access JWT verification + R2 photo storage
 apps/web/         React SPA; lib/camera.ts + lib/scanner.ts hold the iOS work
                   pages/ScanJobsPage.tsx is the photo queue UI
-migrations/       0001 … 0014
+migrations/       0001 … 0016
 ```
 
 Entry points stay thin: `apps/worker/src/index.ts` mounts routes and
@@ -816,6 +919,10 @@ exactly one implementation of anything that makes a decision.
 | GET | `/api/covers/health` | read — dead cover images, for the banner |
 | POST | `/api/covers/check` | editCatalog — force a check slice now |
 | GET | `/api/items/:id/covers` | read — every printing's cover, selected one first |
+| GET | `/api/items/:id/completeness` | read — what else exists for this game. Cached; never fetches |
+| GET | `/api/components/status` | editCatalog — coverage, without a BGG call |
+| POST | `/api/components/backfill` | editCatalog — sweep + classify. `?itemId=` `?calls=` `?force=` |
+| POST | `/api/components/reclassify` | editCatalog — re-decide official/third-party from stored publishers, free |
 | GET | `/api/editions/status` | editCatalog — items still awaiting printings |
 | POST | `/api/editions/backfill` | editCatalog — fetch printings from BGG. `?itemId=`, `?limit=`, `?force=` |
 | POST | `/api/editions/campaign` | editCatalog — record crowdfunding covers as printings |
