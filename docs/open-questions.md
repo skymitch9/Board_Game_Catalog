@@ -6,8 +6,78 @@
 
 ## Usage watch — trial run, 2026-08-06
 
-**State: session 46% (resets in ~2 hr 18 min) · weekly 63% (resets Sun 3:59 PM)**
-Second check. Session rose 2 points in 13 minutes.
+**State: session 48% (resets in ~1 hr 48 min) · weekly 63% (resets Sun 3:59 PM)**
+Fourth check. Unchanged from the third — with no agents running, nothing is
+burning but the checks. The session window will reset long before 89%.
+**The weekly figure is the one to watch.**
+
+### Poll rate should track the rate of change
+
+Interval widened from 13 to 25 minutes once the agents finished. Each check now
+costs four tool calls — away, back, sometimes a click, then `find` — so polling
+every 13 minutes to observe that nothing is happening spends the budget the
+monitor exists to protect. Tighten it again when agents are working.
+
+### The read sequence that actually works
+
+1. navigate to another claude.ai page (`/recents`)
+2. navigate to `claude.ai/new#settings/usage`
+3. `find` **"Usage tab in settings navigation"** and click it — the hash route
+   opens the settings dialog but lands on an arbitrary section, so this step is
+   not optional
+4. `find` the figures
+
+Element refs change on every load, so nothing can be hardcoded. Four to five tool
+calls per check.
+
+### Re-armed, and the session window rolled over
+
+**Session 15% (fresh window) · weekly 65% (resets Sun 4:00 PM) · Fable 56%.**
+
+The session limit reset from 49% to 15% while idle, confirming it is the cheap
+one: waiting it out costs a nap. **The weekly figure moved 63% → 65% and does not
+recover until Sunday** — it is the only number that can actually stop work for
+days, and it is the one the 89% rule should be applied to.
+
+Monitor re-armed at 15 minutes because agents are working again, per the rule
+below.
+
+### Stood down earlier — the monitor was the only thing burning
+
+Final reading: **session 49% (reset in 41 min) · weekly 63% · Fable 56%**.
+
+The session rose 48% → 49% across 40 idle minutes, with nothing running but the
+checks themselves. That is roughly **1.5% of session budget an hour to observe
+that nothing is happening**, and the read had by then grown to six tool calls:
+the hash route stopped opening the settings dialog at all, so it needs
+`/recents` → `#settings/usage` → click **Settings** → click **Usage** → `find`.
+
+So the monitor was stood down rather than re-armed. **Arm it only while delegated
+work is in flight.** An idle system cannot run away, and there is nothing for a
+threshold to stop when no agents are running — the check can only cost.
+
+**The rule this trial actually produces:**
+
+- Watch **both** limits; the weekly one is the real ceiling.
+- Navigate away and back, then click through to Usage — a stale read is silent
+  and looks exactly like low usage.
+- Poll only while agents are working, and match the interval to how fast usage is
+  actually moving.
+- At 89%, stop the agents first, then pause.
+- Never kill a deploy mid-flight.
+
+### The reader must navigate away and back, or it lies
+
+Checks two and three both returned "46% used, resets in 2 hr 18 min" — the
+countdown frozen across 26 minutes. `claude.ai` is a single-page app and the
+usage figures sit behind a hash route, so re-navigating to the same URL does not
+remount it and `find` keeps returning the first render. Going to another
+claude.ai page and back gave the true figure.
+
+A monitor without that step reports a stale number forever and **never trips the
+threshold** — silent, and indistinguishable from low usage. Third
+staleness-shaped failure in this project after the cached `index.html` and the
+covers that had been written but not shown.
 
 ### There are TWO limits, and the weekly one matters more
 
@@ -77,6 +147,47 @@ Worth knowing that on this project almost nothing meets that bar:
 
 The realistic case is a deploy killed partway. Avoid it by not killing deploys,
 and the overage should never be needed.
+
+## The details lookup stalls — best diagnosis so far
+
+**This is the one real blocker.** The bulk fill was not run, correctly: of three
+trial runs, item 92 finished in 20s for 1.7¢, while items 383 and 488 sat at
+`running` with no error. They are still `running` fifteen minutes later, so they
+are **dead, not slow** — no Claude call takes that long.
+
+What has been ruled out:
+
+- **Not an HTTP timeout.** `enrich.ts` uses `client.messages.stream()` with
+  `finalMessage()`, so a long call does not sit on an idle connection.
+- **Not web-search subrequests.** `web_search_20260209` is a server-side tool;
+  the searching happens on Anthropic's side and costs the Worker nothing.
+- **Not the eight-subrequest budget** in `details-run.ts` for the same reason —
+  one item is one outbound call plus a few D1 writes.
+
+**Most likely: the per-invocation CPU ceiling.** Free-plan Workers allow far less
+CPU per invocation than paid, and parsing a long SSE stream is real CPU that
+scales with response length. Item 92 returned 642 output tokens and passed;
+`max_tokens` is 8000 with adaptive thinking and up to four web searches, so a
+harder item returns much more and gets killed. The kill is silent — the isolate
+is terminated, so nothing reaches the `catch` and no error is written.
+
+That is the **same shape as the shelf-enrichment failure**: work proportional to
+input, small inputs pass, large ones die without a trace. Both are one symptom.
+
+**Two things to settle before running any bulk fill:**
+
+1. **Confirm the plan.** If it is free, this is architectural rather than a bug,
+   and the fix is to keep every invocation small — which is exactly what the
+   shelf fix did and why it now works.
+2. **A single Claude call cannot be chunked.** So for details specifically the
+   options are: lower `max_tokens` and effort so responses stay short; or run
+   bulk fills **outside** the Worker — a local script calling `enrichItem` and
+   writing results to remote D1, which is how the original 47-game backfill was
+   done for $1.22. The per-item button can stay in the Worker; it works for
+   ordinary items.
+
+The two stuck rows are harmless: the queue only counts `status = 'done'`, so
+those items will be asked again, and a five-minute stale guard recovers them.
 
 ## If work stopped overnight
 
