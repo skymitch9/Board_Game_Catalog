@@ -148,46 +148,36 @@ Worth knowing that on this project almost nothing meets that bar:
 The realistic case is a deploy killed partway. Avoid it by not killing deploys,
 and the overage should never be needed.
 
-## The details lookup stalls — best diagnosis so far
+## The details lookup stalls — SOLVED, and the fill has been run
 
-**This is the one real blocker.** The bulk fill was not run, correctly: of three
-trial runs, item 92 finished in 20s for 1.7¢, while items 383 and 488 sat at
-`running` with no error. They are still `running` fifteen minutes later, so they
-are **dead, not slow** — no Claude call takes that long.
+**It was `waitUntil`, not the CPU ceiling.** Production named it itself, in
+`wrangler tail`:
 
-What has been ruled out:
+```
+POST /api/research/488/details - Ok
+  (warn) waitUntil() tasks did not complete within the allowed time after
+  invocation end and have been cancelled.
+```
 
-- **Not an HTTP timeout.** `enrich.ts` uses `client.messages.stream()` with
-  `finalMessage()`, so a long call does not sit on an idle connection.
-- **Not web-search subrequests.** `web_search_20260209` is a server-side tool;
-  the searching happens on Anthropic's side and costs the Worker nothing.
-- **Not the eight-subrequest budget** in `details-run.ts` for the same reason —
-  one item is one outbound call plus a few D1 writes.
+A `waitUntil` task gets about thirty seconds **after the response is returned**,
+and that route answered in 0.25s — so the entire Claude call was living on that
+budget. Measured against the real items with the real code, one lookup takes
+**17 to 73 seconds**. Roughly half were being cancelled, silently: nothing is
+thrown, the `catch` never runs, and the row stays `running` for ever.
 
-**Most likely: the per-invocation CPU ceiling.** Free-plan Workers allow far less
-CPU per invocation than paid, and parsing a long SSE stream is real CPU that
-scales with response length. Item 92 returned 642 output tokens and passed;
-`max_tokens` is 8000 with adaptive thinking and up to four web searches, so a
-harder item returns much more and gets killed. The kill is silent — the isolate
-is terminated, so nothing reaches the `catch` and no error is written.
+The CPU theory was wrong, and so was the plan question that hung off it. Item 92
+passing and 383 failing was not a size difference — it was luck. Item 383 has
+since taken 22s, 21s and 61s on three separate runs of identical input.
 
-That is the **same shape as the shelf-enrichment failure**: work proportional to
-input, small inputs pass, large ones die without a trace. Both are one symptom.
+**Fixed in `e355873`**, deployed as `e71840f0-d0a0-4bb4-ad57-4a3568e07417`. The
+work is awaited inside the request (an invocation that has not ended has no such
+clock) and *also* registered with `waitUntil`, which now does what it was
+originally reached for: if the caller disconnects, the work still gets its thirty
+seconds to write itself down. Three layers guarantee a run cannot go quiet — a
+60-second abort on the Claude call, the existing `catch`, and
+`closeStaleDetailsRuns` swept on every read of the runs table.
 
-**Two things to settle before running any bulk fill:**
-
-1. **Confirm the plan.** If it is free, this is architectural rather than a bug,
-   and the fix is to keep every invocation small — which is exactly what the
-   shelf fix did and why it now works.
-2. **A single Claude call cannot be chunked.** So for details specifically the
-   options are: lower `max_tokens` and effort so responses stay short; or run
-   bulk fills **outside** the Worker — a local script calling `enrichItem` and
-   writing results to remote D1, which is how the original 47-game backfill was
-   done for $1.22. The per-item button can stay in the Worker; it works for
-   ordinary items.
-
-The two stuck rows are harmless: the queue only counts `status = 'done'`, so
-those items will be asked again, and a five-minute stale guard recovers them.
+**The fill has been run and the queue is empty.** See the handoff for numbers.
 
 ## If work stopped overnight
 

@@ -193,11 +193,16 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
             Only games are listed. An expansion, promo or accessory takes its publisher
             from the game it belongs to, so there is nothing here worth paying to look up.
           </p>
-          {/* The single most useful thing to know about this screen, and the
-              whole point of the change behind it. */}
+          {/* This paragraph used to promise that closing the tab cost nothing.
+              It was not true: the server got about thirty seconds to finish
+              after answering, and half of these lookups take longer, so they
+              were killed without a word. Saying less, and saying it accurately,
+              is worth more than the reassurance was. */}
           <p className="muted small">
-            Lookups run on the server. You can leave this page — or close the tab — and
-            they carry on; come back and the results are here.
+            Each lookup takes twenty seconds to a minute and this page waits for it.
+            Every outcome is written down as it happens, so a lookup interrupted by a
+            closed tab or a locked phone usually still lands — but leaving the page
+            open is the sure thing.
           </p>
         </div>
         <Link to="/" className="btn btn-quiet">Collection</Link>

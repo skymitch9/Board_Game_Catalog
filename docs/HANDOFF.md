@@ -2,6 +2,129 @@
 
 Everything needed to continue or finish this without Claude.
 
+## The lookup that died quietly — fixed, and the fill is done — 2026-08-06
+
+**Shipped.** Commit `e355873`, production version
+**`e71840f0-d0a0-4bb4-ad57-4a3568e07417`**. No migration. **The details queue is
+empty.**
+
+### It was never the CPU ceiling
+
+Every earlier note in this file guessed at the per-invocation CPU limit and at
+which Workers plan the account is on. Both were wrong, and neither needed
+answering. `wrangler tail` on production, while triggering item 488 from a
+signed-in browser, printed the cause in one line:
+
+```
+POST /api/research/488/details - Ok
+  (warn) waitUntil() tasks did not complete within the allowed time after
+  invocation end and have been cancelled.
+```
+
+**A `waitUntil` task gets about thirty seconds after the response is returned.**
+`POST /:id/details` answered in 0.25s, so the whole Claude call was living on
+that budget. Measured with the real `enrichItem` against the real items, one
+lookup takes **17 to 73 seconds**:
+
+| Item | 4 searches + 3 fetches | 3 + 1 (shipped) |
+|---|---|---|
+| 383 Ascension 15th Anniversary | 56.8s | 20.8s |
+| 488 Before the Stroke of Midnight | 39.1s | 17.3s |
+| 92 Dice Throne: Outcasts | 73.2s | 39.8s |
+
+So roughly half of them were being cancelled. **Item 92 passing and 383 failing
+was luck, not size** — 383 has since run in 22s, 21s and 61s on identical input.
+Anthropic-side search latency is the variable, and it is wide.
+
+⚠️ **`wrangler tail` is the tool this project kept not reaching for.** Three
+separate silent failures — the shelf scan, the crons, this — were each diagnosed
+by guessing. Tail prints the invocation outcome and any runtime warning, and it
+works on production without Access getting in the way. Reach for it first.
+
+### The shape of the fix
+
+The work is **awaited inside the request** — an invocation that has not ended has
+no thirty-second clock — **and still registered with `waitUntil`**, which now
+does the job it was originally reached for: if the caller disconnects mid-lookup
+the work keeps its thirty seconds and writes down whatever it reaches. The two
+failure modes of the two previous designs are covered by the same promise.
+
+Three layers, because each catches what the one before it cannot:
+
+| Guard | Catches | Where |
+|---|---|---|
+| `AbortSignal.timeout(ENRICH_TIMEOUT_MS)`, 60s | a lookup that runs away — it throws, so it is recorded | `packages/research/src/enrich.ts` |
+| the `catch` | anything thrown, from anywhere | `runDetailsLookup`, `apps/worker/src/lib/details-run.ts` |
+| `closeStaleDetailsRuns`, on every read | the invocation killed outright, when none of our code runs | `packages/db/src/research.ts` |
+
+The third one is what makes a bulk fill *safe*, and it is worth understanding
+why: a row stuck at `running` made `activeDetailsRun` report the item as busy,
+so the queue page's driver waited on it for ever. **The fill would have stopped
+dead while looking healthy** — the exact failure this project has produced twice.
+`error` does not count as "asked" in the three-layer policy, so a swept row is
+simply offered again.
+
+`STALE_AFTER_MINUTES` is 3, and the threshold now lives in SQL in one place;
+`isStale` in `details-run.ts` is gone.
+
+### ⚠️ The POST is now slow on purpose — do not add a timeout
+
+`api.startItemDetails` takes **20 to 60 seconds** and returns the *finished* run.
+Anything that wraps it in a timeout, or a proxy that gives up early, reintroduces
+the bug. The queue page also had to grow an in-flight counter (`inFlight` in
+`DetailsQueuePage.tsx`): with the POST held open there is no `running` row to
+notice, and without the counter the driver fires the whole queue off at once.
+
+**60s is a real ceiling and it will occasionally bite.** Item 383 hit it once and
+was recorded as `error` with "The lookup was still searching after 60s and was
+stopped. Try again." That is the designed behaviour — visible and retryable —
+but if it becomes common, the fix is not a bigger number: Cloudflare's edge gives
+up at 100s, so anything longer has to leave the request entirely (a local script
+against remote D1, which is how the original 47-game backfill ran for $1.22).
+
+### The fill, run 2026-08-06
+
+**A second agent's free web-research pass did nearly all of it.** The queue went
+**80 → 50 → 2** while this fix was being built, without spending anything. Do not
+read the small paid numbers below as the feature being cheap; read them as the
+free pass being the right thing to do first.
+
+| | |
+|---|---|
+| Queue before | **2** (`GET /api/research/needs-details`, the only authority) |
+| Queue after | **0** |
+| Completed | 2 — Divine Dungeon the Game, Go Fish |
+| Errored | 0 in the fill itself |
+| Filled a field | **0** |
+| Paid spend, whole session, production | **~7¢** |
+
+Both rows came back **"Nothing new found."**, and both are believed genuine
+rather than a failure of the lookup:
+
+- **Go Fish** (publisher, publisher site, year) is a public-domain folk game.
+  There is no publisher and no publication year to find. **Layer 1 should
+  probably exclude it** — this row will come back every time the queue is
+  rebuilt, and a notification nobody can clear is worse than a blank field. It
+  is the clearest candidate for a `kind`/policy exclusion the owner has.
+- **Divine Dungeon the Game** (playing time) is a real, small-press game whose
+  playing time does not appear to be published anywhere. Genuinely undocumented
+  rather than mis-asked.
+
+The three-layer policy records `unfilled` per field, so neither returns to the
+queue — the queue is empty and stays empty. That is the policy working.
+
+### Two side findings worth keeping
+
+- **The crons DO fire in production.** `wrangler tail` caught
+  `"*/30 * * * *" @ 1:30:23 PM - Ok` with `cover check {"checked":20,"ok":20}`.
+  The long section below claiming nothing scheduled has ever run is **out of
+  date** — it was written before `npx wrangler triggers deploy` was applied.
+- **A read taken during a deploy can be stale.** Two reads right after
+  `wrangler deploy` reported a run as still `running` when the database already
+  said `error` — the old version was still serving. Not a caching bug: the API
+  sends no cache headers, and a re-read a minute later was correct. Wait for the
+  rollout before concluding a fix did not work.
+
 ## A dice tray is not a dice game — built 2026-08-06
 
 **Shipped.** Commit `a0fa75c`, production version
@@ -75,19 +198,13 @@ Two things shipped today, in two commits, deliberately not batched:
 | `fd7b142` | `f0b32c75-45d0-48f1-9733-7a53723affe5` | The collection header down to one button; Related games and Missing details moved to the nav and hidden when empty |
 | `b783883` | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` | "Ask once, re-ask when the world changes" — the three-layer details policy (migration 0020) |
 
-### ⚠️ The bulk details fill was NOT run, on purpose
+### ✅ The bulk details fill has been run — see the section at the top
 
-Two of three trial runs **stalled at `running` with no error** — items 383 and
-488, four minutes each — while item 92 completed in ~20s for 1.7¢. That is the
-subrequest-ceiling silent kill, the same failure that made a shelf scan look
-busy for twenty minutes. Firing 88 runs into it would stop the queue dead while
-looking healthy. **Total spend so far: 1.7¢.**
-
-Diagnosis to do first: whether `enrichItem` with web search now exceeds the
-eight subrequests budgeted in the header of `apps/worker/src/lib/details-run.ts`.
-Fifty is the free-plan ceiling and every D1 call counts alongside every fetch.
-The two stalled runs recover on their own the next time either item is asked —
-`claimDetailsRun` closes anything quiet for five minutes.
+This section used to say the fill was withheld because two of three trial runs
+stalled, and blamed the subrequest ceiling. **The diagnosis was wrong and the
+problem is fixed** — it was `waitUntil`'s post-response budget, not subrequests
+and not CPU. The queue is now empty. See
+[the lookup that died quietly](#the-lookup-that-died-quietly--fixed-and-the-fill-is-done--2026-08-06).
 
 Opinions the owner should decide on are collected in
 [`covers-wanted.md`](covers-wanted.md), including why the Dice Throne player
@@ -314,8 +431,8 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `915ce9c4-8901-4838-85ae-57cca17491fd` — a dice tray is not a dice game, plus the top pager (2026-08-06), at 100% |
-| Previous version | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` — the three-layer details policy (2026-08-06) |
+| Deployed version | `e71840f0-d0a0-4bb4-ad57-4a3568e07417` — the details lookup stops dying quietly (2026-08-06), at 100% |
+| Previous version | `915ce9c4-8901-4838-85ae-57cca17491fd` — a dice tray is not a dice game, plus the top pager (2026-08-06) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
