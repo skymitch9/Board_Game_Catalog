@@ -1,7 +1,16 @@
 # Dice Throne — how should it be organised?
 
-> **Status:** proposal, nothing implemented. Written 2026-08-06 for review.
-> Delete once a decision is made and recorded in the handoff.
+> **Status: BUILT (2026-08-06) — options 2 and 3, as recommended below.**
+> Kept rather than deleted, because the argument against option 1 is the reason
+> the code looks the way it does and would otherwise be re-litigated. Current
+> state and numbers live in
+> [`HANDOFF.md`](HANDOFF.md#folding-a-line-into-one-entry--built-2026-08-06).
+>
+> What shipped: `item.series` (migration 0019), a collection page that folds a
+> series **and a `game_system`** into one entry and offers both through one
+> filter, and a muted, linked parent name beside any child shown away from its
+> parent. 114 entries became 93; Dice Throne's eleven cards became one. No item
+> was re-parented and no item was renamed.
 
 ## The situation, measured
 

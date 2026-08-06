@@ -2,33 +2,33 @@
 
 Everything needed to continue or finish this without Claude.
 
-## Right now — 2026-08-06, written as usage ran low
+## Right now — 2026-08-06
 
-**Working tree is clean, committed, migrated and deployed.** Head `d5f0c4b`,
-production version **`e531c5ca-0b09-48e5-8176-070120e11ba8`**, migrations
-through `0017_scan_job_barcode` applied local *and* production.
+**Working tree is clean, committed, pushed, migrated and deployed.** Head
+`733367f`, production version **`fb39d82e-7ed3-452e-ad08-902e98809bd7`**,
+migrations through `0019_item_series` applied local *and* production.
 
-Production: **739 items** (114 top-level), 740 copies — 510 owned, 204
-preordered, 26 wanted. 133 with a BGG id, 350 with a cover, 972 printings, 77
-relations. All four integrity invariants are 0.
+Production: **738 items** (114 top-level), 146 of them carrying
+`series = 'Dice Throne'`. Another agent is writing rows, which is why item
+totals in this document move between 736 and 739.
 
-**One agent, five tasks. Three shipped, two not started:**
+**All five tasks are shipped.**
 1. ✅ Shelf enrichment fix — chunked, resumable, error recorded, retry/stop
    buttons, sorted jobs leave the queue (`d5f0c4b`)
-2. ⬜ **Background the details call** using the existing `research_run` table.
-   `POST /api/research/:id/details` still `await`s `enrichItem` inline — tens of
-   seconds held open in the request, and a dropped connection pays for the
-   lookup and loses the result. `research_run` has `item_id`, `tier`, `status`,
-   `error_message`, `started_at`, `finished_at`, `input_tokens`,
-   `output_tokens`, and **zero rows**, because this route never writes to it.
-   Return a run id immediately and poll it the way `ScanJobsPage` polls jobs.
-   Keep the token accounting — `/details` shows a cost estimate.
+2. ✅ **The details lookup runs in the background** (`c496fb1`, migration
+   0018) — see [the details run](#the-details-lookup-outlives-the-request--built-2026-08-06)
 3. ✅ Barcode continuous intake (`bd4ec00`)
 4. ✅ Timezone parsing — `apps/web/src/lib/dates.ts`, used by `CopyEditor`,
    `Completeness` and `ScanJobsPage` (`bd4ec00`)
-5. ⬜ **`series` column + linked parent labels.** Next migration number is
-   **0018**. See `docs/dice-throne-shape.md`; also expose `game_system` through
-   the same grouping/filter mechanism, and do **not** re-parent anything.
+5. ✅ **`series` column, grouping over `series` *and* `game_system`, and linked
+   parent labels** (`733367f`, migration 0019) — see
+   [folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
+
+**Migration numbering deviated from the plan, deliberately.** The brief pinned
+`series` to 0018, on the assumption that backgrounding the details call needed
+no schema change. It did — `research_run.tier` was CHECKed against the three
+source tiers and there was nowhere to record what a run filled in — so the
+details work took **0018** and `series` took **0019**.
 
 A separate agent is researching Dice Throne playmats.
 
@@ -79,12 +79,17 @@ wishlisted but unconfirmed to exist.
 Stable reference lives alongside this file and is not duplicated here:
 [`access/`](access/README.md) (endpoints, key names, quotas) and
 [`info/`](info/README.md) (how and why things work).
-**Last updated:** 2026-08-08. Everything is committed, pushed and deployed; the
-working tree is clean. Database was cleared and collection restarted fresh on
-08-05, and is being written to by a separate data-only agent — item totals in
-this document move between 736 and 737 for that reason.
+**Last updated:** 2026-08-06 (series grouping). Everything is committed, pushed
+and deployed; the working tree is clean. Database was cleared and collection
+restarted fresh on 08-05, and is being written to by a separate data-only
+agent — item totals in this document move between 736 and 739 for that reason.
 
 **Newest first:**
+[folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
+— Dice Throne's eleven cards become one, and the same mechanism reaches the 79
+D&D 5e rows scattered across nine trees. Then
+[the details lookup outlives the request](#the-details-lookup-outlives-the-request--built-2026-08-06)
+— a dropped connection no longer pays for a search and loses the answer. Then
 [children inherit from their parent](#children-inherit-from-their-parent--built-2026-08-08)
 — the details queue went from **695 rows to 78**, and a playmat now shows its
 game's publisher instead of costing 1.4¢ to be told it. Then
@@ -108,6 +113,8 @@ Nothing is in flight. The most recent commits:
 
 | Commit | What |
 |---|---|
+| `733367f` | Fold a line of eleven boxes into one entry, without moving a box (migration 0019) |
+| `c496fb1` | Stop a lookup dying when the phone locks (migration 0018) |
 | `2d50224` | Stop paying to be told a dice tray's publisher — the queue, 695 → 78 |
 | `5a35e83` | Stop calling a gaming table an unfinished record |
 | `d105209` | Say what else exists for a game, and what we do not have |
@@ -205,13 +212,13 @@ size).
 | | |
 |---|---|
 | URL | <https://board-game-catalog.bgc-worker.workers.dev> |
-| Deployed version | `eed45840-e358-473a-83e9-b880c10605f5` — children inherit from their parent (2026-08-08), at 100% |
-| Previous version | `32d5cacc-ab38-42f1-8764-d2016292dd45` — the four hidden columns (2026-08-07) |
+| Deployed version | `fb39d82e-7ed3-452e-ad08-902e98809bd7` — series grouping and linked parent labels (2026-08-06), at 100% |
+| Previous version | `9dae0863-72fd-4159-bf31-21325f3aacb8` — the details lookup in the background (2026-08-06) |
 | Cron triggers | `*/30 * * * *` the cover check, `41 5 * * 1` the weekly component refresh. Registered in the deploy output and confirmed *firing locally* via `wrangler dev --test-scheduled` — but **neither has ever fired in production**, see [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run) |
 | Cloudflare account | `113be82b840c956b8378a187047ab3ea` |
 | D1 database | `board-game-catalog` · `7dd22702-f0e2-4fc7-b201-d16d60176efa` · WNAM |
 | R2 bucket | **none** — `bgc-photos` still exists in the account but is unbound and empty |
-| Migrations applied | `0001_init` … `0016_game_components` (local **and** production) |
+| Migrations applied | `0001_init` … `0019_item_series` (local **and** production) |
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` |
 | Access policy | **Everyone** — anyone may authenticate; the app decides who gets in |
 | Login method | Email one-time PIN (Google SSO not configured) |
@@ -492,6 +499,149 @@ routes the weekly refresh silently into the cover check.
 > note said 10); production is untouched, and
 > `rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local` resets
 > local outright.
+
+---
+
+## Folding a line into one entry — built 2026-08-06
+
+`item.series` (migration 0019), and a collection page that groups on it — and on
+`game_system` through the same mechanism. **Nothing was re-parented.** The
+reasoning and the rejected alternatives are in
+[`dice-throne-shape.md`](dice-throne-shape.md); this is state and numbers.
+
+| | Before | After |
+|---|---|---|
+| Collection page entries | 114 | **93** |
+| Dice Throne | 11 cards | **1** |
+| D&D 5e (2014) | 9 cards | **1** |
+| Game trees | 114 | 114 — unchanged |
+
+Five groups fold 26 lines into 5 entries: Dice Throne (11), D&D 5e (2014) (9),
+Cosmere RPG (2), Dungeon Crawler Carl RPG (2), system-agnostic (2).
+
+**The half that cannot be fixed by re-parenting is the `game_system` half**, and
+it is the one the owner asked for. 79 rows need D&D 5e and they sit in **nine
+separate trees**: 53 digital books inside D&D under the DM's Guide, and 26
+physical third-party products — Auroboros, Bergin's Book of Beasts, Firestar
+Falling, three Midnight Tower adventures, Ryoko's Guide, Starlight Arcana — as
+their own top-level lines, because they `require` the Player's Handbook rather
+than being part of D&D. Filing them inside D&D would misdescribe what the owner
+owns. Filtering `D&D 5e (2014)` returns all nine regardless of tree, publisher or
+format, and the group card carries **26 physical · 53 digital** on its face —
+"paper or D&D Beyond?" is exactly the question a combined 5e list raises.
+
+| Piece | Where |
+|---|---|
+| `series` column, index, Dice Throne backfill | `migrations/0019_item_series.sql` |
+| `Item.series`, `itemQuerySchema.series`/`grouped`, `CollectionGroup`, `CollectionEntry`, `MatchedChild` | `packages/core/src/schemas.ts` |
+| `ROOT_GROUP_CTE`, `shouldGroup`, `summariseGroups`, `listGroupOptions` | `packages/db/src/items.ts` |
+| `GET /api/meta` → `groups` | `apps/worker/src/routes/catalog.ts` |
+| `GroupCard` | `apps/web/src/components/ItemTree.tsx` |
+| `ParentLabel` | `apps/web/src/components/ui.tsx` |
+
+### Three decisions that will look arbitrary later
+
+- **A grouping of one line is not a grouping.** `HAVING COUNT(*) > 1` in the CTE
+  drops it, for the same reason a group of one child on a game card starts
+  expanded: replacing one row with one row and a click is an extra step, not a
+  saving. Four production systems qualify — D&D 2024, Cypher System, Lewd Dungeon
+  Adventures, the playtest sheet — and each stays the game it already was.
+- **A tree's label is the value most of it carries**, not the alphabetically
+  first. Production holds exactly one tree with two systems: 20 rows of
+  "D&D 2024" and one of "D&D (playtest material)". `MIN()` would have filed the
+  whole 2024 line under the playtest sheet.
+- **Grouping switches itself off while searching, and inside a group.** Folding
+  a hero's hit into a *Dice Throne* card answers neither half of "which box is
+  Scarlet Witch in", and folding an opened group back up would make the filter a
+  no-op. `shouldGroup` is the one place that decides.
+
+### The parent label, and where it appears
+
+A child that turns up away from its parent now says where it lives, muted, with
+the parent's name as a **link**. Searching `scarlet playmat` reads:
+
+> Matched **Marvel Dice Throne: Playmat - Scarlet Witch** — *Dice Throne Hero:
+> Scarlet Witch*, **Dice Throne Hero: Scarlet Witch** — *Marvel Dice Throne*
+
+and the wishlist reads **Ark Nova: Marine Worlds** — *Ark Nova*. Both halves are
+links; the matched child was not clickable at all before. **Nothing was
+renamed** — `attachMatchReasons` already had the parent in hand while walking the
+tree, and `listWishlist` already returned `parentItemId` and `parentName`.
+
+### Verified against production's data, in a browser
+
+A local D1 was loaded with a read-only export of production's `item` and `copy`
+tables (739 items, 740 copies) in a **separate persist directory**, so the
+ordinary local database was never touched:
+
+```bash
+npx wrangler d1 export board-game-catalog --config apps/worker/wrangler.toml \
+  --remote --table item --table copy --no-schema --output prod.sql
+npx wrangler d1 migrations apply board-game-catalog --config apps/worker/wrangler.toml \
+  --local --persist-to apps/worker/.wrangler/sandbox
+npx wrangler d1 execute board-game-catalog --config apps/worker/wrangler.toml \
+  --local --persist-to apps/worker/.wrangler/sandbox --file prod.sql
+npx wrangler dev --config apps/worker/wrangler.toml --port 8791 \
+  --persist-to "<ABSOLUTE path>/apps/worker/.wrangler/sandbox"
+```
+
+⚠️ **`--persist-to` must be an absolute path or a path under the repo.** A
+relative path is resolved against the *config file's* directory for
+`wrangler dev` but against the cwd for `d1 execute`, so the two silently used
+different databases — the first attempt ran `dev` against the ordinary 86-item
+local DB while the migrations went to the sandbox. A path in the system temp
+directory failed outright with `internal error`.
+
+The cards, the expander, the filter, the search and the wishlist were all
+exercised in Chrome against that data, not only over curl.
+
+---
+
+## The details lookup outlives the request — built 2026-08-06
+
+`POST /api/research/:id/details` answers in about **0.28s** with a run id and
+does the Claude web search under `executionCtx.waitUntil`. It used to `await`
+the call inline: tens of seconds held open, and a dropped connection paid for
+the search and lost the answer.
+
+| Piece | Where |
+|---|---|
+| `research_run` redefined — `details` tier, `result_json` | `migrations/0018_details_runs.sql` |
+| `RUN_TIERS` | `packages/core/src/constants.ts` |
+| `DetailsRun` | `packages/core/src/schemas.ts` |
+| `activeDetailsRun`, `latestDetailsRuns`, `finishRun(result)` | `packages/db/src/research.ts` |
+| `claimDetailsRun`, `runDetailsInBackground`, `toDetailsRun` | `apps/worker/src/lib/details-run.ts` |
+| `POST /:id/details`, `GET /details-runs` | `apps/worker/src/routes/research.ts` |
+| The poller | `apps/web/src/pages/DetailsQueuePage.tsx` |
+
+- **Migration 0018 drops and recreates `research_run`.** SQLite cannot alter a
+  CHECK constraint, and `tier` was restricted to the three source tiers. That is
+  safe only because the table is empty in every environment — **verified
+  immediately before running it**, along with `research_finding`, which
+  references it. Check again before replaying this migration anywhere.
+- **`details` is not a source tier.** `SOURCE_TIERS` is where a claim came from;
+  `RUN_TIERS` is what a run was. Nothing may treat `details` as a source.
+- **"Could not identify that game" is `done`, not `error`.** A retry would cost
+  the same money and return the same nothing.
+- **A second request while one is in flight returns the run already working.**
+  The page polls; without the guard, one poll landing mid-lookup would buy the
+  same answer twice. A run quiet for more than five minutes is closed as an
+  error and re-asked, because the subrequest ceiling *terminates* an invocation
+  rather than throwing, and a run stuck at `running` would block its item
+  forever.
+- **One item is one invocation, about eight subrequests.** The arithmetic is in
+  the file header. A "fill in these ten" path must **not** share an invocation:
+  ten is ~80, past the 50 cap, and the failure is silent.
+
+Verified against the production-shaped local D1 (see above). Three real runs:
+
+| Item | Result |
+|---|---|
+| 383 Ascension 15th Anniversary | `done` in 19s, 195/562 tokens, 1.5¢, filled *playing time* → `playtime_min = 30` |
+| 463 Auroboros | POST aborted at 1s; still `done` in 29s, "Nothing new found." |
+| 488 Before the Stroke of Midnight | started from the browser, **page navigated away and fully reloaded mid-run**, landed `done` at 59s and the row updated itself |
+
+That last one is the whole point: 59 seconds is long enough for a phone to lock.
 
 ---
 
