@@ -56,6 +56,18 @@ const itemFields = z.object({
    * catalog, and null must render as nothing rather than as "unknown".
    */
   gameSystem: nullableString(100),
+  /**
+   * The line this belongs to — "Dice Throne", "Ascension".
+   *
+   * A *label*, never a place in the tree. Eleven Dice Throne boxes stay eleven
+   * roots; the collection page folds them into one entry and offers the name as
+   * a filter. Making it a parent row instead would put 147 rows in one tree, and
+   * search matches trees — so every hit for any hero would return the whole
+   * line. See `docs/dice-throne-shape.md`.
+   *
+   * Free text, like `gameSystem`, and null for almost everything.
+   */
+  series: nullableString(100),
   designers: nullableString(500),
   minPlayers: z.number().int().min(1).max(99).nullable().optional(),
   maxPlayers: z.number().int().min(1).max(999).nullable().optional(),
@@ -160,6 +172,18 @@ export const itemQuerySchema = z.object({
    *  column, so matched exactly rather than fuzzily — the dropdown is built
    *  from the distinct values, so there is nothing to guess at. */
   gameSystem: z.string().trim().max(100).optional(),
+  /** An exact series. Matched like `gameSystem`, and for the same reasons. */
+  series: z.string().trim().max(100).optional(),
+  /**
+   * Fold each series and each game system into a single entry.
+   *
+   * Off by default, so a caller that knows nothing about groups is handed game
+   * trees exactly as before. **Ignored while searching or while inside a
+   * group** — see `listItemTrees`. Send it only when true: `z.coerce.boolean()`
+   * reads the string "false" as true, which is the same convention the other
+   * flags here already follow.
+   */
+  grouped: z.coerce.boolean().optional(),
   /** 1-based. The size of a page is the server's decision, not the caller's. */
   page: z.coerce.number().int().min(1).optional(),
 });
@@ -209,6 +233,8 @@ export interface Item {
   sourceUrl: string | null;
   /** The ruleset a book needs. Null for anything that carries its own rules. */
   gameSystem: string | null;
+  /** The line this box belongs to. A label, never a place in the tree. */
+  series: string | null;
   designers: string | null;
   minPlayers: number | null;
   maxPlayers: number | null;
@@ -264,19 +290,88 @@ export interface ItemNode extends Item {
    * "Catan: Seafarers" — which is the expansion you were looking for, filed
    * where it belongs.
    */
-  matchedChildren?: { id: number; name: string }[];
+  matchedChildren?: MatchedChild[];
 }
 
 /**
- * One page of game trees, and how many there are in total.
+ * A child that explains a search hit, and the box it is in.
  *
- * `total` counts every matching tree, not the ones on this page: the header
- * needs to say "40 games" while showing 25 of them, and a count that shrank to
- * the page size would make paging look like filtering.
+ * The parent travels with it because that is the answer to the question being
+ * asked. Searching "scarlet witch" is the first half of the owner's journey;
+ * the second half is *which box do I pull off the shelf*, and a bare child name
+ * does not answer it. It reads "Scarlet Witch — Marvel Dice Throne", and both
+ * halves are links.
+ */
+export interface MatchedChild {
+  id: number;
+  name: string;
+  parentId: number | null;
+  parentName: string | null;
+}
+
+/**
+ * Two axes, one mechanism.
+ *
+ * `series` is a line of boxes — the eleven Dice Thrones. `system` is a ruleset
+ * — the 79 rows that need D&D 5e, which sit in **nine different trees** because
+ * 53 of them are books inside D&D and 26 are third-party products that merely
+ * *require* the Player's Handbook. Filing Auroboros inside D&D would misdescribe
+ * what the owner owns, so that split is correct and stays. Grouping therefore
+ * has to work over both, or the more valuable half does not work at all.
+ */
+export type GroupAxis = 'series' | 'system';
+
+/** One series or system, folded into a single entry on the collection page. */
+export interface CollectionGroup {
+  /** `series:Dice Throne`. The paging unit's identity, and the React key. */
+  key: string;
+  axis: GroupAxis;
+  name: string;
+  /** Top-level lines folded into this entry — 11, for Dice Throne. */
+  lines: number;
+  /** Rows across those lines' trees — 147, for Dice Throne. */
+  items: number;
+  owned: number;
+  wanted: number;
+  /**
+   * Copies held as a licence, and as a thing.
+   *
+   * Shown because a combined 5e list is exactly where "do I have this on paper
+   * or only on D&D Beyond?" gets asked, and the answer is otherwise buried one
+   * level down.
+   */
+  digital: number;
+  physical: number;
+  /** The lines themselves, so the card names what it folded up. */
+  members: { id: number; name: string; items: number; thumbnailUrl: string | null }[];
+}
+
+/**
+ * One thing on the collection page: a game tree, or a group standing for
+ * several.
+ *
+ * A single ordered list rather than two, because the two kinds are interleaved
+ * alphabetically and paged together — "Dice Throne" sits where the Dice Thrones
+ * were. Returning groups separately would either put them all at the top of
+ * every page or break paging.
+ */
+export type CollectionEntry =
+  | { key: string; kind: 'tree'; tree: ItemNode }
+  | { key: string; kind: 'group'; group: CollectionGroup };
+
+/**
+ * One page of the collection, and how much there is in total.
+ *
+ * `total` counts every matching entry, not the ones on this page: the header
+ * needs to say "104 entries" while showing 25 of them, and a count that shrank
+ * to the page size would make paging look like filtering. `totalRoots` counts
+ * game trees, which is the same number when nothing is grouped and a larger one
+ * when something is — that difference is the feature, so both are reported.
  */
 export interface ItemPage {
-  items: ItemNode[];
+  entries: CollectionEntry[];
   total: number;
+  totalRoots: number;
   /** 1-based, and clamped to the last page when asked for one past the end. */
   page: number;
   pageSize: number;

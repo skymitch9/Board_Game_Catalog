@@ -278,6 +278,31 @@ textarea { resize: vertical; }
   font-size: 0.78rem; color: var(--muted);
 }
 .match-why span { color: var(--text); }
+.match-why a { color: var(--text); }
+
+/*
+  The box a thing lives in, beside the thing itself.
+
+  Muted and lighter than what it qualifies, because it is context rather than
+  the answer — "Scarlet Witch" is what you searched for and "Marvel Dice Throne"
+  is what tells you where to reach. Both are links; only this one is quiet.
+*/
+.parent-label { color: var(--muted); font-weight: 400; }
+.parent-label a { color: var(--muted); }
+.parent-label a:hover { color: var(--text); }
+
+/*
+  A whole series or ruleset standing in for several lines.
+
+  Shares `.item-card` so a folded entry and a game read as the same kind of
+  thing in the list; the header is a button rather than a link because it opens
+  a filter rather than a page.
+*/
+.group-card__head {
+  width: 100%; border: none; background: none; text-align: left;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.group-card__head:hover { background: var(--bg); }
 
 .children { border-top: 1px solid var(--line); }
 .child-row {

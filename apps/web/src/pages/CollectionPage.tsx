@@ -3,9 +3,24 @@ import { COPY_STATUSES, ITEM_KINDS, type ItemQuery, type MeResponse } from '@bgc
 import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
 import { Link } from '../router';
-import { ItemCard, KIND_LABEL } from '../components/ItemTree';
+import { GroupCard, ItemCard, KIND_LABEL } from '../components/ItemTree';
 import { ExportLinks } from '../components/QuickAdd';
 import { EmptyState, ErrorBox, Spinner } from '../components/ui';
+
+/**
+ * The filter dropdown's value: one string covering both axes.
+ *
+ * `series:Dice Throne` and `system:D&D 5e (2014)` are the same kind of choice to
+ * the person making it, and a second dropdown asking the same question in a
+ * different column would be a worse control, not a more precise one. Split back
+ * into the two query parameters on the way out.
+ */
+function splitGroupValue(value: string): { series?: string; gameSystem?: string } {
+  const cut = value.indexOf(':');
+  if (cut < 0) return {};
+  const name = value.slice(cut + 1);
+  return value.startsWith('series:') ? { series: name } : { gameSystem: name };
+}
 
 export function CollectionPage({ me }: { me: MeResponse }) {
   const [search, setSearch] = useState('');
@@ -13,16 +28,21 @@ export function CollectionPage({ me }: { me: MeResponse }) {
   const [kind, setKind] = useState('');
   const [uncatalogued, setUncatalogued] = useState(false);
   const [duplicates, setDuplicates] = useState(false);
-  const [gameSystem, setGameSystem] = useState('');
+  const [group, setGroup] = useState('');
+  // On by default. The page's problem is one line of eleven boxes dominating
+  // it, so the collapsed view is the one worth opening on; the checkbox is for
+  // when you want the whole shelf laid out.
+  const [collapse, setCollapse] = useState(true);
   const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebounced(search);
+  const chosen = splitGroupValue(group);
 
   // Any change to what is being filtered invalidates where you were in it —
   // page 4 of the whole catalog is not page 4 of a search for "catan".
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, status, kind, uncatalogued, duplicates, gameSystem]);
+  }, [debouncedSearch, status, kind, uncatalogued, duplicates, group, collapse]);
 
   const query: ItemQuery = {
     ...(debouncedSearch ? { q: debouncedSearch } : {}),
@@ -30,7 +50,10 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     ...(kind ? { kind: kind as ItemQuery['kind'] } : {}),
     ...(uncatalogued ? { uncatalogued: true } : {}),
     ...(duplicates ? { duplicates: true } : {}),
-    ...(gameSystem ? { gameSystem } : {}),
+    ...chosen,
+    // Sent only when true: the server coerces the string, so "false" would read
+    // as true — the same convention the other flags here follow.
+    ...(collapse ? { grouped: true } : {}),
     ...(page > 1 ? { page } : {}),
   };
 
@@ -43,7 +66,8 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     kind,
     uncatalogued,
     duplicates,
-    gameSystem,
+    group,
+    collapse,
     page,
   ]);
 
@@ -52,14 +76,27 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     window.scrollTo({ top: 0, behavior: 'auto' });
   };
 
+  const openGroup = (key: string) => {
+    setGroup(key);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
   const canEdit = me.capabilities.includes('editCatalog');
   const filtersActive = Boolean(
-    debouncedSearch || status || kind || uncatalogued || duplicates || gameSystem,
+    debouncedSearch || status || kind || uncatalogued || duplicates || group,
   );
   // Only offered when there is something to choose between. A collection of
-  // board games records no rulesets, and a dropdown with one empty option in it
-  // is a control that teaches you nothing.
-  const systems = meta.state === 'ok' ? meta.data.gameSystems : [];
+  // board games with no series and no rulesets recorded gets no dropdown, and a
+  // control with one empty option in it teaches you nothing.
+  const options = meta.state === 'ok' ? meta.data.groups : [];
+  const seriesOptions = options.filter((o) => o.axis === 'series');
+  const systemOptions = options.filter((o) => o.axis === 'system');
+
+  // Searching and being inside a group both switch collapsing off server-side —
+  // folding a hero's hit into a series card answers neither half of "which box
+  // is Scarlet Witch in", and folding an opened group back up would make the
+  // filter do nothing. Said here so the checkbox does not claim otherwise.
+  const collapseApplies = !debouncedSearch && !group;
 
   return (
     <>
@@ -154,19 +191,47 @@ export function CollectionPage({ me }: { me: MeResponse }) {
             ))}
           </select>
 
-          {systems.length > 0 && (
+          {/* One control for both axes. A series and a game system are the same
+              kind of choice — "show me everything in this line" — and the
+              counts say how much of the catalog each reaches across however
+              many separate trees it is filed in. */}
+          {options.length > 0 && (
             <select
-              value={gameSystem}
-              onChange={(e) => setGameSystem(e.target.value)}
-              aria-label="Game system"
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              aria-label="Series or game system"
             >
-              <option value="">Any system</option>
-              {systems.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name} ({s.items})
-                </option>
-              ))}
+              <option value="">Any series or system</option>
+              {seriesOptions.length > 0 && (
+                <optgroup label="Series">
+                  {seriesOptions.map((o) => (
+                    <option key={`series:${o.name}`} value={`series:${o.name}`}>
+                      {o.name} ({o.items})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {systemOptions.length > 0 && (
+                <optgroup label="Game system">
+                  {systemOptions.map((o) => (
+                    <option key={`system:${o.name}`} value={`system:${o.name}`}>
+                      {o.name} ({o.items})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+          )}
+
+          {options.length > 0 && collapseApplies && (
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={collapse}
+                onChange={(e) => setCollapse(e.target.checked)}
+              />
+              Collapse series
+            </label>
           )}
 
           <label className="check-inline">
@@ -197,7 +262,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
                 setKind('');
                 setUncatalogued(false);
                 setDuplicates(false);
-                setGameSystem('');
+                setGroup('');
               }}
             >
               Clear
@@ -209,7 +274,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
       {items.state === 'loading' && <Spinner label="Loading collection…" />}
       {items.state === 'error' && <ErrorBox error={items.error} what="Could not load the collection" />}
 
-      {items.state === 'ok' && items.data.items.length === 0 && (
+      {items.state === 'ok' && items.data.entries.length === 0 && (
         <EmptyState title={filtersActive ? 'Nothing matches' : 'The catalog is empty'}>
           {filtersActive ? (
             <p className="muted">Try loosening the filters.</p>
@@ -223,21 +288,35 @@ export function CollectionPage({ me }: { me: MeResponse }) {
         </EmptyState>
       )}
 
-      {items.state === 'ok' && items.data.items.length > 0 && (
+      {items.state === 'ok' && items.data.entries.length > 0 && (
         <>
           <p className="result-count muted">
             {/* The count is every match, not the page. Saying "25 games" while
-                paging through 107 would read as a filter nobody applied. */}
-            {items.data.total} game{items.data.total === 1 ? '' : 's'}
+                paging through 107 would read as a filter nobody applied.
+
+                Both numbers when they differ, because the difference is the
+                whole feature: "104 entries · 114 games" says plainly that ten
+                cards are standing in for more than one line each. */}
+            {items.data.total} {items.data.total === 1 ? 'entry' : 'entries'}
+            {items.data.totalRoots !== items.data.total &&
+              ` · ${items.data.totalRoots} game${items.data.totalRoots === 1 ? '' : 's'}`}
             {filtersActive && ' matching'}
             {items.data.pageCount > 1 &&
               ` · page ${items.data.page} of ${items.data.pageCount}`}
             {canEdit && <ExportLinks />}
           </p>
           <div className="item-list">
-            {items.data.items.map((node) => (
-              <ItemCard key={node.id} node={node} />
-            ))}
+            {items.data.entries.map((entry) =>
+              entry.kind === 'group' ? (
+                <GroupCard
+                  key={entry.key}
+                  group={entry.group}
+                  onOpen={() => openGroup(entry.key)}
+                />
+              ) : (
+                <ItemCard key={entry.key} node={entry.tree} />
+              ),
+            )}
           </div>
 
           {items.data.pageCount > 1 && (

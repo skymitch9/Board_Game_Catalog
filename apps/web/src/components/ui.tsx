@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { ApiError } from '../api';
+import { Link } from '../router';
 
 export function Spinner({ label = 'Loading…' }: { label?: string }) {
   return <p className="muted pad">{label}</p>;
@@ -43,6 +44,28 @@ export function DigitalTag() {
   return (
     <span className="digital-tag" title="A licence — nothing to hand across the table">
       digital
+    </span>
+  );
+}
+
+/**
+ * The box a thing lives in, named and linked, beside the thing itself.
+ *
+ * "Scarlet Witch" is not an answer on its own — the owner's next question is
+ * always *which box do I pull off the shelf*, and everywhere a child appears
+ * away from its parent (search results, the wishlist) that context is missing.
+ * Renaming the item to carry it was considered and rejected: the label costs
+ * nothing and a rename is lossy and permanent.
+ *
+ * Muted, and the second half is a link to the parent — clicking "Marvel Dice
+ * Throne" opens the box rather than the hero.
+ */
+export function ParentLabel({ id, name }: { id: number | null; name: string | null }) {
+  if (!name) return null;
+  return (
+    <span className="parent-label">
+      {' — '}
+      {id != null ? <Link to={`/items/${id}`}>{name}</Link> : name}
     </span>
   );
 }

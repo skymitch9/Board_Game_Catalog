@@ -98,6 +98,9 @@ export function ItemPage({
               so most items have nothing here, and an empty badge or an
               "unknown" would be noise on 516 of 640 pages. */}
           {item.gameSystem && <Badge tone="lent">{item.gameSystem}</Badge>}
+          {/* The line this belongs to. The tree is unchanged — this box is
+              still its own root — so the badge is the only place it shows. */}
+          {item.series && <Badge tone="kind">{item.series}</Badge>}
           <h1>
             {item.name}
             {item.yearPublished && <span className="item-year"> ({item.yearPublished})</span>}

@@ -38,6 +38,7 @@ export type ItemDetails = {
   publisherUrl: string;
   sourceUrl: string;
   gameSystem: string;
+  series: string;
   designers: string;
   bggId: string;
   minPlayers: string;
@@ -53,6 +54,7 @@ export const EMPTY_DETAILS: ItemDetails = {
   publisherUrl: '',
   sourceUrl: '',
   gameSystem: '',
+  series: '',
   designers: '',
   bggId: '',
   minPlayers: '',
@@ -81,6 +83,7 @@ function toForm(item?: Item, parentId?: number | null): FormState {
     publisherUrl: item?.publisherUrl ?? '',
     sourceUrl: item?.sourceUrl ?? '',
     gameSystem: item?.gameSystem ?? '',
+    series: item?.series ?? '',
     designers: item?.designers ?? '',
     bggId: item?.bggId?.toString() ?? '',
     minPlayers: item?.minPlayers?.toString() ?? '',
@@ -103,6 +106,7 @@ export function detailsToInput(
   | 'publisherUrl'
   | 'sourceUrl'
   | 'gameSystem'
+  | 'series'
   | 'designers'
   | 'bggId'
   | 'minPlayers'
@@ -117,6 +121,7 @@ export function detailsToInput(
     publisherUrl: d.publisherUrl.trim() || null,
     sourceUrl: d.sourceUrl.trim() || null,
     gameSystem: d.gameSystem.trim() || null,
+    series: d.series.trim() || null,
     designers: d.designers.trim() || null,
     bggId: num(d.bggId),
     minPlayers: num(d.minPlayers),
@@ -179,7 +184,7 @@ export function ItemDetailFields({
         </Field>
       </div>
 
-      <div className="row-2">
+      <div className="row-3">
         {/* Not the publisher's site. For a pledge the campaign page is usually
             the only authoritative record the thing ever had, and an item can
             carry both — hence two fields and two hints rather than one box. */}
@@ -198,6 +203,16 @@ export function ItemDetailFields({
             value={value.gameSystem}
             onChange={(e) => onChange({ gameSystem: e.target.value })}
             placeholder="e.g. D&amp;D 5e (2014)"
+          />
+        </Field>
+        {/* A label, not a place in the tree. Boxes in a series stay separate
+            games; the collection page folds them into one entry and offers the
+            name as a filter. Typing the same name on another box joins it. */}
+        <Field label="Series" hint="The line this box belongs to">
+          <input
+            value={value.series}
+            onChange={(e) => onChange({ series: e.target.value })}
+            placeholder="e.g. Dice Throne"
           />
         </Field>
       </div>

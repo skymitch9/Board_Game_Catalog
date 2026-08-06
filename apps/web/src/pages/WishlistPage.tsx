@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Link } from '../router';
 import { KIND_LABEL } from '../components/ItemTree';
-import { Badge, EmptyState, ErrorBox, Spinner } from '../components/ui';
+import { Badge, EmptyState, ErrorBox, ParentLabel, Spinner } from '../components/ui';
 
 /**
  * What we want but do not have.
@@ -99,6 +99,10 @@ export function WishlistPage({ me }: { me: MeResponse }) {
               <div className="candidate__body">
                 <strong>
                   <Link to={`/items/${entry.itemId}`}>{entry.name}</Link>
+                  {/* The box it belongs to, linked. Naming it was already right;
+                      making it clickable is what turns "which one is Marine
+                      Worlds for?" into one tap instead of a search. */}
+                  <ParentLabel id={entry.parentItemId} name={entry.parentName} />
                   {entry.yearPublished && (
                     <span className="item-year"> ({entry.yearPublished})</span>
                   )}
@@ -107,15 +111,7 @@ export function WishlistPage({ me }: { me: MeResponse }) {
 
                 <span className="candidate__meta">
                   <Badge tone="wanted">wanted</Badge>
-                  {/* An expansion's own name rarely says what it expands, so
-                      the parent is named rather than left to be guessed. */}
-                  {entry.kind !== 'base' && (
-                    <Badge tone="kind">
-                      {entry.parentName
-                        ? `${KIND_LABEL[entry.kind]} of ${entry.parentName}`
-                        : KIND_LABEL[entry.kind]}
-                    </Badge>
-                  )}
+                  {entry.kind !== 'base' && <Badge tone="kind">{KIND_LABEL[entry.kind]}</Badge>}
                 </span>
 
                 <span className="muted">

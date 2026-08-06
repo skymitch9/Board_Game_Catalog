@@ -1,7 +1,13 @@
 import { useState } from 'react';
-import { ownedCount, summarizeTree, type Copy, type ItemNode } from '@bgc/core';
+import {
+  ownedCount,
+  summarizeTree,
+  type CollectionGroup,
+  type Copy,
+  type ItemNode,
+} from '@bgc/core';
 import { Link } from '../router';
-import { Badge, DigitalTag } from './ui';
+import { Badge, DigitalTag, ParentLabel } from './ui';
 
 /**
  * True when everything we hold of this item is a licence.
@@ -225,6 +231,9 @@ export function ItemCard({ node }: { node: ItemNode }) {
           {/* Which ruleset this needs, for the things that do not carry their
               own. Absent on every board game, which is most of the catalog. */}
           {node.gameSystem && <Badge tone="lent">{node.gameSystem}</Badge>}
+          {/* The line this box belongs to. Not a place in the tree — the tree
+              is unchanged and this box is still its own root. */}
+          {node.series && <Badge tone="kind">{node.series}</Badge>}
           {allDigital(node.copies) && <DigitalTag />}
           {/* An expansion sitting at the top level is not a game — it is one
               waiting for its game. Saying so is the difference between a
@@ -259,10 +268,21 @@ export function ItemCard({ node }: { node: ItemNode }) {
       {/* Why this group is in the results at all. Searching "seafarers" and
           being handed "Catan" is correct — that is where Seafarers is filed —
           but without this the result looks arbitrary, and the match is hidden
-          behind a collapsed list. */}
+          behind a collapsed list.
+
+          Each hit is a link now, and carries the box it is in: "Scarlet Witch
+          — Marvel Dice Throne". A hero three levels down used to be named with
+          no way to reach it and no clue which tray it came out of. */}
       {node.matchedChildren && node.matchedChildren.length > 0 && (
         <p className="match-why">
-          Matched <span>{node.matchedChildren.map((m) => m.name).join(', ')}</span>
+          Matched{' '}
+          {node.matchedChildren.map((m, i) => (
+            <span key={m.id}>
+              {i > 0 && ', '}
+              <Link to={`/items/${m.id}`}>{m.name}</Link>
+              <ParentLabel id={m.parentId} name={m.parentName} />
+            </span>
+          ))}
         </p>
       )}
 
@@ -312,5 +332,103 @@ export function ItemCard({ node }: { node: ItemNode }) {
     </article>
   );
 }
+
+/**
+ * A whole series or ruleset, folded into one card.
+ *
+ * The problem it solves is one line dominating the page: eleven Dice Throne
+ * boxes are a tenth of the collection's top level, and 147 of its 739 rows. The
+ * card stands where those eleven were, says what it is standing for, and opens
+ * into them — the trees themselves are untouched, so a search still matches a
+ * box (26 rows) rather than a whole line.
+ *
+ * It also covers the case that cannot be solved by re-parenting at all: 79 rows
+ * need D&D 5e and they live in nine separate trees, because 26 of them are
+ * third-party products that *require* the Player's Handbook rather than being
+ * part of D&D. Filing those inside D&D would misdescribe what the owner owns.
+ *
+ * **Format is on the face of the card** because a combined 5e list is exactly
+ * where "do I have this on paper or only on D&D Beyond?" gets asked, and 53 of
+ * those 79 are licences.
+ */
+export function GroupCard({ group, onOpen }: { group: CollectionGroup; onOpen: () => void }) {
+  const [open, setOpen] = useState(false);
+  const shown = open ? group.members : group.members.slice(0, VISIBLE_MEMBERS);
+  const hidden = group.members.length - shown.length;
+
+  return (
+    <article className="card item-card group-card">
+      <button type="button" className="item-head group-card__head" onClick={onOpen}>
+        {group.members[0]?.thumbnailUrl ? (
+          <img className="thumb" src={group.members[0].thumbnailUrl} alt="" loading="lazy" />
+        ) : (
+          <span className="thumb thumb-blank" aria-hidden="true" />
+        )}
+        <span className="item-head-text">
+          <span className="item-name">{group.name}</span>
+          <span className="item-sub">
+            {group.lines} {group.lines === 1 ? 'line' : 'lines'} · {group.items} item
+            {group.items === 1 ? '' : 's'}
+          </span>
+        </span>
+        <span className="item-badges">
+          <Badge tone={group.axis === 'series' ? 'kind' : 'lent'}>
+            {group.axis === 'series' ? 'series' : 'game system'}
+          </Badge>
+          {/* Both counts, not just the digital one: on a mixed list the question
+              is which of the two a given book is, and a lone "53 digital" reads
+              as though the other 26 are unaccounted for. */}
+          {group.digital > 0 && group.physical > 0 && (
+            <Badge tone="neutral">
+              {group.physical} physical · {group.digital} digital
+            </Badge>
+          )}
+          {group.digital > 0 && group.physical === 0 && <DigitalTag />}
+        </span>
+      </button>
+
+      <button
+        type="button"
+        className="children-toggle"
+        aria-expanded={open}
+        aria-controls={`group-${group.key}`}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="children-toggle__caret" aria-hidden="true" data-open={open}>
+          ▸
+        </span>
+        <span>
+          {open ? 'Hide' : 'Show'} the {group.lines} {group.lines === 1 ? 'line' : 'lines'}
+        </span>
+      </button>
+      <div className="children" id={`group-${group.key}`} hidden={!open}>
+        {open &&
+          shown.map((m) => (
+            <Link key={m.id} to={`/items/${m.id}`} className="child-row">
+              <span className="child-name">{m.name}</span>
+              <span className="child-status muted">
+                {m.items} item{m.items === 1 ? '' : 's'}
+              </span>
+            </Link>
+          ))}
+        {open && hidden > 0 && <p className="muted small">and {hidden} more</p>}
+      </div>
+
+      <footer className="item-foot">
+        <span>
+          {group.items} item{group.items === 1 ? '' : 's'}
+        </span>
+        {group.owned > 0 && <span>{group.owned} owned</span>}
+        {group.wanted > 0 && <span>{group.wanted} wanted</span>}
+        <button type="button" className="foot-action linklike" onClick={onOpen}>
+          Show these on their own
+        </button>
+      </footer>
+    </article>
+  );
+}
+
+/** Lines named before the list needs a "and N more". */
+const VISIBLE_MEMBERS = 12;
 
 export { KIND_LABEL, STATUS_TONE };

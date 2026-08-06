@@ -25,7 +25,7 @@ import {
   getItemDetail,
   getRelatedItems,
   listCoverCandidates,
-  listGameSystems,
+  listGroupOptions,
   listItemNames,
   listItemTrees,
   listRelationPairs,
@@ -129,19 +129,20 @@ export const catalogRoutes = new Hono<AppBindings>()
   })
 
   /**
-   * Headline numbers, so the UI needn't compute them — plus the rulesets in use.
+   * Headline numbers, so the UI needn't compute them — plus the groupings in use.
    *
-   * The game-system list rides along here rather than on a route of its own
-   * because it is the same kind of thing: a fact about the whole collection that
-   * the filters need before the user has typed anything. It is empty for a
-   * collection with no roleplaying books, and the filter then does not appear.
+   * The group list rides along here rather than on a route of its own because it
+   * is the same kind of thing: a fact about the whole collection that the filters
+   * need before the user has typed anything. It covers both axes — series and
+   * game system — because they are one mechanism to the person using them, and
+   * two lists would mean two dropdowns asking the same question.
    */
   .get('/meta', async (c) => {
-    const [stats, gameSystems] = await Promise.all([
+    const [stats, groups] = await Promise.all([
       collectionStats(c.env.DB),
-      listGameSystems(c.env.DB),
+      listGroupOptions(c.env.DB),
     ]);
-    return c.json({ stats, gameSystems });
+    return c.json({ stats, groups });
   })
 
   /**

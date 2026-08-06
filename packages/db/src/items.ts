@@ -1,12 +1,16 @@
 import type {
+  CollectionEntry,
+  CollectionGroup,
   Copy,
   CreateItemInput,
   DetailField,
+  GroupAxis,
   Item,
   ItemDetail,
   ItemNode,
   ItemPage,
   ItemQuery,
+  MatchedChild,
   Rating,
   UpdateItemInput,
   WishlistEntry,
@@ -36,6 +40,7 @@ export interface ItemRow {
   publisher_url: string | null;
   source_url: string | null;
   game_system: string | null;
+  series: string | null;
   designers: string | null;
   min_players: number | null;
   max_players: number | null;
@@ -62,6 +67,7 @@ export function mapItemRow(r: ItemRow): Item {
     publisherUrl: r.publisher_url,
     sourceUrl: r.source_url,
     gameSystem: r.game_system,
+    series: r.series,
     designers: r.designers,
     minPlayers: r.min_players,
     maxPlayers: r.max_players,
@@ -75,7 +81,7 @@ export function mapItemRow(r: ItemRow): Item {
 }
 
 const ITEM_COLUMNS = `id, bgg_id, kind, parent_item_id, root_game_id, pending_parent_name,
-  name, sort_name, year_published, publisher, publisher_url, source_url, game_system,
+  name, sort_name, year_published, publisher, publisher_url, source_url, game_system, series,
   designers, min_players, max_players, playtime_min, weight, thumbnail_url, description,
   created_at, updated_at`;
 
@@ -114,7 +120,80 @@ function itemMatchesTerm(item: Item, term: string): boolean {
  * AND down onto one item row would require one row to contain both, which is
  * the same mistake wearing different clothes.
  */
-function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } {
+/**
+ * One grouping label per game tree, and which axis it came from.
+ *
+ * Two rules, both of which earn their complexity against real data:
+ *
+ * - **A series outranks a game system.** They can both apply, and the series is
+ *   the more specific claim about the box.
+ * - **The value most of the tree carries wins.** Production holds exactly one
+ *   tree with two systems — 20 rows of "D&D 2024" and one of "D&D (playtest
+ *   material)" — and the alphabetically-first of those is the playtest sheet.
+ *   Taking `MIN()` would have filed the whole 2024 line under it.
+ *
+ * A root with no series and no system anywhere in its tree gets no row here, and
+ * is its own entry on the page.
+ *
+ * **A grouping of one line is not a grouping.** `HAVING COUNT(*) > 1` drops it,
+ * for the same reason a group of one child on a game card starts expanded:
+ * replacing one row with one row and a click is not a saving, it is an extra
+ * step. Production has four such systems — D&D 2024, Cypher System, Lewd Dungeon
+ * Adventures, the playtest sheet — and each stays the game it already was.
+ */
+const ROOT_GROUP_CTE = `WITH picked_group AS (
+  SELECT root_id, axis, val FROM (
+    SELECT root_id, axis, val,
+           ROW_NUMBER() OVER (
+             PARTITION BY root_id
+             ORDER BY CASE axis WHEN 'series' THEN 0 ELSE 1 END, n DESC, val
+           ) AS rn
+      FROM (
+        SELECT root_game_id AS root_id, 'series' AS axis, series AS val, COUNT(*) AS n
+          FROM item
+         WHERE root_game_id IS NOT NULL AND series IS NOT NULL AND trim(series) != ''
+         GROUP BY root_game_id, series
+        UNION ALL
+        SELECT root_game_id AS root_id, 'system' AS axis, game_system AS val, COUNT(*) AS n
+          FROM item
+         WHERE root_game_id IS NOT NULL AND game_system IS NOT NULL AND trim(game_system) != ''
+         GROUP BY root_game_id, game_system
+      )
+  ) WHERE rn = 1
+),
+root_group AS (
+  SELECT p.root_id, p.axis, p.val
+    FROM picked_group p
+    JOIN (SELECT axis, val FROM picked_group GROUP BY axis, val HAVING COUNT(*) > 1) m
+      ON m.axis = p.axis AND m.val = p.val
+) `;
+
+/**
+ * The identity of one entry on the collection page, as SQL.
+ *
+ * `root:42` for an ordinary game, `series:Dice Throne` or `system:D&D 5e (2014)`
+ * for a group. The page is paged on *this*, not on root ids, which is what makes
+ * eleven boxes occupy one slot rather than eleven and keeps a page the same size
+ * whichever it is.
+ */
+const GROUP_KEY = `CASE WHEN g.val IS NULL THEN 'root:' || i2.root_game_id
+                        ELSE g.axis || ':' || g.val END`;
+const ROOT_KEY = `'root:' || i2.root_game_id`;
+
+/** What entries are sorted by, so a group sits where its members were. */
+const GROUP_ORD = `CASE WHEN g.val IS NULL THEN lower(COALESCE(r.sort_name, r.name))
+                        ELSE lower(g.val) END`;
+const ROOT_ORD = `lower(COALESCE(r.sort_name, r.name))`;
+
+function matchingRootsSql(
+  query: ItemQuery,
+  opts?: {
+    /** Fold series and systems into one entry each. Adds the CTE and the join. */
+    grouped?: boolean;
+    /** An extra condition, ANDed last so its params bind after the rest. */
+    extra?: { where: string; params: unknown[] };
+  },
+): { cte: string; sql: string; key: string; ord: string; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
 
@@ -136,6 +215,12 @@ function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } 
     // rather than typed, and a prefix match would fold it into "D&D 2024".
     where.push('i2.game_system = ?');
     params.push(query.gameSystem);
+  }
+  if (query.series) {
+    // Exactly, for the same reason as `gameSystem`: free text in the column, but
+    // picked from a list built out of it rather than typed.
+    where.push('i2.series = ?');
+    params.push(query.series);
   }
   if (query.status) {
     where.push('c2.status = ?');
@@ -159,14 +244,29 @@ function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } 
     );
   }
 
+  const grouped = opts?.grouped ?? false;
+
+  if (opts?.extra) {
+    where.push(opts.extra.where);
+    params.push(...opts.extra.params);
+  }
+
   // The join to the root is what makes paging orderable: a page has to be the
-  // same 25 groups every time it is asked for, in an order a person recognises,
-  // and only the root carries the name the group is filed under.
+  // same 25 entries every time it is asked for, in an order a person
+  // recognises, and only the root carries the name the tree is filed under.
   const sql = `FROM item i2
                JOIN item r ON r.id = i2.root_game_id
                LEFT JOIN copy c2 ON c2.item_id = i2.id
+               ${grouped ? 'LEFT JOIN root_group g ON g.root_id = i2.root_game_id' : ''}
                ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
-  return { sql, params };
+
+  return {
+    cte: grouped ? ROOT_GROUP_CTE : '',
+    sql,
+    key: grouped ? GROUP_KEY : ROOT_KEY,
+    ord: grouped ? GROUP_ORD : ROOT_ORD,
+    params,
+  };
 }
 
 /** Assemble flat rows into base-game-rooted trees. */
@@ -197,45 +297,111 @@ function buildTrees(items: Item[], copiesByItem: Map<number, Copy[]>): ItemNode[
 const MAX_MATCH_REASONS = 3;
 
 /**
- * One page of matching game trees.
+ * Should this request fold series and systems into single entries?
  *
- * Paged on the *roots*, then the page's trees are fetched whole. The alternative
- * — fetching every matching item and slicing afterwards — would have assembled
- * all 640 rows to hand back 25 groups, which is the cost this exists to avoid.
+ * Two cases where the answer is no however the caller asked, and both are about
+ * not hiding the thing the person is looking at:
  *
- * Four reads: the total, this page's root ids, then the items and copies for
- * those roots. The last two are batched; the first two cannot be, because the
- * ids decide what the others ask for.
+ * - **While searching.** The owner's journey is "find Scarlet Witch, work out
+ *   which box". Folding her hit into a *Dice Throne* card answers neither half.
+ * - **While inside a group.** Filtering to `series=Dice Throne` is the act of
+ *   opening it; folding the result back into one card would make the filter do
+ *   nothing.
+ */
+function shouldGroup(query: ItemQuery): boolean {
+  return Boolean(query.grouped) && !query.q && !query.series && !query.gameSystem;
+}
+
+/**
+ * One page of the collection: game trees, and groups standing in for several.
+ *
+ * Paged on the *entry key*, then each page's trees are fetched whole and each
+ * page's groups summarised. The alternative — fetching every matching item and
+ * slicing afterwards — would assemble all 739 rows to hand back 25 entries,
+ * which is the cost this exists to avoid. Summarising a group in SQL matters for
+ * the same reason: a Dice Throne card that had to load its 147 rows to say "147
+ * rows" would cost exactly what folding it up was meant to save.
+ *
+ * Reads: the totals, this page's keys, then two batched reads for the trees and
+ * two more for the groups — and the group pair is skipped entirely when the page
+ * holds none, which is every page of an ungrouped request.
  */
 export async function listItemTrees(db: D1Database, query: ItemQuery): Promise<ItemPage> {
-  const roots = matchingRootsSql(query);
+  const grouped = shouldGroup(query);
+  const roots = matchingRootsSql(query, { grouped });
   const pageSize = COLLECTION_PAGE_SIZE;
 
   const counted = await db
-    .prepare(`SELECT COUNT(DISTINCT i2.root_game_id) AS total ${roots.sql}`)
+    .prepare(
+      `${roots.cte}SELECT COUNT(DISTINCT ${roots.key}) AS total,
+              COUNT(DISTINCT i2.root_game_id) AS roots ${roots.sql}`,
+    )
     .bind(...roots.params)
-    .first<{ total: number }>();
+    .first<{ total: number; roots: number }>();
   const total = counted?.total ?? 0;
+  const totalRoots = counted?.roots ?? 0;
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   // Asking for page 9 of 5 gets the last page, not an empty one. A stale link or
   // a filter that narrowed under you should land somewhere, not nowhere.
   const page = Math.min(Math.max(query.page ?? 1, 1), pageCount);
 
-  if (total === 0) return { items: [], total, page: 1, pageSize, pageCount: 1 };
+  if (total === 0) {
+    return { entries: [], total, totalRoots, page: 1, pageSize, pageCount: 1 };
+  }
 
-  const { results: idRows } = await db
+  // Grouped by the key rather than DISTINCT over (key, ord): a group's members
+  // have different sort names, and only one of them can decide where the group
+  // lands. MIN is that decision, and it is stable.
+  const { results: keyRows } = await db
     .prepare(
-      `SELECT DISTINCT i2.root_game_id AS id, COALESCE(r.sort_name, r.name) AS ord
+      `${roots.cte}SELECT ${roots.key} AS gkey, MIN(${roots.ord}) AS ord
        ${roots.sql}
-        ORDER BY ord, id
+        GROUP BY gkey
+        ORDER BY ord, gkey
         LIMIT ? OFFSET ?`,
     )
     .bind(...roots.params, pageSize, (page - 1) * pageSize)
-    .all<{ id: number; ord: string }>();
+    .all<{ gkey: string; ord: string }>();
 
-  const ids = idRows.map((r) => r.id);
-  if (ids.length === 0) return { items: [], total, page, pageSize, pageCount };
+  const keys = keyRows.map((k) => k.gkey);
+  if (keys.length === 0) {
+    return { entries: [], total, totalRoots, page, pageSize, pageCount };
+  }
+
+  const rootKeys = keys.filter((k) => k.startsWith('root:'));
+  const groupKeys = keys.filter((k) => !k.startsWith('root:'));
+
+  const [trees, groups] = await Promise.all([
+    fetchTrees(db, query, rootKeys.map((k) => Number(k.slice(5)))),
+    groupKeys.length > 0 ? summariseGroups(db, query, groupKeys) : Promise.resolve(new Map()),
+  ]);
+
+  const treeById = new Map(trees.map((t) => [t.id, t]));
+
+  // Rebuilt in the order the keys came back, so groups sit among the trees
+  // where their members were rather than being bolted on at either end.
+  const entries: CollectionEntry[] = [];
+  for (const key of keys) {
+    if (key.startsWith('root:')) {
+      const tree = treeById.get(Number(key.slice(5)));
+      if (tree) entries.push({ key, kind: 'tree', tree });
+    } else {
+      const group = groups.get(key);
+      if (group) entries.push({ key, kind: 'group', group });
+    }
+  }
+
+  return { entries, total, totalRoots, page, pageSize, pageCount };
+}
+
+/** Whole trees for the roots on this page, with their copies and match reasons. */
+async function fetchTrees(
+  db: D1Database,
+  query: ItemQuery,
+  ids: number[],
+): Promise<ItemNode[]> {
+  if (ids.length === 0) return [];
   const holes = ids.map(() => '?').join(',');
 
   const batched = await db.batch([
@@ -262,7 +428,120 @@ export async function listItemTrees(db: D1Database, query: ItemQuery): Promise<I
 
   const trees = buildTrees(items, copiesByItem);
   attachMatchReasons(trees, searchTerms(query.q));
-  return { items: trees, total, page, pageSize, pageCount };
+  return trees;
+}
+
+/**
+ * What a folded-up group has to say for itself, without unfolding it.
+ *
+ * Two reads. The first is one row per line — its name, its cover, and how many
+ * rows are under it; the second sums the copies. Neither returns the tree, which
+ * is the point: the Dice Throne card describes 147 rows without loading one.
+ *
+ * The filters are reapplied inside, so a group counts what *matches* rather than
+ * what exists. Filtering to `wanted` and being told the Dice Throne group holds
+ * 147 items would be a card describing a different question's answer.
+ */
+async function summariseGroups(
+  db: D1Database,
+  query: ItemQuery,
+  groupKeys: string[],
+): Promise<Map<string, CollectionGroup>> {
+  const holes = groupKeys.map(() => '?').join(',');
+  const scoped = matchingRootsSql(query, {
+    grouped: true,
+    extra: { where: `${GROUP_KEY} IN (${holes})`, params: groupKeys },
+  });
+  const matchedRoots = `SELECT DISTINCT i2.root_game_id AS root_id, ${scoped.key} AS gkey ${scoped.sql}`;
+
+  const batched = await db.batch([
+    db
+      .prepare(
+        `${scoped.cte}SELECT k.gkey, r.id, r.name, r.thumbnail_url,
+                (SELECT COUNT(*) FROM item x WHERE x.root_game_id = r.id) AS items
+           FROM (${matchedRoots}) k
+           JOIN item r ON r.id = k.root_id
+          ORDER BY lower(COALESCE(r.sort_name, r.name))`,
+      )
+      .bind(...scoped.params),
+    db
+      .prepare(
+        `${scoped.cte}SELECT k.gkey,
+                COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') THEN c.quantity END), 0) AS owned,
+                COALESCE(SUM(CASE WHEN c.status IN ('wanted','preordered') THEN c.quantity END), 0) AS wanted,
+                COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') AND c.format = 'digital'
+                                  THEN c.quantity END), 0) AS digital,
+                COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') AND c.format = 'physical'
+                                  THEN c.quantity END), 0) AS physical
+           FROM (${matchedRoots}) k
+           JOIN item it ON it.root_game_id = k.root_id
+           JOIN copy c ON c.item_id = it.id
+          GROUP BY k.gkey`,
+      )
+      .bind(...scoped.params),
+  ]);
+
+  type MemberRow = {
+    gkey: string;
+    id: number;
+    name: string;
+    thumbnail_url: string | null;
+    items: number;
+  };
+  type CopyRowAgg = {
+    gkey: string;
+    owned: number;
+    wanted: number;
+    digital: number;
+    physical: number;
+  };
+
+  const memberRows = (batched[0]?.results ?? []) as MemberRow[];
+  const copyRows = (batched[1]?.results ?? []) as CopyRowAgg[];
+
+  const groups = new Map<string, CollectionGroup>();
+  for (const row of memberRows) {
+    // `series:Dice Throne` — split once, because a value may contain a colon.
+    const cut = row.gkey.indexOf(':');
+    const axis = row.gkey.slice(0, cut) as GroupAxis;
+    const name = row.gkey.slice(cut + 1);
+
+    let group = groups.get(row.gkey);
+    if (!group) {
+      group = {
+        key: row.gkey,
+        axis,
+        name,
+        lines: 0,
+        items: 0,
+        owned: 0,
+        wanted: 0,
+        digital: 0,
+        physical: 0,
+        members: [],
+      };
+      groups.set(row.gkey, group);
+    }
+    group.lines += 1;
+    group.items += row.items;
+    group.members.push({
+      id: row.id,
+      name: row.name,
+      items: row.items,
+      thumbnailUrl: row.thumbnail_url,
+    });
+  }
+
+  for (const row of copyRows) {
+    const group = groups.get(row.gkey);
+    if (!group) continue;
+    group.owned = row.owned;
+    group.wanted = row.wanted;
+    group.digital = row.digital;
+    group.physical = row.physical;
+  }
+
+  return groups;
 }
 
 /**
@@ -287,11 +566,22 @@ function attachMatchReasons(roots: ItemNode[], terms: string[]): void {
     const unexplained = terms.filter((term) => !itemMatchesTerm(root, term));
     if (unexplained.length === 0) continue;
 
-    const scored: { id: number; name: string; hits: number }[] = [];
+    // The parent travels with each hit. "Scarlet Witch" alone answers half the
+    // question a search asks; the other half is which box to pull off the shelf,
+    // and the walker already knows it — no second query, and no rename.
+    const scored: (MatchedChild & { hits: number })[] = [];
     const walk = (node: ItemNode) => {
       for (const child of node.children) {
         const hits = unexplained.filter((term) => itemMatchesTerm(child, term)).length;
-        if (hits > 0) scored.push({ id: child.id, name: child.name, hits });
+        if (hits > 0) {
+          scored.push({
+            id: child.id,
+            name: child.name,
+            parentId: node.id,
+            parentName: node.name,
+            hits,
+          });
+        }
         walk(child);
       }
     };
@@ -303,7 +593,7 @@ function attachMatchReasons(roots: ItemNode[], terms: string[]): void {
     if (scored.length > 0) {
       root.matchedChildren = scored
         .slice(0, MAX_MATCH_REASONS)
-        .map(({ id, name }) => ({ id, name }));
+        .map(({ id, name, parentId, parentName }) => ({ id, name, parentId, parentName }));
     }
   }
 }
@@ -491,10 +781,10 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
     .prepare(
       `INSERT INTO item (bgg_id, kind, parent_item_id, root_game_id, pending_parent_name,
                          name, sort_name, year_published,
-                         publisher, publisher_url, source_url, game_system,
+                         publisher, publisher_url, source_url, game_system, series,
                          designers, min_players, max_players,
                          playtime_min, weight, thumbnail_url, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       input.bggId ?? null,
@@ -511,6 +801,7 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
       input.publisherUrl || null,
       input.sourceUrl || null,
       input.gameSystem || null,
+      input.series || null,
       input.designers || null,
       input.minPlayers ?? null,
       input.maxPlayers ?? null,
@@ -604,6 +895,7 @@ const UPDATABLE: Record<keyof UpdateItemInput, string> = {
   publisherUrl: 'publisher_url',
   sourceUrl: 'source_url',
   gameSystem: 'game_system',
+  series: 'series',
   designers: 'designers',
   minPlayers: 'min_players',
   maxPlayers: 'max_players',
@@ -872,28 +1164,57 @@ export async function listTopLevelItems(
   }));
 }
 
+/** One series or one ruleset in use, and how much of the catalog claims it. */
+export interface GroupOption {
+  axis: GroupAxis;
+  name: string;
+  /** Rows carrying the value itself. 147 for Dice Throne, 79 for D&D 5e. */
+  items: number;
+  /** Top-level lines those rows sit in. 11 and 9 respectively. */
+  lines: number;
+}
+
 /**
- * The rulesets actually in use, with how many items claim each.
+ * The series and rulesets actually in use, for the filter and the group cards.
  *
- * The filter dropdown is built from this rather than from a constant, because
- * `game_system` is deliberately free text — an enum would have to be edited
- * every time a book from a new system arrives, and the list would then be a
- * second place for the truth to live. Empty for a collection of board games,
- * which is the honest answer: the filter simply does not appear.
+ * Built from the values in the columns rather than from a constant, because both
+ * are deliberately free text — an enum would have to be edited every time a book
+ * from a new system or a box from a new line arrived, and would then be a second
+ * place for the truth to live.
+ *
+ * **`lines` is the number worth reading.** 79 rows need D&D 5e and they sit in
+ * *nine* separate trees: 53 books inside D&D, and 26 third-party products
+ * catalogued as their own lines because they `require` the Player's Handbook
+ * rather than being part of it. That split is correct and is not going to be
+ * fixed by re-parenting, which is exactly why the filter has to reach across it.
+ *
+ * Empty for a collection of board games with no series recorded, and the filter
+ * then does not appear at all.
  */
-export async function listGameSystems(
-  db: D1Database,
-): Promise<{ name: string; items: number }[]> {
+export async function listGroupOptions(db: D1Database): Promise<GroupOption[]> {
   const { results } = await db
     .prepare(
-      `SELECT game_system AS name, COUNT(*) AS items
+      `SELECT 'series' AS axis, series AS name,
+              COUNT(*) AS items, COUNT(DISTINCT root_game_id) AS lines
+         FROM item
+        WHERE series IS NOT NULL AND trim(series) != ''
+        GROUP BY series
+       UNION ALL
+       SELECT 'system' AS axis, game_system AS name,
+              COUNT(*) AS items, COUNT(DISTINCT root_game_id) AS lines
          FROM item
         WHERE game_system IS NOT NULL AND trim(game_system) != ''
         GROUP BY game_system
-        ORDER BY items DESC, game_system`,
+        ORDER BY items DESC, name`,
     )
-    .all<{ name: string; items: number }>();
-  return results;
+    .all<{ axis: string; name: string; items: number; lines: number }>();
+
+  return results.map((r) => ({
+    axis: r.axis as GroupAxis,
+    name: r.name,
+    items: r.items,
+    lines: r.lines,
+  }));
 }
 
 export async function collectionStats(db: D1Database): Promise<{

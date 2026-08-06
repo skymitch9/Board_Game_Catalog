@@ -13,6 +13,7 @@ import type {
   CreateItemInput,
   CreateRelationInput,
   DetailsRun,
+  GroupAxis,
   HealthResponse,
   Item,
   ItemDetail,
@@ -86,10 +87,17 @@ export interface CollectionStats {
   digitalCopies: number;
 }
 
-/** One ruleset in use, and how many items need it. */
-export interface GameSystemCount {
+/**
+ * One series or one ruleset in use — the two things the collection page can
+ * fold into a single entry and filter by.
+ */
+export interface GroupOption {
+  axis: GroupAxis;
   name: string;
+  /** Rows carrying it: 147 for Dice Throne, 79 for D&D 5e (2014). */
   items: number;
+  /** Top-level lines those rows sit in: 11 and 9. */
+  lines: number;
 }
 
 function toQueryString(query: ItemQuery): string {
@@ -105,14 +113,14 @@ export const api = {
   health: () => req<HealthResponse>('/api/health'),
   me: () => req<MeResponse>('/api/me'),
 
-  meta: () =>
-    req<{ stats: CollectionStats; gameSystems: GameSystemCount[] }>('/api/meta'),
+  meta: () => req<{ stats: CollectionStats; groups: GroupOption[] }>('/api/meta'),
 
   /**
-   * One page of game trees. `total` is every match, not the page — see ItemPage.
+   * One page of the collection. `total` is every match, not the page.
    *
-   * The page size is the server's, so there is no way to ask for all 107 groups
-   * at once; anything that needs every item wants a different endpoint.
+   * Entries are game trees and, with `grouped`, whole series and rulesets folded
+   * into one. The page size is the server's, so there is no way to ask for all
+   * of it at once; anything that needs every item wants a different endpoint.
    */
   items: (query: ItemQuery = {}) => req<ItemPage>(`/api/items${toQueryString(query)}`),
 
