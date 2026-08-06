@@ -223,6 +223,8 @@ export function ScanPage({ me }: { me: MeResponse }) {
         await api.createCopy(item.id, {
           quantity: 1,
           status: 'owned',
+          // Scanning a barcode or a cover means the thing is in front of you.
+          format: 'physical',
           isSleeved: false,
           isPunched: false,
         });

@@ -13,6 +13,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
   const [kind, setKind] = useState('');
   const [uncatalogued, setUncatalogued] = useState(false);
   const [duplicates, setDuplicates] = useState(false);
+  const [gameSystem, setGameSystem] = useState('');
   const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebounced(search);
@@ -21,7 +22,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
   // page 4 of the whole catalog is not page 4 of a search for "catan".
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, status, kind, uncatalogued, duplicates]);
+  }, [debouncedSearch, status, kind, uncatalogued, duplicates, gameSystem]);
 
   const query: ItemQuery = {
     ...(debouncedSearch ? { q: debouncedSearch } : {}),
@@ -29,6 +30,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     ...(kind ? { kind: kind as ItemQuery['kind'] } : {}),
     ...(uncatalogued ? { uncatalogued: true } : {}),
     ...(duplicates ? { duplicates: true } : {}),
+    ...(gameSystem ? { gameSystem } : {}),
     ...(page > 1 ? { page } : {}),
   };
 
@@ -41,6 +43,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
     kind,
     uncatalogued,
     duplicates,
+    gameSystem,
     page,
   ]);
 
@@ -51,8 +54,12 @@ export function CollectionPage({ me }: { me: MeResponse }) {
 
   const canEdit = me.capabilities.includes('editCatalog');
   const filtersActive = Boolean(
-    debouncedSearch || status || kind || uncatalogued || duplicates,
+    debouncedSearch || status || kind || uncatalogued || duplicates || gameSystem,
   );
+  // Only offered when there is something to choose between. A collection of
+  // board games records no rulesets, and a dropdown with one empty option in it
+  // is a control that teaches you nothing.
+  const systems = meta.state === 'ok' ? meta.data.gameSystems : [];
 
   return (
     <>
@@ -65,6 +72,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
               {meta.data.stats.expansions > 0 && ` · ${meta.data.stats.expansions} expansion${meta.data.stats.expansions !== 1 ? 's' : ''}`}
               {meta.data.stats.accessories > 0 && ` · ${meta.data.stats.accessories} accessor${meta.data.stats.accessories !== 1 ? 'ies' : 'y'}`}
               {meta.data.stats.wantedCopies > 0 && ` · ${meta.data.stats.wantedCopies} wanted`}
+              {meta.data.stats.digitalCopies > 0 && ` · ${meta.data.stats.digitalCopies} digital`}
               {meta.data.stats.duplicatedItems > 0 && (
                 <>
                   {' · '}
@@ -131,6 +139,21 @@ export function CollectionPage({ me }: { me: MeResponse }) {
             ))}
           </select>
 
+          {systems.length > 0 && (
+            <select
+              value={gameSystem}
+              onChange={(e) => setGameSystem(e.target.value)}
+              aria-label="Game system"
+            >
+              <option value="">Any system</option>
+              {systems.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name} ({s.items})
+                </option>
+              ))}
+            </select>
+          )}
+
           <label className="check-inline">
             <input
               type="checkbox"
@@ -159,6 +182,7 @@ export function CollectionPage({ me }: { me: MeResponse }) {
                 setKind('');
                 setUncatalogued(false);
                 setDuplicates(false);
+                setGameSystem('');
               }}
             >
               Clear

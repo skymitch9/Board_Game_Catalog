@@ -112,6 +112,9 @@ export function QuickAdd({
         await api.createCopy(item.id, {
           quantity: Math.max(1, Number(quantity) || 1),
           status,
+          // Typing along a shelf means a box in your hand. A licence is edited
+          // in afterwards on the item page rather than asked about here.
+          format: 'physical',
           isSleeved: false,
           isPunched: false,
         });

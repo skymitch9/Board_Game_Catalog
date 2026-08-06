@@ -27,6 +27,8 @@ export interface ItemRow {
   year_published: number | null;
   publisher: string | null;
   publisher_url: string | null;
+  source_url: string | null;
+  game_system: string | null;
   designers: string | null;
   min_players: number | null;
   max_players: number | null;
@@ -51,6 +53,8 @@ export function mapItemRow(r: ItemRow): Item {
     yearPublished: r.year_published,
     publisher: r.publisher,
     publisherUrl: r.publisher_url,
+    sourceUrl: r.source_url,
+    gameSystem: r.game_system,
     designers: r.designers,
     minPlayers: r.min_players,
     maxPlayers: r.max_players,
@@ -64,8 +68,9 @@ export function mapItemRow(r: ItemRow): Item {
 }
 
 const ITEM_COLUMNS = `id, bgg_id, kind, parent_item_id, root_game_id, pending_parent_name,
-  name, sort_name, year_published, publisher, publisher_url, designers, min_players,
-  max_players, playtime_min, weight, thumbnail_url, description, created_at, updated_at`;
+  name, sort_name, year_published, publisher, publisher_url, source_url, game_system,
+  designers, min_players, max_players, playtime_min, weight, thumbnail_url, description,
+  created_at, updated_at`;
 
 /** "The Castles of Burgundy" sorts under C, not T. */
 export function toSortName(name: string): string {
@@ -117,6 +122,13 @@ function matchingRootsSql(query: ItemQuery): { sql: string; params: unknown[] } 
   if (query.kind) {
     where.push('i2.kind = ?');
     params.push(query.kind);
+  }
+  if (query.gameSystem) {
+    // Matched exactly, not by LIKE: the values are free text but the dropdown is
+    // built from the ones actually in the column, so "D&D 5e (2014)" is picked
+    // rather than typed, and a prefix match would fold it into "D&D 2024".
+    where.push('i2.game_system = ?');
+    params.push(query.gameSystem);
   }
   if (query.status) {
     where.push('c2.status = ?');
@@ -405,9 +417,10 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
     .prepare(
       `INSERT INTO item (bgg_id, kind, parent_item_id, root_game_id, pending_parent_name,
                          name, sort_name, year_published,
-                         publisher, publisher_url, designers, min_players, max_players,
+                         publisher, publisher_url, source_url, game_system,
+                         designers, min_players, max_players,
                          playtime_min, weight, thumbnail_url, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       input.bggId ?? null,
@@ -422,6 +435,8 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
       input.yearPublished ?? null,
       input.publisher || null,
       input.publisherUrl || null,
+      input.sourceUrl || null,
+      input.gameSystem || null,
       input.designers || null,
       input.minPlayers ?? null,
       input.maxPlayers ?? null,
@@ -513,6 +528,8 @@ const UPDATABLE: Record<keyof UpdateItemInput, string> = {
   yearPublished: 'year_published',
   publisher: 'publisher',
   publisherUrl: 'publisher_url',
+  sourceUrl: 'source_url',
+  gameSystem: 'game_system',
   designers: 'designers',
   minPlayers: 'min_players',
   maxPlayers: 'max_players',
@@ -738,6 +755,30 @@ export async function listTopLevelItems(
   }));
 }
 
+/**
+ * The rulesets actually in use, with how many items claim each.
+ *
+ * The filter dropdown is built from this rather than from a constant, because
+ * `game_system` is deliberately free text — an enum would have to be edited
+ * every time a book from a new system arrives, and the list would then be a
+ * second place for the truth to live. Empty for a collection of board games,
+ * which is the honest answer: the filter simply does not appear.
+ */
+export async function listGameSystems(
+  db: D1Database,
+): Promise<{ name: string; items: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT game_system AS name, COUNT(*) AS items
+         FROM item
+        WHERE game_system IS NOT NULL AND trim(game_system) != ''
+        GROUP BY game_system
+        ORDER BY items DESC, game_system`,
+    )
+    .all<{ name: string; items: number }>();
+  return results;
+}
+
 export async function collectionStats(db: D1Database): Promise<{
   baseGames: number;
   expansions: number;
@@ -746,6 +787,8 @@ export async function collectionStats(db: D1Database): Promise<{
   ownedCopies: number;
   wantedCopies: number;
   duplicatedItems: number;
+  /** Licences rather than objects — the D&D Beyond half of the shelf. */
+  digitalCopies: number;
 }> {
   const row = await db
     .prepare(
@@ -760,7 +803,9 @@ export async function collectionStats(db: D1Database): Promise<{
            WHERE status IN ('wanted','preordered'))                          AS wanted_copies,
          (SELECT COUNT(*) FROM (
             SELECT item_id FROM copy WHERE status IN ('owned','lent')
-             GROUP BY item_id HAVING SUM(quantity) > 1))                     AS duplicated_items`,
+             GROUP BY item_id HAVING SUM(quantity) > 1))                     AS duplicated_items,
+         (SELECT COALESCE(SUM(quantity), 0) FROM copy
+           WHERE format = 'digital' AND status IN ('owned','lent'))          AS digital_copies`,
     )
     .first<{
       base_games: number;
@@ -770,6 +815,7 @@ export async function collectionStats(db: D1Database): Promise<{
       owned_copies: number;
       wanted_copies: number;
       duplicated_items: number;
+      digital_copies: number;
     }>();
 
   return {
@@ -780,6 +826,7 @@ export async function collectionStats(db: D1Database): Promise<{
     ownedCopies: row?.owned_copies ?? 0,
     wantedCopies: row?.wanted_copies ?? 0,
     duplicatedItems: row?.duplicated_items ?? 0,
+    digitalCopies: row?.digital_copies ?? 0,
   };
 }
 

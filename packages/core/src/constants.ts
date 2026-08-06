@@ -21,6 +21,16 @@ export const COPY_STATUSES = ['owned', 'wanted', 'preordered', 'lent', 'sold'] a
 export type CopyStatus = (typeof COPY_STATUSES)[number];
 
 /**
+ * Whether a copy is a thing or a licence.
+ *
+ * Every D&D Beyond book is the second: owning the Monster Manual digitally
+ * answers "do we have it" and not "can it be handed across the table". Added by
+ * migration 0015; `physical` is the default and covers all 564 board-game rows.
+ */
+export const COPY_FORMATS = ['physical', 'digital'] as const;
+export type CopyFormat = (typeof COPY_FORMATS)[number];
+
+/**
  * How many game trees one page of the collection holds.
  *
  * Fixed on the server rather than sent by the client: the cost being paged is
@@ -49,16 +59,40 @@ export type SourceTier = (typeof SOURCE_TIERS)[number];
  * - works_with: standalone games that combine (Dice Throne characters, Unmatched fighters)
  * - reimplements: a newer standalone version of an older game
  * - integrates_with: can be combined with another standalone game
+ * - requires: you cannot use this without owning that. A 5e supplement and the
+ *   Player's Handbook. `works_with` is the near miss and is wrong — it implies
+ *   optional compatibility — and nesting is wrong too, because Auroboros is not
+ *   *part of* D&D, it is a separate product with a hard dependency.
  *
  * `same_family` is first because it is the common case in a real collection and
  * the one the others were being stretched to cover. Starfarers does not *work
  * with* Catan — you cannot shuffle them together — and calling it a
  * reimplementation overstates it. It is simply another Catan.
+ *
+ * `requires` is the only directional one — see DIRECTIONAL_RELATIONS below.
  */
 export const RELATION_TYPES = [
   'same_family',
   'works_with',
   'reimplements',
   'integrates_with',
+  'requires',
 ] as const;
 export type RelationType = (typeof RELATION_TYPES)[number];
+
+/**
+ * Relations where which item is `from` and which is `to` carries meaning.
+ *
+ * Everything else here is a claim about a pair and reads the same from either
+ * end, so `createRelation` normalises the two ids into a stable order to make
+ * the unique index catch duplicates whichever way round they are offered. That
+ * normalisation would destroy a `requires`: the supplement requires the core
+ * book, never the reverse, and a stored link that had been silently flipped
+ * would have the Player's Handbook announcing it cannot be used without one of
+ * its own supplements.
+ *
+ * `reimplements` arguably belongs here too — a newer game reimplements an older
+ * one, not both ways — but no code reads its direction today and flipping the
+ * existing rows is not this change's job.
+ */
+export const DIRECTIONAL_RELATIONS: readonly RelationType[] = ['requires'];

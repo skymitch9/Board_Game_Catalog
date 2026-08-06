@@ -24,6 +24,7 @@ import {
   getItemDetail,
   getRelatedItems,
   listCoverCandidates,
+  listGameSystems,
   listItemNames,
   listItemTrees,
   listRelationPairs,
@@ -105,9 +106,20 @@ export const catalogRoutes = new Hono<AppBindings>()
     return c.json(covers);
   })
 
-  /** Headline numbers, so the UI needn't compute them. */
+  /**
+   * Headline numbers, so the UI needn't compute them — plus the rulesets in use.
+   *
+   * The game-system list rides along here rather than on a route of its own
+   * because it is the same kind of thing: a fact about the whole collection that
+   * the filters need before the user has typed anything. It is empty for a
+   * collection with no roleplaying books, and the filter then does not appear.
+   */
   .get('/meta', async (c) => {
-    return c.json({ stats: await collectionStats(c.env.DB) });
+    const [stats, gameSystems] = await Promise.all([
+      collectionStats(c.env.DB),
+      listGameSystems(c.env.DB),
+    ]);
+    return c.json({ stats, gameSystems });
   })
 
   /**

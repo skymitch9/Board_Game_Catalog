@@ -375,6 +375,20 @@ textarea { resize: vertical; }
   border-radius: 4px; padding: 0 0.3em; margin-right: 0.4em;
   font-weight: 700; font-size: 0.9em;
 }
+/* A licence, not an object. Quieter than a status badge on purpose — it
+   qualifies a status rather than replacing it. */
+.digital-tag {
+  display: inline-block;
+  background: var(--transit-bg); color: var(--transit);
+  border-radius: 4px; padding: 0 0.35em; margin-right: 0.4em;
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;
+}
+
+/* What this cannot be used without, stated rather than badged. */
+.requires { margin: 0.35rem 0 0; font-size: 0.85rem; }
+.requires__line { display: block; }
+.requires__line strong { font-weight: 600; }
+
 .dupe-strip {
   display: flex; flex-wrap: wrap; gap: 0.5rem;
   padding: 0.4rem 1rem; border-top: 1px solid var(--line);

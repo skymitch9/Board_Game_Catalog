@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { COPY_STATUSES, type Copy, type CopyStatus } from '@bgc/core';
+import { COPY_FORMATS, COPY_STATUSES, type Copy, type CopyFormat, type CopyStatus } from '@bgc/core';
 import { api } from '../api';
-import { Badge, ConfirmButton, ErrorBox, Field } from './ui';
+import { Badge, ConfirmButton, DigitalTag, ErrorBox, Field } from './ui';
 import { STATUS_TONE } from './ItemTree';
 
 /**
@@ -17,6 +17,7 @@ function formatAdded(iso: string): string {
 interface FormState {
   quantity: string;
   status: CopyStatus;
+  format: CopyFormat;
   isSleeved: boolean;
   isPunched: boolean;
   lentTo: string;
@@ -28,6 +29,7 @@ function toForm(copy?: Copy): FormState {
   return {
     quantity: String(copy?.quantity ?? 1),
     status: copy?.status ?? 'owned',
+    format: copy?.format ?? 'physical',
     isSleeved: copy?.isSleeved ?? false,
     isPunched: copy?.isPunched ?? false,
     lentTo: copy?.lentTo ?? '',
@@ -62,6 +64,7 @@ export function CopyForm({
       const payload = {
         quantity: Math.max(1, Number(form.quantity) || 1),
         status: form.status,
+        format: form.format,
         isSleeved: form.isSleeved,
         isPunched: form.isPunched,
         lentTo: form.lentTo.trim() || null,
@@ -83,7 +86,7 @@ export function CopyForm({
     <form className="copy-form" onSubmit={submit}>
       {error ? <ErrorBox error={error} what="Could not save this copy" /> : null}
 
-      <div className="row-2">
+      <div className="row-3">
         <Field label="How many" hint="Identical copies">
           <input
             type="number"
@@ -98,6 +101,19 @@ export function CopyForm({
             {COPY_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* A licence is not an object. Defaults to physical, which is nearly
+            everything — this exists so the D&D Beyond half of the shelf can say
+            it cannot be handed across a table. */}
+        <Field label="Format">
+          <select value={form.format} onChange={(e) => set('format', e.target.value as CopyFormat)}>
+            {COPY_FORMATS.map((f) => (
+              <option key={f} value={f}>
+                {f}
               </option>
             ))}
           </select>
@@ -200,6 +216,10 @@ export function CopyRow({
       <Badge tone={STATUS_TONE[copy.status]}>
         {copy.quantity > 1 ? `${copy.quantity} × ${copy.status}` : copy.status}
       </Badge>
+      {/* Only the exception is labelled. 564 of 639 copies are physical, and a
+          badge on every one of them would be a badge nobody reads — the same
+          argument this codebase already makes about "owned". */}
+      {copy.format === 'digital' && <DigitalTag />}
       <span className="copy-facts">{facts.join(' · ')}</span>
       {(copy.completenessNotes || copy.notes) && (
         <span className="copy-notes">{[copy.completenessNotes, copy.notes].filter(Boolean).join(' — ')}</span>

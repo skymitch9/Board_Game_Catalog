@@ -15,7 +15,14 @@ import { CopyForm, CopyRow } from '../components/CopyEditor';
 import { ItemForm } from '../components/ItemForm';
 import { KIND_LABEL, STATUS_TONE } from '../components/ItemTree';
 import { Ratings } from '../components/Ratings';
-import { Badge, ConfirmButton, EmptyState, ErrorBox, Spinner } from '../components/ui';
+import {
+  Badge,
+  ConfirmButton,
+  DigitalTag,
+  EmptyState,
+  ErrorBox,
+  Spinner,
+} from '../components/ui';
 
 export function ItemPage({
   id,
@@ -82,6 +89,10 @@ export function ItemPage({
         {item.thumbnailUrl && <img className="thumb thumb-lg" src={item.thumbnailUrl} alt="" />}
         <div className="grow">
           <Badge tone="kind">{KIND_LABEL[item.kind]}</Badge>
+          {/* Only when there is one. A board game carries its rules in the box,
+              so most items have nothing here, and an empty badge or an
+              "unknown" would be noise on 516 of 640 pages. */}
+          {item.gameSystem && <Badge tone="lent">{item.gameSystem}</Badge>}
           <h1>
             {item.name}
             {item.yearPublished && <span className="item-year"> ({item.yearPublished})</span>}
@@ -100,6 +111,7 @@ export function ItemPage({
               .join(' · ') || 'No details recorded'}
           </p>
           <ExternalLinks item={item} />
+          <Dependencies related={item.relatedItems} />
         </div>
         {canEdit && (
           <div className="head-actions">
@@ -201,6 +213,12 @@ export function ItemPage({
                   <Link to={`/items/${child.id}`} className="child-link">
                     <span className="child-kind">{KIND_LABEL[child.kind]}</span>
                     <span className="child-name">{child.name}</span>
+                    {/* A container of D&D Beyond books has 53 children and not
+                        one of them can be handed across the table. Saying so
+                        here is the difference between a shelf and a library
+                        card. */}
+                    {child.copies.length > 0 &&
+                      child.copies.every((c) => c.format === 'digital') && <DigitalTag />}
                     {primary ? (
                       <Badge tone={STATUS_TONE[primary.status]}>
                         {child.copies.length > 1 ? `${child.copies.length} copies` : primary.status}
@@ -467,7 +485,7 @@ function LinkEditor({
           <li key={rel.itemId}>
             <Link to={`/items/${rel.itemId}`} className="child-link">
               <span className="child-name">{rel.name}</span>
-              <Badge tone="kind">{RELATION_LABEL[rel.relation]}</Badge>
+              <Badge tone="kind">{relationLabel(rel)}</Badge>
             </Link>
             {rel.relationId === null ? (
               <span className="muted small">via the family</span>
@@ -491,7 +509,20 @@ export const RELATION_LABEL: Record<RelationType, string> = {
   works_with: 'Works with',
   reimplements: 'Reimplements',
   integrates_with: 'Integrates with',
+  requires: 'Requires',
 };
+
+/**
+ * The label as read from *this* item's end.
+ *
+ * Only `requires` differs by direction, and getting it wrong is not a wording
+ * nit — "Requires" on the core book's page is a false statement about what the
+ * collection contains.
+ */
+function relationLabel(rel: RelatedItemRef): string {
+  if (rel.relation === 'requires' && !rel.outgoing) return 'Needed by';
+  return RELATION_LABEL[rel.relation];
+}
 
 /**
  * Standalone games that belong together — Dice Throne characters, Unmatched
@@ -543,15 +574,21 @@ function RelatedGames({
     }
   }
 
+  // `requires` is not shown here: it is a hard dependency, not a family
+  // resemblance, and it already reads as a sentence at the top of the page.
+  // Listing it in both places would say the same thing twice and, worse, would
+  // say it without its direction.
+  const linked = relatedItems.filter((r) => r.relation !== 'requires');
+
   // Don't show the section if there are no relations and the user can't edit.
-  if (relatedItems.length === 0 && !canEdit) return null;
+  if (linked.length === 0 && !canEdit) return null;
 
   return (
     <section className="card">
       <div className="section-head">
         <h2>
           Related games
-          {relatedItems.length > 0 && <span className="count"> {relatedItems.length}</span>}
+          {linked.length > 0 && <span className="count"> {linked.length}</span>}
         </h2>
         {canEdit && !adding && (
           <button type="button" className="btn btn-quiet" onClick={() => setAdding(true)}>
@@ -586,7 +623,7 @@ function RelatedGames({
         </form>
       )}
 
-      {relatedItems.length === 0 && !adding ? (
+      {linked.length === 0 && !adding ? (
         <p className="muted">
           No linked games{canEdit ? ' — link standalone games that play together.' : '.'}
         </p>
@@ -597,12 +634,12 @@ function RelatedGames({
            implication anyway and have no single row to remove. Unlinking lives
            on the edit form, where you have already said you are editing. */
         <ul className="child-list">
-          {relatedItems.map((rel) => (
+          {linked.map((rel) => (
             <li key={rel.itemId}>
               <Link to={`/items/${rel.itemId}`} className="child-link">
                 {rel.thumbnailUrl && <img className="thumb thumb-sm" src={rel.thumbnailUrl} alt="" />}
                 <span className="child-name">{rel.name}</span>
-                <Badge tone="kind">{RELATION_LABEL[rel.relation]}</Badge>
+                <Badge tone="kind">{relationLabel(rel)}</Badge>
               </Link>
             </li>
           ))}
@@ -613,6 +650,64 @@ function RelatedGames({
 }
 
 /**
+ * What this cannot be used without, and what cannot be used without it.
+ *
+ * A plain statement rather than a badge, because it is a fact about whether the
+ * thing is usable at all: Auroboros is unplayable without the Player's Handbook,
+ * and a page that says nothing about that is hiding the most important thing it
+ * knows.
+ *
+ * **The direction is the whole point.** `requires` is stored from the supplement
+ * to the core book, and `outgoing` says which end you are standing at. Rendering
+ * both ends with one sentence would have the Player's Handbook — which eight
+ * things depend on — announcing that it requires all eight of them. So the two
+ * directions get two different sentences, and the incoming one deliberately does
+ * not use the word "requires" at all.
+ */
+function Dependencies({ related }: { related: RelatedItemRef[] }) {
+  const requires = related.filter((r) => r.relation === 'requires' && r.outgoing);
+  const neededBy = related.filter((r) => r.relation === 'requires' && !r.outgoing);
+  if (requires.length === 0 && neededBy.length === 0) return null;
+
+  const list = (refs: RelatedItemRef[]) =>
+    refs.map((r, i) => (
+      <span key={r.itemId}>
+        {i > 0 && ', '}
+        <Link to={`/items/${r.itemId}`}>{r.name}</Link>
+      </span>
+    ));
+
+  return (
+    <p className="requires">
+      {requires.length > 0 && (
+        <span className="requires__line">
+          <strong>Requires:</strong> {list(requires)}
+        </span>
+      )}
+      {neededBy.length > 0 && (
+        <span className="requires__line muted">
+          Needed by {neededBy.length === 1 ? '' : `${neededBy.length} things: `}
+          {list(neededBy)}
+        </span>
+      )}
+    </p>
+  );
+}
+
+/** "Kickstarter", "Gamefound", or just "Campaign" for anywhere else. */
+function campaignLabel(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    if (host.endsWith('kickstarter.com')) return 'Kickstarter';
+    if (host.endsWith('gamefound.com')) return 'Gamefound';
+    if (host.endsWith('backerkit.com')) return 'BackerKit';
+    return 'Campaign';
+  } catch {
+    return 'Campaign';
+  }
+}
+
+/**
  * Where to read more about this game.
  *
  * BoardGameGeek is derived, not stored: a `bggId` is all you need, and building
@@ -620,7 +715,11 @@ function RelatedGames({
  * column and nothing to keep in sync. `rel="noreferrer"` on both because there
  * is no reason to leak where the click came from.
  */
-function ExternalLinks({ item }: { item: { bggId: number | null; publisherUrl: string | null } }) {
+function ExternalLinks({
+  item,
+}: {
+  item: { bggId: number | null; publisherUrl: string | null; sourceUrl: string | null };
+}) {
   const links: { href: string; label: string }[] = [];
 
   if (item.bggId != null) {
@@ -631,6 +730,15 @@ function ExternalLinks({ item }: { item: { bggId: number | null; publisherUrl: s
   }
   if (item.publisherUrl) {
     links.push({ href: item.publisherUrl, label: 'Publisher' });
+  }
+  /*
+    Where this pledge came from, which is not where the publisher lives — an
+    item can have both, and for two thirds of this catalog the campaign page is
+    the only authoritative record the box ever had. Named after the host so the
+    two links cannot be confused for each other at a glance.
+  */
+  if (item.sourceUrl) {
+    links.push({ href: item.sourceUrl, label: campaignLabel(item.sourceUrl) });
   }
 
   if (links.length === 0) return null;

@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { ownedCount, summarizeTree, type Copy, type ItemNode } from '@bgc/core';
 import { Link } from '../router';
-import { Badge } from './ui';
+import { Badge, DigitalTag } from './ui';
+
+/**
+ * True when everything we hold of this item is a licence.
+ *
+ * "Every", not "any": a book owned in print *and* on D&D Beyond can still be
+ * handed across the table, so it is not the thing this marker warns about.
+ */
+function allDigital(copies: Copy[]): boolean {
+  return copies.length > 0 && copies.every((c) => c.format === 'digital');
+}
 
 const KIND_LABEL: Record<ItemNode['kind'], string> = {
   base: 'Base game',
@@ -145,6 +155,7 @@ function ChildRow({ node, depth }: { node: ItemNode; depth: number }) {
               ×{ownedCount(node.copies)}
             </span>
           )}
+          {allDigital(node.copies) && <DigitalTag />}
           {status?.text}
         </span>
       </Link>
@@ -195,6 +206,10 @@ export function ItemCard({ node }: { node: ItemNode }) {
           </span>
         </span>
         <span className="item-badges">
+          {/* Which ruleset this needs, for the things that do not carry their
+              own. Absent on every board game, which is most of the catalog. */}
+          {node.gameSystem && <Badge tone="lent">{node.gameSystem}</Badge>}
+          {allDigital(node.copies) && <DigitalTag />}
           {/* An expansion sitting at the top level is not a game — it is one
               waiting for its game. Saying so is the difference between a
               catalog that looks wrong and one that is honest about a gap. */}

@@ -79,6 +79,14 @@ export interface CollectionStats {
   wantedCopies: number;
   /** Items we hold more than one of. */
   duplicatedItems: number;
+  /** Licences rather than objects. */
+  digitalCopies: number;
+}
+
+/** One ruleset in use, and how many items need it. */
+export interface GameSystemCount {
+  name: string;
+  items: number;
 }
 
 function toQueryString(query: ItemQuery): string {
@@ -94,7 +102,8 @@ export const api = {
   health: () => req<HealthResponse>('/api/health'),
   me: () => req<MeResponse>('/api/me'),
 
-  meta: () => req<{ stats: CollectionStats }>('/api/meta'),
+  meta: () =>
+    req<{ stats: CollectionStats; gameSystems: GameSystemCount[] }>('/api/meta'),
 
   /**
    * One page of game trees. `total` is every match, not the page — see ItemPage.

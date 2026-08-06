@@ -36,6 +36,8 @@ interface Props {
 export type ItemDetails = {
   publisher: string;
   publisherUrl: string;
+  sourceUrl: string;
+  gameSystem: string;
   designers: string;
   bggId: string;
   minPlayers: string;
@@ -49,6 +51,8 @@ export type ItemDetails = {
 export const EMPTY_DETAILS: ItemDetails = {
   publisher: '',
   publisherUrl: '',
+  sourceUrl: '',
+  gameSystem: '',
   designers: '',
   bggId: '',
   minPlayers: '',
@@ -75,6 +79,8 @@ function toForm(item?: Item, parentId?: number | null): FormState {
     yearPublished: item?.yearPublished?.toString() ?? '',
     publisher: item?.publisher ?? '',
     publisherUrl: item?.publisherUrl ?? '',
+    sourceUrl: item?.sourceUrl ?? '',
+    gameSystem: item?.gameSystem ?? '',
     designers: item?.designers ?? '',
     bggId: item?.bggId?.toString() ?? '',
     minPlayers: item?.minPlayers?.toString() ?? '',
@@ -95,6 +101,8 @@ export function detailsToInput(
   CreateItemInput,
   | 'publisher'
   | 'publisherUrl'
+  | 'sourceUrl'
+  | 'gameSystem'
   | 'designers'
   | 'bggId'
   | 'minPlayers'
@@ -107,6 +115,8 @@ export function detailsToInput(
   return {
     publisher: d.publisher.trim() || null,
     publisherUrl: d.publisherUrl.trim() || null,
+    sourceUrl: d.sourceUrl.trim() || null,
+    gameSystem: d.gameSystem.trim() || null,
     designers: d.designers.trim() || null,
     bggId: num(d.bggId),
     minPlayers: num(d.minPlayers),
@@ -151,7 +161,7 @@ export function ItemDetailFields({
       </div>
 
       <div className="row-2">
-        <Field label="Publisher URL">
+        <Field label="Publisher URL" hint="The publisher's own site">
           <input
             type="url"
             value={value.publisherUrl}
@@ -165,6 +175,29 @@ export function ItemDetailFields({
             value={value.bggId}
             onChange={(e) => onChange({ bggId: e.target.value })}
             placeholder="e.g. 13"
+          />
+        </Field>
+      </div>
+
+      <div className="row-2">
+        {/* Not the publisher's site. For a pledge the campaign page is usually
+            the only authoritative record the thing ever had, and an item can
+            carry both — hence two fields and two hints rather than one box. */}
+        <Field label="Campaign URL" hint="Where this pledge came from">
+          <input
+            type="url"
+            value={value.sourceUrl}
+            onChange={(e) => onChange({ sourceUrl: e.target.value })}
+            placeholder="https://kickstarter.com/projects/…"
+          />
+        </Field>
+        {/* Free text, because the space of rulesets is open. Blank for anything
+            that carries its own rules, which is every board game. */}
+        <Field label="Game system" hint="Only for books that need one">
+          <input
+            value={value.gameSystem}
+            onChange={(e) => onChange({ gameSystem: e.target.value })}
+            placeholder="e.g. D&amp;D 5e (2014)"
           />
         </Field>
       </div>

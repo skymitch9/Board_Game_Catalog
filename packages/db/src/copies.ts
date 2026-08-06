@@ -7,6 +7,7 @@ export interface CopyRow {
   applies_to_copy_id: number | null;
   quantity: number;
   status: string;
+  format: string;
   is_sleeved: number;
   is_punched: number;
   completeness_notes: string | null;
@@ -35,6 +36,9 @@ export function mapCopyRow(r: CopyRow): Copy {
     appliesToCopyId: r.applies_to_copy_id,
     quantity: r.quantity ?? 1,
     status: r.status as Copy['status'],
+    // Column added by migration 0015 with a NOT NULL default, so the fallback is
+    // belt and braces rather than a real case.
+    format: (r.format as Copy['format']) ?? 'physical',
     isSleeved: r.is_sleeved === 1,
     isPunched: r.is_punched === 1,
     completenessNotes: r.completeness_notes,
@@ -61,9 +65,9 @@ export async function createCopy(
 ): Promise<Copy> {
   const res = await db
     .prepare(
-      `INSERT INTO copy (item_id, edition_id, applies_to_copy_id, quantity, status,
+      `INSERT INTO copy (item_id, edition_id, applies_to_copy_id, quantity, status, format,
                          is_sleeved, is_punched, completeness_notes, lent_to, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       itemId,
@@ -71,6 +75,7 @@ export async function createCopy(
       input.appliesToCopyId ?? null,
       input.quantity,
       input.status,
+      input.format,
       input.isSleeved ? 1 : 0,
       input.isPunched ? 1 : 0,
       input.completenessNotes || null,
@@ -89,6 +94,7 @@ const UPDATABLE: Record<keyof UpdateCopyInput, string> = {
   appliesToCopyId: 'applies_to_copy_id',
   quantity: 'quantity',
   status: 'status',
+  format: 'format',
   isSleeved: 'is_sleeved',
   isPunched: 'is_punched',
   completenessNotes: 'completeness_notes',

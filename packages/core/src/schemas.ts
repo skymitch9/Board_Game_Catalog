@@ -4,10 +4,11 @@
  */
 
 import { z } from 'zod';
-import { COPY_STATUSES, ITEM_KINDS, RELATION_TYPES } from './constants.js';
+import { COPY_FORMATS, COPY_STATUSES, ITEM_KINDS, RELATION_TYPES } from './constants.js';
 
 export const itemKindSchema = z.enum(ITEM_KINDS);
 export const copyStatusSchema = z.enum(COPY_STATUSES);
+export const copyFormatSchema = z.enum(COPY_FORMATS);
 
 const nullableString = (max: number) => z.string().trim().max(max).nullable().optional();
 
@@ -36,6 +37,24 @@ const itemFields = z.object({
   yearPublished: z.number().int().min(1000).max(2200).nullable().optional(),
   publisher: nullableString(200),
   publisherUrl: z.string().trim().url().max(500).nullable().optional().or(z.literal('')),
+  /**
+   * The campaign this came from — a Kickstarter or Gamefound project page.
+   *
+   * Not the same thing as `publisherUrl`, and an item can carry both: one is
+   * the publisher's own site, the other is where *this pledge* was made. For
+   * two thirds of the catalog the campaign page is the only authoritative
+   * record there is, since the box never had a retail listing.
+   */
+  sourceUrl: z.string().trim().url().max(500).nullable().optional().or(z.literal('')),
+  /**
+   * Which ruleset this needs, for the things that do not carry their own.
+   *
+   * Free text on purpose — the space of systems is open, and an enum here would
+   * be rewritten every time a new one arrives. "D&D 5e (2014)", "Cypher
+   * System", "system-agnostic". Null for every board game, which is most of the
+   * catalog, and null must render as nothing rather than as "unknown".
+   */
+  gameSystem: nullableString(100),
   designers: nullableString(500),
   minPlayers: z.number().int().min(1).max(99).nullable().optional(),
   maxPlayers: z.number().int().min(1).max(999).nullable().optional(),
@@ -83,6 +102,8 @@ const copyFields = z.object({
   /** How many identical copies this row stands for. */
   quantity: z.number().int().min(1).max(999).default(1),
   status: copyStatusSchema.default('owned'),
+  /** A thing or a licence. Defaults to `physical`, which is 564 of 639 rows. */
+  format: copyFormatSchema.default('physical'),
   isSleeved: z.boolean().default(false),
   isPunched: z.boolean().default(false),
   completenessNotes: nullableString(1000),
@@ -134,6 +155,10 @@ export const itemQuerySchema = z.object({
   uncatalogued: z.coerce.boolean().optional(),
   /** Only trees containing something we hold more than one of. */
   duplicates: z.coerce.boolean().optional(),
+  /** An exact ruleset, chosen from the ones actually in use. Free text in the
+   *  column, so matched exactly rather than fuzzily — the dropdown is built
+   *  from the distinct values, so there is nothing to guess at. */
+  gameSystem: z.string().trim().max(100).optional(),
   /** 1-based. The size of a page is the server's decision, not the caller's. */
   page: z.coerce.number().int().min(1).optional(),
 });
@@ -179,6 +204,10 @@ export interface Item {
   yearPublished: number | null;
   publisher: string | null;
   publisherUrl: string | null;
+  /** The campaign page this pledge came from. Distinct from `publisherUrl`. */
+  sourceUrl: string | null;
+  /** The ruleset a book needs. Null for anything that carries its own rules. */
+  gameSystem: string | null;
   designers: string | null;
   minPlayers: number | null;
   maxPlayers: number | null;
@@ -197,6 +226,8 @@ export interface Copy {
   appliesToCopyId: number | null;
   quantity: number;
   status: (typeof COPY_STATUSES)[number];
+  /** `physical` for a box on a shelf, `digital` for a licence. */
+  format: (typeof COPY_FORMATS)[number];
   isSleeved: boolean;
   isPunched: boolean;
   completenessNotes: string | null;
@@ -428,6 +459,19 @@ export interface RelatedItemRef {
   kind: string;
   thumbnailUrl: string | null;
   relation: (typeof RELATION_TYPES)[number];
+  /**
+   * True when the item being viewed is the `from` side of the stored row.
+   *
+   * Only meaningful for a directional relation, and there it is the whole
+   * meaning: `requires` with `outgoing: true` reads "this needs that", and with
+   * `outgoing: false` reads "that needs this". Without it the Player's Handbook
+   * would list eight supplements and claim to require every one of them.
+   *
+   * False for a member reached through the family rather than by a link of its
+   * own, which is correct by accident and harmless by design — family is
+   * symmetric, so there is no direction to get wrong.
+   */
+  outgoing: boolean;
 }
 
 /** How many of this item we hold, counting quantities across all its copies. */

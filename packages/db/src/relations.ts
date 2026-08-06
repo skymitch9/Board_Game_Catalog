@@ -7,6 +7,7 @@
  */
 
 import type { RelatedItemRef, RelationType } from '@bgc/core';
+import { DIRECTIONAL_RELATIONS } from '@bgc/core';
 
 export interface ItemRelation {
   id: number;
@@ -48,12 +49,17 @@ export async function getRelatedItems(
        direct AS (
          SELECT r.id AS relation_id,
                 CASE WHEN r.from_item_id = ?1 THEN r.to_item_id ELSE r.from_item_id END AS item_id,
-                r.relation
+                r.relation,
+                -- Which end of the stored row we are looking from. Meaningless
+                -- for the symmetric relations, and the entire meaning of a
+                -- requires: the supplement is the from side.
+                CASE WHEN r.from_item_id = ?1 THEN 1 ELSE 0 END AS outgoing
            FROM item_relation r
           WHERE r.from_item_id = ?1 OR r.to_item_id = ?1
        )
        SELECT i.id AS item_id, i.name, i.kind, i.thumbnail_url,
               d.relation_id AS relation_id,
+              COALESCE(d.outgoing, 0) AS outgoing,
               COALESCE(d.relation, 'same_family') AS relation
          FROM item i
          LEFT JOIN direct d ON d.item_id = i.id
@@ -69,6 +75,7 @@ export async function getRelatedItems(
       kind: string;
       thumbnail_url: string | null;
       relation: RelationType;
+      outgoing: number;
     }>();
 
   return results.map((r) => ({
@@ -78,6 +85,7 @@ export async function getRelatedItems(
     kind: r.kind,
     thumbnailUrl: r.thumbnail_url,
     relation: r.relation,
+    outgoing: r.outgoing === 1,
   }));
 }
 
@@ -92,8 +100,19 @@ export async function createRelation(
     throw new RelationError('An item cannot relate to itself', 400);
   }
 
-  // Normalise order so the unique constraint catches duplicates regardless of direction.
-  const [lo, hi] = fromItemId < toItemId ? [fromItemId, toItemId] : [toItemId, fromItemId];
+  /*
+    Normalise order so the unique constraint catches duplicates regardless of
+    direction — but only for the relations where direction carries no meaning.
+
+    A `requires` stored the wrong way round is not a tidy duplicate, it is a
+    false statement: sorting the ids would have the Player's Handbook (a low id,
+    catalogued early) claiming it cannot be used without Auroboros. Directional
+    relations are stored exactly as offered, and their unique index then treats
+    A-requires-B and B-requires-A as two different rows, which they are.
+  */
+  const directional = DIRECTIONAL_RELATIONS.includes(relation);
+  const [lo, hi] =
+    directional || fromItemId < toItemId ? [fromItemId, toItemId] : [toItemId, fromItemId];
 
   const row = await db
     .prepare(

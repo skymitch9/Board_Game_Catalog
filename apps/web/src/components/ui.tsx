@@ -30,6 +30,23 @@ export function Badge({
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
 
+/**
+ * A licence, not an object.
+ *
+ * Deliberately a small tag rather than a full status badge: it qualifies a copy
+ * that already carries one ("owned · digital"), and competing with the status
+ * for attention would make the common word harder to read, not the rare one
+ * easier. `physical` is never labelled — it is 564 of 639 rows, and a label on
+ * the majority is a label nobody reads.
+ */
+export function DigitalTag() {
+  return (
+    <span className="digital-tag" title="A licence — nothing to hand across the table">
+      digital
+    </span>
+  );
+}
+
 export function Field({
   label,
   hint,

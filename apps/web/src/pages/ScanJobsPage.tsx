@@ -518,6 +518,8 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
         await api.createCopy(item.id, {
           quantity: 1,
           status: 'owned',
+          // A photograph is of a physical thing by construction.
+          format: 'physical',
           isSleeved: false,
           isPunched: false,
         });
