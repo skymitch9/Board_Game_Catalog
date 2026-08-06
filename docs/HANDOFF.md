@@ -2,6 +2,68 @@
 
 Everything needed to continue or finish this without Claude.
 
+## Everything has a picture now — 2026-08-06
+
+*"for 161 just use the base game photo, maybe we should use that as a default
+fallback so no matter what everything has an image"* — the owner.
+
+**323 → 1.** Measured over all 760 rows through `GET /api/items`, walking every
+tree: **437 have a cover of their own, 322 borrow one, and exactly one is still
+blank** — Excursion Tiles 1, a standalone accessory with no parent to borrow
+from. The same three numbers come out of SQL directly, so the API and the table
+agree.
+
+### It works the way inherited publishers already work
+
+`inheritCover` in **`packages/core/src/covers.ts`** is the whole decision:
+nearest ancestor with art, resolved at read time, **never written**. A Dice
+Throne hero's playmat takes the hero's picture, not the box's.
+
+| Read path | How the ancestors are found |
+|---|---|
+| Collection trees (`buildTrees`) | the tree is already in memory — no query at all |
+| Item page (`resolveInheritedDetails`) | the recursive CTE it already ran for the publisher, now selecting `thumbnail_url` too |
+| Wishlist (`ancestorCoversFor`) | one extra read, and only for the rows that are blank |
+
+⚠️ **Do not "optimise" this into a stored column.** A copied URL would be
+indistinguishable from a researched cover a month later, and the cover-health
+cron would probe the same dead link 323 times instead of once.
+
+### Where a borrowed cover actually shows, and where it does not
+
+- **Item page** — yes, with a muted, linked *"Cover from Deep Rock Galactic: The
+  Board Game"* under the name, the same treatment the borrowed publisher gets.
+  Somebody looking at one row deserves to know the art is not that product's.
+- **Wishlist** — yes. **20 of the 25 wanted rows had no cover**; a thing nobody
+  has bought yet rarely does. No badge: the linked parent name is already beside
+  the picture and says whose it is.
+- **Collection page** — **no change, and this is expected.** The cards on that
+  page are game *trees*, one per root, and a root has no ancestor to borrow
+  from. Its children are rendered as a text list with no thumbnails at all, so
+  there is nowhere for a borrowed cover to appear. Adding pictures to that list
+  is a separate change nobody has asked for.
+- **Group cards** now use the first member **that has art**, not `members[0]`
+  blindly — a one-line fix that stopped a group wearing a dashed box while its
+  second line had a picture.
+
+### The dashed box is now on `.thumb`, not only `.thumb-blank`
+
+An image that fails or has not arrived yet used to leave a hole in the row.
+`.thumb` now carries the same dashed outline as a deliberate blank, and
+`object-fit: cover` hides it completely once the picture paints. This matters
+more than it sounds: several covers are served from `dicethrone.com` at ~780 KB
+each, so **rows sit in the not-yet-loaded state for seconds** — verified in
+Chrome, where all 16 requests returned 200 and simply took their time.
+
+### What was dropped, and why
+
+The earlier plan was a placeholder image plus a marker distinguishing "looked
+for, nothing exists" from "not looked yet". **Both are unnecessary now.** With
+322 of the 323 blanks answered by an ancestor, a column to describe the
+remaining one would be a schema change carrying a single row. The `preordered`
+case needs nothing either — an undelivered item shows its game's art like
+anything else.
+
 ## The queue empties by design, not by having been asked — 2026-08-06
 
 *"exclude the impossible fields so the queue can empty"* — the owner. The queue
@@ -388,7 +450,11 @@ the moment the fix went live: 73/73, 74/74 and 36/36, and they now sit at
 - `wrangler deploy` printed "Deployed … triggers" for weeks while Cloudflare's
   Cron Events log showed **no events at all**. Fixed with
   `npx wrangler triggers deploy` plus a full deploy. **A cron is not working
-  until something it writes has rows** — `cover_check` now has 40.
+  until something it writes has rows.** *Resolved and confirmed twice over:*
+  `cover_check` passed 433 rows, and a later `wrangler tail` capture caught
+  `"*/30 * * * *" - Ok` with `cover check {"checked":20,"ok":20,"dead":0}` firing
+  on schedule. Both crons run normally now; treat any earlier text claiming
+  otherwise as historical.
 - **The subrequest cap was the shelf killer, confirmed.** Workers allow 50 per
   invocation on the free plan and every D1 call counts alongside every fetch;
   one title costs about four, so a 73-title shelf wanted ~290. The invocation is

@@ -7,7 +7,7 @@ import {
   type ItemNode,
 } from '@bgc/core';
 import { Link } from '../router';
-import { Badge, DigitalTag, ParentLabel } from './ui';
+import { Badge, Cover, DigitalTag, ParentLabel } from './ui';
 
 /**
  * True when everything we hold of this item is a licence.
@@ -205,11 +205,7 @@ export function ItemCard({ node }: { node: ItemNode }) {
   return (
     <article className="card item-card">
       <Link to={`/items/${node.id}`} className="item-head">
-        {node.thumbnailUrl ? (
-          <img className="thumb" src={node.thumbnailUrl} alt="" loading="lazy" />
-        ) : (
-          <span className="thumb thumb-blank" aria-hidden="true" />
-        )}
+        <Cover item={node} />
         <span className="item-head-text">
           <span className="item-name">
             {node.name}
@@ -362,11 +358,10 @@ export function GroupCard({ group, onOpen }: { group: CollectionGroup; onOpen: (
   return (
     <article className="card item-card group-card">
       <button type="button" className="item-head group-card__head" onClick={onOpen}>
-        {group.members[0]?.thumbnailUrl ? (
-          <img className="thumb" src={group.members[0].thumbnailUrl} alt="" loading="lazy" />
-        ) : (
-          <span className="thumb thumb-blank" aria-hidden="true" />
-        )}
+        {/* The first member that HAS art, not simply the first member. A
+            group wears one of its own lines' covers, and taking members[0]
+            blindly put a dashed box on a card whose second line had a picture. */}
+        <Cover item={{ thumbnailUrl: group.members.find((m) => m.thumbnailUrl)?.thumbnailUrl ?? null }} />
         <span className="item-head-text">
           <span className="item-name">{group.name}</span>
           <span className="item-sub">

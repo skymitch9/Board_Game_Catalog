@@ -70,6 +70,41 @@ export function ParentLabel({ id, name }: { id: number | null; name: string | nu
   );
 }
 
+/**
+ * The picture a row shows: its own, or the one it borrows from its game.
+ *
+ * *"maybe we should use that as a default fallback so no matter what everything
+ * has an image"* — the owner. 322 of the 323 coverless rows in the catalog have
+ * an ancestor with art, resolved at read time by `packages/core/src/covers.ts`
+ * and never written down. This component is the only place the choice between
+ * the two is made, so a list and a page cannot disagree about which picture a
+ * row has.
+ *
+ * **No badge at 44px.** A borrowed cover in a list sits visually inside the game
+ * it borrowed from, so the inheritance is already implied, and a marker on three
+ * hundred rows is noise rather than information. The item page says whose
+ * picture it is in words instead — that is where somebody is looking at one row
+ * on its own. On the wishlist, where a row appears away from its game, the
+ * linked parent name beside it does the same job.
+ *
+ * The blank that remains is deliberate-looking rather than broken: a dashed
+ * outline, which is what `.thumb-blank` already draws. Exactly one row in the
+ * catalog reaches it.
+ */
+export function Cover({
+  item,
+  size,
+}: {
+  item: { name?: string; thumbnailUrl: string | null; inheritedCover?: { value: string } | null };
+  /** `lg` for the picture you opened the page to see. It is never lazy. */
+  size?: 'lg';
+}) {
+  const url = item.thumbnailUrl || item.inheritedCover?.value || null;
+  const className = size === 'lg' ? 'thumb thumb-lg' : 'thumb';
+  if (!url) return <span className={`${className} thumb-blank`} aria-hidden="true" />;
+  return <img className={className} src={url} alt="" loading={size === 'lg' ? undefined : 'lazy'} />;
+}
+
 export function Field({
   label,
   hint,

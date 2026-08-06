@@ -251,7 +251,15 @@ textarea { resize: vertical; }
 }
 .item-badges { flex-shrink: 0; }
 
-.thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+/* The dashed box is on `.thumb` itself, not only on `.thumb-blank`, so an image
+   that fails to load reads as the same deliberate placeholder rather than as a
+   void. `object-fit: cover` fills the box, so a picture that does load hides it
+   completely. Several covers in the catalog are somebody else's file behind
+   hotlink protection — those used to leave a hole in the row. */
+.thumb {
+  width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex-shrink: 0;
+  background: var(--bg); border: 1px dashed var(--line);
+}
 .thumb-blank { background: var(--bg); border: 1px dashed var(--line); }
 .thumb-lg { width: 72px; height: 72px; }
 

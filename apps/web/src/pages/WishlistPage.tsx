@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Link } from '../router';
 import { KIND_LABEL } from '../components/ItemTree';
-import { Badge, EmptyState, ErrorBox, ParentLabel, Spinner } from '../components/ui';
+import { Badge, Cover, EmptyState, ErrorBox, ParentLabel, Spinner } from '../components/ui';
 
 /**
  * What we want but do not have.
@@ -87,14 +87,11 @@ export function WishlistPage({ me }: { me: MeResponse }) {
         <ul className="candidate-list wishlist">
           {state.data.entries.map((entry) => (
             <li key={entry.copyId} className="candidate">
-              {/* Most wanted games have a cover from BoardGameGeek; the ones
-                  typed in by hand have none, and a dashed placeholder keeps the
-                  rows aligned rather than letting one shrug the list sideways. */}
-              {entry.thumbnailUrl ? (
-                <img className="thumb" src={entry.thumbnailUrl} alt="" loading="lazy" />
-              ) : (
-                <span className="thumb thumb-blank" aria-hidden="true" />
-              )}
+              {/* 20 of the 25 wanted rows have no cover of their own — a thing
+                  nobody has bought yet rarely does — so this is mostly the
+                  game's art, borrowed. The linked parent name beside it is what
+                  keeps that legible; a dashed placeholder is the last resort. */}
+              <Cover item={entry} />
 
               <div className="candidate__body">
                 <strong>

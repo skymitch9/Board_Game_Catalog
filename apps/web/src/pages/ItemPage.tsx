@@ -24,6 +24,7 @@ import { Ratings } from '../components/Ratings';
 import {
   Badge,
   ConfirmButton,
+  Cover,
   DigitalTag,
   EmptyState,
   ErrorBox,
@@ -92,7 +93,10 @@ export function ItemPage({
       </nav>
 
       <header className="page-head item-detail-head">
-        {item.thumbnailUrl && <img className="thumb thumb-lg" src={item.thumbnailUrl} alt="" />}
+        {/* Its own picture, or its game's. `.thumb-lg` is never lazy — it is
+            the picture you opened the page to see. Whose it is is said in
+            words below, beside the name, not stamped on the image. */}
+        <Cover item={item} size="lg" />
         <div className="grow">
           <Badge tone="kind">{KIND_LABEL[item.kind]}</Badge>
           {/* Only when there is one. A board game carries its rules in the box,
@@ -107,6 +111,19 @@ export function ItemPage({
             {item.yearPublished && <span className="item-year"> ({item.yearPublished})</span>}
           </h1>
           <Subtitle item={item} />
+          {/* Somebody looking at one row on its own deserves to know the art is
+              not this product's. The same muted, linked treatment the borrowed
+              publisher gets — and it appears only when the picture really is
+              somebody else's, because `inheritedCover` is null whenever the row
+              has art of its own. */}
+          {item.inheritedCover && (
+            <p className="subtitle inherited-from">
+              Cover from{' '}
+              <Link to={`/items/${item.inheritedCover.fromItemId}`}>
+                {item.inheritedCover.fromName}
+              </Link>
+            </p>
+          )}
           <ExternalLinks item={item} />
           <Dependencies related={item.relatedItems} />
         </div>

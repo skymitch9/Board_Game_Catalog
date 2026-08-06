@@ -12,6 +12,8 @@ import type {
   ItemQuery,
   MatchedChild,
   Rating,
+  CoverLender,
+  InheritedDetail,
   UpdateItemInput,
   WishlistEntry,
 } from '@bgc/core';
@@ -19,6 +21,7 @@ import {
   COLLECTION_PAGE_SIZE,
   INHERITED_FIELDS,
   detailGapBranches,
+  inheritCover,
   isBlankDetail,
   searchTerms,
 } from '@bgc/core';
@@ -290,6 +293,17 @@ function buildTrees(items: Item[], copiesByItem: Map<number, Copy[]>): ItemNode[
     list.forEach((n) => sortDeep(n.children));
   };
   sortDeep(roots);
+
+  // The whole tree is in hand, so a row's ancestors cost nothing to walk — no
+  // query, and no CTE. `ancestors` is nearest-first, which is what `inheritCover`
+  // requires. See `packages/core/src/covers.ts` for the rule itself.
+  const lendDown = (node: ItemNode, ancestors: CoverLender[]) => {
+    node.inheritedCover = inheritCover(node.thumbnailUrl, ancestors);
+    const forChildren = [{ id: node.id, name: node.name, thumbnailUrl: node.thumbnailUrl }, ...ancestors];
+    for (const child of node.children) lendDown(child, forChildren);
+  };
+  for (const root of roots) lendDown(root, []);
+
   return roots;
 }
 
@@ -631,38 +645,53 @@ const MAX_ANCESTOR_DEPTH = 8;
  * publisher while the URL comes from the box above it. That per-field
  * independence is why this is not just "read the root".
  *
+ * The cover rides along in the same read rather than in a second one. It is not
+ * a `DETAIL_FIELD` — the details queue has never asked for a picture and still
+ * does not — but it is resolved by the same walk and by the same rule, so
+ * fetching the ancestors twice would be paying twice for one answer. The
+ * decision itself lives in `inheritCover`, `packages/core/src/covers.ts`.
+ *
  * Nothing is written. See `packages/core/src/details.ts` for which fields are
  * eligible and why the list is as short as it is.
  *
  * Costs one read, and only for a child that is actually missing something: a
- * root, or a child with its own publisher, returns without touching the
- * database.
+ * root, or a child with its own publisher and its own art, returns without
+ * touching the database.
  */
 export async function resolveInheritedDetails(
   db: D1Database,
   item: Item,
-): Promise<ItemDetail['inherited']> {
+): Promise<{ inherited: ItemDetail['inherited']; cover: InheritedDetail | null }> {
   const inherited: ItemDetail['inherited'] = {};
-  if (item.parentItemId == null) return inherited;
+  if (item.parentItemId == null) return { inherited, cover: null };
 
   const wanted = INHERITED_FIELDS.filter((field) => isBlankDetail(item[field]));
-  if (wanted.length === 0) return inherited;
+  const wantsCover = isBlankDetail(item.thumbnailUrl);
+  if (wanted.length === 0 && !wantsCover) return { inherited, cover: null };
 
   const { results } = await db
     .prepare(
-      `WITH RECURSIVE ancestor(id, parent_item_id, name, publisher, publisher_url, depth) AS (
-         SELECT id, parent_item_id, name, publisher, publisher_url, 0
+      `WITH RECURSIVE ancestor(id, parent_item_id, name, publisher, publisher_url,
+                               thumbnail_url, depth) AS (
+         SELECT id, parent_item_id, name, publisher, publisher_url, thumbnail_url, 0
            FROM item WHERE id = ?1
          UNION ALL
-         SELECT p.id, p.parent_item_id, p.name, p.publisher, p.publisher_url, a.depth + 1
+         SELECT p.id, p.parent_item_id, p.name, p.publisher, p.publisher_url,
+                p.thumbnail_url, a.depth + 1
            FROM item p JOIN ancestor a ON p.id = a.parent_item_id
           WHERE a.depth < ?2
        )
-       SELECT id, name, publisher, publisher_url FROM ancestor
+       SELECT id, name, publisher, publisher_url, thumbnail_url FROM ancestor
         WHERE depth > 0 ORDER BY depth`,
     )
     .bind(item.id, MAX_ANCESTOR_DEPTH)
-    .all<{ id: number; name: string; publisher: string | null; publisher_url: string | null }>();
+    .all<{
+      id: number;
+      name: string;
+      publisher: string | null;
+      publisher_url: string | null;
+      thumbnail_url: string | null;
+    }>();
 
   for (const field of wanted) {
     const column = field === 'publisher' ? 'publisher' : 'publisher_url';
@@ -675,7 +704,55 @@ export async function resolveInheritedDetails(
     };
   }
 
-  return inherited;
+  const cover = inheritCover(
+    item.thumbnailUrl,
+    results.map((r) => ({ id: r.id, name: r.name, thumbnailUrl: r.thumbnail_url })),
+  );
+
+  return { inherited, cover };
+}
+
+/**
+ * The ancestors of several items at once, nearest first, for lending covers.
+ *
+ * One read for a whole screen, rather than one per blank row. Used by the
+ * wishlist, where a row appears away from its game and there is no tree in hand
+ * to walk — 20 of the 25 wanted rows have no art of their own, so a page of
+ * empty boxes was the alternative.
+ *
+ * The single-item read path does not use this: `resolveInheritedDetails` already
+ * fetches the same ancestors for the publisher, and takes the cover from that.
+ */
+async function ancestorCoversFor(
+  db: D1Database,
+  ids: number[],
+): Promise<Map<number, CoverLender[]>> {
+  const byItem = new Map<number, CoverLender[]>();
+  if (ids.length === 0) return byItem;
+  const holes = ids.map(() => '?').join(',');
+
+  const { results } = await db
+    .prepare(
+      `WITH RECURSIVE chain(of_id, cur, depth) AS (
+         SELECT id, parent_item_id, 1 FROM item WHERE id IN (${holes})
+         UNION ALL
+         SELECT c.of_id, p.parent_item_id, c.depth + 1
+           FROM chain c JOIN item p ON p.id = c.cur
+          WHERE c.depth < ?
+       )
+       SELECT c.of_id, i.id, i.name, i.thumbnail_url, c.depth
+         FROM chain c JOIN item i ON i.id = c.cur
+        ORDER BY c.of_id, c.depth`,
+    )
+    .bind(...ids, MAX_ANCESTOR_DEPTH)
+    .all<{ of_id: number; id: number; name: string; thumbnail_url: string | null }>();
+
+  for (const row of results) {
+    const list = byItem.get(row.of_id) ?? [];
+    list.push({ id: row.id, name: row.name, thumbnailUrl: row.thumbnail_url });
+    byItem.set(row.of_id, list);
+  }
+  return byItem;
 }
 
 export async function getItemDetail(db: D1Database, id: number): Promise<ItemDetail | null> {
@@ -742,14 +819,19 @@ export async function getItemDetail(db: D1Database, id: number): Promise<ItemDet
   // Related items — standalone games linked to this one (bidirectional).
   const relatedItems = await getRelatedItems(db, id);
 
+  // The children list on this page is text, not pictures, so it is deliberately
+  // left without borrowed covers — there is nowhere for one to show.
+  const { inherited, cover } = await resolveInheritedDetails(db, item);
+
   return {
     ...item,
+    inheritedCover: cover,
     parent,
     copies: ownCopyRows.map(mapCopyRow),
     children: children.sort((a, b) => (a.sortName ?? a.name).localeCompare(b.sortName ?? b.name)),
     ratings,
     relatedItems,
-    inherited: await resolveInheritedDetails(db, item),
+    inherited,
   };
 }
 
@@ -1249,6 +1331,14 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
       parent_name: string | null;
     }>();
 
+  // A wanted row rarely has art of its own — it is a thing nobody has bought
+  // yet. One extra read lends each of them its game's cover; the row already
+  // names its parent beside the picture, so whose art it is stays legible.
+  const ancestors = await ancestorCoversFor(
+    db,
+    results.filter((r) => isBlankDetail(r.thumbnail_url)).map((r) => r.item_id),
+  );
+
   return results.map((r) => ({
     copyId: r.copy_id,
     itemId: r.item_id,
@@ -1257,6 +1347,7 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
     parentItemId: r.parent_item_id,
     parentName: r.parent_name,
     thumbnailUrl: r.thumbnail_url,
+    inheritedCover: inheritCover(r.thumbnail_url, ancestors.get(r.item_id) ?? []),
     publisher: r.publisher,
     yearPublished: r.year_published,
     minPlayers: r.min_players,

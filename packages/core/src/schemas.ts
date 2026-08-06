@@ -241,6 +241,18 @@ export interface Item {
   playtimeMin: number | null;
   weight: number | null;
   thumbnailUrl: string | null;
+  /**
+   * A picture borrowed from the nearest ancestor that has one. **Never stored.**
+   *
+   * Present only when `thumbnailUrl` is blank *and* an ancestor could answer, so
+   * a non-null value always means "this art belongs to something else" and the
+   * item page can say whose it is. See `packages/core/src/covers.ts`.
+   *
+   * Optional because it is resolved by the read paths that assemble trees and
+   * item pages; a row fetched for a write does not carry it, and nothing may
+   * persist it.
+   */
+  inheritedCover?: InheritedDetail | null;
   description: string | null;
   createdAt: string;
   updatedAt: string;
@@ -424,6 +436,8 @@ export interface WishlistEntry {
   parentItemId: number | null;
   parentName: string | null;
   thumbnailUrl: string | null;
+  /** Borrowed from the nearest ancestor with art. See `covers.ts`. */
+  inheritedCover?: InheritedDetail | null;
   publisher: string | null;
   yearPublished: number | null;
   minPlayers: number | null;
