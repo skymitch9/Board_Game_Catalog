@@ -482,7 +482,9 @@ function ExpansionPicker({
               thumbnailUrl: c.thumbnailUrl ?? undefined,
             })}
           >
-            {c.thumbnailUrl && <img src={c.thumbnailUrl} alt="" className="thumb thumb-sm" />}
+            {c.thumbnailUrl && (
+              <img src={c.thumbnailUrl} alt="" className="thumb thumb-sm" loading="lazy" />
+            )}
             <span>{c.name}</span>
             {c.yearPublished && <span className="muted">({c.yearPublished})</span>}
           </button>

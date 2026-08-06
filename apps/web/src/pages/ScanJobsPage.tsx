@@ -1042,7 +1042,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                   )}
 
                   {t.thumbnailUrl && !doubtful && (
-                    <img src={t.thumbnailUrl} alt="" className="candidate__thumb" />
+                    <img src={t.thumbnailUrl} alt="" className="candidate__thumb" loading="lazy" />
                   )}
 
                   <div className="candidate__body">
@@ -1120,7 +1120,12 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                           {t.candidates!.map((cand, ci) => (
                             <li key={`${cand.bggId ?? cand.name}-${ci}`} className="suggest">
                               {cand.thumbnailUrl && (
-                                <img src={cand.thumbnailUrl} alt="" className="suggest__thumb" />
+                                <img
+                                  src={cand.thumbnailUrl}
+                                  alt=""
+                                  className="suggest__thumb"
+                                  loading="lazy"
+                                />
                               )}
                               <span className="suggest__body">
                                 <strong>{cand.name}</strong>

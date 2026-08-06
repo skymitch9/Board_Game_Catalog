@@ -585,7 +585,9 @@ function CandidateList({
     <ul className="candidate-list">
       {candidates.map((c, i) => (
         <li key={`${c.bggId ?? c.name}-${i}`} className="candidate">
-          {c.thumbnailUrl && <img src={c.thumbnailUrl} alt="" className="candidate__thumb" />}
+          {c.thumbnailUrl && (
+            <img src={c.thumbnailUrl} alt="" className="candidate__thumb" loading="lazy" />
+          )}
           <div className="candidate__body">
             <strong>{c.name}</strong>
             <span className="muted">
@@ -832,7 +834,12 @@ function ShelfResult({
                   )}
 
                   {item.thumbnailUrl && (
-                    <img src={item.thumbnailUrl} alt="" className="candidate__thumb" />
+                    <img
+                      src={item.thumbnailUrl}
+                      alt=""
+                      className="candidate__thumb"
+                      loading="lazy"
+                    />
                   )}
 
                   <div className="candidate__body">

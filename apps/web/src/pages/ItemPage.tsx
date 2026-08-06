@@ -235,18 +235,22 @@ export function ItemPage({
           answer under a heading that reads as being about the expansion. */}
       {item.parentItemId == null && <Completeness item={item} canEdit={canEdit} />}
 
-      <RelatedGames
-        itemId={item.id}
-        relatedItems={item.relatedItems}
-        canEdit={canEdit}
-        onChanged={reload}
-      />
-
+      {/* Ratings before related games, deliberately. A Dice Throne hero lists
+          about fifty-five relatives — family is transitive and the whole line is
+          one family — so a related-games list above this buried the short useful
+          thing under the long one. The list is unchanged; only its position is. */}
       <Ratings
         itemId={item.id}
         ratings={item.ratings}
         myEmail={me.email}
         canRate={canRate}
+        onChanged={reload}
+      />
+
+      <RelatedGames
+        itemId={item.id}
+        relatedItems={item.relatedItems}
+        canEdit={canEdit}
         onChanged={reload}
       />
     </>
@@ -780,7 +784,15 @@ function RelatedGames({
           {linked.map((rel) => (
             <li key={rel.itemId}>
               <Link to={`/items/${rel.itemId}`} className="child-link">
-                {rel.thumbnailUrl && <img className="thumb thumb-sm" src={rel.thumbnailUrl} alt="" />}
+                {/* Lazy, and this is the list that made it necessary. A Dice
+                    Throne hero's family runs to 55 rows, and the hero art is
+                    served full-size from the publisher's own origin at 0.6–1.4
+                    MB a PNG — about 8 MB of thumbnails on one page, over mobile
+                    data. The URLs are deliberately not proxied; see the covers
+                    section of the handoff. Same attribute ItemTree uses. */}
+                {rel.thumbnailUrl && (
+                  <img className="thumb thumb-sm" src={rel.thumbnailUrl} alt="" loading="lazy" />
+                )}
                 <span className="child-name">{rel.name}</span>
                 <Badge tone="kind">{relationLabel(rel)}</Badge>
               </Link>

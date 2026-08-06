@@ -128,37 +128,42 @@ export function CollectionPage({ me }: { me: MeResponse }) {
         {canEdit && (
           <div className="head-actions">
             {/*
-              Three doors, and the middle one exists because the first two were
-              not enough.
+              One door in, and three places to go afterwards.
 
-              "Add games" is bulk intake and "Check a game" is the one-off
-              in-a-shop question — that split is still right, and neither has
-              moved. What was wrong is that barcode scanning lived *only* behind
-              "Check a game", so the fastest and most exact way to add a game
-              was hidden behind a button that sounded like it only answered a
-              question. The owner went looking for it under "Add games" and
-              concluded the feature had been removed.
+              This row used to hold five buttons of equal weight, three of which
+              landed on what looked like the same screen. "Scan a barcode" went
+              to `/scan-jobs?add=barcode` — the tab Add games already opens on,
+              so it was a shortcut to the button beside it. And "Check a game"
+              (`/scan`) opens the same tab strip over the same camera panel, so
+              from in front of the screen the two were indistinguishable. The
+              owner said so: they all seem to go to the same place.
 
-              So barcode scanning is now a first-class tab of Add games — the
-              first one, since a code is the only exact identification here —
-              and this button is a direct way in. It goes to the same page as
-              "Add games", named for what you do rather than for the queue you
-              end up in.
+              The old argument for the split — Add games is bulk intake, Check a
+              game is the one-off "am I already holding this?" you ask in a shop
+              — stopped being true when barcodes moved onto the queue. The queue
+              answers that question per scan now, out loud: BarcodeQueue marks a
+              code "Already yours" from our own table, on its own audio pitch.
+
+              So the camera doors collapse to one. `/scan` is untouched and
+              still reachable — the link below opens it on the tab the queue has
+              no equivalent of, the keyboard. Typing a name is a different act,
+              not a second camera.
             */}
             <Link to="/scan-jobs" className="btn btn-primary">
               + Add games
             </Link>
-            <Link to="/scan-jobs?add=barcode" className="btn btn-quiet">
-              Scan a barcode
-            </Link>
-            <Link to="/scan" className="btn btn-quiet">
-              Check a game
+            <Link to="/scan?mode=manual" className="btn btn-quiet">
+              Type a name
             </Link>
             <Link to="/retag" className="btn btn-quiet">
               Related games
             </Link>
+            {/* A place, not an act. Labelled "Fill in details" this read as the
+                button that runs the lookup; the owner pressed it, landed on a
+                list, and took the feature for broken. The buttons that do run a
+                lookup live on that screen and keep their verbs. */}
             <Link to="/details" className="btn btn-quiet">
-              Fill in details
+              Missing details
             </Link>
           </div>
         )}
