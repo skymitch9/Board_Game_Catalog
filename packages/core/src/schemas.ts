@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { COPY_FORMATS, COPY_STATUSES, ITEM_KINDS, RELATION_TYPES } from './constants.js';
+import type { InheritedDetail, InheritedField } from './details.js';
 
 export const itemKindSchema = z.enum(ITEM_KINDS);
 export const copyStatusSchema = z.enum(COPY_STATUSES);
@@ -288,6 +289,18 @@ export interface ItemDetail extends Item {
   ratings: Rating[];
   relatedItems: RelatedItemRef[];
   parent: Item | null;
+  /**
+   * Blank fields answered by the nearest ancestor that has one.
+   *
+   * Resolved on read and never written down, which is the whole point: the
+   * catalog goes on saying that this playmat's publisher is unknown, while the
+   * page shows the game's and says where it came from. A stored copy would be
+   * indistinguishable from a fact somebody checked. See `details.ts`.
+   *
+   * Empty for anything with no parent, and for a child that already has its own
+   * value — only genuine gaps appear here.
+   */
+  inherited: Partial<Record<InheritedField, InheritedDetail>>;
 }
 
 /**

@@ -14,6 +14,7 @@ import { CAPABILITY_MATRIX } from './capabilities.js';
 import { ROLES, type Role } from './constants.js';
 
 export * from './constants.js';
+export * from './details.js';
 export * from './schemas.js';
 export * from './capabilities.js';
 export * from './barcode.js';

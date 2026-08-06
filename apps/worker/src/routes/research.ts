@@ -13,8 +13,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { SOURCE_TIERS } from '@bgc/core';
-import type { Item } from '@bgc/core';
+import { DETAIL_FIELD_LABEL, SOURCE_TIERS, detailGaps } from '@bgc/core';
 import {
   createRun,
   finishRun,
@@ -47,21 +46,6 @@ const tierSchema = z.enum(['official', 'crowdfunding', 'retail']);
 const reviewStateSchema = z.enum(['pending', 'accepted', 'rejected']);
 const runSchema = z.object({ tier: tierSchema });
 const reviewSchema = z.object({ reviewState: z.enum(['accepted', 'rejected']) });
-
-/** Which of the fillable fields this game has nothing for. */
-function missingFields(item: Item): string[] {
-  const blank = (v: string | number | null): boolean =>
-    v == null || (typeof v === 'string' && v.trim() === '');
-
-  const missing: string[] = [];
-  if (blank(item.publisher)) missing.push('publisher');
-  if (blank(item.publisherUrl)) missing.push('publisher site');
-  if (blank(item.yearPublished)) missing.push('year');
-  if (blank(item.minPlayers)) missing.push('players');
-  if (blank(item.playtimeMin)) missing.push('playing time');
-  if (blank(item.description)) missing.push('description');
-  return missing;
-}
 
 const idParam = (raw: string | undefined): number | null => {
   const id = Number(raw);
@@ -204,6 +188,12 @@ export const researchRoutes = new Hono<AppBindings>()
    * Publisher is the one that matters beyond tidiness: it is empty on
    * everything a scan produced, and the official research tier cannot run
    * without the URL that comes with it.
+   *
+   * Expansions, promos and accessories are **not** here: they read their
+   * publisher through from the game they belong to, and the rest of the list
+   * describes a game being played rather than a dice tray. `detailGaps` is the
+   * one place that decides, so the "missing:" line under a row and the query
+   * that chose the row cannot disagree — see `packages/core/src/details.ts`.
    */
   .get('/needs-details', requireCapability('read'), async (c) => {
     const items = await listItemsNeedingDetails(c.env.DB);
@@ -212,7 +202,7 @@ export const researchRoutes = new Hono<AppBindings>()
         id: i.id,
         name: i.name,
         kind: i.kind,
-        missing: missingFields(i),
+        missing: detailGaps(i).map((field) => DETAIL_FIELD_LABEL[field]),
       })),
       centsEach: ENRICH_CENTS_EACH,
     });

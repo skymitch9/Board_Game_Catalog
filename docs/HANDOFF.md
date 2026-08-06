@@ -8,7 +8,11 @@ Stable reference lives alongside this file and is not duplicated here:
 **Last updated:** 2026-08-07. Everything is committed and deployed; the working
 tree is clean. Database was cleared and collection restarted fresh on 08-05.
 
-**Newest first:** ["what am I missing"](#what-am-i-missing--built-2026-08-06) —
+**Newest first:**
+[children inherit from their parent](#children-inherit-from-their-parent--built-2026-08-08)
+— the details queue went from **695 rows to 78**, and a playmat now shows its
+game's publisher instead of costing 1.4¢ to be told it. Then
+["what am I missing"](#what-am-i-missing--built-2026-08-06) —
 the shopping list, cached and refreshed weekly. Then
 [the collection page at 640 items](#the-collection-page-at-640-items--built-2026-08-07)
 — paging, multi-term search, collapsed groups — and
@@ -409,6 +413,129 @@ routes the weekly refresh silently into the cover check.
 > note said 10); production is untouched, and
 > `rm -rf apps/worker/.wrangler/state/v3/d1 && npm run db:migrate:local` resets
 > local outright.
+
+---
+
+## Children inherit from their parent — built 2026-08-08
+
+*"for the fill in details, can we make child objects inherit from the parent. I
+dont super care if an expansion or accessory has a different publisher"* —
+the owner, which is the whole specification.
+
+`listItemsNeedingDetails` asked every row for the same six facts. Measured
+against production on 2026-08-08: **695 of 737 items in the queue, and only 79
+of them top-level.** The other 616 were expansions, promos, playmats and dice
+trays, at ~1.4¢ of Claude usage each — about **$8.30 to answer questions like
+"who publishes the Dice Throne Vanguard dice tray"**, whose answer is already in
+the database one row up.
+
+**695 → 78.**
+
+### Which fields inherit, and which deliberately do not
+
+| Field | Inherits | Asked of |
+|---|---|---|
+| `publisher` | **yes** | rows with no parent |
+| `publisherUrl` | **yes** | rows with no parent |
+| `yearPublished` | no | base games |
+| `minPlayers` / `playtimeMin` | no | base games |
+| `description` | no | base games |
+
+- **publisher / publisherUrl** — the owner's instruction, and nearly always
+  right. `publisherUrl` matters twice over: it is what the official research
+  tier needs before it can run, so inheriting it makes a child researchable for
+  free rather than merely cheap.
+- **year does not inherit.** An expansion published years after its base game is
+  the common case, and the year renders in the `<h1>` next to the name — a
+  visible false statement, for a fact worth very little. It is not inherited
+  *and* not asked for on a child, so nothing is fabricated and nothing is
+  bought.
+- **Player count and playing time do not inherit**, and this is the one that
+  looks safe and is not. An expansion mostly shares its base game's — except
+  when it does not, and the exception is exactly the expansion that exists to
+  change it. **This catalog holds "Catan: Starfarers – 5-6 Player Extension".**
+  Inheriting 3–4 players onto that would be wrong in precisely the case anyone
+  would look.
+- **description never inherits.** A dice tray is not described by the base
+  game's description; copying it would be actively misleading rather than
+  merely unhelpful.
+
+### Nothing is written to the 616 rows
+
+Resolved on read, in `resolveInheritedDetails`, and never stored. A stored copy
+would assert something nobody verified, would be indistinguishable a month later
+from a fact somebody checked, and would go stale the moment the parent was
+corrected. Reading it through is reversible and honest — the catalog still says
+this playmat's publisher is unknown while the page shows the game's and says so.
+
+A recursive CTE up `parent_item_id`, taking **per field** the first ancestor
+with a value, so a hero with a URL but no publisher name supplies the URL while
+the name comes from the box above it. Depth-capped at 8: a cycle that got in by
+some route `updateItem` does not guard would otherwise hang a read.
+
+### Why a child is asked for *nothing*, rather than asked and satisfied
+
+If a whole ancestry has no publisher, the child is still not queued. Researching
+the child does not fix it; researching the **root** does, once, and then answers
+for all fifty-three of its children. Queueing the children would pay
+fifty-three times for one answer.
+
+A parentless non-base row — an orphan expansion waiting for its game, or one of
+the three genuinely standalone accessories — is asked only for publisher and
+publisher site. The moment `adoptOrphans` re-parents it, it stops being asked,
+with nothing to clean up.
+
+### One decision, one implementation
+
+`packages/core/src/details.ts` holds the policy. The SQL `WHERE` clause is
+**generated** from it (`detailGapsSql` in `packages/db/src/items.ts`) rather than
+restated, so adding a kind or changing what a kind owes moves the queue, the
+"missing:" line under each queue row, and the item page's lookup panel together.
+A hand-typed clause would be a second implementation of the decision.
+
+| Piece | Where |
+|---|---|
+| The policy, and the reasoning per field | `packages/core/src/details.ts` |
+| `ItemDetail.inherited` | `packages/core/src/schemas.ts` |
+| `resolveInheritedDetails`, `detailGapsSql`, `listItemsNeedingDetails` | `packages/db/src/items.ts` |
+| `GET /api/research/needs-details` | `apps/worker/src/routes/research.ts` |
+| `Subtitle`, `resolvePublisher`, `LookupDetails` | `apps/web/src/pages/ItemPage.tsx` |
+| `.inherited-from` | `apps/web/src/styles.css` |
+
+### Surfaced, not smuggled
+
+The item page shows `Root Works` followed by a muted, linked **"from ZZ Inherit
+Root"**. The publisher's website link is only borrowed *alongside* the name — an
+item with its own publisher and no URL gets nothing, because that link would
+name one company and point at another's site.
+
+The lookup panel used to open a playmat's page with **"No year, min players, max
+players, play time, description and cover image recorded"**. It now reads
+**"Nothing more is expected of this one"**, with the buttons still there: that
+panel is the only per-item way in, and an expansion big enough to want a
+description of its own should not have to be researched from the queue.
+
+### Verified against local dev, 2026-08-08
+
+A four-deep chain built through `POST /api/items` and read back:
+
+| Row | Own publisher | Resolved |
+|---|---|---|
+| Root (base) | `Root Works`, `root.example` | `{}` — roots inherit nothing |
+| Hero (expansion, own URL only) | — | publisher ← Root |
+| Playmat (accessory, under Hero) | — | publisher ← **Root, two levels up**; URL ← Hero, one level up |
+| Sleeve (accessory, under Playmat) | — | publisher ← **Root, three levels up** |
+| Orphan expansion (no parent) | — | `{}`, and queued for publisher + publisher site |
+
+The per-field split is the part worth keeping: the playmat's publisher skipped
+the hero, which had none, while its URL stopped there. `GET
+/api/research/needs-details` listed the base game (year, description) and the
+orphan, and none of the four children. **Test rows were deleted afterwards —
+local is back to 86 items with no `ZZ Inherit%` leftovers.**
+
+> Production was measured with **read-only** `SELECT`s against the live D1; no
+> data-modifying SQL was run. Another agent was writing rows throughout, which
+> is why the item total moves between 736 and 737 in this section.
 
 ---
 

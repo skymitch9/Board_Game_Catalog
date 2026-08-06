@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import {
+  DETAIL_FIELD_LABEL,
   RELATION_TYPES,
+  detailGaps,
   isTrustedMatch,
-  type Item,
+  type InheritedDetail,
+  type ItemDetail,
   type MeResponse,
   type RelatedItemRef,
   type RelationType,
@@ -98,19 +101,7 @@ export function ItemPage({
             {item.name}
             {item.yearPublished && <span className="item-year"> ({item.yearPublished})</span>}
           </h1>
-          <p className="subtitle">
-            {[
-              item.publisher,
-              item.designers,
-              item.minPlayers && item.maxPlayers
-                ? `${item.minPlayers}–${item.maxPlayers} players`
-                : null,
-              item.playtimeMin ? `${item.playtimeMin} min` : null,
-              item.weight ? `weight ${item.weight}` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ') || 'No details recorded'}
-          </p>
+          <Subtitle item={item} />
           <ExternalLinks item={item} />
           <Dependencies related={item.relatedItems} />
         </div>
@@ -258,6 +249,76 @@ export function ItemPage({
   );
 }
 
+/**
+ * Publisher and publisher site, as this page should show them.
+ *
+ * A playmat's publisher is its game's publisher, and the catalog deliberately
+ * does not write that onto the playmat's row — a stored copy would be
+ * indistinguishable later from a fact somebody checked, and would go stale the
+ * moment the game's was corrected. So the value is resolved here, on the way to
+ * the screen, and carries where it came from. See `packages/core/src/details.ts`.
+ *
+ * **The site is only borrowed alongside the publisher.** An item that records
+ * its own publisher but no URL gets nothing: linking it to the ancestor's
+ * website would name one company and point at another's.
+ */
+function resolvePublisher(item: ItemDetail): {
+  publisher: string | null;
+  publisherUrl: string | null;
+  /** The ancestor the values were borrowed from — null when they are this item's own. */
+  from: InheritedDetail | null;
+} {
+  const own = !isBlank(item.publisher);
+  const borrowedName = own ? null : (item.inherited.publisher ?? null);
+  const borrowedUrl = own ? null : (item.inherited.publisherUrl ?? null);
+
+  return {
+    publisher: own ? item.publisher : (borrowedName?.value ?? null),
+    publisherUrl: isBlank(item.publisherUrl)
+      ? (borrowedUrl?.value ?? null)
+      : item.publisherUrl,
+    from: borrowedName ?? borrowedUrl,
+  };
+}
+
+/**
+ * The line under the name — and the one place a value shown here may not be
+ * this item's own.
+ *
+ * An inherited publisher is shown with a muted "from <game>" beside it rather
+ * than silently, because a fact borrowed from the box upstairs and a fact
+ * somebody looked up should not read identically. The name links, so the claim
+ * can be checked in one tap.
+ */
+function Subtitle({ item }: { item: ItemDetail }) {
+  const { publisher, from } = resolvePublisher(item);
+
+  const rest = [
+    item.designers,
+    item.minPlayers && item.maxPlayers ? `${item.minPlayers}–${item.maxPlayers} players` : null,
+    item.playtimeMin ? `${item.playtimeMin} min` : null,
+    item.weight ? `weight ${item.weight}` : null,
+  ].filter((part): part is string => Boolean(part));
+
+  if (!publisher && rest.length === 0) {
+    return <p className="subtitle">No details recorded</p>;
+  }
+
+  return (
+    <p className="subtitle">
+      {publisher}
+      {publisher && from && (
+        <span className="inherited-from">
+          {' '}
+          from <Link to={`/items/${from.fromItemId}`}>{from.fromName}</Link>
+        </span>
+      )}
+      {publisher && rest.length > 0 && ' · '}
+      {rest.join(' · ')}
+    </p>
+  );
+}
+
 export function NotFoundPage() {
   return (
     <EmptyState title="No such page">
@@ -313,13 +374,21 @@ function inWords(labels: string[]): string {
  *
  * Only shown while something is actually missing, so a fully-recorded game
  * carries no invitation to re-fetch what it already knows.
+ *
+ * **Missing and expected are two different things.** A dice tray is not asked
+ * for a player count, so announcing that it has none would be scolding a record
+ * for being exactly what it should be. `detailGaps` decides what is expected —
+ * the same function the details queue is built from — and anything else that
+ * happens to be blank is offered rather than demanded. The buttons stay either
+ * way: this is the only per-item way in, and an expansion big enough to want a
+ * description of its own should not have to be researched from the queue.
  */
 function LookupDetails({
   item,
   onFilled,
   canResearch,
 }: {
-  item: Item;
+  item: ItemDetail;
   onFilled: (summary: string) => void;
   /** The web search costs money, so it is owner-only like the other paid calls. */
   canResearch: boolean;
@@ -328,7 +397,15 @@ function LookupDetails({
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  const missing = FILLABLE.filter(({ key }) => isBlank(item[key]));
+  // What a lookup could write into. A field answered by the game upstairs is
+  // excluded: without that, every playmat in the catalog would offer to fill in
+  // a publisher directly under a subtitle already displaying one.
+  const missing = FILLABLE.filter(({ key }) => isBlank(item[key]) && !(key in item.inherited));
+
+  // What this row is asked for and does not have — the queue's own test, so the
+  // page and the queue can never disagree about whether a record is finished.
+  // Empty for everything filed under a game.
+  const gaps = detailGaps(item).map((field) => DETAIL_FIELD_LABEL[field]);
 
   async function run() {
     setBusy(true);
@@ -404,18 +481,31 @@ function LookupDetails({
     }
   }
 
-  if (missing.length === 0) return null;
+  if (missing.length === 0 && gaps.length === 0) return null;
 
   return (
     <section className="card lookup-fill">
       <div className="lookup-fill__row">
         <div className="grow">
-          <strong>No {inWords(missing.map((m) => m.label))} recorded</strong>
-          <p className="muted small">
-            Only blanks are filled — anything already written down stays as it is.
-            The free lookup uses the same sources as the scanner; searching the web
-            costs a few cents and is the only thing that finds a publisher.
-          </p>
+          {gaps.length > 0 ? (
+            <>
+              <strong>No {inWords(gaps)} recorded</strong>
+              <p className="muted small">
+                Only blanks are filled — anything already written down stays as it is.
+                The free lookup uses the same sources as the scanner; searching the web
+                costs a few cents and is the only thing that finds a publisher.
+              </p>
+            </>
+          ) : (
+            <>
+              <strong>Nothing more is expected of this one</strong>
+              <p className="muted small">
+                Anything filed under a game takes that game&rsquo;s publisher, and is not
+                asked for a year, a player count or a description of its own. Look it up
+                anyway if you want the extra detail — only blanks are filled.
+              </p>
+            </>
+          )}
         </div>
         <div className="lookup-fill__actions">
           <button type="button" className="btn" disabled={busy} onClick={() => void run()}>
@@ -721,12 +811,9 @@ function campaignLabel(url: string): string {
  * column and nothing to keep in sync. `rel="noreferrer"` on both because there
  * is no reason to leak where the click came from.
  */
-function ExternalLinks({
-  item,
-}: {
-  item: { bggId: number | null; publisherUrl: string | null; sourceUrl: string | null };
-}) {
-  const links: { href: string; label: string }[] = [];
+function ExternalLinks({ item }: { item: ItemDetail }) {
+  const links: { href: string; label: string; title?: string }[] = [];
+  const { publisherUrl, from } = resolvePublisher(item);
 
   if (item.bggId != null) {
     links.push({
@@ -734,8 +821,15 @@ function ExternalLinks({
       label: 'BoardGameGeek',
     });
   }
-  if (item.publisherUrl) {
-    links.push({ href: item.publisherUrl, label: 'Publisher' });
+  if (publisherUrl) {
+    // Titled, not relabelled: it is still the publisher's site, and a link that
+    // read "Publisher (from Dice Throne Vanguard)" would say in the busiest row
+    // on the page what the subtitle already says one line above.
+    links.push({
+      href: publisherUrl,
+      label: 'Publisher',
+      ...(isBlank(item.publisherUrl) && from ? { title: `From ${from.fromName}` } : {}),
+    });
   }
   /*
     Where this pledge came from, which is not where the publisher lives — an
@@ -752,7 +846,7 @@ function ExternalLinks({
   return (
     <p className="external-links">
       {links.map((l) => (
-        <a key={l.href} href={l.href} target="_blank" rel="noreferrer noopener">
+        <a key={l.href} href={l.href} target="_blank" rel="noreferrer noopener" title={l.title}>
           {l.label} ↗
         </a>
       ))}

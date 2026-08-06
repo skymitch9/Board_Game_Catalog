@@ -88,6 +88,13 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
             Scanning gives a name and little else. This looks each game up on the web
             and fills only the blanks — anything already recorded is left alone.
           </p>
+          {/* Said here rather than left to be inferred from a short list: the
+              queue went from 694 rows to 78 when children stopped being asked,
+              and a page that quietly dropped 616 games would look broken. */}
+          <p className="muted small">
+            Only games are listed. An expansion, promo or accessory takes its publisher
+            from the game it belongs to, so there is nothing here worth paying to look up.
+          </p>
         </div>
         <Link to="/" className="btn btn-quiet">Collection</Link>
       </header>
@@ -126,8 +133,9 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
 
         {items.length === 0 ? (
           <p className="muted">
-            Every game has a publisher, a year, a player count and a description.
-            Nothing to fill in.
+            Every game has a publisher, a year, a player count and a description, and
+            everything filed under one reads its publisher from the game. Nothing to
+            fill in.
           </p>
         ) : (
           <ul className="candidate-list">

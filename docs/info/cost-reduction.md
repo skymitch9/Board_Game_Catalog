@@ -1,10 +1,36 @@
 # Making Lookups Cheaper — Information Reference
 
-> **Audience:** Claude sessions. **Status:** TRACKED. Not built — this is a plan.
-> Last verified: **2026-08-05**. Figures marked *measured* came from live calls
-> during this project; pricing came from vendor docs on this date.
+> **Audience:** Claude sessions. **Status:** TRACKED. The inheritance section is
+> **built**; everything below it is still a plan.
+> Last verified: **2026-08-08** (inheritance numbers, read-only against
+> production D1). The search-API landscape below was last checked **2026-08-05**
+> and has not been re-verified. Figures marked *measured* came from live calls
+> during this project; pricing came from vendor docs on those dates.
 
 Where money and time actually go, and the one change that would move the needle.
+
+## Done: stop researching what a row can inherit — 695 queued rows → 78
+
+The single largest saving so far, and it cost no API calls at all. The details
+queue asked every catalog row for the same six facts; against production that
+was **695 of 737 items, only 79 of them top-level**. At ~1.4¢ a row, ~$8.30 of
+it was spent establishing that a Dice Throne playmat is published by whoever
+publishes Dice Throne.
+
+Anything with a parent now reads `publisher` and `publisherUrl` through from its
+nearest ancestor at read time — never written down — and is asked for nothing.
+Year, player count, playing time and description are asked only of base games,
+and none of them inherit: an expansion's year is usually different, and
+"Catan: Starfarers – 5-6 Player Extension" is the standing proof that a base
+game's player count is not an expansion's.
+
+The reasoning per field lives in `packages/core/src/details.ts`; the numbers and
+what was verified are in [`../HANDOFF.md`](../HANDOFF.md#children-inherit-from-their-parent--built-2026-08-08).
+
+**The general lesson, worth applying to the next queue.** The expensive question
+was not "what does this row not know" but "what is worth *buying* for this row".
+Those are different, and the first one wearing the second's name is what put 616
+dice trays in front of a web-search model.
 
 ## Measured cost of each path
 

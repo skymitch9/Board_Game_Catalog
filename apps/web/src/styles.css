@@ -645,6 +645,16 @@ code {
   .lookup-fill__row { flex-direction: column; align-items: stretch; }
 }
 
+/*
+  Where a value on this page belongs to the game upstairs rather than to the
+  item itself. Quieter than the value it qualifies and dimmer than the muted
+  text around it, because it is a footnote on a fact, not a fact — but the link
+  keeps its underline on hover so it still reads as somewhere to go.
+*/
+.inherited-from { font-size: 0.82em; opacity: 0.8; }
+.inherited-from a { color: inherit; text-decoration: none; }
+.inherited-from a:hover { text-decoration: underline; }
+
 .external-links { display: flex; gap: 0.75rem; margin: 0.35rem 0 0; font-size: 0.85rem; }
 .external-links a { color: var(--accent); text-decoration: none; }
 .external-links a:hover { text-decoration: underline; }

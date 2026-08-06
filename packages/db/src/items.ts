@@ -1,6 +1,7 @@
 import type {
   Copy,
   CreateItemInput,
+  DetailField,
   Item,
   ItemDetail,
   ItemNode,
@@ -10,7 +11,13 @@ import type {
   UpdateItemInput,
   WishlistEntry,
 } from '@bgc/core';
-import { COLLECTION_PAGE_SIZE, searchTerms } from '@bgc/core';
+import {
+  COLLECTION_PAGE_SIZE,
+  INHERITED_FIELDS,
+  detailGapBranches,
+  isBlankDetail,
+  searchTerms,
+} from '@bgc/core';
 import { getRelatedItems } from './relations.js';
 import { preserveDisplacedCover } from './editions.js';
 import { mapCopyRow, toIso, type CopyRow } from './copies.js';
@@ -309,6 +316,72 @@ export async function getItem(db: D1Database, id: number): Promise<Item | null> 
   return row ? mapItemRow(row) : null;
 }
 
+/**
+ * How far up a tree the search for an inherited value will walk.
+ *
+ * The catalog is three deep today (a Dice Throne box → a hero → the hero's
+ * playmat), so eight is generous. It is really a cycle guard: `updateItem`
+ * refuses to make a loop, but a recursive CTE against a loop that got in by some
+ * other route would not stop on its own, and a hung read is a worse failure than
+ * a missing publisher.
+ */
+const MAX_ANCESTOR_DEPTH = 8;
+
+/**
+ * The blanks this item can answer from the game it belongs to.
+ *
+ * Walks up `parent_item_id` and takes, **per field**, the first ancestor that
+ * has one — so a hero with a publisher but no publisher site can supply the
+ * publisher while the URL comes from the box above it. That per-field
+ * independence is why this is not just "read the root".
+ *
+ * Nothing is written. See `packages/core/src/details.ts` for which fields are
+ * eligible and why the list is as short as it is.
+ *
+ * Costs one read, and only for a child that is actually missing something: a
+ * root, or a child with its own publisher, returns without touching the
+ * database.
+ */
+export async function resolveInheritedDetails(
+  db: D1Database,
+  item: Item,
+): Promise<ItemDetail['inherited']> {
+  const inherited: ItemDetail['inherited'] = {};
+  if (item.parentItemId == null) return inherited;
+
+  const wanted = INHERITED_FIELDS.filter((field) => isBlankDetail(item[field]));
+  if (wanted.length === 0) return inherited;
+
+  const { results } = await db
+    .prepare(
+      `WITH RECURSIVE ancestor(id, parent_item_id, name, publisher, publisher_url, depth) AS (
+         SELECT id, parent_item_id, name, publisher, publisher_url, 0
+           FROM item WHERE id = ?1
+         UNION ALL
+         SELECT p.id, p.parent_item_id, p.name, p.publisher, p.publisher_url, a.depth + 1
+           FROM item p JOIN ancestor a ON p.id = a.parent_item_id
+          WHERE a.depth < ?2
+       )
+       SELECT id, name, publisher, publisher_url FROM ancestor
+        WHERE depth > 0 ORDER BY depth`,
+    )
+    .bind(item.id, MAX_ANCESTOR_DEPTH)
+    .all<{ id: number; name: string; publisher: string | null; publisher_url: string | null }>();
+
+  for (const field of wanted) {
+    const column = field === 'publisher' ? 'publisher' : 'publisher_url';
+    const source = results.find((row) => !isBlankDetail(row[column]));
+    if (!source) continue;
+    inherited[field] = {
+      value: String(source[column]),
+      fromItemId: source.id,
+      fromName: source.name,
+    };
+  }
+
+  return inherited;
+}
+
 export async function getItemDetail(db: D1Database, id: number): Promise<ItemDetail | null> {
   const item = await getItem(db, id);
   if (!item) return null;
@@ -380,6 +453,7 @@ export async function getItemDetail(db: D1Database, id: number): Promise<ItemDet
     children: children.sort((a, b) => (a.sortName ?? a.name).localeCompare(b.sortName ?? b.name)),
     ratings,
     relatedItems,
+    inherited: await resolveInheritedDetails(db, item),
   };
 }
 
@@ -631,12 +705,60 @@ export async function listItemNames(
   return results;
 }
 
+const DETAIL_COLUMN: Record<DetailField, string> = {
+  publisher: 'publisher',
+  publisherUrl: 'publisher_url',
+  yearPublished: 'year_published',
+  minPlayers: 'min_players',
+  playtimeMin: 'playtime_min',
+  description: 'description',
+};
+
+/** Mirrors `isBlankDetail`. `trim()` on an integer yields its digits, never ''. */
+const blankSql = (column: string) => `(${column} IS NULL OR trim(${column}) = '')`;
+
 /**
- * Games missing the details a lookup could fill.
+ * The gap test of `detailGaps`, as SQL, generated rather than restated.
  *
- * The queue for enrichment. Publisher is the field that matters most — it is
- * absent on everything a scan produced, and it is what the official research
- * tier needs before it can run at all.
+ * The policy lives in `packages/core/src/details.ts` and this builds a `WHERE`
+ * clause out of it, so adding a kind or changing what a kind owes moves both the
+ * queue and the item page at once. Kind names are interpolated, which is safe
+ * only because they come from the frozen `ITEM_KINDS` and never from a request.
+ */
+function detailGapsSql(): string {
+  const branches = detailGapBranches().map(({ kind, fields }) => {
+    const gaps = fields.map((field) => blankSql(DETAIL_COLUMN[field])).join(' OR ');
+    return `(kind = '${kind}' AND (${gaps}))`;
+  });
+  return `parent_item_id IS NULL AND (${branches.join('\n            OR ')})`;
+}
+
+/**
+ * The rows worth paying to research, and nothing else.
+ *
+ * The queue for enrichment, at roughly 1.4¢ of Claude usage a row. It used to
+ * ask every row in the catalog for the same six facts, which against a real
+ * collection meant **694 of 736 items — only 79 of them top-level.** The other
+ * 615 were expansions, promos and playmats, so most of that bill was for
+ * answering "who publishes the Dice Throne Vanguard dice tray" one tray at a
+ * time.
+ *
+ * Two rules cut it to 78:
+ *
+ * 1. **Anything with a parent is skipped entirely.** Publisher and publisher
+ *    site are read through from the nearest ancestor that has them
+ *    (`resolveInheritedDetails`), so they are not gaps; the rest — year, player
+ *    count, playing time, description — describe a game being played and are
+ *    not asked of a sleeve pack at all. And when an ancestry genuinely has no
+ *    publisher, the fix is to research the *root*, once, which then answers for
+ *    all fifty-three of its children.
+ * 2. **A parentless non-base row is asked only for the inheritable fields.**
+ *    That is an orphan expansion waiting for its game, or one of the three
+ *    genuinely standalone accessories in the catalog. Neither has a player
+ *    count worth buying.
+ *
+ * Ordered by `sort_name` so a run works down the list in the order the
+ * collection page shows it.
  */
 export async function listItemsNeedingDetails(
   db: D1Database,
@@ -645,12 +767,7 @@ export async function listItemsNeedingDetails(
   const { results } = await db
     .prepare(
       `SELECT ${ITEM_COLUMNS} FROM item
-        WHERE (publisher IS NULL OR publisher = '')
-           OR (publisher_url IS NULL OR publisher_url = '')
-           OR year_published IS NULL
-           OR min_players IS NULL
-           OR playtime_min IS NULL
-           OR (description IS NULL OR description = '')
+        WHERE ${detailGapsSql()}
         ORDER BY sort_name
         LIMIT ?`,
     )
