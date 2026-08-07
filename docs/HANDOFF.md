@@ -2,6 +2,24 @@
 
 Everything needed to continue or finish this without Claude.
 
+## State at 2026-08-06, end of session
+
+Working tree **clean**, everything committed to `main` and pushed, worker
+deployed at **`9d3da413-5a84-4654-8ef0-bfb84e0cad86`** (100%). No migration is
+pending. 775 items, **zero blank covers**, details queue empty, **zero scan jobs
+waiting to be sorted** — the owner cleared the queue by hand.
+
+**Nothing is in flight.** Nothing needs running to reach a good state.
+
+What still wants a person, all of it optional or waiting on a delivery:
+
+| | |
+|---|---|
+| `game_component` is **empty** | the Sunday 16:00 cron fills it unattended; by hand it is `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, ~8 runs |
+| HELLDIVERS 2: Mystery Expansions (item 414) | rename from the box when the pledge ships; deliberately a placeholder |
+| Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md` |
+| ⚠️ Excursion Tiles 1 (117) says **2024** | its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand and was asleep; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree |
+
 ## Two photos of one shelf stop arguing — 2026-08-06
 
 *"if items are in a queue and scanned and another photo is in the queue and
@@ -26,6 +44,34 @@ not repeated here. The state:
 | Cost | **two D1 reads per request**, no per-title round trip |
 | Migration | **none** — nothing about this is stored |
 | Deployed | `3162e8fa-d650-4873-9f18-04420f20648b` (commits `50c4b14`, `d0aa235`) |
+
+### The proposals were the same bug, one field over — fixed the same day
+
+`proposedKind`, `proposedParentId`, `proposedParentName`, `inferredParentName`
+and `reason` were **also** decided at enrichment and frozen, so an expansion
+whose base game you added from the *other* photo still said *"Wingspan is not in
+your collection — if this is an expansion, it will wait for it"* and offered no
+parent. `withFreshOwnership` is now **`withFreshView`** and resolves both, in
+that order — an owned row takes no part in classification, and a row whose base
+game arrived elsewhere must be classified against a catalog that now holds it.
+
+New `apps/worker/src/lib/scan-classify.ts` is the **only** classifier; the
+enrichment pass calls it too, differing only in how ownership is known at that
+point. Deployed **`9d3da413-5a84-4654-8ef0-bfb84e0cad86`**, commit `7bcfa7b`, no
+migration.
+
+⚠️ **A second defect, found while testing, that silently undid the first.** The
+classifier used `resolvedName` where the Add button used `effectiveName`. A spine
+reading *"Qwixomo: Tidal Reach"* resolves to *Reach* — a doubtful one-word hit —
+so the classifier saw a name with no colon, proposed no parent, and the row was
+saved as "Qwixomo: Tidal Reach" regardless. Both now call **`scanRowName`** in
+`packages/core/src/barcode.ts`; the web app's own rule moved to where both
+callers reach it, with no change to the review screen's behaviour.
+
+Measured on a seeded local two-job shelf: job B's Oceania row went from
+*base / no parent* to *expansion / parent 9423 Wingspan / "already in your
+collection"* with job B never touched, while the stored blob kept its stale text
+and `instr(enriched,'ownership')` stayed 0 everywhere.
 
 **Verified locally against two seeded jobs sharing a title** (`npm run dev:worker`,
 no Access). Adding *Wingspan* from job A made job B's row read *"Added from
