@@ -95,19 +95,14 @@ app itself.)
 
 ## Optional: swap one-time PIN for Google SSO
 
-Purely a login-UX change — **no code changes**. The Worker reads the verified
-email from the Access token regardless of which identity provider produced it.
+Tired of typing your email and waiting for a 6-digit code? Google SSO is free,
+needs **no code changes and no deploy**, and keeps your existing account, role
+and ratings — the app keys users on the email claim, which Google returns
+unchanged.
 
-1. Google Cloud Console → create a project → **APIs & Services → Credentials** →
-   **Create OAuth client ID** (Web application).
-2. Authorized redirect URI:
-   `https://wispy-snowflake-2801.cloudflareaccess.com/cdn-cgi/access/callback`
-3. Cloudflare dashboard → **Zero Trust → Integrations → Identity providers →
-   Add an identity provider → Google**. Paste the client ID and secret.
-4. Zero Trust → **Access controls → Applications → board-game-catalog →
-   Login methods** → enable Google.
-
-Worth doing if the PIN emails get annoying. Not worth doing tonight.
+Full procedure, costs, the exact redirect URI, how to skip the login-method
+chooser, the rollback path, and the gotchas: **[`access/login.md`](access/login.md)**.
+Not repeated here.
 
 ---
 

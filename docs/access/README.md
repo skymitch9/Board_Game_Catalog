@@ -10,6 +10,7 @@ current state and work in flight live in [`../HANDOFF.md`](../HANDOFF.md).
 | File | Covers |
 |---|---|
 | [`external-apis.md`](external-apis.md) | Every third-party service: endpoints, key names, quotas, what breaks without them |
+| [`login.md`](login.md) | How sign-in works, swapping one-time PIN for Google SSO (free), skipping the login chooser, rollback without locking yourself out |
 
 Cloudflare, D1 and Access details are in [`../SETUP.md`](../SETUP.md); commands
 and deploy levers are in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.
