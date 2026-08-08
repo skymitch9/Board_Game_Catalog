@@ -4,37 +4,33 @@ Everything needed to continue or finish this without Claude.
 
 ## State at 2026-08-08, end of session
 
-**Working tree clean. `main` is 12 commits ahead of where the day started
-(`29f2c67`), and the last three are committed but NOT pushed and NOT
-deployed.**
+**Everything is shipped. Working tree clean, `main` pushed through `086ac07`,
+worker deployed, alias rows applied.** `main` is 13 commits ahead of where the
+day started (`29f2c67`).
 
 | | |
 |---|---|
-| Live worker version | **`fcdd868d-6478-4fe4-a0ba-53f60928008b`**, deployed 14:58 UTC from commit **`2007cd1`** |
+| Live worker version | **`7cfae0a7-0cfe-4dae-a58b-ea5b94d45e33`**, deployed 16:38 UTC |
+| Previous version | `fcdd868d-6478-4fe4-a0ba-53f60928008b`, 14:58 UTC — roll back to this if the search changes misbehave |
 | Migrations | `0021_item_alias` applied local **and** production. **None pending.** |
 | Catalog | **806 items**, 806 copies, 573 owned, 29 wanted |
-| `origin/main` | behind by 3 |
+| `item_alias` | **72 rows across 18 items** — the D&D spellings, all `source = 'manual'` |
 
-### ⚠️ The three things to run, in this order
+**Nothing is in flight and nothing needs running to reach a good state.** The
+only outstanding commit is this handoff refresh itself.
+
+Verify the deploy did what it should:
 
 ```bash
-git push && npm run deploy          # carries b3b473a, 0e3e169, 086ac07
+# should be 18, was 1 before today
+curl -s 'https://board-game-catalog.bgc-worker.workers.dev/api/items?q=D%26D' | jq '.total'
 ```
 
-```bash
-# ONLY after the deploy — the rows are inert until the code that reads them is live
-npx wrangler d1 execute board-game-catalog --remote \
-  --config apps/worker/wrangler.toml --file scratchpad/dnd-aliases.sql
-```
-
-No migration is needed for any of it. `npm run deploy` refuses a dirty tree;
-the tree is clean and `npm run typecheck` passes across all six workspaces.
-
-The undeployed commits are **`b3b473a`** (a `+ Add` button on the wishlist),
-**`0e3e169`** (search matches `series` and `item_alias`) and **`086ac07`**
-(search folds apostrophes and dashes). Until they ship, the site has today's
-new series groupings and cannot find "DnD" — the data is live, the code that
-reads it is not.
+…except Access intercepts that at the edge, so it has to come from a
+signed-in browser console instead — see the "Verifying anything" section of
+`CLAUDE.md`. `await (await fetch('/api/items?q=DnD')).json()` should report 18
+matching trees, and `?q=players+handbook` should report 2. Both returned **0**
+before today.
 
 ### Data changed directly in production today, all live
 
