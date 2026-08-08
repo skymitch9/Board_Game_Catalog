@@ -190,6 +190,37 @@ says *"Everything BoardGameGeek lists as official for this game is a promo or a
 collectible"* rather than "lists nothing official", which would be a plain
 untruth about data on the same screen.
 
+### ⚠️ Out-of-print was asked for, considered and declined — 2026-08-08
+
+*"Let's also check if something is out of print or was an exclusive. I don't
+want to chase things I can't get."* — the owner. **Half of it was already
+done**: `exclusive`, `kickstarter`, `indiegogo` and `limited edition` are in the
+term list above.
+
+The other half was declined, and the reason is that **BoardGameGeek has no
+in-print field**. Everything `packages/bgg/src/client.ts` parses — names, year,
+publishers, versions, links, stats — is what BGG offers about a thing; there is
+no availability to read. (Established by reading our parser, not by diffing a
+raw BGG response. If a future session finds one, this section is wrong and
+should say so.)
+
+The three stand-ins, and why none was built:
+
+| Proxy | Why not |
+|---|---|
+| Age of the component | Catan: Seafarers is 1997 and in print. Useless alone |
+| Newest edition year, from `versions=1` | The least bad — but components are fetched **without** versions on purpose (`things(token, slice, false)`, `component-backfill.ts`), so it costs a column and a full re-sweep, and BGG version data is patchy and user-maintained |
+| Retailer stock checks | The only true availability signal, but ~660 scrapes, fragile, and stale the week it runs |
+
+**And it is already answered where it matters.** `buy-links.ts` says it outright:
+*"A retailer search that comes back empty is a true answer, not a failure."* The
+owner learns a thing is unobtainable at the moment they are deciding whether to
+chase it, from a live search, rather than from a flag guessed months earlier
+that may be wrong in either direction.
+
+Revisit only if BGG gains an availability field, or if the owner wants to spend
+the research budget on it per row.
+
 ### The suggestion list gets it for free
 
 `loadComponents` in `AddRelated.tsx` reads `expansions.outstanding` and
