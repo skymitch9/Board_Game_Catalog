@@ -130,3 +130,65 @@ an insert plus a root rewrite, and reversible.
   45 hero→box links leaves the 11 boxes linked to each other and shortens the
   section, with no real loss: you still reach the family from any hero via its
   box.
+
+---
+
+## The paradigm as the data actually expresses it — read back 2026-08-08
+
+Everything above describes the *decision*. When a second line was asked to
+"match the paradigm of Dice Throne" (Unstable Unicorns, below), the shape had to
+be read out of production, and it turns out to have **three** ingredients, not
+the two this document recommends. Measured against production D1:
+
+| Ingredient | What Dice Throne does |
+|---|---|
+| **Roots** | all 11 boxes are `kind = 'base'`, `parent_item_id IS NULL` — *including* the ones that are commercially add-ons (Mystic Brawler, Alchemist, Deadpool Box Deluxe). A box you can play by yourself is a root, whatever the shop called it |
+| **Label** | `series = 'Dice Throne'` on **all 146 rows**, roots and descendants alike — not only the roots |
+| **Links** | **56 `same_family` rows**, and `same_family` only. Every one points at a box; boxes point at Season One ReRolled. Transitive, so any member reaches the whole line |
+
+Two things worth knowing that the recommendation above does not say:
+
+- **`series` on every row is a choice, not a requirement.** `ROOT_GROUP_CTE`
+  groups by `root_game_id` and takes the value most of the tree carries, so one
+  tagged row per tree would form the group. Tagging the whole line is what makes
+  the `series=Dice Throne` **filter** return 146 rows instead of 11.
+- **A group needs two roots.** `HAVING COUNT(*) > 1` in `ROOT_GROUP_CTE` drops a
+  series carried by a single line — so a `series` label on one root is inert.
+
+### ⚠️ `works_with`'s doc comment names Dice Throne. No Dice Throne row uses it.
+
+`packages/core/src/constants.ts` describes `works_with` as *"standalone games
+that combine (Dice Throne characters, Unmatched fighters)"*. Production holds
+**zero** `works_with` rows in the Dice Throne line; all 56 are `same_family`.
+The comment is the pre-`same_family` design and was not updated when
+`same_family` was added as the "common case in a real collection" it now is.
+**Follow the data, not that comment.** (Left unedited — `packages/` was owned by
+other agents at the time.)
+
+`requires` *is* used inside Dice Throne, and only where it is literally true:
+**Adventures – Unchained** and **Marvel Dice Throne: Missions** each `requires`
+the hero boxes they cannot be played without. That is the line between the two —
+`same_family` for a box that plays alone, `requires` for one that does not.
+
+### Applied to Unstable Unicorns — 2026-08-08
+
+*"Like Dice Throne, Unstable Unicorns Chaos and Control are standalone
+expansions that are also expansions, because they can be used with the base
+game"* — the owner.
+
+Chaos (501) and Control (500) were **already** roots with `kind = 'base'`; what
+was missing was the label and the right link. Four statements, no rows deleted,
+no code changed:
+
+| | |
+|---|---|
+| 502 *Christmas Expansion Pack* | re-parented from 500 (Control) to **832** (the base game), `root_game_id` following |
+| 500, 501, 502, 832, 853 | `series = 'Unstable Unicorns'` |
+| relations 79, 80 | `works_with` → **`same_family`** |
+
+`requires` was rejected — it means "unplayable without", and both are sold as
+complete base games. Transitivity does the rest: Chaos ↔ Control needs no row of
+its own.
+
+The line folds to **one entry**: *Unstable Unicorns · 3 lines · 5 items*, and the
+collection page goes 147 → 145 entries.
