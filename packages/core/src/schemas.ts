@@ -435,9 +435,28 @@ export interface WishlistEntry {
   /** The game this hangs off, so "Marine Worlds" reads as an Ark Nova expansion. */
   parentItemId: number | null;
   parentName: string | null;
+  /**
+   * The game at the top of the tree — what the page groups by.
+   *
+   * The *root*, not the parent: eight X-Men playmats hang off eight different
+   * hero boxes, and grouping on the parent would make eight sections of one row
+   * where the owner asked for one section of eight. Self for a row that is its
+   * own root, so every entry has one.
+   */
+  rootGameId: number | null;
+  rootGameName: string | null;
   thumbnailUrl: string | null;
   /** Borrowed from the nearest ancestor with art. See `covers.ts`. */
   inheritedCover?: InheritedDetail | null;
+  /**
+   * Where to buy it, and where the pledge was taken. Both feed `buyLinksFor` in
+   * `buy-links.ts` and neither is a link this app made up — see that file for
+   * why a finished Kickstarter is not offered as a shop.
+   */
+  publisherUrl: string | null;
+  /** Borrowed from the nearest ancestor with one, like the publisher itself. */
+  inheritedPublisherUrl?: InheritedDetail | null;
+  sourceUrl: string | null;
   publisher: string | null;
   yearPublished: number | null;
   minPlayers: number | null;

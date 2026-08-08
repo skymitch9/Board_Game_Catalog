@@ -975,3 +975,56 @@ code {
   border-top: 1px solid var(--line);
   font-size: 0.76rem; color: var(--muted);
 }
+
+/* --- the wishlist, grouped by game --------------------------------------- */
+
+/*
+  Read on a phone, standing in a game shop. That is the only constraint that
+  matters here: twenty of the twenty-five wanted rows are Dice Throne playmats,
+  and the five that are not were being scrolled past. Sections make the page
+  thumbable; the header is the whole tap target because a thumb is not a mouse.
+*/
+.wishlist-group { padding: 0; overflow: hidden; margin-bottom: 0; }
+.wishlist-group__head {
+  width: 100%; border: none; background: none; text-align: left;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.wishlist-group__head:hover { background: var(--bg); }
+.wishlist-group__head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* The rows sit inside the card, so they need the card's padding back. */
+.wishlist-group .candidate-list { padding: 0 0.6rem 0.6rem; }
+
+.wishlist-legend { margin: 0 0 0.75rem; line-height: 1.35; }
+
+/*
+  Where to buy it. Ranked left to right by `buyLinksFor`, and the publisher is
+  drawn as the one solid chip because it is the only first-party answer on the
+  row — everything after it is a search of somebody else's catalog.
+*/
+.buy-links { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
+.buy-link {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--line); border-radius: 999px;
+  font-size: 0.74rem; line-height: 1.2;
+  color: var(--muted); text-decoration: none; white-space: nowrap;
+}
+.buy-link:hover { background: var(--bg); color: var(--text); text-decoration: none; }
+.buy-link--publisher {
+  border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+/* A pledge manager that may or may not still be open — the same weight as a
+   shop, never the weight of the publisher, because it is a maybe. */
+.buy-link--late-pledge { border-style: dashed; border-color: var(--accent); color: var(--accent); }
+.buy-link__glyph { font-size: 0.85em; opacity: 0.8; }
+
+@media (max-width: 560px) {
+  /*
+    A phone row is name, links and the button stacked, not a three-column strip.
+    Left as-is, six buy chips squeeze "Mark as bought" into a two-line sliver
+    down the right-hand edge and the links wrap to five lines beside it.
+  */
+  .wishlist .candidate { flex-wrap: wrap; align-items: flex-start; }
+  .wishlist .candidate > .btn { width: 100%; margin-top: 0.2rem; }
+  .wishlist-group .candidate-list { padding: 0 0.4rem 0.5rem; }
+}

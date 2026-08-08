@@ -712,6 +712,11 @@ export async function resolveInheritedDetails(
   return { inherited, cover };
 }
 
+/** An ancestor with everything the wishlist may borrow from it. */
+interface WishlistLender extends CoverLender {
+  publisherUrl: string | null;
+}
+
 /**
  * The ancestors of several items at once, nearest first, for lending covers.
  *
@@ -720,14 +725,21 @@ export async function resolveInheritedDetails(
  * to walk — 20 of the 25 wanted rows have no art of their own, so a page of
  * empty boxes was the alternative.
  *
+ * It now carries `publisher_url` on the same rows, because the wishlist borrows
+ * that too: a playmat almost never has a site of its own and its game always
+ * does, and `INHERITED_FIELDS` already says a child may take its parent's. One
+ * extra column on a query that was already running beats a second walk of the
+ * same chain. It stays nearest-first, so `inheritCover` and the publisher
+ * fallback agree about which ancestor answered.
+ *
  * The single-item read path does not use this: `resolveInheritedDetails` already
  * fetches the same ancestors for the publisher, and takes the cover from that.
  */
 async function ancestorCoversFor(
   db: D1Database,
   ids: number[],
-): Promise<Map<number, CoverLender[]>> {
-  const byItem = new Map<number, CoverLender[]>();
+): Promise<Map<number, WishlistLender[]>> {
+  const byItem = new Map<number, WishlistLender[]>();
   if (ids.length === 0) return byItem;
   const holes = ids.map(() => '?').join(',');
 
@@ -740,16 +752,27 @@ async function ancestorCoversFor(
            FROM chain c JOIN item p ON p.id = c.cur
           WHERE c.depth < ?
        )
-       SELECT c.of_id, i.id, i.name, i.thumbnail_url, c.depth
+       SELECT c.of_id, i.id, i.name, i.thumbnail_url, i.publisher_url, c.depth
          FROM chain c JOIN item i ON i.id = c.cur
         ORDER BY c.of_id, c.depth`,
     )
     .bind(...ids, MAX_ANCESTOR_DEPTH)
-    .all<{ of_id: number; id: number; name: string; thumbnail_url: string | null }>();
+    .all<{
+      of_id: number;
+      id: number;
+      name: string;
+      thumbnail_url: string | null;
+      publisher_url: string | null;
+    }>();
 
   for (const row of results) {
     const list = byItem.get(row.of_id) ?? [];
-    list.push({ id: row.id, name: row.name, thumbnailUrl: row.thumbnail_url });
+    list.push({
+      id: row.id,
+      name: row.name,
+      thumbnailUrl: row.thumbnail_url,
+      publisherUrl: row.publisher_url,
+    });
     byItem.set(row.of_id, list);
   }
   return byItem;
@@ -1403,7 +1426,10 @@ export async function countItemsNeedingDetails(db: D1Database): Promise<number> 
  * waiting for the post, which is a different question from what to buy next.
  *
  * The join to the parent is what lets a row read as "Marine Worlds, expansion
- * of Ark Nova" rather than as a game nobody has heard of.
+ * of Ark Nova" rather than as a game nobody has heard of. The second join, to
+ * the *root*, is what the page groups on: eight X-Men playmats hang off eight
+ * different hero boxes, so grouping on the parent would make eight sections of
+ * one row apiece. Rows come back in root order so a group is contiguous.
  */
 export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
   const { results } = await db
@@ -1421,13 +1447,18 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
               i.min_players   AS min_players,
               i.max_players   AS max_players,
               i.bgg_id        AS bgg_id,
+              i.publisher_url AS publisher_url,
+              i.source_url    AS source_url,
               p.id            AS parent_item_id,
-              p.name          AS parent_name
+              p.name          AS parent_name,
+              g.id            AS root_game_id,
+              g.name          AS root_game_name
          FROM copy c
          JOIN item i ON i.id = c.item_id
          LEFT JOIN item p ON p.id = i.parent_item_id
+         LEFT JOIN item g ON g.id = COALESCE(i.root_game_id, i.id)
         WHERE c.status = 'wanted'
-        ORDER BY COALESCE(p.sort_name, i.sort_name, i.name), i.sort_name, c.id`,
+        ORDER BY COALESCE(g.sort_name, g.name, i.sort_name, i.name), i.sort_name, c.id`,
     )
     .all<{
       copy_id: number;
@@ -1443,36 +1474,66 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
       min_players: number | null;
       max_players: number | null;
       bgg_id: number | null;
+      publisher_url: string | null;
+      source_url: string | null;
       parent_item_id: number | null;
       parent_name: string | null;
+      root_game_id: number | null;
+      root_game_name: string | null;
     }>();
 
   // A wanted row rarely has art of its own — it is a thing nobody has bought
   // yet. One extra read lends each of them its game's cover; the row already
   // names its parent beside the picture, so whose art it is stays legible.
+  //
+  // Asked for every row now, not only the coverless ones, because the same walk
+  // answers "whose publisher site does this playmat use" — 20 of the 25 rows
+  // have no site of their own and every one of their games does. `inheritCover`
+  // still returns null for a row that has its own art, so nothing about the
+  // covers changed.
   const ancestors = await ancestorCoversFor(
     db,
-    results.filter((r) => isBlankDetail(r.thumbnail_url)).map((r) => r.item_id),
+    results
+      .filter((r) => isBlankDetail(r.thumbnail_url) || isBlankDetail(r.publisher_url))
+      .map((r) => r.item_id),
   );
 
-  return results.map((r) => ({
-    copyId: r.copy_id,
-    itemId: r.item_id,
-    name: r.name,
-    kind: r.kind as WishlistEntry['kind'],
-    parentItemId: r.parent_item_id,
-    parentName: r.parent_name,
-    thumbnailUrl: r.thumbnail_url,
-    inheritedCover: inheritCover(r.thumbnail_url, ancestors.get(r.item_id) ?? []),
-    publisher: r.publisher,
-    yearPublished: r.year_published,
-    minPlayers: r.min_players,
-    maxPlayers: r.max_players,
-    bggId: r.bgg_id,
-    quantity: r.quantity ?? 1,
-    notes: r.notes,
-    addedAt: toIso(r.added_at),
-  }));
+  return results.map((r) => {
+    const chain = ancestors.get(r.item_id) ?? [];
+    const lender = isBlankDetail(r.publisher_url)
+      ? chain.find((a) => !isBlankDetail(a.publisherUrl))
+      : undefined;
+    return {
+      copyId: r.copy_id,
+      itemId: r.item_id,
+      name: r.name,
+      kind: r.kind as WishlistEntry['kind'],
+      parentItemId: r.parent_item_id,
+      parentName: r.parent_name,
+      // Self for a root, so the page always has something to group on.
+      rootGameId: r.root_game_id ?? r.item_id,
+      rootGameName: r.root_game_name ?? r.name,
+      thumbnailUrl: r.thumbnail_url,
+      inheritedCover: inheritCover(r.thumbnail_url, chain),
+      publisherUrl: r.publisher_url,
+      inheritedPublisherUrl: lender
+        ? {
+            value: lender.publisherUrl as string,
+            fromItemId: lender.id,
+            fromName: lender.name,
+          }
+        : null,
+      sourceUrl: r.source_url,
+      publisher: r.publisher,
+      yearPublished: r.year_published,
+      minPlayers: r.min_players,
+      maxPlayers: r.max_players,
+      bggId: r.bgg_id,
+      quantity: r.quantity ?? 1,
+      notes: r.notes,
+      addedAt: toIso(r.added_at),
+    };
+  });
 }
 
 /** Top-level items and their kinds — the input to a re-tagging pass. */
