@@ -20,6 +20,112 @@ What still wants a person, all of it optional or waiting on a delivery:
 | Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md` |
 | ⚠️ Excursion Tiles 1 (117) says **2024** | its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand and was asleep; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree |
 
+## Search learns the line's name, and its spellings — 2026-08-08
+
+> ⚠️ **UNCOMMITTED and UNDEPLOYED.** One modified file
+> (`packages/db/src/items.ts`) and one untracked file
+> (`scratchpad/dnd-aliases.sql`). **Nothing was written to production** — the
+> alias rows are applied to a local D1 only. `npm run typecheck` passes; the
+> mojibake sweep is clean.
+
+*"We might also need to add aliases to the parents so DnD, Dungeons and Dragons,
+D&D etc all return in the search for this one."* — the owner.
+
+Two changes, because the two mechanisms that would answer this were both
+invisible to the search box: `termClause` looked only at `name`, `publisher` and
+`designers`, and `item_alias` (migration 0021) was read only by the scanner.
+
+| | |
+|---|---|
+| Change 1 | `termClause` also matches **`series`** — free, no new data |
+| Change 2 | a new `aliasTermClause` also matches **`item_alias`**, per search term |
+| Change 3 | `scratchpad/dnd-aliases.sql` — **72 rows, 4 spellings on 18 roots** |
+
+### Measured, local D1 loaded with production's 806 items and 806 copies
+
+Result counts are **matching game trees**, which is what the page shows.
+
+| Search box | Before | + `series` | + aliases |
+|---|---|---|---|
+| `D&D` | **1** | 14 | **18** |
+| `DnD` | **0** | 0 | **18** |
+| `Dungeons and Dragons` | **0** | 0 | **18** |
+| `Dungeons & Dragons` | 4 | 4 | **18** |
+| `dice throne` | 12 | 12 | 12 |
+| `zorblax` | 0 | 0 | 0 |
+| *(empty)* | 140 entries / 171 roots | — | unchanged |
+
+`D&D` returning **1** before is the whole bug in one number: 109 rows across 14
+trees are the D&D line, and only the 2024 Dungeon Master's Guide came back,
+because somebody happened to type "D&D" into a child row's name.
+
+### ⚠️ The alias clause must stay an uncorrelated `IN`
+
+`item_alias` is empty in production today, so the cost is nothing *today*. It
+will not stay empty — a full BGG backfill is ~116 alternate names per game.
+Measured against a synthetic 22,908-row table:
+
+| Alias clause | Cost of the collection count |
+|---|---|
+| correlated `EXISTS (… WHERE ta.root_game_id = i2.root_game_id …)` | **22–27 ms** |
+| uncorrelated `i2.root_game_id IN (SELECT …)` | **6–10 ms** |
+| unchanged code, for comparison | 3–5 ms |
+
+A leading-wildcard `LIKE` can use no index, so the table gets scanned either
+way; the `IN` form scans it **once per search term** instead of once per
+candidate row. `EXPLAIN QUERY PLAN` must say `LIST SUBQUERY`, not `CORRELATED`.
+End to end the endpoint is **35–40 ms** for a search either way, on 806 items.
+
+### Why looser matching is right here and wrong in the scanner
+
+The comment at the top of `routes/aliases.ts` and the three rules in
+`buildTitleIndex` keep aliases out of loose matching **because a scanner match
+is an unattended decision** — it marks a game already-owned and the box
+disappears from the review list with nobody watching. A search box inverts every
+term of that: it is already `LIKE '%term%'`, a person reads the list and picks,
+and nothing is written. The failure that actually costs the owner something is
+typing "DnD" and being told they own nothing.
+
+**They share no code.** The scanner reads aliases through `listItemAliases` →
+`buildTitleIndex`/`matchIndexedTitle` in `packages/core`; search reads them in
+SQL in `matchingRootsSql`. `MIN_SPINE_SIMILARITY`, `isConfidentMatch` and the
+three index rules are untouched. The asymmetry is deliberate in both directions:
+a **contested alias belongs to nobody in the scanner and to everybody here** —
+showing both games that answer to a name is right for a human and wrong for an
+unattended matcher.
+
+### Which rows got the aliases, and the free safety property
+
+**18 roots, not 109 rows.** Search matches whole *trees*, so one alias on a root
+surfaces its whole tree; tagging all 109 returns the identical page for six times
+the rows. 14 roots come from `series = 'D&D'` (the core books were promoted to
+roots today); the other 4 are the D&D-branded board games — Castle Ravenloft,
+Legend of Drizzt, Wrath of Ashardalon, Tomb of Annihilation — which carry no
+`series`, were already returned by "Dungeons & Dragons" and were *not* returned
+by "D&D". Without them the four spellings disagree with each other.
+
+⚠️ **Spreading a string across the line is what makes it inert in the scanner.**
+`normaliseTitle` folds the four spellings to three keys (`d and d`, `dnd`,
+`dungeons and dragons`), each claimed by all 18 roots, so rule 2 drops all
+three — verified by running the real `buildTitleIndex` logic over
+`GET /api/item-names`: **`aliasKeys` comes back empty.** Putting one of these on
+a *single* root is what would change scanner behaviour.
+
+### Left for the owner
+
+- **Apply `scratchpad/dnd-aliases.sql` to production**, deliberately not done
+  here. Before-state and reversal are in the file's header; production
+  `item_alias` was **0 rows** when read on 2026-08-08. It is idempotent.
+- **There is still no web UI for typing an alias.** These rows go in by SQL or by
+  `POST /api/aliases/items/:id`. Every other line — Dice Throne, Boss Monster —
+  has the same spelling problem waiting.
+- **A series-level alias would be the honest model.** These 72 rows say
+  "*Ryoko's Guide to the Yokai Realms* also answers to DnD", which is true of the
+  line, not of the book. An `item_alias` row is the mechanism that exists today.
+- ⚠️ **Unrelated find: `Player’s Handbook` uses a curly apostrophe (U+2019).**
+  Searching `players handbook` returns **0**; `dnd handbook` returns 2. Nothing
+  to do with this change, and it will bite somebody.
+
 ## A game with two names is one game — 2026-08-08
 
 > ⚠️ **UNCOMMITTED, UNDEPLOYED, and living in a worktree**, not in `main`:

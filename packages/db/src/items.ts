@@ -96,15 +96,82 @@ export function toSortName(name: string): string {
     .replace(/^(the|a|an)\s+/, '');
 }
 
-/** The fields a search term is looked for in, for one item alias. */
+/**
+ * The fields a search term is looked for in, for one item alias.
+ *
+ * `series` is here because it is the only name the *line* has. Typing "D&D"
+ * used to return **one** of the 14 trees that carry `series = 'D&D'` — the
+ * 2024 Dungeon Master's Guide, and only because somebody happened to write
+ * "D&D" into a child row's name. The other 13 are called "Player's Handbook
+ * (2024)" and "Ryoko's Guide to the Yokai Realms", and nothing in a name, a
+ * publisher or a designer says what line they belong to. `game_system` is
+ * deliberately *not*
+ * here: it duplicates `series` on every row in this catalog that has both, and
+ * where it differs it is the more granular claim ("D&D 5e (2014)"), which the
+ * dropdown filter already reaches exactly.
+ */
 function termClause(alias: string): string {
   return `(lower(${alias}.name) LIKE ? OR lower(${alias}.publisher) LIKE ?
-           OR lower(${alias}.designers) LIKE ?)`;
+           OR lower(${alias}.designers) LIKE ? OR lower(${alias}.series) LIKE ?)`;
 }
 
-/** True when this item's own text accounts for the term. Mirrors `termClause`. */
+/**
+ * The same term, looked for in the other names a game answers to.
+ *
+ * ⚠️ **This is looser than the scanner is allowed to be, on purpose, and the
+ * two must never share a code path.** `buildTitleIndex` in
+ * `packages/core/src/vision.ts` matches an alias *exactly*, drops one claimed by
+ * two items, and lets a real name beat one — because a match there marks a game
+ * already-owned with nobody watching, and a wrong guess makes a box vanish from
+ * the review list. None of that applies to a search box: it is already
+ * `LIKE '%term%'` over four columns, a person reads the results and decides,
+ * and nothing is written. A false positive here costs one extra row on screen;
+ * the failure that actually hurts is typing "DnD" and being told you own
+ * nothing.
+ *
+ * The asymmetry is deliberate in both directions. A contested alias belongs to
+ * nobody in the scanner and to *everybody* here — showing both games that answer
+ * to a name is the right answer for a human and the wrong one for an unattended
+ * matcher. That is precisely why this is SQL living beside the collection query
+ * rather than a flag on the core matcher.
+ *
+ * ⚠️ **An uncorrelated `IN`, and it has to be — measured, not assumed.** A
+ * leading-wildcard LIKE can use no index, so the alias table gets scanned; the
+ * only question is how often. Written as a correlated `EXISTS (… WHERE
+ * ta.root_game_id = i2.root_game_id …)` the scan happens once per candidate row,
+ * and against a fully backfilled table (22,908 rows — 197 items × BGG's ~116
+ * alternate names each) the collection count went **3–5 ms → 22–27 ms**. As an
+ * `IN` whose subquery mentions nothing from the outer query, SQLite builds the
+ * set of matching roots once and probes it: **6–10 ms** on the same data, for
+ * the same answers. Do not "tidy" this back into an EXISTS.
+ *
+ * It is still one scan of `item_alias` per search *term*, which is the honest
+ * ceiling here; `searchTerms` caps a query at eight.
+ *
+ * Kept as a sibling of the text EXISTS rather than folded into it so the OR
+ * short-circuits per row — a tree that already matched on name never probes the
+ * list. `EXPLAIN QUERY PLAN` says `LIST SUBQUERY`, not `CORRELATED`, which is
+ * the line to check if this is ever edited.
+ */
+function aliasTermClause(rootExpr: string): string {
+  return `${rootExpr} IN (SELECT ta.root_game_id
+                            FROM item_alias al
+                            JOIN item ta ON ta.id = al.item_id
+                           WHERE ta.root_game_id IS NOT NULL
+                             AND lower(al.alias) LIKE ?)`;
+}
+
+/**
+ * True when this item's own text accounts for the term. Mirrors `termClause`.
+ *
+ * Aliases are **not** consulted here, and that is not an oversight. This feeds
+ * `attachMatchReasons`, whose whole job is to name the child that explains a
+ * result, and it works from the trees already in memory — no alias rows were
+ * read. A tree that matched only by alias simply gets no "why" line, which is
+ * the same thing that happens today when a term is explained by the root.
+ */
 function itemMatchesTerm(item: Item, term: string): boolean {
-  return [item.name, item.publisher, item.designers].some(
+  return [item.name, item.publisher, item.designers, item.series].some(
     (field) => field != null && field.toLowerCase().includes(term),
   );
 }
@@ -202,11 +269,14 @@ function matchingRootsSql(
 
   for (const term of searchTerms(query.q)) {
     where.push(
-      `EXISTS (SELECT 1 FROM item t
-                WHERE t.root_game_id = i2.root_game_id AND ${termClause('t')})`,
+      `(EXISTS (SELECT 1 FROM item t
+                 WHERE t.root_game_id = i2.root_game_id AND ${termClause('t')})
+        OR ${aliasTermClause('i2.root_game_id')})`,
     );
     const like = `%${term}%`;
-    params.push(like, like, like);
+    // Four for `termClause`, then one for the alias probe — in the order the
+    // two clauses appear above.
+    params.push(like, like, like, like, like);
   }
   if (query.kind) {
     where.push('i2.kind = ?');
