@@ -16,6 +16,7 @@ import type {
   GroupAxis,
   HealthResponse,
   Item,
+  ItemAliasRef,
   ItemDetail,
   ItemPage,
   ItemQuery,
@@ -128,13 +129,19 @@ export const api = {
   items: (query: ItemQuery = {}) => req<ItemPage>(`/api/items${toQueryString(query)}`),
 
   /**
-   * Every item's id, name and kind. The list `items()` cannot give you.
+   * Every item's id, name and kind, and every alternate name. The list
+   * `items()` cannot give you.
    *
    * Matching read spine text against the collection needs all of it — a paged
    * browse would match against the first page and call everything else new.
+   * `aliases` arrives with it and must be passed on with it: the matcher decides
+   * a real name beats an alias, which it can only do seeing both.
    */
   itemNames: () =>
-    req<{ items: { id: number; name: string; kind: string }[] }>('/api/item-names'),
+    req<{
+      items: { id: number; name: string; kind: string }[];
+      aliases: ItemAliasRef[];
+    }>('/api/item-names'),
   item: (id: number) => req<{ item: ItemDetail }>(`/api/items/${id}`),
 
   /**

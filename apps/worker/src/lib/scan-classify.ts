@@ -27,7 +27,12 @@
  * question* and nothing else, so that question is the parameter.
  */
 
-import { classifyShelfResults, scanRowName, type NameableScanRow } from '@bgc/core';
+import {
+  classifyShelfResults,
+  scanRowName,
+  type ItemAliasRef,
+  type NameableScanRow,
+} from '@bgc/core';
 
 /** The fields a classifiable row must have. Structural, so both paths fit. */
 export interface ClassifiableTitle extends NameableScanRow {
@@ -58,6 +63,13 @@ export function classifyTitles<T extends ClassifiableTitle>(
   rows: T[],
   existing: readonly { id: number; name: string; kind: string }[],
   isOwned: (row: T, index: number) => boolean,
+  /**
+   * Alternate names, so a *prefix* may be one too. "The Settlers of Catan:
+   * Seafarers" is an expansion of the box filed as "Catan", and without this the
+   * classifier would propose no parent for it while the ownership pass one step
+   * earlier had no trouble recognising the same string.
+   */
+  aliases: readonly ItemAliasRef[] = [],
 ): T[] {
   const participates = rows.map((r, i) => !isOwned(r, i));
 
@@ -73,6 +85,7 @@ export function classifyTitles<T extends ClassifiableTitle>(
         thumbnailUrl: r.thumbnailUrl,
       })),
     existing,
+    aliases,
   );
 
   let idx = 0;

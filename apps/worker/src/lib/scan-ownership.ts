@@ -42,10 +42,12 @@ import {
   buildTitleIndex,
   isConfidentMatch,
   matchIndexedTitle,
+  type ItemAliasRef,
   type TitleIndex,
 } from '@bgc/core';
 import {
   listAddedItemSources,
+  listItemAliases,
   listItemNames,
   type ScanJob,
   type ScanJobMode,
@@ -62,6 +64,12 @@ interface CatalogItem {
 export interface OwnershipContext {
   /** The catalog as `classifyShelfResults` wants it — the same rows, unfolded. */
   items: CatalogItem[];
+  /**
+   * The other names those rows answer to. Carried unfolded beside `items` for
+   * the same reason `items` is: the classifier needs them too, and folding is
+   * the index's job.
+   */
+  aliases: ItemAliasRef[];
   index: TitleIndex<CatalogItem>;
   byId: Map<number, CatalogItem>;
   /** itemId → the job whose review screen added it, when one did. */
@@ -96,8 +104,16 @@ export interface ResolvedOwnership {
  * project keeps producing; `wrangler tail` prints it.
  */
 export async function ownershipContext(db: D1Database): Promise<OwnershipContext> {
-  const [items, sources] = await Promise.all([
+  const [items, aliases, sources] = await Promise.all([
     listItemNames(db),
+    // Alternate names are how *"Settlers of Catan and Catan are the same game"*
+    // is answered. Degrading like provenance rather than failing the read: with
+    // no aliases the queue matches on names alone, which is what it did before
+    // and is a queue that works, not a queue that will not load.
+    listItemAliases(db).catch((err: unknown) => {
+      console.warn('item aliases unavailable', (err as Error).message);
+      return [];
+    }),
     listAddedItemSources(db).catch((err: unknown) => {
       console.warn('scan-job provenance unavailable', (err as Error).message);
       return [];
@@ -111,7 +127,8 @@ export async function ownershipContext(db: D1Database): Promise<OwnershipContext
 
   return {
     items,
-    index: buildTitleIndex(items),
+    aliases,
+    index: buildTitleIndex(items, aliases),
     byId: new Map(items.map((i) => [i.id, i])),
     addedBy,
   };
@@ -233,7 +250,9 @@ export function withFreshView<T extends ScanJob>(job: T, ctx: OwnershipContext):
 
   return {
     ...job,
-    enriched: JSON.stringify(classifyTitles(resolved, ctx.items, (t) => t.ownership !== null)),
+    enriched: JSON.stringify(
+      classifyTitles(resolved, ctx.items, (t) => t.ownership !== null, ctx.aliases),
+    ),
   };
 }
 

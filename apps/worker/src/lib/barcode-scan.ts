@@ -21,7 +21,7 @@ import {
   type ItemKind,
 } from '@bgc/core';
 import { gameUpcConfig, resolveBarcode } from '@bgc/barcode';
-import { countOwnedCopies, findByBarcode, listItemNames } from '@bgc/db';
+import { countOwnedCopies, findByBarcode, listItemAliases, listItemNames } from '@bgc/db';
 import type { Env } from '../env.js';
 // Type-only, so nothing links the two files at runtime: `scan-ownership.ts`
 // imports `ScannedTitle` from here, and this import is erased.
@@ -318,8 +318,8 @@ export async function resolveScannedBarcode(
   // Only ever claimed for a match we trust. An unconfirmed guess that happens
   // to collide with something owned would file a genuinely new game under
   // "already yours", which loses it — much worse than a duplicate.
-  const existing = await listItemNames(env.DB);
-  const owned = needsConfirmation ? null : matchExistingTitle(best.name, existing);
+  const [existing, aliases] = await Promise.all([listItemNames(env.DB), listItemAliases(env.DB)]);
+  const owned = needsConfirmation ? null : matchExistingTitle(best.name, existing, aliases);
   if (owned) {
     return {
       ...base,
@@ -343,6 +343,7 @@ export async function resolveScannedBarcode(
   const [classified] = classifyShelfResults(
     [{ name: best.name, bggId: best.bggId, thumbnailUrl: best.thumbnailUrl }],
     existing,
+    aliases,
   );
 
   return {
@@ -370,7 +371,7 @@ export async function resolveScannedBarcode(
         ? 'Community-verified barcode match.'
         : needsConfirmation
           ? `Nobody has confirmed this code. "${best.name}" is the best the free databases offered — check it against the box.${
-              matchExistingTitle(best.name, existing)
+              matchExistingTitle(best.name, existing, aliases)
                 ? ' You may already own it under a different code.'
                 : ''
             }`

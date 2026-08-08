@@ -662,7 +662,11 @@ function ShelfResult({
         bggId: m.bggId,
         thumbnailUrl: m.thumbnailUrl,
       }));
-      setClassified(classifyShelfResults(freshItems, flat));
+      // Alternate names too, so a spine reading "The Settlers of Catan:
+      // Seafarers" proposes the box filed as "Catan" as its parent rather than
+      // rooting itself beside it. The server's ownership pass already uses
+      // them; this is the same catalog answering the same way.
+      setClassified(classifyShelfResults(freshItems, flat, res.aliases ?? []));
     }).catch(() => {
       const freshItems = fresh.map((m) => ({
         name: m.resolvedName ?? m.title.text,
