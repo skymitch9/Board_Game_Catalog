@@ -2,27 +2,101 @@
 
 Everything needed to continue or finish this without Claude.
 
-## State at 2026-08-06, end of session
+## State at 2026-08-08, end of session
 
-Working tree **clean**, everything committed to `main` and pushed, worker
-deployed at **`9d3da413-5a84-4654-8ef0-bfb84e0cad86`** (100%). No migration is
-pending. 775 items, **zero blank covers**, details queue empty, **zero scan jobs
-waiting to be sorted** — the owner cleared the queue by hand.
-
-**Nothing is in flight.** Nothing needs running to reach a good state.
-
-What still wants a person, all of it optional or waiting on a delivery:
+**Working tree clean. `main` is 12 commits ahead of where the day started
+(`29f2c67`), and the last three are committed but NOT pushed and NOT
+deployed.**
 
 | | |
 |---|---|
-| `game_component` is **empty** | the Sunday 16:00 cron fills it unattended; by hand it is `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, ~8 runs |
+| Live worker version | **`fcdd868d-6478-4fe4-a0ba-53f60928008b`**, deployed 14:58 UTC from commit **`2007cd1`** |
+| Migrations | `0021_item_alias` applied local **and** production. **None pending.** |
+| Catalog | **806 items**, 806 copies, 573 owned, 29 wanted |
+| `origin/main` | behind by 3 |
+
+### ⚠️ The three things to run, in this order
+
+```bash
+git push && npm run deploy          # carries b3b473a, 0e3e169, 086ac07
+```
+
+```bash
+# ONLY after the deploy — the rows are inert until the code that reads them is live
+npx wrangler d1 execute board-game-catalog --remote \
+  --config apps/worker/wrangler.toml --file scratchpad/dnd-aliases.sql
+```
+
+No migration is needed for any of it. `npm run deploy` refuses a dirty tree;
+the tree is clean and `npm run typecheck` passes across all six workspaces.
+
+The undeployed commits are **`b3b473a`** (a `+ Add` button on the wishlist),
+**`0e3e169`** (search matches `series` and `item_alias`) and **`086ac07`**
+(search folds apostrophes and dashes). Until they ship, the site has today's
+new series groupings and cannot find "DnD" — the data is live, the code that
+reads it is not.
+
+### Data changed directly in production today, all live
+
+Every one of these went straight to D1 and is already in effect. Reversal SQL
+is recorded in the section for each.
+
+| | |
+|---|---|
+| Item 852 "Here to Sleigh" | was a `base` root; now an `expansion` under Here to Slay (107) |
+| Item 826 "The Settlers of Catan" | **deleted** — a real duplicate of item 54 |
+| D&D core books (599, 601, 620, 622) | promoted out of the DMG trees to their own roots |
+| Items 854, 855 | Fractured Sky: Awakening / Rift, added `wanted` |
+| Items 856, 857 | Fractured Sky Metal Starfall Tokens / Neoprene Game Mat, added `wanted` |
+| Item 841 "Hypothetically" | researched by hand and filled in |
+| **15 `series` labels** | across ~470 rows — see the family sweep section |
+| **`same_family` 65 → 90** | 25 edges from the sweep, plus Slam Throne |
+
+### What still wants a person
+
+| | |
+|---|---|
+| `game_component` is **empty** (0 rows) | the Sunday 16:00 cron fills it unattended; by hand it is `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, ~8 runs |
+| ⚠️ **174 owned base games and expansions have no `bgg_id`** | 157 of them expansions. This gates the completeness feature entirely. Reads only, fully licensed — the highest-value unglamorous job left |
+| ⚠️ `copy.edition_id` is **null on all 806 copies** | 1,063 edition rows exist with 768 BGG version ids, so the catalog knows which printings exist and has never recorded which one is on the shelf |
+| Excursion Tiles (117, 118) | share a `series` but have **no `same_family` edge**, so the group card forms while neither item's page mentions the other. One row: `INSERT INTO item_relation (from_item_id,to_item_id,relation) VALUES (117,118,'same_family');` |
+| ⚠️ Three orphaned non-base rows sitting as their own roots | 823 Dark Moon: Shadow Corporation (`expansion`, wants nesting under 790), 842 Tiny Epic Dungeons Adventures: The Phantom Voyage (`expansion`, under 840), 830 Scales of Fate Metal Upgrade Kit (`accessory`, under 91) |
 | HELLDIVERS 2: Mystery Expansions (item 414) | rename from the box when the pledge ships; deliberately a placeholder |
 | Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md` |
-| ⚠️ Excursion Tiles 1 (117) says **2024** | its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand and was asleep; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree |
+| ⚠️ Excursion Tiles 1 (117) says **2024** | its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree |
+
+### Login is now Google SSO — and the email PIN was deliberately kept
+
+Both Access applications (production and the `*-` preview wildcard) accept
+**Google and one-time PIN**, with **Apply instant authentication OFF**. That
+is a settled decision, not an unfinished step: Instant Auth only skips the
+chooser when an application has exactly one login method, so keeping the PIN
+costs one click at the chooser and buys a fallback that is visible on the
+login page rather than two clicks deep in a dashboard. The owner weighed it
+and chose the click. See [`access/login.md`](access/login.md).
+
+Both accounts (`nbaslamking@`, `asprint200@`) are `owner` and survived the
+switch untouched — `upsertUserOnLogin` matches on the lowercased email, and
+Google returns the same string the PIN flow did.
+
+### BoardGameGeek has no write API — settled 2026-08-08
+
+Asked and researched properly, so nobody spends a day on it again. XMLAPI2 is
+GET-only on every documented endpoint; the July 2025 bearer-token change was
+authentication for *reads*, with no scopes. The only route that can write a
+collection is driving the logged-in site backend (`api.geekdo.com`), which
+BGG's own wiki says the XML terms do "NOT cover" and a staff developer says
+not to use "outside of the context of just browsing the website".
+
+It would also sync **142 of 573 owned items (25%)** — base games are 114/131,
+expansions 27/184, accessories 1/221. And the edition half is unanswerable
+regardless, because `copy.edition_id` is null everywhere. **Do not build
+this.**
 
 ## A curly apostrophe is not a different word — 2026-08-08
 
-> ⚠️ **UNCOMMITTED and UNDEPLOYED.** Two modified files:
+> **COMMITTED as `086ac07`; not pushed and NOT DEPLOYED.** (This block said
+> UNCOMMITTED; it was committed later the same day.) Touches
 > `packages/core/src/schemas.ts` and `packages/db/src/items.ts`. **No migration,
 > nothing written to production.** `npm run typecheck` passes; the mojibake sweep
 > is clean.
