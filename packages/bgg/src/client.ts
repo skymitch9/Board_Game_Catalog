@@ -130,6 +130,12 @@ export interface BggThing {
   bggId: number;
   type: BggType;
   name: string;
+  /**
+   * Every other name BGG lists for this game — see `alternateNames`. Feeds
+   * `item_alias`, which is how a rescan reading "The Settlers of Catan" finds
+   * the "Catan" already on the shelf.
+   */
+  alternateNames: string[];
   yearPublished: number | null;
   description: string | null;
   thumbnailUrl: string | null;
@@ -177,6 +183,27 @@ function primaryName(node: Node): string {
   const names = asArray<Node>(node['name']);
   const primary = names.find((n) => attr(n, 'type') === 'primary') ?? names[0];
   return attr(primary, 'value') ?? '';
+}
+
+/**
+ * The names that are not the title — localisations, reissues, former titles.
+ *
+ * These were parsed and thrown away for months, and they are the answer to
+ * *"Settlers of Catan and Catan are the same game"*: BGG 13's primary name is
+ * **Catan** and its alternates include **The Settlers of Catan**, **Die Siedler
+ * von Catan** and sixty more. BoardGameGeek already models the thing the catalog
+ * needed a model for, so `item_alias` imports it rather than inventing one.
+ *
+ * Returned verbatim and unfiltered. Deciding which of them are safe to match on
+ * is a question about *this* catalog — whether another game already answers to
+ * that string — and it is answered in `buildTitleIndex`, which is the only place
+ * that can see both sides.
+ */
+function alternateNames(node: Node): string[] {
+  return asArray<Node>(node['name'])
+    .filter((n) => attr(n, 'type') === 'alternate')
+    .map((n) => decodeEntities(attr(n, 'value') ?? ''))
+    .filter((v) => v !== '');
 }
 
 function linksOfType(node: Node, type: string): { id: number; value: string }[] {
@@ -305,6 +332,7 @@ export async function things(
       bggId: Number(attr(item, 'id')),
       type: (attr(item, 'type') ?? 'boardgame') as BggType,
       name: decodeEntities(primaryName(item)),
+      alternateNames: alternateNames(item),
       yearPublished: numAttr(item['yearpublished'], 'value'),
       description:
         typeof rawDescription === 'string'

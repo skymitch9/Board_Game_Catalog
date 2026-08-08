@@ -110,8 +110,20 @@ export function normaliseTitle(raw: string): string {
 export function matchExistingTitle<T extends { id: number; name: string }>(
   title: string,
   existing: readonly T[],
+  aliases: readonly ItemAliasRef[] = [],
 ): T | null {
-  return matchIndexedTitle(buildTitleIndex(existing), title);
+  return matchIndexedTitle(buildTitleIndex(existing, aliases), title);
+}
+
+/**
+ * One known other name for one item — see `migrations/0021_item_alias.sql`.
+ *
+ * Structural rather than the db package's row type, so `packages/core` stays a
+ * leaf with no I/O and nothing to import.
+ */
+export interface ItemAliasRef {
+  itemId: number;
+  alias: string;
 }
 
 /**
@@ -125,15 +137,86 @@ export function matchExistingTitle<T extends { id: number; name: string }>(
  */
 export interface TitleIndex<T> {
   entries: { item: T; key: string }[];
+  /**
+   * Folded alternate names, exact-match only. Kept apart from `entries` rather
+   * than flagged inside it because the two are asked *different questions* —
+   * see `matchIndexedTitle`.
+   */
+  aliasKeys: Map<string, T>;
 }
 
+/**
+ * Fold the catalog, and fold what else each row answers to.
+ *
+ * **Two rules keep an alias from becoming the wrong-game bug it exists to
+ * prevent**, and both drop the alias rather than guess:
+ *
+ * 1. **A real name always wins.** An alias folding to some *other* item's actual
+ *    name is discarded outright. BoardGameGeek's alternates are not curated
+ *    against this catalog and one of them will eventually be a game somebody
+ *    owns — BGG 13 alone offers the bare "The Settlers".
+ * 2. **A contested alias belongs to nobody.** BGG 13 and BGG 152959 both list
+ *    "Los Colonos de Catán", so owning both would make that string ambiguous.
+ *    Picking either is how two different games get silently merged, which this
+ *    module's own comment calls far worse than asking about one you already own.
+ *
+ * An alias equal to its own item's name is dropped as redundant, not as a
+ * collision — that is the ordinary case for a row whose primary name we already
+ * hold.
+ */
 export function buildTitleIndex<T extends { id: number; name: string }>(
   existing: readonly T[],
+  aliases: readonly ItemAliasRef[] = [],
 ): TitleIndex<T> {
-  return { entries: existing.map((item) => ({ item, key: normaliseTitle(item.name) })) };
+  const entries = existing.map((item) => ({ item, key: normaliseTitle(item.name) }));
+
+  if (aliases.length === 0) return { entries, aliasKeys: new Map() };
+
+  const byId = new Map(existing.map((item) => [item.id, item]));
+  const realNames = new Map<string, number>();
+  for (const e of entries) if (!realNames.has(e.key)) realNames.set(e.key, e.item.id);
+
+  const claimed = new Map<string, T | null>(); // null = contested, do not use
+  for (const a of aliases) {
+    const item = byId.get(a.itemId);
+    if (!item) continue;
+    const key = normaliseTitle(a.alias);
+    if (key.length < 2) continue;
+
+    const realOwner = realNames.get(key);
+    if (realOwner !== undefined) continue; // rule 1 — an item's own name wins
+
+    const seen = claimed.get(key);
+    if (seen === undefined) claimed.set(key, item);
+    else if (seen !== null && seen.id !== item.id) claimed.set(key, null); // rule 2
+  }
+
+  const aliasKeys = new Map<string, T>();
+  for (const [key, item] of claimed) if (item) aliasKeys.set(key, item);
+
+  return { entries, aliasKeys };
 }
 
-/** `matchExistingTitle`, against a pre-folded catalog. Identical rules. */
+/**
+ * `matchExistingTitle`, against a pre-folded catalog. Identical rules.
+ *
+ * **Aliases answer the exact question only, and that is the whole design.** A
+ * name is compared three ways here, in falling order of how much it claims:
+ *
+ * | | |
+ * |---|---|
+ * | exact, real name | the same game, said the same way |
+ * | exact, alias | the same game, said another way — asserted, not inferred |
+ * | containment, real name only | a guess, gated at 60% of the longer string |
+ *
+ * An alias is an *identity claim* about one specific string, so it needs no
+ * similarity score and gets no similarity credit. Letting aliases into the
+ * containment pass would undo the guard: "The Settlers of Catan" would start
+ * swallowing "The Settlers of Catan: Seafarers", which is a different box, and
+ * the fragment rule in `isConfidentMatch` would have nothing left to protect.
+ * Adding a *known other name* is not the same as lowering the floor, and the
+ * floor is not lowered — `MIN_SPINE_SIMILARITY` is untouched at 0.7.
+ */
 export function matchIndexedTitle<T extends { id: number; name: string }>(
   index: TitleIndex<T>,
   title: string,
@@ -143,6 +226,9 @@ export function matchIndexedTitle<T extends { id: number; name: string }>(
 
   const exact = index.entries.find((e) => e.key === target);
   if (exact) return exact.item;
+
+  const aliased = index.aliasKeys.get(target);
+  if (aliased) return aliased;
 
   return (
     index.entries
@@ -215,11 +301,22 @@ export interface ClassifiedItem {
 export function classifyShelfResults(
   items: { name: string; bggId: number | null; thumbnailUrl: string | null }[],
   existing: readonly { id: number; name: string; kind: string }[],
+  aliases: readonly ItemAliasRef[] = [],
 ): ClassifiedItem[] {
   // Build a lookup of existing items by normalised name.
   const existingByKey = new Map<string, { id: number; name: string }>();
   for (const item of existing) {
     existingByKey.set(normaliseTitle(item.name), { id: item.id, name: item.name });
+  }
+
+  // A prefix may be an *alternate* name of the game it belongs to, and then it
+  // is the same question one level down: "The Settlers of Catan: Seafarers" is
+  // an expansion of the box filed as "Catan". Same collision rules as the
+  // matcher — `buildTitleIndex` has already dropped anything contested or
+  // shadowed by a real name — and real names still win, because they are
+  // written first and only missing keys are filled in.
+  for (const [key, item] of buildTitleIndex(existing, aliases).aliasKeys) {
+    if (!existingByKey.has(key)) existingByKey.set(key, { id: item.id, name: item.name });
   }
 
   // First pass: classify each item. We also track batch items (things being

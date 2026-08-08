@@ -20,6 +20,165 @@ What still wants a person, all of it optional or waiting on a delivery:
 | Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md` |
 | ⚠️ Excursion Tiles 1 (117) says **2024** | its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand and was asleep; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree |
 
+## A game with two names is one game — 2026-08-08
+
+> ⚠️ **UNCOMMITTED, UNDEPLOYED, and living in a worktree**, not in `main`:
+> `.claude/worktrees/agent-adb38407889808798`. Migration **0021 is applied
+> locally only**. The owner reviews and ships. The production *data* fix below
+> is already done and is the one exception.
+
+*"Settlers of Catan and Catan are the same game — the studio just did a naming
+thing... maybe we figure out a solution for games that are the same but have
+alternate names."* — the owner.
+
+### Part 1 — it was a real duplicate row, and it is gone
+
+Not a queue artefact. **Item 826 "The Settlers of Catan"** existed in production,
+added 2026-08-07 from scan job 12. Job 13 then matched *its own* second reading
+against 826, so the two photos agreed with each other and both disagreed with
+item 54.
+
+Deleted from production, cascading to two child rows. Three rows, `changes: 3`,
+verified gone; item count 803 → 802. **There is no undo on `--remote`**, so the
+exact reversal is written down here rather than only in a chat log:
+
+```sql
+-- Put back exactly what was deleted on 2026-08-08. Run in this order.
+INSERT INTO item (id, bgg_id, kind, parent_item_id, root_game_id, name, sort_name,
+                  year_published, publisher, publisher_url, designers, min_players,
+                  max_players, playtime_min, weight, thumbnail_url, description,
+                  created_at, updated_at, pending_parent_name, source_url,
+                  game_system, series)
+VALUES (826, 152959, 'base', NULL, 826, 'The Settlers of Catan', 'settlers of catan',
+        2008, 'Mayfair Games', NULL, NULL, 3, 4, 90, NULL,
+        'https://cf.geekdo-images.com/_1_jHYKYe93u3sCG-2gonA__small/img/Z_tnIgHi13kzToOM1qsFooSn4U4=/fit-in/200x150/filters:strip_icc()/pic747314.jpg',
+        'A trading and building game in which players settle the island of Catan, placing settlements, cities and roads on a modular hex board. Resources are produced by dice rolls on adjacent terrain hexes and traded between players, with the first to reach ten victory points winning.',
+        '2026-08-07 02:42:36', '2026-08-08 13:54:57', NULL, NULL, NULL, NULL);
+
+INSERT INTO copy (id, item_id, edition_id, applies_to_copy_id, status, is_sleeved,
+                  is_punched, completeness_notes, lent_to, notes, created_at,
+                  updated_at, quantity, format)
+VALUES (801, 826, NULL, NULL, 'owned', 0, 0, NULL, NULL, NULL,
+        '2026-08-07 02:42:36', '2026-08-07 02:42:36', 1, 'physical');
+
+INSERT INTO research_run (id, item_id, tier, model, effort, status, error_message,
+                          input_tokens, output_tokens, result_json, triggered_by,
+                          started_at, finished_at, created_at, input_owned,
+                          input_bgg_id, input_name, input_year, unfilled)
+VALUES (40, 826, 'details', 'claude-opus-5', 'low', 'done', NULL, 196, 1474,
+        '{"filled":{"publisher":"Mayfair Games","minPlayers":3,"maxPlayers":4,"playtimeMin":90,"description":"A trading and building game in which players settle the island of Catan, placing settlements, cities and roads on a modular hex board. Resources are produced by dice rolls on adjacent terrain hexes and traded between players, with the first to reach ten victory points winning."},"detail":null}',
+        1, '2026-08-08 13:54:10', '2026-08-08 13:54:57', '2026-08-08 13:54:10',
+        1, 152959, 'The Settlers of Catan', 2008, ',publisherUrl,');
+```
+
+| Attached to 826 | |
+|---|---|
+| `copy` | **1** — id 801, `owned`, quantity 1, no notes, `created_at` identical to the item's. The add flow's default copy, not a recorded pledge |
+| `research_run` | 1 (details, done) |
+| ratings, relations, editions, barcodes, children, components, plays | **none** |
+
+Item 54 "Catan" keeps its own `copy` id 55, **`owned` × 2**, untouched.
+
+⚠️ **Job 12's blob still carries `addedItemId: 826`**, now dangling — that job is
+`done` with 0 outstanding, so it is a dead "Added — open it" link on a closed
+job and nothing else. Repointing it at 54 is a one-line JSON edit nobody needs.
+
+### Part 2 — `item_alias`, and why nothing cheaper works
+
+⚠️ **`bgg_id` matching was the obvious free answer and it is wrong here.**
+Measured, not assumed: item 54 carries **13**, item 826 carried **152959**.
+152959 is a genuinely separate BGG entry (Mayfair, 2008) whose *own primary name*
+is "The Settlers of Catan", and the free lookup rung resolved the spine to it
+correctly. An id comparison would have said "different games" and added the row
+anyway. It also only ever works for the 128 of 802 rows that have an id.
+
+What is true is that **BGG 13 lists "The Settlers of Catan" among its 64
+`<name type="alternate">` nodes** — and `packages/bgg/src/client.ts` was parsing
+those and throwing them away in `primaryName()`. The identity already existed
+upstream.
+
+⚠️ **The similarity floor was not touched and must not be.** "Catan" vs "The
+Settlers of Catan" is the *same shape* as "Quandary" vs "Zorblax Quandary" — the
+case `isConfidentMatch` exists to reject. `MIN_SPINE_SIMILARITY` is still 0.7. An
+alias is an **exact** match on a specific string, asserted by BGG or a person; it
+earns no similarity credit and never enters the containment pass.
+
+| Rejected | Why |
+|---|---|
+| `bgg_id` match | measured false on this very case, and covers 16% of rows |
+| `alt_names` text column | cannot record a source, cannot delete one row, worse to query |
+| Resolve at read time from BGG | the repo's instinct, and it does not apply — `inheritCover` resolves from data already in D1; alternate names are behind a network call the scan path's subrequest budget cannot afford per title |
+
+**Three rules in `buildTitleIndex` stop an alias becoming a wrong-game bug**, and
+all three *drop* the alias rather than guess. Each is measured below.
+
+1. **A real name always wins.** BGG's alternates are not curated against this
+   catalog; BGG 13 alone offers the bare "The Settlers".
+2. **A contested alias belongs to nobody.** BGG 13 and 152959 both list "Los
+   Colonos de Catán".
+3. **Aliases are exact-only.** Containment would let "The Settlers of Catan"
+   swallow "…: Seafarers", which is a different box.
+
+### Measured, `wrangler dev` against a seeded local D1
+
+Same code both columns; the "before" column is the alias table emptied, which is
+exactly the pre-fix state.
+
+| Spine read | Before | After |
+|---|---|---|
+| **The Settlers of Catan** | **NEW GAME** ← the production bug, reproduced | **OWNED → 54 "Catan"** |
+| ZORBLAX QUANDARY → *Quandary* | NEW GAME | **NEW GAME** — guard holds |
+| The Settlers of Catan: Seafarers | NEW, parent *"The Settlers of Catan"* (the phantom root) | NEW, **parent "Catan"** |
+| Settlers of the Deep | OWNED → 91 | OWNED → 91 |
+
+Collision rules, with the traps deliberately planted:
+
+| | |
+|---|---|
+| "Settlers of the Deep" while Catan *also* claims it as an alias | → **item 91**, its real owner |
+| "Die Siedler von Catan" claimed by two items | → **NEW GAME** — refuses to pick |
+| "Katan", one uncontested alias | → item 54 |
+
+Then the whole thing again against **BGG's real list, imported live**:
+`POST /api/aliases/backfill` → **1 BGG call, 2 items, 116 aliases**, and every
+verdict above still correct — plus a German box reading *Die Siedler von Catan*
+now matching, which nothing asked for and is free.
+
+`SELECT instr(enriched,'ownership')` is still **0** on every job: this is
+resolved on read and never written, same as `inheritCover`.
+
+### Where it is wired
+
+| | |
+|---|---|
+| Migration | **0021_item_alias.sql** — `item_alias` + `alias_check`. Local only |
+| The decision | `buildTitleIndex` / `matchIndexedTitle`, `packages/core/src/vision.ts` — one implementation |
+| Scan paths | `scan-ownership.ts`, `scan-classify.ts`, `scan-jobs.ts`, `barcode-scan.ts`, `routes/vision.ts` |
+| Import | `lib/alias-backfill.ts`, `routes/aliases.ts` (`POST /api/aliases/backfill`) |
+| Read | **`GET /api/item-names` now returns `aliases` alongside `items`** — deliberately one call, because the "real name beats alias" rule cannot be applied to either list alone |
+
+⚠️ **A re-import never deletes a name a person typed** — `replaceBggAliases`
+clears `source = 'bgg'` only. The manual door (`POST /api/aliases/items/:id`) is
+not a fallback: 674 of 802 rows have no `bgg_id` and never will.
+
+**No web UI for typing an alias yet.** The API is there; the item page has no
+field. That is the obvious next piece.
+
+### ⚠️ Two local-dev traps, both new, both cost time here
+
+- **The worktree path is too long for local D1.** Every `wrangler d1 --local`
+  command in `.claude/worktrees/<agent>/apps/worker` fails with a bare
+  `internal error; reference = …` — even `SELECT 1`. The sqlite file lands at
+  ~255 characters and Windows gives up at 260. **Fix: `--persist-to
+  C:/Users/nbasl/AppData/Local/Temp/bgcd1`** on every `d1` and `dev` command. It
+  does not present as a path error in any way.
+- **Two processes were already listening on 8787-8799.** Port 8799 answered
+  `/api/health` happily while serving *another agent's* worker and *another*
+  database — the handoff's existing warning, one port over and with a new
+  symptom: not a dead worker, a live wrong one. `/api/aliases/status` returning
+  404 was what gave it away. Check `netstat -ano | grep LISTENING` first and
+  pick something odd; 8942 was free.
+
 ## Two photos of one shelf stop arguing — 2026-08-06
 
 *"if items are in a queue and scanned and another photo is in the queue and

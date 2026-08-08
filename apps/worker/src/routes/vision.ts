@@ -9,7 +9,7 @@ import {
   type ShelfMatch,
 } from '@bgc/core';
 import { gameUpcConfig, lookupGameUpc, resolveTitle } from '@bgc/barcode';
-import { listItemNames } from '@bgc/db';
+import { listItemAliases, listItemNames } from '@bgc/db';
 import { ResearchError, identifyFromPhoto, isPhotoMediaType, readShelf } from '@bgc/research';
 import type { AppBindings } from '../env.js';
 import { cachedResolve } from '../lib/resolve-title.js';
@@ -170,14 +170,17 @@ export const visionRoutes = new Hono<AppBindings>()
       return c.json(body, status as 503);
     }
 
-    const existing = await listItemNames(c.env.DB);
+    const [existing, aliases] = await Promise.all([
+      listItemNames(c.env.DB),
+      listItemAliases(c.env.DB),
+    ]);
     const deps = { gameUpc: gameUpcConfig(c.env), bggToken: c.env.BGG_API_TOKEN };
 
     // Resolve unknown titles concurrently — these are independent free lookups
     // and doing them in series would make a full shelf feel slow.
     const matches: ShelfMatch[] = await Promise.all(
       reading.titles.map(async (title): Promise<ShelfMatch> => {
-        const owned = matchExistingTitle(title.text, existing);
+        const owned = matchExistingTitle(title.text, existing, aliases);
         if (owned) {
           return {
             title,

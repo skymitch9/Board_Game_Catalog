@@ -26,6 +26,7 @@ import {
   getRelatedItems,
   listCoverCandidates,
   listGroupOptions,
+  listItemAliases,
   listItemNames,
   listItemTrees,
   listRelationPairs,
@@ -66,16 +67,27 @@ export const catalogRoutes = new Hono<AppBindings>()
   })
 
   /**
-   * Every item's id, name and kind — nothing else.
+   * Every item's id, name and kind — and the other names each one answers to.
    *
    * Exists because `/items` is paged. Shelf classification needs the whole
    * catalog to match spine text against, and a paged browse endpoint cannot
    * answer that: it would silently match against the first 25 groups and report
    * every other game you own as new. Three columns over 640 rows is a few tens
    * of kilobytes, against the megabyte a page of whole trees costs.
+   *
+   * **Aliases ride along rather than getting an endpoint of their own** because
+   * they are useless apart: `buildTitleIndex` needs both halves at once — its
+   * rule that a real name beats an alias cannot be applied to either list alone
+   * — and a caller that fetched one without the other would get a matcher
+   * quietly weaker than the server's. One call, one answer, no way to hold it
+   * wrong.
    */
   .get('/item-names', async (c) => {
-    return c.json({ items: await listItemNames(c.env.DB) });
+    const [items, aliases] = await Promise.all([
+      listItemNames(c.env.DB),
+      listItemAliases(c.env.DB),
+    ]);
+    return c.json({ items, aliases });
   })
 
   .get('/items/:id', async (c) => {

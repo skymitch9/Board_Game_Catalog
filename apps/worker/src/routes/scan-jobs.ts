@@ -20,6 +20,7 @@ import {
   matchExistingTitle,
   titleSimilarity,
   type BarcodeCandidate,
+  type ItemAliasRef,
   type ShelfTitle,
 } from '@bgc/core';
 import { gameUpcConfig } from '@bgc/barcode';
@@ -27,6 +28,7 @@ import {
   createScanJob,
   deleteScanJob,
   getScanJob,
+  listItemAliases,
   listItemNames,
   listScanJobs,
   toIso,
@@ -550,6 +552,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
     const [classified] = classifyShelfResults(
       [{ name: chosen.name, bggId: chosen.bggId, thumbnailUrl: chosen.thumbnailUrl }],
       ctx.items,
+      ctx.aliases,
     );
     entry.proposedKind = classified?.proposedKind ?? chosen.kind ?? 'base';
     entry.proposedParentId = classified?.proposedParentId ?? null;
@@ -698,6 +701,7 @@ async function enrichOne(
   env: Env,
   deps: { gameUpc: ReturnType<typeof gameUpcConfig>; bggToken: string | undefined },
   existing: { id: number; name: string; kind: string }[],
+  aliases: readonly ItemAliasRef[],
   title: ShelfTitle,
 ): Promise<EnrichedTitle> {
   const base = {
@@ -711,7 +715,11 @@ async function enrichOne(
     reason: null as string | null,
   };
 
-  const owned = matchExistingTitle(title.text, existing);
+  // Names *and* alternate names: a spine reading "The Settlers of Catan" is the
+  // Catan already on the shelf, and paying a lookup to be told otherwise is the
+  // duplicate this whole feature exists to stop. Cheap here too — the miss is
+  // what costs a subrequest, so a hit saves one.
+  const owned = matchExistingTitle(title.text, existing, aliases);
   if (owned) {
     return {
       ...base,
@@ -773,8 +781,9 @@ async function enrichOne(
 function classifyAll(
   rows: EnrichedTitle[],
   existing: { id: number; name: string; kind: string }[],
+  aliases: readonly ItemAliasRef[],
 ): EnrichedTitle[] {
-  return classifyTitles(rows, existing, (r) => r.alreadyOwned);
+  return classifyTitles(rows, existing, (r) => r.alreadyOwned, aliases);
 }
 
 async function processEnrichment(env: Env, jobId: number): Promise<void> {
@@ -795,8 +804,9 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
 
     if (done >= titles.length) {
       // Nothing left to do — somebody asked again for a job already finished.
+      const [names, aliases] = await Promise.all([listItemNames(env.DB), listItemAliases(env.DB)]);
       await updateScanJobStatus(env.DB, jobId, 'review', {
-        enriched: JSON.stringify(classifyAll(soFar, await listItemNames(env.DB))),
+        enriched: JSON.stringify(classifyAll(soFar, names, aliases)),
       });
       return;
     }
@@ -805,16 +815,16 @@ async function processEnrichment(env: Env, jobId: number): Promise<void> {
     // and a job that has stopped beating can be told from one still working.
     await updateScanJobStatus(env.DB, jobId, 'enriching');
 
-    const existing = await listItemNames(env.DB);
+    const [existing, aliases] = await Promise.all([listItemNames(env.DB), listItemAliases(env.DB)]);
     const deps = { gameUpc: gameUpcConfig(env), bggToken: env.BGG_API_TOKEN };
 
     const stop = Math.min(titles.length, done + TITLES_PER_RUN);
     const chunk = await Promise.all(
-      titles.slice(done, stop).map((t) => enrichOne(env, deps, existing, t)),
+      titles.slice(done, stop).map((t) => enrichOne(env, deps, existing, aliases, t)),
     );
     soFar.push(...chunk);
 
-    const enriched = JSON.stringify(classifyAll(soFar, existing));
+    const enriched = JSON.stringify(classifyAll(soFar, existing, aliases));
 
     if (soFar.length >= titles.length) {
       await updateScanJobStatus(env.DB, jobId, 'review', { enriched });
