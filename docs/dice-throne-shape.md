@@ -192,3 +192,52 @@ its own.
 
 The line folds to **one entry**: *Unstable Unicorns · 3 lines · 5 items*, and the
 collection page goes 147 → 145 entries.
+
+## The box carries the `bgg_id`; the heroes carry none — 2026-08-08
+
+Settled by the owner: *"The box just contains the hero. For us we can ignore
+this. We encompass it."*
+
+The data already worked this way and it is now deliberate rather than
+incidental. Every one of the **12 Dice Throne roots has a `bgg_id`; every
+hero row has `NULL`**:
+
+```
+676  Dice Throne: Season One ReRolled        base, root      bgg 291794
+└── 680-687  Dice Throne Hero: Barbarian…    expansion       bgg NULL
+
+114  Dice Throne: Deadpool Box Deluxe Ed.    base, root      bgg 403511
+└── 722  Dice Throne Hero: Deadpool          expansion       bgg NULL
+    └── 761/762/783  sculpt, sleeves, playmat
+```
+
+### Why item 114 is not a mismatch, though an audit will flag it
+
+The 2026-08-08 `bgg_id` audit marked 114 SUSPECT: we call it *"Dice Throne:
+Deadpool Box Deluxe Edition"*, BoardGameGeek calls `403511` *"Marvel Dice
+Throne: Deadpool"* and types it `boardgameexpansion` where we say `base`.
+
+Both disagreements are cosmetic:
+
+- **The "Marvel" prefix is BGG's convention for this whole wave**, not
+  something specific to Deadpool. Its siblings sit in the same id block —
+  96 X-Men is 403494, 115 Missions is 403495, 114 is 403511 — and carry the
+  same naming difference. They simply scored above the audit's line.
+- **`boardgameexpansion` is BGG's taxonomy, not ours.** A box that plays
+  alone is a root here regardless of what BGG types it, which is the same
+  rule that makes all 11 Dice Throne boxes roots.
+
+**Do not "fix" 114 by moving its id to hero 722.** That was proposed and
+rejected: it would break the convention above, and 722 is not the thing the
+owner bought — the box is.
+
+### Consequence for the audit's false-negative worklist
+
+Eight of the twenty rows on that list are heroes, flagged because we write
+`Dice Throne Hero: X` and BGG writes `Dice Throne: X – Hero Pack`. **They are
+not missing matches.** Heroes are not supposed to carry ids, so there is
+nothing to fill in. The worklist is smaller than it looks.
+
+What survives on that list is **item 277 *Casting Shadows: Expansion Pack***,
+whose apparent match is the base game — the genuine trap the audit warned
+about, and the reason `pack` must never be added to `GENERIC_TITLE_WORDS`.
