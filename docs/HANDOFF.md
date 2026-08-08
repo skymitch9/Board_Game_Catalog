@@ -16,8 +16,25 @@ day started (`29f2c67`).
 | Catalog | **806 items**, 806 copies, 573 owned, 29 wanted |
 | `item_alias` | **72 rows across 18 items** — the D&D spellings, all `source = 'manual'` |
 
-**Nothing is in flight and nothing needs running to reach a good state.** The
-only outstanding commit is this handoff refresh itself.
+### ⚠️ Work in flight at the moment this was written
+
+Two agents were still running and their work is **uncommitted in the tree**.
+If the session ended here, this is what you are looking at in `git status`:
+
+| Files | What it is |
+|---|---|
+| `apps/web/src/components/AddRelated.tsx` (new), `ItemPage.tsx`, `ItemForm.tsx`, `ItemPicker.tsx`, `Completeness.tsx`, `RetagPage.tsx`, `styles.css` | One unified add/link panel replacing four overlapping surfaces, plus an `+ Own` button beside `+ Wishlist` on the completeness report |
+| `scratchpad/bgg-audit-2026-08-08.{md,tsv}`, `scratchpad/bgg-audit/` | A **read-only** audit of every `bgg_id` — a map to verify before anything is applied. Nothing written to production |
+
+Neither is deployed and neither needs to be. **If any of it looks
+half-written, `git checkout --` the file rather than trying to finish it** —
+an interrupted agent leaves plausible-looking partial edits, and this repo has
+already had one mid-edit `packages/core` state that typechecked and was still
+wrong.
+
+`bcdea97` (orphan adoption) landed cleanly before this and **is** committed.
+
+**Nothing else is in flight and nothing needs running to reach a good state.**
 
 Verify the deploy did what it should:
 
