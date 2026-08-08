@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { COPY_STATUSES, ITEM_KINDS } from '@bgc/core';
 
 /**
  * A router in thirty lines. The app has four routes and no need for nested
@@ -15,8 +16,29 @@ export type AddMode = 'barcode' | 'shelf' | 'single' | 'manual';
 const SCAN_MODES: readonly ScanMode[] = ['barcode', 'photo', 'shelf', 'manual'];
 const ADD_MODES: readonly AddMode[] = ['barcode', 'shelf', 'single', 'manual'];
 
+/**
+ * What the collection page is showing, as opposed to which page it is.
+ *
+ * It lives in the URL so that opening a game and pressing Back returns you to
+ * the search you were in the middle of, rather than to an unfiltered page 1.
+ * Every field has a default, and an unrecognised value in the query string
+ * falls back to it — the same forgiveness `?mode=` gets, and the reason
+ * `?page=abc` cannot produce a NaN here.
+ */
+export type CollectionFilters = {
+  q: string;
+  status: string;
+  kind: string;
+  uncatalogued: boolean;
+  duplicates: boolean;
+  /** `series:Name` or `system:Name`; see `splitGroupValue` on the page. */
+  group: string;
+  collapse: boolean;
+  page: number;
+};
+
 export type Route =
-  | { name: 'collection' }
+  | { name: 'collection'; filters: CollectionFilters }
   | { name: 'item'; id: number }
   | { name: 'newItem'; parentId: number | null }
   | { name: 'editItem'; id: number }
@@ -38,10 +60,68 @@ function pick<T extends string>(search: string, key: string, allowed: readonly T
   return raw && (allowed as readonly string[]).includes(raw) ? (raw as T) : null;
 }
 
+/** A checkbox in the query string. Only `1` and `0` speak; anything else defers. */
+function flag(search: string, key: string, fallback: boolean): boolean {
+  const raw = new URLSearchParams(search).get(key);
+  if (raw === '1') return true;
+  if (raw === '0') return false;
+  return fallback;
+}
+
+/** A page number, or 1. `Number(null)`, `Number('')` and `Number('abc')` all fail the test. */
+function positiveInt(search: string, key: string): number {
+  const n = Number(new URLSearchParams(search).get(key));
+  return Number.isInteger(n) && n > 0 ? n : 1;
+}
+
+/**
+ * The group filter is open-ended — the names come from the catalog, so there is
+ * no closed set to check against. The prefix is all that can be validated, and
+ * it is enough to keep junk out of a request.
+ */
+function groupValue(search: string): string {
+  const raw = new URLSearchParams(search).get('group') ?? '';
+  const axis = raw.startsWith('series:') || raw.startsWith('system:');
+  const name = raw.slice(raw.indexOf(':') + 1);
+  return axis && name ? raw : '';
+}
+
+function parseCollection(search: string): CollectionFilters {
+  return {
+    q: new URLSearchParams(search).get('q') ?? '',
+    status: pick(search, 'status', COPY_STATUSES) ?? '',
+    kind: pick(search, 'kind', ITEM_KINDS) ?? '',
+    uncatalogued: flag(search, 'uncatalogued', false),
+    duplicates: flag(search, 'duplicates', false),
+    group: groupValue(search),
+    collapse: flag(search, 'collapse', true),
+    page: positiveInt(search, 'page'),
+  };
+}
+
+/**
+ * The inverse of `parseCollection`, kept beside it so the parameter names have
+ * one definition. Defaults are omitted, so a plain browse is `/` and not
+ * `/?q=&status=&page=1`.
+ */
+export function collectionPath(f: CollectionFilters): string {
+  const p = new URLSearchParams();
+  if (f.q) p.set('q', f.q);
+  if (f.status) p.set('status', f.status);
+  if (f.kind) p.set('kind', f.kind);
+  if (f.uncatalogued) p.set('uncatalogued', '1');
+  if (f.duplicates) p.set('duplicates', '1');
+  if (f.group) p.set('group', f.group);
+  if (!f.collapse) p.set('collapse', '0');
+  if (f.page > 1) p.set('page', String(f.page));
+  const qs = p.toString();
+  return qs ? `/?${qs}` : '/';
+}
+
 function parse(pathname: string, search: string): Route {
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
 
-  if (parts.length === 0) return { name: 'collection' };
+  if (parts.length === 0) return { name: 'collection', filters: parseCollection(search) };
 
   if (parts[0] === 'people' && parts.length === 1) return { name: 'people' };
   if (parts[0] === 'wishlist' && parts.length === 1) return { name: 'wishlist' };
@@ -82,6 +162,25 @@ function parse(pathname: string, search: string): Route {
 export function navigate(path: string): void {
   window.history.pushState({}, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+/**
+ * Rewrite the URL in place: no history entry, and no popstate.
+ *
+ * ⚠️ Do not "fix" this into `navigate`. The collection filters are written here
+ * on every change, and the search box is live — a pushState per keystroke would
+ * put ten entries in the history for a ten-character search and make Back
+ * useless in a different way. What Back has to do is return you to the search
+ * you left, and for that the collection URL only has to be *correct at the
+ * moment you navigate away*, which replaceState gives for free at one entry per
+ * page.
+ *
+ * Withholding the popstate matters just as much: the page that owns this state
+ * is already re-rendering from it, and telling the router would remount that
+ * page underneath itself mid-keystroke.
+ */
+export function replaceUrl(path: string): void {
+  window.history.replaceState({}, '', path);
 }
 
 export function useRoute(): Route {

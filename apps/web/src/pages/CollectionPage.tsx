@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { COPY_STATUSES, ITEM_KINDS, type ItemQuery, type MeResponse } from '@bgc/core';
 import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
-import { Link } from '../router';
+import { Link, collectionPath, replaceUrl, type CollectionFilters } from '../router';
 import { GroupCard, ItemCard, KIND_LABEL } from '../components/ItemTree';
 import { ExportLinks } from '../components/QuickAdd';
 import { EmptyState, ErrorBox, Pager, Spinner } from '../components/ui';
@@ -22,27 +22,68 @@ function splitGroupValue(value: string): { series?: string; gameSystem?: string 
   return value.startsWith('series:') ? { series: name } : { gameSystem: name };
 }
 
-export function CollectionPage({ me }: { me: MeResponse }) {
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
-  const [kind, setKind] = useState('');
-  const [uncatalogued, setUncatalogued] = useState(false);
-  const [duplicates, setDuplicates] = useState(false);
-  const [group, setGroup] = useState('');
+export function CollectionPage({ me, filters }: { me: MeResponse; filters: CollectionFilters }) {
+  // Seeded from the URL, once. `filters` is the parsed query string, and this
+  // page is remounted (keyed in App.tsx) whenever the URL says something
+  // different — so there is no second source of truth to keep in step.
+  const [search, setSearch] = useState<string>(filters.q);
+  const [status, setStatus] = useState<string>(filters.status);
+  const [kind, setKind] = useState<string>(filters.kind);
+  const [uncatalogued, setUncatalogued] = useState(filters.uncatalogued);
+  const [duplicates, setDuplicates] = useState(filters.duplicates);
+  const [group, setGroup] = useState<string>(filters.group);
   // On by default. The page's problem is one line of eleven boxes dominating
   // it, so the collapsed view is the one worth opening on; the checkbox is for
   // when you want the whole shelf laid out.
-  const [collapse, setCollapse] = useState(true);
-  const [page, setPage] = useState(1);
+  const [collapse, setCollapse] = useState(filters.collapse);
+  const [page, setPage] = useState(filters.page);
 
   const debouncedSearch = useDebounced(search);
   const chosen = splitGroupValue(group);
 
   // Any change to what is being filtered invalidates where you were in it —
   // page 4 of the whole catalog is not page 4 of a search for "catan".
+  //
+  // It fires on a *change*, not on arrival: the URL is allowed to come in with
+  // a page already on it, and `/?q=catan&page=2` resetting itself to page 1
+  // before the first request went out is the bookmark not working. Comparing
+  // the values rather than counting runs is also what makes this survive
+  // StrictMode's deliberate double-mount in dev.
+  const filterKey = JSON.stringify([
+    debouncedSearch,
+    status,
+    kind,
+    uncatalogued,
+    duplicates,
+    group,
+    collapse,
+  ]);
+  const lastFilterKey = useRef(filterKey);
   useEffect(() => {
+    if (lastFilterKey.current === filterKey) return;
+    lastFilterKey.current = filterKey;
     setPage(1);
-  }, [debouncedSearch, status, kind, uncatalogued, duplicates, group, collapse]);
+  }, [filterKey]);
+
+  // The filters go back into the query string so that opening a game and
+  // pressing Back returns you to this search, on this page of it. Written with
+  // `replaceUrl` rather than `navigate` — see the comment on `replaceUrl` for
+  // why a live search box must not push. The raw `search` is used, not the
+  // debounced one, so the address bar never disagrees with the box.
+  useEffect(() => {
+    replaceUrl(
+      collectionPath({
+        q: search,
+        status,
+        kind,
+        uncatalogued,
+        duplicates,
+        group,
+        collapse,
+        page,
+      }),
+    );
+  }, [search, status, kind, uncatalogued, duplicates, group, collapse, page]);
 
   const query: ItemQuery = {
     ...(debouncedSearch ? { q: debouncedSearch } : {}),

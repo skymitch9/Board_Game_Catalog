@@ -1,7 +1,7 @@
 import type { MeResponse } from '@bgc/core';
 import { ApiError, api } from './api';
 import { useAsync } from './hooks';
-import { Link, useRoute } from './router';
+import { Link, collectionPath, useRoute } from './router';
 import { SignIn } from './SignIn';
 import { NewItemPage } from './components/ItemForm';
 import { CollectionPage } from './pages/CollectionPage';
@@ -19,8 +19,14 @@ function Routes({ me }: { me: MeResponse }) {
   const route = useRoute();
 
   switch (route.name) {
+    // Keyed by the filters for the same reason ItemPage is keyed by id below:
+    // the page seeds its state from the URL once, so arriving at a *different*
+    // set of filters — pressing Back, or "Cancel" landing you on a bare "/" —
+    // has to be a new page rather than the old one holding the old search.
+    // Typing in the search box does not come through here at all; the page
+    // rewrites the URL with `replaceUrl`, which fires no popstate.
     case 'collection':
-      return <CollectionPage me={me} />;
+      return <CollectionPage key={collectionPath(route.filters)} me={me} filters={route.filters} />;
     // Keyed by id: without it React reuses one ItemPage across every game you
     // open, and page state — a half-open copy form, a report of what a lookup
     // just filled in — follows you to the next one.
