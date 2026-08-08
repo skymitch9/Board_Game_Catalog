@@ -6,6 +6,7 @@
  */
 
 import { Hono } from 'hono';
+import { sweepOrphanAdoptions } from '@bgc/db';
 import type { AppBindings, Env } from './env.js';
 import { COMPONENT_REFRESH_CRON, runComponentBackfill } from './lib/component-backfill.js';
 import { runCoverCheck } from './lib/cover-check.js';
@@ -84,12 +85,29 @@ export default {
    * both jobs' wiring in the one place anybody would look for it. Still just
    * wiring: every decision lives in lib/.
    *
-   * Every half hour — a slice of the cover check.
+   * Every half hour — a slice of the cover check, **and** the orphan sweep.
    * `41 5 * * 1`  — the weekly "what's new for a game you own" sweep.
    *
    * Anything unrecognised runs the cover check, because that is the schedule
    * that existed first and an unmatched cron doing nothing at all is the kind
    * of silent stall this codebase has been bitten by before.
+   *
+   * ⚠️ **The orphan sweep rides on the half-hourly trigger rather than getting
+   * one of its own, and that is the whole point.** `wrangler deploy` reported
+   * registering triggers for weeks while Cloudflare's Cron Events log showed no
+   * events at all — the rule this project came away with is that *a cron is not
+   * working until something it writes has rows*. The half-hourly expression is
+   * the one here with that proof: 437+ rows in `cover_check`, and a
+   * `wrangler tail` capture of it reporting `- Ok`. Hanging the sweep off it
+   * inherits the proof instead of betting on a fresh registration, and half-hourly
+   * beats the hourly that was asked for anyway.
+   *
+   * (The expression itself is not written out in this comment: it contains the
+   * two characters that end a block comment, which is a compile error, not a
+   * typo. It lives in `wrangler.toml`.)
+   *
+   * Two `waitUntil`s rather than one chain, so a failing sweep cannot take the
+   * cover check down with it.
    */
   scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     if (event.cron === COMPONENT_REFRESH_CRON) {
@@ -111,6 +129,13 @@ export default {
       runCoverCheck(env.DB).then(
         (run) => console.log('cover check', JSON.stringify(run)),
         (err) => console.error('cover check failed', err),
+      ),
+    );
+
+    ctx.waitUntil(
+      sweepOrphanAdoptions(env.DB).then(
+        (run) => console.log('orphan sweep', JSON.stringify(run)),
+        (err) => console.error('orphan sweep failed', err),
       ),
     );
   },

@@ -24,6 +24,7 @@ import {
   foldSearchText,
   inheritCover,
   isBlankDetail,
+  normaliseTitle,
   searchTerms,
 } from '@bgc/core';
 import { getRelatedItems } from './relations.js';
@@ -1089,6 +1090,13 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
  * Called after every item creation. Cheap: an indexed lookup that almost always
  * returns nothing, against a mistake that is otherwise invisible until someone
  * notices their collection has two Wingspans.
+ *
+ * ⚠️ **This is only half the mechanism, and on its own it has a hole.** It is
+ * triggered by a *game* arriving and asks "who was waiting for me" — so an
+ * orphan created *after* its base game already exists is never looked at again,
+ * because the creation event that would have found it has already happened. Item
+ * 842 sat that way with item 840 sitting right beside it. The reverse question —
+ * "does this orphan's parent already exist?" — is `sweepOrphanAdoptions` below.
  */
 export async function adoptOrphans(db: D1Database, parent: Item): Promise<Item[]> {
   const { results } = await db
@@ -1335,6 +1343,234 @@ export async function updateItem(
   if (newRoot !== null) await retargetSubtreeRoot(db, id, newRoot);
 
   return getItem(db, id);
+}
+
+/**
+ * Separators that mean "…and the rest of this name is the sub-title".
+ *
+ * En dash and em dash are written as `\u` escapes rather than as themselves:
+ * rewriting a source file through this project's shell has mangled those two
+ * characters before, and the result typechecked, built and deployed clean. A
+ * mangled dash in a comment is cosmetic; one in this character class would fail
+ * silently by simply never matching, which is the worst kind of bug this file
+ * can have.
+ */
+const TITLE_SEPARATOR = /:|\s[-\u2013\u2014]\s/g;
+
+/**
+ * The names an unfiled item's own title claims it belongs to, most specific
+ * first.
+ *
+ * "Dice Throne: Season Two: Battle Chest" yields *Dice Throne: Season Two* then
+ * *Dice Throne* — the longer prefix is tried first, so a box lands under the set
+ * it actually names rather than the line's root. A title with no separator
+ * yields nothing at all, which is the right answer: it has made no claim.
+ */
+function claimedParentNames(name: string): string[] {
+  const out: string[] = [];
+  TITLE_SEPARATOR.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = TITLE_SEPARATOR.exec(name)) !== null) {
+    const prefix = name.slice(0, match.index).trim();
+    if (prefix) out.push(prefix);
+  }
+  return out.reverse();
+}
+
+/** What the orphan's claim to a parent was made of. */
+export type OrphanMatchBasis = 'pending' | 'title';
+
+export interface OrphanAdoption {
+  itemId: number;
+  itemName: string;
+  parentId: number;
+  parentName: string;
+  via: OrphanMatchBasis;
+}
+
+export interface OrphanSweepRun {
+  /** Parentless non-base rows carrying a `pending_parent_name`. */
+  waiting: number;
+  /** Parentless expansion/promo/upgrade rows that have lost even that. */
+  unfiled: number;
+  adopted: number;
+  /** Two or more items answered to the name, so nobody got it. */
+  contested: number;
+  /** Nothing in the catalog answered to the name. Left exactly as it was. */
+  unmatched: number;
+  /** The only match was inside the orphan's own subtree. */
+  looped: number;
+  adoptions: OrphanAdoption[];
+}
+
+/**
+ * The reverse of `adoptOrphans`: for each orphan, does its parent already exist?
+ *
+ * `adoptOrphans` is game-first — it fires when a base game is created and
+ * collects whoever was waiting for *that* name. That can only ever reunite an
+ * orphan that was created **first**. An orphan created after its parent has
+ * already missed its one trigger and will wait for ever: item 842 "Tiny Epic
+ * Dungeons Adventures: The Phantom Voyage" sat as a parentless expansion with
+ * `pending_parent_name = 'Tiny Epic Dungeons Adventures'` while item 840, of
+ * exactly that name, sat beside it. Running the old sweep more often would not
+ * have found it — there was no creation event left to run it on.
+ *
+ * ## Two populations, and they are not the same thing
+ *
+ * | | matched on | why |
+ * |---|---|---|
+ * | `pending_parent_name` set | that name | a human or a scan **asserted** which game this belongs to |
+ * | parentless expansion / promo / upgrade | its own title's prefix | the row has asserted nothing; the box's name is all there is |
+ *
+ * **`accessory` is deliberately absent from the second population**, matching
+ * `BELONGS_TO_A_GAME` in `ItemTree.tsx`. Items 117 and 118 (Excursion Tiles 1 and
+ * 2) and item 372 (the Pangea gaming table) are standalone on purpose and must
+ * not be filed under anything. An accessory that *does* carry a pending name is
+ * in the first population and is adopted, because there the intent was recorded.
+ *
+ * ## Matching is exact after normalising, and nothing else
+ *
+ * This runs unattended, which puts it in the scanner's risk class rather than
+ * the search box's: nobody is looking at the result, so a confident wrong answer
+ * is permanent. So there is **no similarity threshold and no fuzzy fallback** —
+ * `normaliseTitle`, the scanner's fold, applied to both sides, then string
+ * equality. (Note it folds `Player’s` to `player s` with a space; that is not
+ * `foldSearchText`, which drops the apostrophe entirely. The two are deliberately
+ * different and must not be conflated.)
+ *
+ * **If two items answer to the name, nobody gets the orphan.** Same rule as the
+ * alias index in `buildTitleIndex` and the fragment rule in `isConfidentMatch`,
+ * both of which exist because loose unattended matching in this codebase has
+ * produced confident wrong answers before.
+ *
+ * A candidate parent must itself be **properly filed** — a base game, or a
+ * non-base row that has a parent. Adopting an orphan onto another orphan would
+ * move the problem rather than solve it.
+ *
+ * ## Re-parenting goes through `updateItem`, on purpose
+ *
+ * Not a second parent-setting path. `updateItem` already carries `wouldLoop`
+ * (an orphan may have grown children, and one of them may be the thing whose
+ * name matched), `retargetSubtreeRoot` (the adopted row's whole subtree has to
+ * follow it onto the new root) and the clearing of `pending_parent_name`. A
+ * loop is caught there and counted here rather than thrown.
+ *
+ * `itemId` narrows the sweep to one row — that is the inline call on item
+ * creation. Without it the whole catalog is swept, which is the half-hourly
+ * cron. One implementation, so the cron proves the inline path and vice versa.
+ */
+export async function sweepOrphanAdoptions(
+  db: D1Database,
+  opts: { itemId?: number | null } = {},
+): Promise<OrphanSweepRun> {
+  const only = opts.itemId ?? null;
+
+  const run: OrphanSweepRun = {
+    waiting: 0,
+    unfiled: 0,
+    adopted: 0,
+    contested: 0,
+    unmatched: 0,
+    looped: 0,
+    adoptions: [],
+  };
+
+  const { results: orphanRows } = await db
+    .prepare(
+      `SELECT ${ITEM_COLUMNS} FROM item
+        WHERE parent_item_id IS NULL
+          AND kind != 'base'
+          AND ( (pending_parent_name IS NOT NULL AND trim(pending_parent_name) != '')
+                OR kind IN ('expansion', 'promo', 'upgrade') )
+          AND (?1 IS NULL OR id = ?1)
+        ORDER BY id`,
+    )
+    .bind(only)
+    .all<ItemRow>();
+
+  const orphans = orphanRows.map(mapItemRow);
+  for (const orphan of orphans) {
+    if (orphan.pendingParentName?.trim()) run.waiting += 1;
+    else run.unfiled += 1;
+  }
+  if (orphans.length === 0) return run;
+
+  /*
+    The candidate side is folded in JS, not SQL, because `normaliseTitle` strips
+    diacritics and punctuation and expands `&` — none of which SQLite can express
+    without a custom collation. `listItemNames` fetches the whole catalog for the
+    same reason and with the same justification: a household catalog is hundreds
+    of short rows, so this is one cheap read, and it is only read at all once an
+    orphan actually exists to match.
+  */
+  const { results: candidateRows } = await db
+    .prepare(
+      `SELECT id, name FROM item
+        WHERE kind = 'base' OR parent_item_id IS NOT NULL`,
+    )
+    .all<{ id: number; name: string }>();
+
+  const byName = new Map<string, { id: number; name: string }[]>();
+  for (const row of candidateRows) {
+    const key = normaliseTitle(row.name);
+    if (key.length < 2) continue;
+    const bucket = byName.get(key);
+    if (bucket) bucket.push(row);
+    else byName.set(key, [row]);
+  }
+
+  for (const orphan of orphans) {
+    const pending = orphan.pendingParentName?.trim() ?? '';
+    const via: OrphanMatchBasis = pending ? 'pending' : 'title';
+    const claims = pending ? [pending] : claimedParentNames(orphan.name);
+
+    // First claim that anything answers to at all decides the outcome — a
+    // shorter prefix is a *less* specific claim, so falling through to one after
+    // a contested hit would be a way of routing around the ambiguity.
+    let matches: { id: number; name: string }[] | undefined;
+    for (const claim of claims) {
+      const key = normaliseTitle(claim);
+      if (key.length < 2) continue;
+      matches = byName.get(key);
+      if (matches) break;
+    }
+
+    if (!matches) {
+      run.unmatched += 1;
+      continue;
+    }
+    if (matches.length > 1) {
+      run.contested += 1;
+      continue;
+    }
+
+    const parent = matches[0]!;
+    try {
+      const moved = await updateItem(db, orphan.id, { parentItemId: parent.id });
+      if (!moved) {
+        run.unmatched += 1;
+        continue;
+      }
+    } catch (err) {
+      // The only match was one of the orphan's own descendants. Left alone.
+      if (err instanceof ItemError) {
+        run.looped += 1;
+        continue;
+      }
+      throw err;
+    }
+
+    run.adopted += 1;
+    run.adoptions.push({
+      itemId: orphan.id,
+      itemName: orphan.name,
+      parentId: parent.id,
+      parentName: parent.name,
+      via,
+    });
+  }
+
+  return run;
 }
 
 /** Cascades to children, copies, ratings and findings via foreign keys. */

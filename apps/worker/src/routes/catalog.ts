@@ -22,6 +22,7 @@ import {
   deleteRating,
   deleteRelation,
   getGameCompleteness,
+  getItem,
   getItemDetail,
   getRelatedItems,
   listCoverCandidates,
@@ -32,6 +33,7 @@ import {
   listRelationPairs,
   listTopLevelItems,
   listWishlist,
+  sweepOrphanAdoptions,
   updateCopy,
   updateItem,
   upsertRating,
@@ -199,7 +201,25 @@ export const catalogRoutes = new Hono<AppBindings>()
       // it. Reported back so the screen can say so rather than leaving the user
       // to notice their orphan quietly moved.
       const adopted = await adoptOrphans(c.env.DB, item);
-      return c.json({ item, adopted }, 201);
+
+      /*
+        And the other direction, which is the one that was missing: the thing
+        just created may itself be an orphan whose parent has been sitting in the
+        catalog all along. `adoptOrphans` alone can never find that — it is
+        triggered by the *parent* arriving, and for this row that already
+        happened. Item 842 waited on item 840 exactly this way.
+
+        Runs second so a new orphan that just collected children of its own drags
+        them along; `updateItem` retargets the whole subtree's root.
+
+        No cooldown and no debounce. This is two indexed reads and no network
+        call, item creation is human-paced, and a cooldown would buy persistent
+        state and a "did it fire?" question in exchange for nothing.
+      */
+      const filed = await sweepOrphanAdoptions(c.env.DB, { itemId: item.id });
+      const finalItem = filed.adopted > 0 ? ((await getItem(c.env.DB, item.id)) ?? item) : item;
+
+      return c.json({ item: finalItem, adopted, filedUnder: filed.adoptions[0] ?? null }, 201);
     } catch (err) {
       if (err instanceof ItemError) {
         return c.json({ error: 'bad_request', detail: err.message }, err.status as 400);
