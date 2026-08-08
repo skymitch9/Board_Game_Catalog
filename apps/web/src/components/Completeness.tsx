@@ -143,10 +143,53 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
 }
 
 /**
+ * Above this many rows, a section starts shut.
+ *
+ * **Measured on the local catalog, 2026-08-08**, because production's
+ * `game_component` is still empty. Catan (item 54) is the case the owner named
+ * and it is worse than "82 items": 82 official expansions, **0 held**, so all 82
+ * are listed — plus 14 accessories, also all listed, and 59 third-party already
+ * behind their own disclosure. Rendered at 386px the card is **8,538px, ten
+ * phone screens, and 83% of the whole item page**.
+ *
+ * **Nothing else on this card can be collapsed instead.** `sectionFor` only puts
+ * `state !== 'held'` into `outstanding`, so the owned side is not rendered at
+ * all — there is no "already have it" list burying the missing one. And `held`
+ * is 0 on almost every game here, because 174 owned rows still carry no
+ * BoardGameGeek id. So the long list *is* the missing list, and the only honest
+ * way to shorten it is to leave the answer on the header: "0 of 82 official
+ * expansions" stays visible and unclickable-through, and only the 82 names go
+ * behind a tap.
+ *
+ * Five is where the line goes because these rows are now **76–93px tall** at
+ * phone width — each one grew a second button today, so the name wraps and the
+ * buttons take their own line. Five is ~435px, already two thirds of a phone
+ * screen once the count line sits above it; six cannot share a screen with
+ * anything else. That is the same reasoning, and the same number, as the
+ * wishlist's `COLLAPSE_ABOVE`, and it is deliberately a second constant rather
+ * than an import: the value agrees today because the rows happen to be a similar
+ * height, and one screen's rows changing height must not silently retune the
+ * other's.
+ *
+ * Catalog-wide this touches 22 of the 55 checked games, 9 of which have both
+ * sections over the line. Everything else — the 1–4 the owner said were no
+ * issue — renders exactly as it did before, with no toggle at all.
+ */
+const COLLAPSE_ABOVE = 5;
+
+/**
  * One counted category: official expansions, or official accessories.
  *
  * The count leads, because "4 of 7" is the answer to the question. The names
- * follow, because a number with no names is not a shopping list.
+ * follow, because a number with no names is not a shopping list — until there
+ * are eighty-two of them, at which point they are a wall, and the count line
+ * becomes the toggle that hides them.
+ *
+ * The toggle appears **only** when there is something worth hiding, which is how
+ * `ThirdParty` behaves in this same card. The wishlist puts a header on every
+ * group because its groups are repeated identical cards; here there are two
+ * sections and the count line is the feature's headline, so growing a caret on
+ * "3 of 4" would dress up the answer as a control for nothing.
  */
 function Section({
   title,
@@ -161,37 +204,70 @@ function Section({
   canEdit: boolean;
   onChanged: () => void;
 }) {
+  /**
+   * Null until somebody presses it, so the size rule keeps deciding — the same
+   * shape the wishlist uses. Holding the open state absolutely would have to be
+   * reconciled with a list that re-counts itself every time a row is added.
+   */
+  const [choice, setChoice] = useState<boolean | null>(null);
   if (section.total === 0) return null;
 
   const complete = section.held === section.total;
+  const collapsible = section.outstanding.length > COLLAPSE_ABOVE;
+  const open = choice ?? !collapsible;
+  const listId = `completeness-${title}-${gameId}`;
+
+  const count = (
+    <>
+      <strong className={complete ? 'tone-good' : 'tone-warn'}>
+        {section.held} of {section.total}
+      </strong>{' '}
+      official {section.total === 1 ? singular(title) : title}
+      {complete && <span className="completeness__done"> — complete</span>}
+      {/* Counted apart from `held`, never into it. A name that matches is not
+          proof, and inflating the figure is the one failure that costs money
+          silently. Saying it out loud also points at the fix: set the id. */}
+      {section.uncertain > 0 && (
+        <span className="muted"> · {section.uncertain} possibly already yours</span>
+      )}
+    </>
+  );
 
   return (
     <div className="completeness__section">
-      <p className="completeness__count">
-        <strong className={complete ? 'tone-good' : 'tone-warn'}>
-          {section.held} of {section.total}
-        </strong>{' '}
-        official {section.total === 1 ? singular(title) : title}
-        {complete && <span className="completeness__done"> — complete</span>}
-        {/* Counted apart from `held`, never into it. A name that matches is not
-            proof, and inflating the figure is the one failure that costs money
-            silently. Saying it out loud also points at the fix: set the id. */}
-        {section.uncertain > 0 && (
-          <span className="muted"> · {section.uncertain} possibly already yours</span>
-        )}
-      </p>
+      {/* The whole count line is the tap target, not a caret beside it — this is
+          read standing in a shop with a box in the other hand. */}
+      {collapsible ? (
+        <button
+          type="button"
+          className="completeness__count completeness__count--toggle"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => setChoice(!open)}
+        >
+          <span className="children-toggle__caret" aria-hidden="true" data-open={open}>
+            ▸
+          </span>
+          <span>{count}</span>
+        </button>
+      ) : (
+        <p className="completeness__count">{count}</p>
+      )}
 
+      {/* The list is always in the tree so `aria-controls` always points at
+          something; its rows are not, so eighty-two shut rows cost no render. */}
       {section.outstanding.length > 0 && (
-        <ul className="completeness__list">
-          {section.outstanding.map((c) => (
-            <MissingRow
-              key={c.id}
-              component={c}
-              gameId={gameId}
-              canEdit={canEdit}
-              onChanged={onChanged}
-            />
-          ))}
+        <ul className="completeness__list" id={listId} hidden={!open}>
+          {open &&
+            section.outstanding.map((c) => (
+              <MissingRow
+                key={c.id}
+                component={c}
+                gameId={gameId}
+                canEdit={canEdit}
+                onChanged={onChanged}
+              />
+            ))}
         </ul>
       )}
     </div>
