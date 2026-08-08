@@ -1,7 +1,7 @@
 # What am I missing — Information Reference
 
 > **Audience:** Claude sessions. **Status:** TRACKED.
-> Last verified: **2026-08-06**.
+> Last verified: **2026-08-08**.
 
 Accessory and expansion completeness: *seven expansions exist, you have four,
 here are the three you do not*. The last clause is a shopping list, and it is
@@ -128,6 +128,74 @@ accessories) against **472 third-party** (203, 269).
 with **no BoardGameGeek call**: 1,137 rows in 0.57s, measured. That is the whole
 reason the publisher lists are columns rather than transients — if the rule
 changes, or a list is corrected by hand, one request makes everything agree.
+
+---
+
+## Chaseable versus collectible
+
+*"We're getting bogged down by things like promo cards, or limited 1-off items,
+random collectible vinyl figures. It doesn't need to be perfect but can we
+filter those out"* — the owner, 2026-08-08.
+
+The publisher split cannot help here: these are made by the same people who made
+the game, which is exactly why `isOfficialComponent` waves them through. The only
+signal in the stored data is the name, so `isCollectible(name)` in
+`packages/core/src/completeness.ts` reads the name.
+
+**A second split, not a second `official`.** Collectibles get their own
+`collectibles` group on the report, shaped like `thirdParty` and behind its own
+disclosure in the UI. Third-party is decided first, so a stranger's promo card
+stays where it already was; only what survives that is asked whether it is
+chaseable.
+
+### The terms, and the ones deliberately left out
+
+`promo*`, `vinyl`, `exclusive(s)`, `limited edition`, `alt/alternate art`,
+`foil(s)`, `holo(graphic)`, `kickstarter`, `indiegogo`, `gen con`/`gencon`,
+`convention`, `collector's` — all word-bounded, case-insensitive.
+
+Not included, each for a reason checked against the real names:
+
+| Term | Why not |
+|---|---|
+| `dice tower` | Every such row already says "promo", and a dice tower is a real accessory |
+| `spiel essen`, `adventskalender` | Same — already caught by `promo` |
+| `anniversary` | Limited runs and ordinary reprints are described the same way |
+
+### Measured, 2026-08-08, against the local catalog
+
+**180 of 660** official components matched.
+
+| Game | Before → after |
+|---|---|
+| Terraforming Mars — expansions | 76 → 19 (57 single promo cards) |
+| Sheriff of Nottingham — expansions | 17 → 7 |
+| Scythe — expansions | 16 → 5 |
+| Mysterium — expansions | 8 → 2 |
+| Twisted Cryptids — accessories | 19 → 8 (eleven vinyl cryptids) |
+| Here to Slay — accessories | 23 → 14 |
+| Catan — expansions | 82 → 80 |
+
+⚠️ **Catan is the case this does not fix**, and knowingly. Its fifty regional
+scenarios ("Catan Geographies: Mallorca", "Die Siedler von Catan: Hochzeitsturm")
+are as unbuyable as any promo, but nothing in their names says so; guessing from
+language or place would be a different and much worse rule. The size collapse
+(`COLLAPSE_ABOVE`) is what carries Catan.
+
+### "Nothing exists" and "everything is a promo" are different sentences
+
+Terraria: The Board Game has exactly two official expansions and both are promo
+packs, so both sections are empty while the disclosure holds two rows. The card
+says *"Everything BoardGameGeek lists as official for this game is a promo or a
+collectible"* rather than "lists nothing official", which would be a plain
+untruth about data on the same screen.
+
+### The suggestion list gets it for free
+
+`loadComponents` in `AddRelated.tsx` reads `expansions.outstanding` and
+`accessories.outstanding`, so promos leave the "add an expansion" picker with no
+filter of its own. That is the point of the report being the one place that
+decides what counts.
 
 ---
 

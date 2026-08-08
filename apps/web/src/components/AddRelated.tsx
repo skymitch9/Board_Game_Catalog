@@ -174,8 +174,11 @@ function componentToOffer(c: ComponentStatus): OfferedItem {
  * to prevent everywhere else.
  *
  * Third-party components — inserts, sleeves, upgrade kits by other publishers —
- * are left out. They are a long tail that would bury the official list, and
- * "What else exists" already shows them behind its own disclosure.
+ * are left out, and so are promos and collectibles. Both are long tails that
+ * would bury the official list, and "What else exists" already shows each
+ * behind its own disclosure. Neither is filtered here: reading `outstanding`
+ * gets both exclusions for free, which is the point of the report being the one
+ * place that decides what counts.
  */
 async function loadComponents(itemId: number): Promise<Offers> {
   let report;
@@ -211,7 +214,7 @@ async function loadComponents(itemId: number): Promise<Offers> {
     return {
       items: [],
       componentNote:
-        'BoardGameGeek lists nothing official for this game that you do not already have.',
+        'BoardGameGeek lists nothing official and buyable for this game that you do not already have — promos and third-party items are on the game’s page, under “What else exists”.',
     };
   }
   return { items: outstanding.map(componentToOffer), componentNote: null };

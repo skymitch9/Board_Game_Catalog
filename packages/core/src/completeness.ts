@@ -84,6 +84,61 @@ export function isOfficialComponent(
 }
 
 // ---------------------------------------------------------------------------
+// Chaseable versus collectible
+// ---------------------------------------------------------------------------
+
+/**
+ * Words that mean "this was a one-off, not a thing you can go and buy".
+ *
+ * *"We're getting bogged down by things like promo cards, or limited 1-off
+ * items, random collectible vinyl figures."* — the owner. The shopping list is
+ * the whole point of this feature, and a convention card handed out in 2014 is
+ * not shopping; it is a fact about the past. Terraforming Mars is the case that
+ * makes it unusable: **76 official expansions, 57 of them single promo cards**.
+ *
+ * Publisher tells us nothing here — these are made by the same people who made
+ * the game, which is exactly why `isOfficialComponent` waves them through. The
+ * only signal in the data is the name, so the name is what this reads.
+ *
+ * Measured against the local catalog on 2026-08-08: **180 of 660** official
+ * components matched. Terraforming Mars' expansions fall 76 → 19, Sheriff of
+ * Nottingham's 17 → 7, Scythe's 16 → 5, Mysterium's 8 → 2, and Twisted
+ * Cryptids' accessories 19 → 8 as its eleven vinyl cryptids leave.
+ *
+ * ⚠️ **Deliberately a rough cut, and it must stay one.** The owner asked for
+ * "it doesn't need to be perfect", and every term here was checked against the
+ * 660 real names rather than imagined:
+ *
+ * - `dice tower`, `spiel essen` and `adventskalender` are **not** here even
+ *   though they name promo distributors. Every such row in the catalog already
+ *   says "promo" as well, and "Dice Tower" is also a real accessory a game can
+ *   genuinely have.
+ * - `anniversary` is not here. "Ticket to Ride: Deluxe Train Set – 20th
+ *   Anniversary" is a limited run, but so are ordinary reprints described that
+ *   way, and the cost of dropping a real expansion is the one this feature
+ *   cannot pay.
+ * - `foil` and `holo` are word-bounded so "tinfoil" and "Holocene" cannot match.
+ *
+ * What it does not catch, and knowingly: Catan's fifty regional scenarios
+ * ("Catan Geographies: Mallorca") are as unbuyable as any promo, but nothing in
+ * their names says so, and guessing from language or place would be a different
+ * and much worse rule. Catan falls 82 → 80. The size collapse in the UI is what
+ * carries that case.
+ */
+const COLLECTIBLE_TERMS =
+  /\bpromo\w*\b|\bvinyl\b|\bexclusives?\b|\blimited edition\b|\balt(ernate)? art\b|\bfoils?\b|\bholo(graphic)?\b|\bkickstarter\b|\bindiegogo\b|\bgen ?con\b|\bconvention\b|\bcollector'?s\b/i;
+
+/**
+ * Is this a promo or a collectible rather than something to chase?
+ *
+ * Exported because it is a judgement the owner will want to argue with, and an
+ * argument needs something to point at.
+ */
+export function isCollectible(name: string): boolean {
+  return COLLECTIBLE_TERMS.test(name);
+}
+
+// ---------------------------------------------------------------------------
 // Do we have it?
 // ---------------------------------------------------------------------------
 
@@ -281,6 +336,18 @@ export interface GameCompleteness {
    */
   thirdParty: { total: number; held: number; components: ComponentStatus[] };
   /**
+   * Official, but a promo or a collectible. Never counted, always available.
+   *
+   * Same shape and same bargain as `thirdParty`, for the same reason: the
+   * owner wants these out of the way "for the most part but check if we want
+   * something specific when desired". They are kept apart from `thirdParty`
+   * rather than folded into it because the two answer different questions — one
+   * is *somebody else made this*, the other is *you cannot buy this* — and a
+   * promo made by the game's own publisher would be a lie in a group labelled
+   * third-party.
+   */
+  collectibles: { total: number; held: number; components: ComponentStatus[] };
+  /**
    * Components whose own publisher has not been fetched yet.
    *
    * Counted in neither total. A component with no publisher cannot be placed on
@@ -340,20 +407,31 @@ export function buildCompleteness(input: {
   // today, so it stays out of every denominator.
   const live = statuses.filter((s) => !s.stale);
 
-  const official = live.filter((s) => s.official === true);
+  // Two splits, in this order. Third-party first, because "somebody else made
+  // this" is decided from stored publisher ids and is the stronger fact; a
+  // stranger's promo card belongs under third-party, where it already was.
+  // Only what survives that is asked whether it is chaseable.
   const third = live.filter((s) => s.official === false).sort(byRecency);
+  const official = live.filter((s) => s.official === true);
+  const chaseable = official.filter((s) => !isCollectible(s.name));
+  const collectible = official.filter((s) => isCollectible(s.name)).sort(byRecency);
 
   return {
     itemId: input.itemId,
     bggId: input.bggId,
     state,
     checkedAt: input.checkedAt,
-    expansions: sectionFor(official.filter((s) => s.kind === 'expansion')),
-    accessories: sectionFor(official.filter((s) => s.kind === 'accessory')),
+    expansions: sectionFor(chaseable.filter((s) => s.kind === 'expansion')),
+    accessories: sectionFor(chaseable.filter((s) => s.kind === 'accessory')),
     thirdParty: {
       total: third.length,
       held: third.filter((s) => s.state === 'held').length,
       components: third,
+    },
+    collectibles: {
+      total: collectible.length,
+      held: collectible.filter((s) => s.state === 'held').length,
+      components: collectible,
     },
     unclassified: live.filter((s) => s.official == null).length,
     stale: statuses.filter((s) => s.stale).length,

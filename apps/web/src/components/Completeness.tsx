@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   fillableFieldsFor,
   type ComponentStatus,
@@ -109,23 +109,60 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
             onChanged={refresh}
           />
 
+          {/* "Nothing exists" and "everything that exists is a promo" are
+              different facts, and Terraria is the second one: both its official
+              expansions are promo packs, so both sections are empty while the
+              disclosure below holds two rows. Saying "lists nothing official"
+              there would be a plain untruth about data on the same screen. */}
           {data.expansions.total === 0 && data.accessories.total === 0 && (
             <p className="muted">
-              BoardGameGeek lists nothing official for this game — no expansions, no
-              accessories. Nothing to chase.
+              {data.collectibles.total > 0 ? (
+                <>
+                  Everything BoardGameGeek lists as official for this game is a promo or a
+                  collectible — nothing to chase.
+                </>
+              ) : (
+                <>
+                  BoardGameGeek lists nothing official for this game — no expansions, no
+                  accessories. Nothing to chase.
+                </>
+              )}
             </p>
           )}
 
-          <ThirdParty
-            thirdParty={data.thirdParty}
+          <Aside
+            group={data.collectibles}
+            id={`collectibles-${data.itemId}`}
+            summary={(n) => (
+              <>
+                {n} promo{n === 1 ? '' : 's'} &amp; collectible{n === 1 ? '' : 's'} — promo
+                cards, convention exclusives, vinyl figures
+              </>
+            )}
+            explanation="Official, but one-offs rather than things you can go and buy, so none of these count towards the figures above. Sorted out by name, which is a rough cut — if something real is hiding in here, that is why."
+            gameId={data.itemId}
+            canEdit={canEdit}
+            onChanged={refresh}
+          />
+
+          <Aside
+            group={data.thirdParty}
+            id={`third-party-${data.itemId}`}
+            summary={(n) => (
+              <>
+                {n} third-party {n === 1 ? 'item' : 'items'} — inserts, upgrades, sleeves
+              </>
+            )}
+            explanation="Made by someone other than this game’s publisher, so none of these count towards the figures above."
             gameId={data.itemId}
             canEdit={canEdit}
             onChanged={refresh}
           />
 
           <p className="completeness__footnote">
-            Checked {formatWhen(data.checkedAt)}. Official components only — anything a
-            different publisher made is counted separately.
+            Checked {formatWhen(data.checkedAt)}. Official components you could still buy
+            only — promos, collectibles and anything a different publisher made are counted
+            separately.
             {data.unclassified > 0 && (
               <>
                 {' '}
@@ -461,29 +498,45 @@ function AddComponent({
 }
 
 /**
- * Third-party, behind a disclosure.
+ * A group that does not count, behind a disclosure.
  *
- * The owner's rule, verbatim: it does not count towards the completeness
- * figure but must stay checkable on demand — "something that lets us ignore it
- * for the most part but check if we want something specific when desired".
+ * The owner's rule, first said of third-party components and then again of
+ * promos: it does not count towards the completeness figure but must stay
+ * checkable on demand — "something that lets us ignore it for the most part but
+ * check if we want something specific when desired".
+ *
+ * One component for both, because the second group arrived as an exact copy of
+ * the first and a copy is how two disclosures drift into behaving differently.
+ * Only the words differ; the control, the held count and the unmounting are the
+ * same bargain. What each group *is* stays in `packages/core` — this only knows
+ * how to hide one.
  *
  * Same control as the collection page's group collapse: a real `<button>` with
- * `aria-expanded`, and the rows unmounted while closed so twenty-three inserts
- * cost no render.
+ * `aria-expanded`, and the rows unmounted while closed so fifty-seven promo
+ * cards cost no render.
  */
-function ThirdParty({
-  thirdParty,
+function Aside({
+  group,
+  id,
+  summary,
+  explanation,
   gameId,
   canEdit,
   onChanged,
 }: {
-  thirdParty: GameCompleteness['thirdParty'];
+  group: GameCompleteness['thirdParty'];
+  /** Unique per group per game — two of these share a page. */
+  id: string;
+  /** The header line, given the count so it can say "1 item" or "7 items". */
+  summary: (total: number) => ReactNode;
+  /** Why these do not count, said inside rather than on the header. */
+  explanation: string;
   gameId: number;
   canEdit: boolean;
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  if (thirdParty.total === 0) return null;
+  if (group.total === 0) return null;
 
   return (
     <>
@@ -491,27 +544,23 @@ function ThirdParty({
         type="button"
         className="children-toggle completeness__toggle"
         aria-expanded={open}
-        aria-controls={`third-party-${gameId}`}
+        aria-controls={id}
         onClick={() => setOpen(!open)}
       >
         <span className="children-toggle__caret" aria-hidden="true" data-open={open}>
           ▸
         </span>
         <span>
-          {thirdParty.total} third-party {thirdParty.total === 1 ? 'item' : 'items'} — inserts,
-          upgrades, sleeves
-          {thirdParty.held > 0 && ` · you have ${thirdParty.held}`}
+          {summary(group.total)}
+          {group.held > 0 && ` · you have ${group.held}`}
         </span>
       </button>
-      <div id={`third-party-${gameId}`} hidden={!open}>
+      <div id={id} hidden={!open}>
         {open && (
           <>
-            <p className="completeness__note completeness__note--block">
-              Made by someone other than this game&rsquo;s publisher, so none of these count
-              towards the figures above.
-            </p>
+            <p className="completeness__note completeness__note--block">{explanation}</p>
             <ul className="completeness__list">
-              {thirdParty.components.map((c) => (
+              {group.components.map((c) => (
                 <MissingRow
                   key={c.id}
                   component={c}

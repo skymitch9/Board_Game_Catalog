@@ -16,6 +16,26 @@ day started (`29f2c67`).
 | Catalog | **806 items**, 806 copies, 573 owned, 29 wanted |
 | `item_alias` | **72 rows across 18 items** — the D&D spellings, all `source = 'manual'` |
 
+### Landed after the above, committed and **not yet deployed**
+
+Promos and collectibles are now split out of the completeness figures — the
+owner's *"we're getting bogged down by things like promo cards, or limited 1-off
+items, random collectible vinyl figures"*. `isCollectible(name)` in
+`packages/core/src/completeness.ts`, a new `collectibles` group on the report
+shaped like `thirdParty`, and one shared `Aside` disclosure in
+`Completeness.tsx` now serving both groups.
+
+Name-based and deliberately rough; the terms and the ones left out are in
+[`info/completeness.md`](info/completeness.md). Measured against the local
+catalog: 180 of 660 official components move, Terraforming Mars' expansions fall
+76 → 19, Mysterium's 8 → 2. Catan barely moves (82 → 80) and that is known —
+its regional scenarios say nothing in their names.
+
+**No migration.** The split is computed on read from `game_component.name`, so
+`npm run deploy` is all it needs and a rollback is a revert. Verified locally
+against the real component rows through `GET /api/items/:id/completeness` and in
+the browser on items 49, 59 and 109.
+
 ### ⚠️ Work in flight at the moment this was written
 
 Two agents were still running and their work is **uncommitted in the tree**.
