@@ -21,6 +21,7 @@ import {
   COLLECTION_PAGE_SIZE,
   INHERITED_FIELDS,
   detailGapBranches,
+  foldSearchText,
   inheritCover,
   isBlankDetail,
   searchTerms,
@@ -97,6 +98,34 @@ export function toSortName(name: string): string {
 }
 
 /**
+ * The SQL half of `foldSearchText`. Both sides of every comparison get this.
+ *
+ * The characters and the reasoning are in `foldSearchText`'s comment in
+ * `packages/core/src/schemas.ts`; **the two lists must agree**, because folding
+ * only the typed term would take a working search and break it. The terms are
+ * folded there, on their way to becoming `?` params, so nothing in this file
+ * folds a term itself.
+ *
+ * ⚠️ **`char(N)` rather than the glyphs.** The generated SQL is pure ASCII, so a
+ * shell that mangles this file's UTF-8 while rewriting it — which has happened
+ * in this repo, see CLAUDE.md — cannot silently change which characters get
+ * folded. A literal curly quote inside this string would typecheck, build,
+ * deploy, and quietly stop matching.
+ *
+ * Cost: seven `replace()` calls per column per row scanned. Free at this size in
+ * the shape `matchingRootsSql` uses — see the note there — and the measurement
+ * that says when it stops being free is with it.
+ */
+const FOLD_CODEPOINTS = [0x2019, 0x0027, 0x2018, 0x0060, 0x002d, 0x2013, 0x2014];
+
+function folded(expr: string): string {
+  return FOLD_CODEPOINTS.reduce(
+    (sql, cp) => `replace(${sql}, char(${cp}), '')`,
+    `lower(${expr})`,
+  );
+}
+
+/**
  * The fields a search term is looked for in, for one item alias.
  *
  * `series` is here because it is the only name the *line* has. Typing "D&D"
@@ -111,8 +140,8 @@ export function toSortName(name: string): string {
  * dropdown filter already reaches exactly.
  */
 function termClause(alias: string): string {
-  return `(lower(${alias}.name) LIKE ? OR lower(${alias}.publisher) LIKE ?
-           OR lower(${alias}.designers) LIKE ? OR lower(${alias}.series) LIKE ?)`;
+  return `(${folded(`${alias}.name`)} LIKE ? OR ${folded(`${alias}.publisher`)} LIKE ?
+           OR ${folded(`${alias}.designers`)} LIKE ? OR ${folded(`${alias}.series`)} LIKE ?)`;
 }
 
 /**
@@ -148,17 +177,34 @@ function termClause(alias: string): string {
  * It is still one scan of `item_alias` per search *term*, which is the honest
  * ceiling here; `searchTerms` caps a query at eight.
  *
- * Kept as a sibling of the text EXISTS rather than folded into it so the OR
- * short-circuits per row — a tree that already matched on name never probes the
- * list. `EXPLAIN QUERY PLAN` says `LIST SUBQUERY`, not `CORRELATED`, which is
- * the line to check if this is ever edited.
+ * Kept as a sibling of the text clause rather than folded into it, so the two
+ * stay separately readable and `EXPLAIN QUERY PLAN` names them separately. That
+ * plan must say `LIST SUBQUERY`, not `CORRELATED`, which is the line to check if
+ * this is ever edited.
+ *
+ * ⚠️ **The alias fold is the one part of the search fold that will not stay
+ * free.** `al.alias` gets the same `folded()` treatment as every other column,
+ * because an alias typed with a curly apostrophe has to answer to a straight one
+ * — but this is the only folded column whose table is unbounded. Measured, same
+ * machine, same catalog:
+ *
+ * | `item_alias` rows | unfolded | folded |
+ * |---|---|---|
+ * | 72 (today's D&D rows) | 3.9–6.0 ms | 4.9–7.1 ms |
+ * | 22,852 (a full BGG backfill) | 10–24 ms | 64–125 ms |
+ *
+ * Production holds **0** alias rows and the D&D work adds 72, so this costs
+ * nothing today. If somebody backfills BGG's alternate names, the fix is a
+ * stored folded column on `item_alias` — measured at **11–23 ms** on the same
+ * 22,852 rows, i.e. back to the unfolded baseline. Do that then, not now: an
+ * empty table does not need a migration.
  */
 function aliasTermClause(rootExpr: string): string {
   return `${rootExpr} IN (SELECT ta.root_game_id
                             FROM item_alias al
                             JOIN item ta ON ta.id = al.item_id
                            WHERE ta.root_game_id IS NOT NULL
-                             AND lower(al.alias) LIKE ?)`;
+                             AND ${folded('al.alias')} LIKE ?)`;
 }
 
 /**
@@ -169,10 +215,14 @@ function aliasTermClause(rootExpr: string): string {
  * result, and it works from the trees already in memory — no alias rows were
  * read. A tree that matched only by alias simply gets no "why" line, which is
  * the same thing that happens today when a term is explained by the root.
+ *
+ * ⚠️ It mirrors `folded()` too, and has to. The term arrives already folded from
+ * `searchTerms`, so comparing it against a raw `Player’s Handbook` would find
+ * nothing — the search would return the row and then refuse to say why.
  */
 function itemMatchesTerm(item: Item, term: string): boolean {
   return [item.name, item.publisher, item.designers, item.series].some(
-    (field) => field != null && field.toLowerCase().includes(term),
+    (field) => field != null && foldSearchText(field).includes(term),
   );
 }
 
@@ -183,7 +233,7 @@ function itemMatchesTerm(item: Item, term: string): boolean {
  * expansion should surface its base game too, otherwise you get an orphaned
  * result with no context.
  *
- * Each search term gets its own EXISTS over the tree, and the terms are ANDed.
+ * Each search term gets its own probe of the tree, and the terms are ANDed.
  * That is what lets "catan seafarers" find the Catan group: the two words are
  * satisfied by two different rows in it. Putting both words in one LIKE would
  * require them adjacent in a single field, which they are not — and pushing the
@@ -268,9 +318,26 @@ function matchingRootsSql(
   const params: unknown[] = [];
 
   for (const term of searchTerms(query.q)) {
+    // ⚠️ **Both halves are uncorrelated `IN`s, and the text half only became one
+    // when the fold arrived.** It used to be `EXISTS (… WHERE t.root_game_id =
+    // i2.root_game_id …)`, which re-evaluates its LIKEs once per candidate row.
+    // That was affordable while the comparison was a bare `lower()`; wrapping
+    // each column in seven `replace()` calls made the same query cost **16–27 ms
+    // against a 4–5 ms baseline**, on 806 items. Hoisted to an `IN` whose
+    // subquery mentions nothing from the outer query, SQLite folds the catalog
+    // **once per term** and probes the resulting set through `idx_item_root`:
+    // **1.7–7.1 ms**, at or under the unfolded baseline it replaced.
+    //
+    // This is the same rewrite, for the same reason, that the alias probe below
+    // already carries — see its comment for the numbers that established it.
+    // `EXPLAIN QUERY PLAN` should say `MULTI-INDEX OR` over two `LIST SUBQUERY`s
+    // and must never say `CORRELATED`. Verified answer-for-answer against the
+    // EXISTS form over 1,212 query pairs — every term pair drawn from the real
+    // catalog's own words, crossed with the kind, status and uncatalogued
+    // filters — with zero differences.
     where.push(
-      `(EXISTS (SELECT 1 FROM item t
-                 WHERE t.root_game_id = i2.root_game_id AND ${termClause('t')})
+      `(i2.root_game_id IN (SELECT t.root_game_id FROM item t
+                             WHERE t.root_game_id IS NOT NULL AND ${termClause('t')})
         OR ${aliasTermClause('i2.root_game_id')})`,
     );
     const like = `%${term}%`;

@@ -191,6 +191,54 @@ export const itemQuerySchema = z.object({
 export type ItemQuery = z.infer<typeof itemQuerySchema>;
 
 /**
+ * Punctuation that is typography rather than spelling, folded away on **both**
+ * sides of a search comparison.
+ *
+ * `Player’s Handbook` is stored with U+2019 and `Aeon's End` with U+0027 — the
+ * same intent, two codepoints, decided by whichever tool the row was typed in.
+ * Measured on the 806-item catalog: **15 rows carry the curly apostrophe and 47
+ * the straight one**, so neither spelling is the odd one out and a search box
+ * that respects the difference is wrong for half the collection whichever half
+ * you pick. `players handbook` returned nothing at all.
+ *
+ * Dashes are the same failure with a different glyph: 189 hyphens against 12 en
+ * dashes, and typing "season two - battle chest" for a row printed with an en
+ * dash returned nothing. All three dashes fold to the same nothing, so it no
+ * longer matters which one either side used.
+ *
+ * **Removed, not replaced with a space**, and it is a real choice. 145 of the
+ * dashes are ` - ` separators and 56 sit inside a word ("X-Men", "5-6 Player",
+ * "Gilmour-Long"). For the separators the two options are indistinguishable —
+ * terms are split on whitespace, so no term ever spans one. Inside a word,
+ * removal is a strict superset: `X-Men` folded to `xmen` is found by "x-men",
+ * "x men" *and* "xmen", where folding to a space loses the last of those.
+ *
+ * ⚠️ **`&` and `:` are deliberately NOT here.** `D&D` would fold to `dd`, and
+ * the 72 alias rows the D&D line depends on are spelled `D&D`; worse, a user
+ * typing `D D` produces two one-character terms that match most of the catalog.
+ * `:` separates the line from the box in 622 places and is what makes "catan
+ * seafarers" mean something. Diacritics are not folded either — three characters
+ * in three rows, and SQLite has no NFD, so matching `normaliseTitle`'s
+ * accent-stripping here would cost a replace() per accented letter for no
+ * measured failure. `normaliseTitle` in `vision.ts` is the scanner's fold and
+ * stays the scanner's; this one is looser about quotes and stricter about
+ * everything else, because a search box shows a person a list and the scanner
+ * decides unattended.
+ *
+ * ⚠️ **Written as `\u` escapes rather than literal glyphs on purpose.** A
+ * PowerShell rewrite has silently mangled the UTF-8 of a source file in this
+ * repo before (see CLAUDE.md), and the failure is invisible: the mangled form
+ * typechecks, builds and deploys, and the search quietly stops folding. Escapes
+ * survive it. Keep them.
+ */
+const SEARCH_FOLD = /[\u2019\u0027\u2018\u0060\u002d\u2013\u2014]/g;
+
+/** Lowercase and drop the folded punctuation. The JS half of the comparison. */
+export function foldSearchText(s: string): string {
+  return s.toLowerCase().replace(SEARCH_FOLD, '');
+}
+
+/**
  * Split a search box into the words that must all be found.
  *
  * "catan seafarers" is two facts about one game tree, and they live in different
@@ -199,15 +247,16 @@ export type ItemQuery = z.infer<typeof itemQuerySchema>;
  * never are. Every term has to match *something* in the tree; no term has to
  * match the same thing as another.
  *
- * Lowercased here so the SQL and the "why did this match" check downstream
- * cannot drift apart on case.
+ * Lowercased and folded here so the SQL and the "why did this match" check
+ * downstream cannot drift apart on case or on punctuation. Folding *before* the
+ * length filter is what drops a term of pure punctuation — typing a bare "-"
+ * asks no question, and `LIKE '%%'` is not the answer to it.
  */
 export function searchTerms(q: string | undefined | null): string[] {
   if (!q) return [];
   return q
-    .toLowerCase()
     .split(/\s+/)
-    .map((t) => t.trim())
+    .map((t) => foldSearchText(t).trim())
     .filter(Boolean)
     .slice(0, 8);
 }

@@ -20,13 +20,104 @@ What still wants a person, all of it optional or waiting on a delivery:
 | Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md` |
 | ⚠️ Excursion Tiles 1 (117) says **2024** | its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand and was asleep; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree |
 
+## A curly apostrophe is not a different word — 2026-08-08
+
+> ⚠️ **UNCOMMITTED and UNDEPLOYED.** Two modified files:
+> `packages/core/src/schemas.ts` and `packages/db/src/items.ts`. **No migration,
+> nothing written to production.** `npm run typecheck` passes; the mojibake sweep
+> is clean.
+
+*"Should we do a search type where we clear all marks and do a character compare
+only? player's handbook / players handbook etc return the same?"* — the owner.
+
+Narrower than "clear all marks", because two of the marks are load-bearing.
+`foldSearchText` in `packages/core/src/schemas.ts` drops **seven characters** on
+both sides of every comparison: three apostrophes (U+2019, U+0027, U+2018), the
+backtick, and three dashes (hyphen, en dash, em dash). `&` and `:` are
+deliberately kept — `D&D` would fold to `dd`, and typing `D D` would then be two
+one-character terms matching most of the catalog.
+
+Measured on the catalog, which is what settled it: **15 rows carry `’` and 47
+carry `'`**, so neither spelling is the odd one out; 189 hyphens against 12 en
+dashes. **Dashes fold to nothing, not to a space.** Terms are split on
+whitespace, so no term ever spans a ` - ` separator (145 of them) and the two
+options are indistinguishable there. Inside a word (56 of them) removal is a
+strict superset: `X-Men` → `xmen` answers to "x-men", "x men" *and* "xmen".
+
+### The fold had to be paid for, and the payment was a shape change
+
+Query-time, no stored column — but naively it was a **4× regression**. Wrapping
+four columns in seven `replace()` calls inside the existing *correlated* `EXISTS`
+cost **16–27 ms against a 4–5 ms baseline**, because that EXISTS re-folds rows
+once per candidate row.
+
+Hoisting the text clause to an **uncorrelated `IN`** — the same rewrite the alias
+probe already carried, for the same reason — folds the catalog once per term and
+probes through `idx_item_root`: **1.7–7.1 ms**, at or under the baseline it
+replaced. `EXPLAIN QUERY PLAN` now says `MULTI-INDEX OR` over two `LIST
+SUBQUERY`s. Checked answer-for-answer against the old EXISTS over **1,212 query
+pairs** with zero differences. End to end through a real worker the endpoint is
+unmoved: 44.0 → 44.5 ms for a two-result search, 48.2 → 48.6 for `dice throne`,
+and `zorblax` got *faster* (23.9 → 19.1).
+
+⚠️ **The one part that does not stay free is the alias fold**, because
+`item_alias` is the only folded column whose table is unbounded. At 72 rows it
+costs nothing; at a full BGG backfill (22,852 rows) it is 64–125 ms against
+10–24 ms unfolded. The fix at that point is a stored folded column on
+`item_alias` — measured at 11–23 ms, back to baseline. The numbers and the
+trigger are in the comment on `aliasTermClause`. Not done now: production holds
+**0** alias rows.
+
+### Measured through a real worker, local D1 loaded from production
+
+| Search box | Before | After |
+|---|---|---|
+| `players handbook` | **0** | **2** |
+| `player's handbook` | **0** | **2** |
+| `Player’s Handbook` | 2 | 2 |
+| `dungeon masters guide` | **1** | **2** |
+| `dungeon master's guide` | **0** | **2** |
+| `aeons end` | **0** | **2** |
+| `xmen` | **0** | **1** |
+| `56 player` | **0** | **3** |
+| `season two - battle chest` | **0** | **1** |
+| `dice throne` | 12 | 12 |
+| `D&D` / `DnD` / `Dungeons and Dragons` | 18 | 18 |
+| `boss monster` | 5 | 5 |
+| `unstable unicorns` | 4 | 4 |
+| `zorblax` / `qqq` | 0 | 0 |
+| *(empty)* | 171 / 171 roots, 114 grouped entries | identical |
+
+⚠️ The earlier section below records the empty search as "140 entries / 171
+roots". Measured on the same 806-item local D1 today it is **114 grouped entries
+/ 171 roots**, before *and* after — the 140 is stale, not a regression. An empty
+search builds no term clause at all, so this change cannot reach it.
+
+`aeons end`, `xmen`, `56 player` and the hyphen-for-en-dash row were not in the
+brief — they are the same bug wearing other punctuation, found by counting
+characters in the catalog rather than by guessing.
+
+⚠️ **`itemMatchesTerm` had to fold too.** It backs the "why did this match" line,
+and the term reaches it already folded — left alone it would have returned
+*Betrayal at House on the Hill* for "widows walk" and then refused to say which
+child explained it. Verified: it names *Widow's Walk*.
+
+### Scanner behaviour is unchanged, and it was checked rather than assumed
+
+`vision.ts`, `barcode.ts` and `routes/aliases.ts` are not in the diff, and no
+scanner module imports `foldSearchText` or `searchTerms`. Running the real
+`buildTitleIndex`/`matchIndexedTitle` over `GET /api/item-names` with the 72
+alias rows present still gives **`aliasKeys` = 0**, still matches `CATAN` → #54,
+and still refuses `D&D`, `DnD` and `ZORBLAX QUANDARY`. `normaliseTitle` still
+folds `Player’s` to `player s` **with a space** — the two folds are deliberately
+different and remain so.
+
 ## Search learns the line's name, and its spellings — 2026-08-08
 
-> ⚠️ **UNCOMMITTED and UNDEPLOYED.** One modified file
-> (`packages/db/src/items.ts`) and one untracked file
-> (`scratchpad/dnd-aliases.sql`). **Nothing was written to production** — the
-> alias rows are applied to a local D1 only. `npm run typecheck` passes; the
-> mojibake sweep is clean.
+> ⚠️ **COMMITTED as `0e3e169`, not pushed and NOT DEPLOYED.** (This block said
+> UNCOMMITTED; it was committed later the same day.) `scratchpad/dnd-aliases.sql`
+> is still untracked. **Nothing was written to production** — the alias rows are
+> applied to a local D1 only.
 
 *"We might also need to add aliases to the parents so DnD, Dungeons and Dragons,
 D&D etc all return in the search for this one."* — the owner.
