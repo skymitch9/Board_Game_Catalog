@@ -246,7 +246,19 @@ textarea { resize: vertical; }
   cursor: pointer;
 }
 .picker__clear:hover { background: rgb(0 0 0 / 0.12); }
-.picker__none { font-size: 0.78rem; color: var(--warn); }
+/* Was a bare line of warning text, and still is where nothing can be done about
+   it. A host that supplies `emptyHint` puts a button in here, so it has to wrap
+   and sit on its baseline rather than stretching full width like a form row. */
+.picker__none {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem;
+  font-size: 0.78rem; color: var(--warn); margin-top: 0.3rem;
+}
+/* A button that reads as part of a sentence. Everything the button rules give
+   it except the box — the text around it is what carries the meaning. */
+.btn-inline {
+  padding: 0.15rem 0.4rem; font-size: inherit; min-height: 0;
+  text-decoration: underline;
+}
 
 /* --- linking / filing, on an item page ----------------------------------- */
 /* This form had no styles at all: it was an id box, a dropdown and two buttons
@@ -995,6 +1007,29 @@ code {
 .wishlist-group .candidate-list { padding: 0 0.6rem 0.6rem; }
 
 .wishlist-legend { margin: 0 0 0.75rem; line-height: 1.35; }
+
+/*
+  Adding something you do not have.
+
+  Sits above the list rather than at the bottom of it: on a phone the list is
+  the long thing, and a form under twenty-five rows is a form nobody scrolls to.
+  One column throughout — every field here is one answer, and the two-up grid
+  `.quickadd-row` gives is right for "name / type / year" and wrong for a
+  question phrased as a sentence.
+*/
+.wishlist-add { margin-bottom: 1rem; }
+.wishlist-add .quickadd-row { grid-template-columns: 1fr 1fr; }
+/* The new-game half, set in from the field that revealed it so it reads as a
+   consequence of "not in the catalog" rather than as more of the same form. */
+.wishlist-add__new {
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.wishlist-add__new .quickadd-row { grid-template-columns: 1fr; }
+@media (max-width: 640px) { .wishlist-add .quickadd-row { grid-template-columns: 1fr; } }
 
 /*
   Where to buy it. Ranked left to right by `buyLinksFor`, and the publisher is

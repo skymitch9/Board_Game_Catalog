@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ItemKind } from '@bgc/core';
 import { api } from '../api';
 import { KIND_LABEL } from './ItemTree';
@@ -82,6 +82,8 @@ export function ItemPicker({
   disabled,
   /** Narrow the list, e.g. to the things that can hold children. */
   filter,
+  onQueryChange,
+  emptyHint,
 }: {
   /** The currently chosen item, or null. The input mirrors it. */
   value: PickedItem | null;
@@ -92,6 +94,26 @@ export function ItemPicker({
   autoFocus?: boolean;
   disabled?: boolean;
   filter?: (item: PickedItem) => boolean;
+  /**
+   * The raw text, for a host that can do something with a name the catalog does
+   * not hold.
+   *
+   * The picker's own answer to "no match" is to say so and stop, which is right
+   * when the only valid outcome is an existing row — linking two items, choosing
+   * a parent. The wishlist is the case where it is not: *not in the catalog* is
+   * the normal state of a thing you want and have not bought, and the next step
+   * is to create it. Reporting the text lets that host offer the step without a
+   * second search box beside this one.
+   */
+  onQueryChange?: (query: string) => void;
+  /**
+   * What to show instead of "Nothing in the catalog matches that."
+   *
+   * The default is a dead end stated politely. A host with somewhere to go from
+   * there puts the way out here, so the message and the action are one thing
+   * rather than a sentence followed by an unexplained button.
+   */
+  emptyHint?: ReactNode;
 }) {
   const [names, setNames] = useState<PickedItem[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -117,6 +139,17 @@ export function ItemPicker({
   useEffect(() => {
     setQuery(value?.name ?? '');
   }, [value?.id, value?.name]);
+
+  // Reported from one place rather than from each of the four things that
+  // change the text — typing, choosing, clearing, and the effect above — so a
+  // host can never be told a stale query by a path somebody forgot to update.
+  // Through a ref because the callback is usually an inline lambda: in the
+  // dependency list it would be a new function every render and this would loop.
+  const notifyRef = useRef(onQueryChange);
+  notifyRef.current = onQueryChange;
+  useEffect(() => {
+    notifyRef.current?.(query);
+  }, [query]);
 
   // Clicking away is a dismissal, not a choice. Without this the list stays
   // open over whatever the user actually reached for.
@@ -219,7 +252,9 @@ export function ItemPicker({
           </button>
         </span>
       ) : query.trim() !== '' && names && suggestions.length === 0 ? (
-        <span className="picker__none">Nothing in the catalog matches that.</span>
+        <span className="picker__none">
+          {emptyHint ?? 'Nothing in the catalog matches that.'}
+        </span>
       ) : null}
 
       {open && suggestions.length > 0 && (

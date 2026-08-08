@@ -5,6 +5,7 @@ import { useAsync } from '../hooks';
 import { Link } from '../router';
 import { KIND_LABEL } from '../components/ItemTree';
 import { Badge, Cover, EmptyState, ErrorBox, ParentLabel, Spinner } from '../components/ui';
+import { WishlistAddForm } from '../components/WishlistAdd';
 
 /**
  * What we want but do not have, filed under the game it belongs to.
@@ -89,7 +90,8 @@ export function WishlistPage({ me }: { me: MeResponse }) {
   const [state, refresh] = useAsync(() => api.wishlist(), []);
   /** Copy ids currently being flipped, so a row can't be double-submitted. */
   const [busy, setBusy] = useState<number | null>(null);
-  const [bought, setBought] = useState<string | null>(null);
+  /** One line of "that worked", shared by buying a row and by adding one. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   /**
    * Only the sections somebody has actually opened or shut, by root id.
@@ -101,6 +103,8 @@ export function WishlistPage({ me }: { me: MeResponse }) {
    * appear later.
    */
   const [choice, setChoice] = useState<Record<number, boolean>>({});
+  /** The add form, which is shut until asked for — see `WishlistAdd`. */
+  const [adding, setAdding] = useState(false);
 
   const canEdit = me.capabilities.includes('editCatalog');
   const entries = state.state === 'ok' ? state.data.entries : [];
@@ -120,7 +124,7 @@ export function WishlistPage({ me }: { me: MeResponse }) {
       // makes. Nothing about buying a game is special enough to deserve its own
       // endpoint, and a second write path is a second one to keep correct.
       await api.updateCopy(entry.copyId, { status: 'owned' });
-      setBought(`“${entry.name}” is now marked as owned.`);
+      setNotice(`“${entry.name}” is now marked as owned.`);
       refresh();
     } catch (err) {
       setError(err);
@@ -144,6 +148,14 @@ export function WishlistPage({ me }: { me: MeResponse }) {
           </p>
         </div>
         <div className="head-actions">
+          {/* First in the row, and the only primary button on the screen. The
+              owner came here, could not find a way to add something, and had to
+              ask — so this is not a control to tuck away behind a menu. */}
+          {canEdit && !adding && (
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              + Add
+            </button>
+          )}
           {groups.length > 1 && (
             <button type="button" className="btn btn-quiet" onClick={() => setAll(anyShut)}>
               {anyShut ? 'Open all' : 'Close all'}
@@ -155,7 +167,17 @@ export function WishlistPage({ me }: { me: MeResponse }) {
         </div>
       </header>
 
-      {bought && <p className="lookup-filled">{bought}</p>}
+      {canEdit && adding && (
+        <WishlistAddForm
+          onAdded={(message) => {
+            setNotice(message);
+            refresh();
+          }}
+          onClose={() => setAdding(false)}
+        />
+      )}
+
+      {notice && <p className="lookup-filled">{notice}</p>}
       {error != null && <ErrorBox error={error} what="Could not mark that as bought" />}
 
       {state.state === 'loading' && <Spinner label="Loading the wishlist…" />}
@@ -170,9 +192,14 @@ export function WishlistPage({ me }: { me: MeResponse }) {
             <strong>wanted</strong> — set that when adding it, or change an existing
             copy&rsquo;s status on the game&rsquo;s page.
           </p>
-          {canEdit && (
+          {/* The page's own door, not a link to `/scan`. Sending somebody to
+              the scanner to record something they do not have yet was always
+              the wrong direction — that page is for boxes in your hand. */}
+          {canEdit && !adding && (
             <p className="muted">
-              <Link to="/scan">Add a game</Link>
+              <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+                + Add something
+              </button>
             </p>
           )}
         </EmptyState>
