@@ -208,6 +208,64 @@ textarea { resize: vertical; }
 .field-label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
 .field-hint { font-size: 0.78rem; color: var(--muted); }
 
+/* --- item picker (type-ahead over the whole catalog) --------------------- */
+/* `position: relative` on the wrapper and `absolute` on the list, so opening
+   the suggestions does not shove the rest of the form down the page. */
+.picker { position: relative; display: flex; flex-direction: column; gap: 0.25rem; }
+.picker__input { width: 100%; }
+.picker__list {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+  margin: 0.15rem 0 0; padding: 0.2rem; list-style: none;
+  max-height: 15rem; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+}
+.picker__opt {
+  display: flex; align-items: baseline; gap: 0.5rem; width: 100%;
+  padding: 0.4rem 0.5rem; border: 0; border-radius: 6px;
+  background: transparent; color: var(--text); font: inherit; font-size: 0.9rem;
+  text-align: left; cursor: pointer;
+}
+.picker__opt--active { background: var(--info-bg); color: var(--info); }
+.picker__opt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker__kind {
+  flex: none; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.02em;
+  color: var(--muted);
+}
+/* The chosen row, stated rather than implied — text in the box is only text
+   until it resolves to an id, and that difference decides what the button does. */
+.picker__chosen {
+  display: inline-flex; align-items: center; gap: 0.4rem; align-self: flex-start;
+  padding: 0.15rem 0.15rem 0.15rem 0.5rem; border-radius: 999px;
+  background: var(--good-bg); color: var(--good); font-size: 0.8rem;
+}
+.picker__chosen .picker__kind { color: inherit; opacity: 0.75; }
+.picker__clear {
+  width: 1.15rem; height: 1.15rem; padding: 0; border: 0; border-radius: 999px;
+  background: transparent; color: inherit; font-size: 0.95rem; line-height: 1;
+  cursor: pointer;
+}
+.picker__clear:hover { background: rgb(0 0 0 / 0.12); }
+.picker__none { font-size: 0.78rem; color: var(--warn); }
+
+/* --- linking / filing, on an item page ----------------------------------- */
+/* This form had no styles at all: it was an id box, a dropdown and two buttons
+   stacked full-width by the bare `input` rule above. */
+.relation-add { margin: 0.75rem 0; }
+.relation-add__row {
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem;
+}
+/* The picker takes the slack; the two dropdowns size to their content so the
+   sentence "Wingspan / Files under / as accessory" stays readable in one line. */
+.relation-add__row .picker { flex: 1 1 14rem; min-width: 0; }
+.relation-add__what { flex: 0 1 auto; width: auto; max-width: 100%; }
+.relation-add__kind { flex: 0 1 auto; width: auto; }
+.relation-add__note { margin: 0.5rem 0 0; }
+@media (max-width: 560px) {
+  .relation-add__row { flex-direction: column; align-items: stretch; }
+  .relation-add__what, .relation-add__kind { width: 100%; }
+}
+
 .row-2, .row-3, .row-4 { display: grid; gap: 0.75rem; }
 .row-2 { grid-template-columns: 1fr 1fr; }
 .row-3 { grid-template-columns: repeat(3, 1fr); }

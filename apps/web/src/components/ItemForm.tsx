@@ -10,6 +10,7 @@ import { api } from '../api';
 import { useAsync } from '../hooks';
 import { navigate } from '../router';
 import { CoverPicker } from './CoverPicker';
+import { ItemPicker, type PickedItem } from './ItemPicker';
 import { ErrorBox, Field, Spinner } from './ui';
 import { KIND_LABEL } from './ItemTree';
 
@@ -302,11 +303,31 @@ export function ItemForm({ existing, parentId, parentName, prefill, onSaved, onC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
+  /**
+   * Which game this is filed under — a real, editable field at last.
+   *
+   * It used to be derived and unreachable: `existing?.parentItemId ?? parentId`,
+   * with no control on the form. Changing an item's type from base to accessory
+   * therefore saved it with `parentItemId: null`, and since `updateItemSchema`
+   * is `itemFields.partial()` with nothing to say about the pair, the server
+   * took it. The row became a top-level accessory belonging to nothing — the
+   * exact state this screen was being opened to fix.
+   */
+  const [parent, setParent] = useState<PickedItem | null>(() => {
+    const id = existing?.parentItemId ?? parentId ?? null;
+    if (id == null) return null;
+    // `parentName` is what the caller knows; the picker replaces it with the
+    // catalog's own row as soon as the list loads or the user retypes.
+    return { id, name: parentName ?? `Item ${id}`, kind: 'base' as ItemKind };
+  });
+
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  // A child item's kind can't be "base", and a base game has no parent.
-  const effectiveParent = form.kind === 'base' ? null : (existing?.parentItemId ?? parentId ?? null);
+  // A base game is the top of its own tree, so it has no parent whatever the
+  // picker last held. Everything else takes what the picker says — including
+  // nothing, which is a standalone accessory and a legitimate record.
+  const effectiveParent = form.kind === 'base' ? null : (parent?.id ?? null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -354,9 +375,7 @@ export function ItemForm({ existing, parentId, parentName, prefill, onSaved, onC
           hint={
             form.kind === 'base'
               ? 'A base game sits at the top of its own tree.'
-              : parentName
-                ? `Will be filed under ${parentName}.`
-                : 'Needs a parent game — open a game and use "Add to this game".'
+              : 'Filed under the game named below.'
           }
         >
           <select
@@ -380,6 +399,30 @@ export function ItemForm({ existing, parentId, parentName, prefill, onSaved, onC
           />
         </Field>
       </div>
+
+      {/* Only for the types that can have one. Rendering it for a base game and
+          disabling it would suggest the value is being kept somewhere, and it is
+          not — `effectiveParent` is null the moment the type says base. */}
+      {form.kind !== 'base' && (
+        /* A div, not `Field`. `Field` is a <label>, and a label wrapping the
+           picker forwards every click on a suggestion straight back to the text
+           input — which reopens the list you just chose from. Same classes, so
+           it looks identical. */
+        <div className="field">
+          <span className="field-label">Part of</span>
+          <ItemPicker
+            value={parent}
+            onPick={setParent}
+            excludeId={existing?.id}
+            placeholder="Start typing a game's name…"
+          />
+          <span className="field-hint">
+            {existing && existing.parentItemId != null && parent == null
+              ? '⚠️ Clearing this leaves it filed under nothing, at the top of the collection.'
+              : 'The game this belongs to. Leave empty only for something that genuinely belongs to no game.'}
+          </span>
+        </div>
+      )}
 
       <ItemDetailFields
         value={form}

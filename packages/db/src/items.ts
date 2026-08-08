@@ -993,6 +993,90 @@ const UPDATABLE: Record<keyof UpdateItemInput, string> = {
   description: 'description',
 };
 
+/**
+ * How far the loop and subtree walks are allowed to run.
+ *
+ * Deliberately far larger than `MAX_ANCESTOR_DEPTH`, which bounds the *read*
+ * paths at 8. A guard that stopped where the readers stop could wave through a
+ * loop nine levels up and leave the readers to meet it, which is the one
+ * outcome this is here to prevent. 64 is free — it is 64 index lookups on a
+ * catalog whose deepest tree is three.
+ */
+const MAX_TREE_WALK = 64;
+
+/**
+ * Would making `candidateParentId` the parent of `id` close a loop?
+ *
+ * Walks the candidate's own ancestors and looks for `id` among them. That is
+ * the question, and the old test could not ask it: it compared
+ * `parent.rootGameId === id`, which only detects a loop when `id` is itself the
+ * root of its tree. Filing an *expansion* under one of its own accessories
+ * passed cleanly and produced a real cycle — measured, before this existed, on
+ * a three-item test tree.
+ *
+ * The damage is quiet rather than loud, which is why it survived. Every read
+ * path caps its recursion, so nothing hangs; instead the looped rows stop being
+ * reachable from their root and simply vanish out of the collection page while
+ * still sitting in the table.
+ *
+ * `UNION` rather than `UNION ALL` so that a tree which is *already* cyclic —
+ * one made before this guard existed — is answered rather than walked for ever.
+ */
+async function wouldLoop(
+  db: D1Database,
+  id: number,
+  candidateParentId: number,
+): Promise<boolean> {
+  const hit = await db
+    .prepare(
+      `WITH RECURSIVE chain(id, parent_item_id, depth) AS (
+         SELECT id, parent_item_id, 0 FROM item WHERE id = ?1
+         UNION
+         SELECT p.id, p.parent_item_id, c.depth + 1
+           FROM item p JOIN chain c ON p.id = c.parent_item_id
+          WHERE c.depth < ?3
+       )
+       SELECT 1 AS hit FROM chain WHERE id = ?2 LIMIT 1`,
+    )
+    .bind(candidateParentId, id, MAX_TREE_WALK)
+    .first<{ hit: number }>();
+  return hit != null;
+}
+
+/**
+ * Move a whole subtree onto a new root.
+ *
+ * `root_game_id` is not decoration: every listing, grouping, filter and count
+ * in this file selects on it, so a row whose root is stale is a row in the
+ * wrong tree. Re-parenting used to set it on the moved item alone and leave its
+ * children pointing at wherever they used to live — invisible until a game with
+ * expansions under it was filed somewhere else and the expansions stayed
+ * behind.
+ *
+ * `adoptOrphans` gets away with `WHERE root_game_id = <orphan>` because an
+ * orphan is always a root and so owns its whole subtree's root value. That is
+ * not true here — the item being moved may be halfway down a tree it shares
+ * with unrelated branches — so the descendants are walked by parent link
+ * instead. `UNION` terminates on a pre-existing cycle.
+ */
+async function retargetSubtreeRoot(
+  db: D1Database,
+  id: number,
+  newRoot: number,
+): Promise<void> {
+  await db
+    .prepare(
+      `WITH RECURSIVE sub(id) AS (
+         SELECT ?1
+         UNION
+         SELECT i.id FROM item i JOIN sub s ON i.parent_item_id = s.id
+       )
+       UPDATE item SET root_game_id = ?2 WHERE id IN (SELECT id FROM sub)`,
+    )
+    .bind(id, newRoot)
+    .run();
+}
+
 export async function updateItem(
   db: D1Database,
   id: number,
@@ -1015,18 +1099,43 @@ export async function updateItem(
     }
   }
 
+  /*
+    The root the moved subtree lands on. Held until after the row is written,
+    because it applies to the item's descendants too and so cannot be expressed
+    as one more `SET` on this statement. Null means "the parent is not changing".
+  */
+  let newRoot: number | null = null;
+
   if (input.parentItemId !== undefined) {
+    // The kind and the place in the tree have to be decided together. A base
+    // game is the top of its own tree by definition, so one with a parent is a
+    // contradiction the reader has no way to render — and `createItem` has
+    // always refused it. `RetagPage` and the related-games section both send
+    // the two fields in one patch, which is the shape this asks for.
+    const kind = 'kind' in input ? input.kind : existing.kind;
+    if (kind === 'base' && input.parentItemId != null) {
+      throw new ItemError(
+        'a base game sits at the top of its own tree — say what it becomes (expansion, accessory, promo or upgrade) in the same change',
+        400,
+      );
+    }
+
     if (input.parentItemId === id) throw new ItemError('an item cannot be its own parent', 400);
     if (input.parentItemId == null) {
-      sets.push('root_game_id = id');
+      // Detached: it roots itself, exactly as a base game or a fresh orphan
+      // does. Every listing query selects by root, so a null root would make it
+      // invisible rather than merely unattached.
+      newRoot = id;
     } else {
       const parent = await getItem(db, input.parentItemId);
       if (!parent) throw new ItemError('parent item does not exist', 400);
-      if (parent.rootGameId === id) {
-        throw new ItemError('that would make the tree a loop', 400);
+      if (await wouldLoop(db, id, input.parentItemId)) {
+        throw new ItemError(
+          `"${parent.name}" is already filed under "${existing.name}" — that would make the tree a loop`,
+          400,
+        );
       }
-      sets.push('root_game_id = ?');
-      params.push(parent.rootGameId ?? parent.id);
+      newRoot = parent.rootGameId ?? parent.id;
       // Attaching a parent by hand answers the question the pending name was
       // holding open, so it stops being true. Leaving it would keep the item
       // eligible for adoption by a second game with the same name.
@@ -1058,6 +1167,13 @@ export async function updateItem(
   params.push(id);
 
   await db.prepare(`UPDATE item SET ${sets.join(', ')} WHERE id = ?`).bind(...params).run();
+
+  // After the move, not with it: the new root belongs to everything under this
+  // item as well, and a subtree cannot be updated by the statement that changes
+  // one row. Safe to walk now — the loop guard above has already refused any
+  // parent that would make this walk unbounded.
+  if (newRoot !== null) await retargetSubtreeRoot(db, id, newRoot);
+
   return getItem(db, id);
 }
 
