@@ -20,14 +20,6 @@ interface Props {
   /** Pre-selected parent when adding into a known game. */
   parentId?: number | null;
   parentName?: string | null;
-  /** Pre-filled data from the expansion picker. */
-  prefill?: Partial<{
-    name: string;
-    yearPublished: string;
-    publisher: string;
-    thumbnailUrl: string;
-    description: string;
-  }> | null;
   onSaved: (item: Item) => void;
   onCancel: () => void;
 }
@@ -285,21 +277,8 @@ export function ItemDetailFields({
   );
 }
 
-export function ItemForm({ existing, parentId, parentName, prefill, onSaved, onCancel }: Props) {
-  const [form, setForm] = useState<FormState>(() => {
-    const base = toForm(existing, parentId);
-    if (prefill) {
-      return {
-        ...base,
-        name: prefill.name ?? base.name,
-        yearPublished: prefill.yearPublished ?? base.yearPublished,
-        publisher: prefill.publisher ?? base.publisher,
-        thumbnailUrl: prefill.thumbnailUrl ?? base.thumbnailUrl,
-        description: prefill.description ?? base.description,
-      };
-    }
-    return base;
-  });
+export function ItemForm({ existing, parentId, parentName, onSaved, onCancel }: Props) {
+  const [form, setForm] = useState<FormState>(() => toForm(existing, parentId));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -462,90 +441,26 @@ export function NewItemPage({ parentId }: { parentId: number | null }) {
 
   const parentItem = parent.state === 'ok' ? parent.data : null;
 
+  /*
+    Deliberately just the form now.
+
+    It used to be preceded by an `ExpansionPicker` — a list of titles from the
+    free name lookup, shown under "Known in this series". Clicking one did not
+    add anything: it re-navigated to this same URL with the choice packed into a
+    `?prefill=` query string, so the only visible effect was that the form you
+    were already looking at filled itself in. *"The add expansion suggests
+    expansions but you can't click them to add"* is that, exactly.
+
+    Those suggestions now live in `AddRelatedPanel`, on the game's own page,
+    where clicking one resolves it against the catalog and then writes. This
+    screen is what remains: the long form, for typing in something by hand.
+  */
   return (
-    <>
-      {parentItem && (
-        <ExpansionPicker
-          parentName={parentItem.name}
-          onPick={(c) => navigate(`/items/new?parent=${parentId}&prefill=${encodeURIComponent(JSON.stringify(c))}`)}
-        />
-      )}
-      <ItemForm
-        parentId={parentId}
-        parentName={parentItem?.name ?? null}
-        prefill={parsePrefill()}
-        onSaved={(item) => navigate(`/items/${item.id}`)}
-        onCancel={() => navigate(parentId ? `/items/${parentId}` : '/')}
-      />
-    </>
-  );
-}
-
-/** Parse prefill data from the URL if present. */
-function parsePrefill(): Partial<{
-  name: string;
-  yearPublished: string;
-  publisher: string;
-  thumbnailUrl: string;
-  description: string;
-}> | null {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get('prefill');
-    if (!raw) return null;
-    return JSON.parse(decodeURIComponent(raw));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * A picker showing known expansions for this parent game.
- *
- * Searches by the parent's name to find related titles from the free lookup
- * services. When BGG token arrives, this will use the BGG expansion links
- * for definitive results.
- */
-function ExpansionPicker({
-  parentName,
-  onPick,
-}: {
-  parentName: string;
-  onPick: (data: { name: string; yearPublished?: number; publisher?: string; thumbnailUrl?: string }) => void;
-}) {
-  const [results] = useAsync(
-    () => api.lookup(parentName).then((r) => r.candidates).catch(() => []),
-    [parentName],
-  );
-
-  // Don't show if no results or still loading.
-  if (results.state !== 'ok' || results.data.length === 0) return null;
-
-  return (
-    <div className="card expansion-picker">
-      <h3>Known in this series</h3>
-      <p className="muted small">Pick one to pre-fill the form, or type your own below.</p>
-      <div className="expansion-picker__list">
-        {results.data.map((c, i) => (
-          <button
-            key={i}
-            type="button"
-            className="expansion-picker__item"
-            onClick={() => onPick({
-              name: c.name,
-              yearPublished: c.yearPublished ?? undefined,
-              publisher: c.publisher ?? undefined,
-              thumbnailUrl: c.thumbnailUrl ?? undefined,
-            })}
-          >
-            {c.thumbnailUrl && (
-              <img src={c.thumbnailUrl} alt="" className="thumb thumb-sm" loading="lazy" />
-            )}
-            <span>{c.name}</span>
-            {c.yearPublished && <span className="muted">({c.yearPublished})</span>}
-          </button>
-        ))}
-      </div>
-    </div>
+    <ItemForm
+      parentId={parentId}
+      parentName={parentItem?.name ?? null}
+      onSaved={(item) => navigate(`/items/${item.id}`)}
+      onCancel={() => navigate(parentId ? `/items/${parentId}` : '/')}
+    />
   );
 }

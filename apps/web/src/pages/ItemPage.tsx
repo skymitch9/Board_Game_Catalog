@@ -1,27 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   DETAIL_FIELD_LABEL,
-  ITEM_KINDS,
-  RELATION_TYPES,
   detailGaps,
   fillableFieldsFor,
   isTrustedMatch,
   type DetailsRun,
   type InheritedDetail,
   type ItemDetail,
-  type ItemKind,
   type MeResponse,
   type RelatedItemRef,
-  type RelationType,
   type UpdateItemInput,
 } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Link, navigate } from '../router';
+import { AddRelatedPanel, RELATION_LABEL } from '../components/AddRelated';
 import { Completeness } from '../components/Completeness';
 import { CopyForm, CopyRow } from '../components/CopyEditor';
 import { ItemForm } from '../components/ItemForm';
-import { ItemPicker, type PickedItem } from '../components/ItemPicker';
 import { KIND_LABEL, STATUS_TONE } from '../components/ItemTree';
 import { Ratings } from '../components/Ratings';
 import {
@@ -46,11 +42,19 @@ export function ItemPage({
   const [detail, refresh] = useAsync(() => api.item(id), [id]);
   const [addingCopy, setAddingCopy] = useState(false);
   /**
-   * Held here rather than inside the lookup panel: refreshing puts the page
-   * back through its loading state, which unmounts everything below it. The
-   * report of what changed has to outlive the reload that proves it.
+   * Held here rather than inside the panel that did the work: refreshing puts
+   * the page back through its loading state, which unmounts everything below
+   * it. The report of what changed has to outlive the reload that proves it.
    */
-  const [filledNote, setFilledNote] = useState<string | null>(null);
+  const [changeNote, setChangeNote] = useState<string | null>(null);
+  /**
+   * Which half of the add panel is open, and where it is rendered.
+   *
+   * One piece of state for two buttons in two sections, so opening one closes
+   * the other. They open the *same* component — see `AddRelatedPanel` — and
+   * differ only in which row of its dropdown starts selected.
+   */
+  const [adding, setAdding] = useState<'nest' | 'link' | null>(null);
 
   const canEdit = me.capabilities.includes('editCatalog');
   const canRate = me.capabilities.includes('rate');
@@ -152,13 +156,13 @@ export function ItemPage({
         )}
       </header>
 
-      {filledNote && <p className="lookup-filled">{filledNote}</p>}
+      {changeNote && <p className="lookup-filled">{changeNote}</p>}
 
       {canEdit && (
         <LookupDetails
           item={item}
           onFilled={(summary) => {
-            setFilledNote(summary);
+            setChangeNote(summary);
             reload();
           }}
           canResearch={me.capabilities.includes('runResearch')}
@@ -210,12 +214,28 @@ export function ItemPage({
             Expansions &amp; accessories
             {item.children.length > 0 && <span className="count"> {item.children.length}</span>}
           </h2>
-          {canEdit && (
-            <Link to={`/items/new?parent=${item.id}`} className="btn btn-quiet">
+          {/* A button, not a link out to a blank form. Adding an expansion used
+              to mean leaving the page for `/items/new`, which is where the
+              suggestion list that could not be acted on lived. */}
+          {canEdit && adding !== 'nest' && (
+            <button type="button" className="btn btn-quiet" onClick={() => setAdding('nest')}>
               + Add
-            </Link>
+            </button>
           )}
         </div>
+
+        {adding === 'nest' && (
+          <AddRelatedPanel
+            item={item}
+            mode="nest"
+            onSaved={(note) => {
+              setChangeNote(note);
+              setAdding(null);
+              reload();
+            }}
+            onCancel={() => setAdding(null)}
+          />
+        )}
 
         {item.children.length === 0 ? (
           <p className="muted">
@@ -269,12 +289,16 @@ export function ItemPage({
       />
 
       <RelatedGames
-        itemId={item.id}
-        itemKind={item.kind}
-        itemName={item.name}
-        relatedItems={item.relatedItems}
+        item={item}
         canEdit={canEdit}
-        onChanged={reload}
+        adding={adding === 'link'}
+        onAdd={() => setAdding('link')}
+        onCancel={() => setAdding(null)}
+        onSaved={(note) => {
+          setChangeNote(note);
+          setAdding(null);
+          reload();
+        }}
       />
     </>
   );
@@ -692,14 +716,6 @@ function LinkEditor({
   );
 }
 
-export const RELATION_LABEL: Record<RelationType, string> = {
-  same_family: 'Same family',
-  works_with: 'Works with',
-  reimplements: 'Reimplements',
-  integrates_with: 'Integrates with',
-  requires: 'Requires',
-};
-
 /**
  * The label as read from *this* item's end.
  *
@@ -713,117 +729,38 @@ function relationLabel(rel: RelatedItemRef): string {
 }
 
 /**
- * The two things this form can do, and they are not the same kind of thing.
- *
- * A relation is a *sideways* link between two games that each keep their own
- * top-level entry — it writes a row in `item_relation` and changes nobody's
- * place in the tree. Containment is the opposite: it writes `parent_item_id`
- * and physically moves a row, and no relation row is created at all.
- *
- * They share one form because they answer the same question — "what is this
- * thing's connection to that thing?" — and until now the second answer had no
- * way in. A `base` item that turned out to be an accessory for another game
- * could not be re-filed from anywhere in the UI.
- */
-type LinkAction = RelationType | 'file_under' | 'contains';
-
-const isContainment = (a: LinkAction): a is 'file_under' | 'contains' =>
-  a === 'file_under' || a === 'contains';
-
-/** Anything with a parent is by definition not a base game. */
-const CHILD_KINDS = ITEM_KINDS.filter((k) => k !== 'base');
-
-/**
  * Standalone games that belong together — Dice Throne characters, Unmatched
  * fighters, standalone expansions that combine with a family. Each keeps its own
  * top-level entry in the collection; the link shows the connection without
  * nesting.
  *
- * **And the one place a thing can be nested after the fact.** Kickstarter
- * delivers under a different name than the campaign used, a shelf photo reads a
- * spine as a game, and the catalog ends up with an accessory pack sitting at the
- * top level as a base game. Filing it under its real parent is the fix, and the
- * only screen that ever knows about both items at once is this one.
+ * The form that used to live here has moved into `AddRelatedPanel`, which the
+ * expansions section opens too. It kept its own copy of the "link or nest"
+ * dropdown and its own picker, and the owner's complaint was exactly that: two
+ * menus asking one question in two vocabularies, neither of which could act on
+ * the suggestions the other one showed. What is left here is the list.
  */
 function RelatedGames({
-  itemId,
-  itemKind,
-  itemName,
-  relatedItems,
+  item,
   canEdit,
-  onChanged,
+  adding,
+  onAdd,
+  onCancel,
+  onSaved,
 }: {
-  itemId: number;
-  itemKind: ItemKind;
-  itemName: string;
-  relatedItems: RelatedItemRef[];
+  item: ItemDetail;
   canEdit: boolean;
-  onChanged: () => void;
+  /** Owned by the page, so opening this closes the expansions panel. */
+  adding: boolean;
+  onAdd: () => void;
+  onCancel: () => void;
+  onSaved: (note: string) => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [target, setTarget] = useState<PickedItem | null>(null);
-  const [action, setAction] = useState<LinkAction>('works_with');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  // Which row is about to gain a parent, and so which row's type is in
-  // question. "Files under" moves this item; "Contains" moves the picked one.
-  const moving =
-    action === 'file_under'
-      ? { id: itemId, name: itemName, kind: itemKind }
-      : target
-        ? { id: target.id, name: target.name, kind: target.kind }
-        : null;
-
-  // A base game cannot keep that type once it has a parent — the server refuses
-  // the pair — so it is offered a real one rather than being silently rewritten.
-  // Anything already filed keeps what it is unless the user says otherwise.
-  const [kind, setKind] = useState<ItemKind>('accessory');
-  const suggestedKind: ItemKind = moving && moving.kind !== 'base' ? moving.kind : 'accessory';
-  useEffect(() => {
-    setKind(suggestedKind);
-  }, [suggestedKind, action]);
-
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!target || target.id === itemId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (action === 'file_under') {
-        // Note what this does *not* do: no `item_relation` row. Containment is
-        // the tree, and writing a sideways link beside it would have the item
-        // listed as a relative of the game it is now part of.
-        await api.updateItem(itemId, { kind, parentItemId: target.id });
-      } else if (action === 'contains') {
-        await api.updateItem(target.id, { kind, parentItemId: itemId });
-      } else {
-        await api.addRelation(itemId, { toItemId: target.id, relation: action });
-      }
-      setTarget(null);
-      setAdding(false);
-      onChanged();
-    } catch (err) {
-      setError(err);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRemove(relationId: number) {
-    try {
-      await api.removeRelation(relationId);
-      onChanged();
-    } catch (err) {
-      setError(err);
-    }
-  }
-
   // `requires` is not shown here: it is a hard dependency, not a family
   // resemblance, and it already reads as a sentence at the top of the page.
   // Listing it in both places would say the same thing twice and, worse, would
   // say it without its direction.
-  const linked = relatedItems.filter((r) => r.relation !== 'requires');
+  const linked = item.relatedItems.filter((r) => r.relation !== 'requires');
 
   // Don't show the section if there are no relations and the user can't edit.
   if (linked.length === 0 && !canEdit) return null;
@@ -836,88 +773,14 @@ function RelatedGames({
           {linked.length > 0 && <span className="count"> {linked.length}</span>}
         </h2>
         {canEdit && !adding && (
-          <button type="button" className="btn btn-quiet" onClick={() => setAdding(true)}>
+          <button type="button" className="btn btn-quiet" onClick={onAdd}>
             + Link
           </button>
         )}
       </div>
 
-      {error != null && <ErrorBox error={error} what="Could not update relation" />}
-
       {adding && (
-        <form className="relation-add" onSubmit={handleAdd}>
-          <div className="relation-add__row">
-            <ItemPicker
-              value={target}
-              onPick={setTarget}
-              excludeId={itemId}
-              placeholder="Which game? Start typing…"
-              autoFocus
-            />
-            <select
-              className="relation-add__what"
-              value={action}
-              onChange={(e) => setAction(e.target.value as LinkAction)}
-            >
-              {/* Grouped because the two halves do genuinely different things,
-                  and a flat list of seven options would hide that a couple of
-                  them move a row out of the collection's top level. */}
-              <optgroup label="Link — both stay separate games">
-                {RELATION_TYPES.map((r) => (
-                  <option key={r} value={r}>{RELATION_LABEL[r]}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Nest — one becomes part of the other">
-                <option value="file_under">Files under — this goes inside it</option>
-                <option value="contains">Contains — it goes inside this</option>
-              </optgroup>
-            </select>
-
-            {isContainment(action) && (
-              <select
-                className="relation-add__kind"
-                value={kind}
-                onChange={(e) => setKind(e.target.value as ItemKind)}
-                aria-label="What it becomes"
-              >
-                {CHILD_KINDS.map((k) => (
-                  <option key={k} value={k}>as {KIND_LABEL[k].toLowerCase()}</option>
-                ))}
-              </select>
-            )}
-
-            <button type="submit" className="btn btn-primary" disabled={busy || !target}>
-              {busy ? 'Saving…' : isContainment(action) ? 'File' : 'Link'}
-            </button>
-            <button type="button" className="btn btn-quiet" onClick={() => setAdding(false)}>
-              Cancel
-            </button>
-          </div>
-
-          {/* Says what is about to happen in words, naming both rows. A link and
-              a move look identical on this form until it is submitted, and only
-              one of them takes a game off the collection's top level. */}
-          <p className="muted small relation-add__note">
-            {action === 'file_under' ? (
-              <>
-                <strong>{itemName}</strong> stops being a top-level entry and becomes{' '}
-                {KIND_LABEL[kind].toLowerCase() === 'accessory' ? 'an' : 'a'}{' '}
-                {KIND_LABEL[kind].toLowerCase()} of{' '}
-                <strong>{target?.name ?? 'the game you pick'}</strong>.
-              </>
-            ) : action === 'contains' ? (
-              <>
-                <strong>{target?.name ?? 'The game you pick'}</strong> stops being a top-level
-                entry and moves inside <strong>{itemName}</strong>.
-              </>
-            ) : (
-              <>
-                Both stay top-level entries in the collection. The link shows on both pages and
-                nothing moves in the tree.
-              </>
-            )}
-          </p>
-        </form>
+        <AddRelatedPanel item={item} mode="link" onSaved={onSaved} onCancel={onCancel} />
       )}
 
       {linked.length === 0 && !adding ? (

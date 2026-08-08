@@ -11,6 +11,66 @@ export interface PickedItem {
 }
 
 /**
+ * Where a suggestion came from, and how much it is worth.
+ *
+ * Three sources of wildly different trustworthiness end up in one list, and
+ * they must not look identical on screen. This is the same instinct the item
+ * page already has when it prints "publisher, from Dice Throne Vanguard"
+ * rather than showing a borrowed fact as a native one.
+ *
+ * - `catalog` — a row we hold. Certain: it has an id.
+ * - `component` — BoardGameGeek's own list of what exists for this game.
+ *   Trustworthy, and the only source that knows about a thing nobody has
+ *   catalogued yet.
+ * - `lookup` — the free title search. **Confidently wrong on a single shared
+ *   word**; the handoff records an ISBN coming back as *Labyrinth*. Shown, but
+ *   never shown as a fact.
+ */
+export type SuggestionSource = 'catalog' | 'component' | 'lookup';
+
+/** How each source is named beside its suggestions. */
+const SOURCE_LABEL: Record<SuggestionSource, string> = {
+  catalog: 'in the catalog',
+  component: 'BoardGameGeek',
+  lookup: 'guess',
+};
+
+/** Certain, then trustworthy, then guessed — used only to break a tie. */
+const SOURCE_ORDER: Record<SuggestionSource, number> = {
+  catalog: 0,
+  component: 1,
+  lookup: 2,
+};
+
+/**
+ * A suggestion the host supplies, from somewhere other than the catalog.
+ *
+ * It carries no id, because the thing it names may not exist here yet — that is
+ * the whole reason for offering it. Everything past `name` rides along so a
+ * host that goes on to create the row does not have to look the same facts up
+ * a second time.
+ */
+export interface OfferedItem {
+  /** Unique within one call's `offered` list, and the React key. */
+  key: string;
+  name: string;
+  /** For the label only. What a nested row *becomes* is the host's decision. */
+  kind: ItemKind;
+  source: Exclude<SuggestionSource, 'catalog'>;
+  bggId?: number | null;
+  yearPublished?: number | null;
+  publisher?: string | null;
+  thumbnailUrl?: string | null;
+  /**
+   * The catalog row this suggestion is already known to be, when the source
+   * worked it out. `completeness` matches components by BoardGameGeek id, which
+   * is a stronger answer than any name comparison, so it is passed on rather
+   * than thrown away and rediscovered.
+   */
+  matchedItemId?: number | null;
+}
+
+/**
  * Every item's id, name and kind — fetched once per page load, not per picker.
  *
  * `/api/item-names` is ~41 KB for 640 rows, which is cheap once and silly three
@@ -37,10 +97,48 @@ function loadNames(): Promise<PickedItem[]> {
   return namesPromise;
 }
 
+/**
+ * Throw the cached list away, because something was just added to the catalog.
+ *
+ * The comment above says a stale list can only omit a game added *in another
+ * tab*, and that reloading fixes it. That stopped being the whole truth when
+ * adding became something a picker's own host does: create an expansion from
+ * `AddRelatedPanel`, reopen it, and the row you just made was missing from its
+ * own suggestions — while the resolve step, which asks the server, knew about
+ * it perfectly well. The two disagreeing is worse than either being wrong.
+ *
+ * Only the promise is cleared. A picker that is already mounted keeps what it
+ * has; the next one to mount refetches, and the panel unmounts on save.
+ */
+export function forgetItemNames(): void {
+  namesPromise = null;
+}
+
 /** How many suggestions to show. Enough to choose from, short enough to scan. */
 const MAX_SUGGESTIONS = 8;
 
+/**
+ * How many host suggestions to show before anything is typed.
+ *
+ * Larger than `MAX_SUGGESTIONS` because this list is the answer to a question
+ * nobody typed — *what exists for this game* — and cutting BoardGameGeek's
+ * thirteen expansions down to eight would hide five of them behind a search
+ * term the owner would have to guess. The list scrolls, so length is cheap.
+ */
+const MAX_OFFERED = 20;
+
 const normalise = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** One line in the list, whichever of the three sources produced it. */
+interface Row {
+  key: string;
+  name: string;
+  kind: ItemKind;
+  source: SuggestionSource;
+  /** Set for a catalog row, and null for everything else. */
+  item: PickedItem | null;
+  offered: OfferedItem | null;
+}
 
 /**
  * Rank one candidate against the typed terms.
@@ -84,6 +182,9 @@ export function ItemPicker({
   filter,
   onQueryChange,
   emptyHint,
+  offered,
+  onPickOffered,
+  offerWhenEmpty = false,
 }: {
   /** The currently chosen item, or null. The input mirrors it. */
   value: PickedItem | null;
@@ -114,6 +215,28 @@ export function ItemPicker({
    * rather than a sentence followed by an unexplained button.
    */
   emptyHint?: ReactNode;
+  /**
+   * Suggestions from outside the catalog, ranked and labelled alongside it.
+   *
+   * One field rather than a second list beside this one, because the question
+   * — *which thing?* — is the same whether the answer is already on the shelf
+   * or has never been recorded, and two boxes asking it would put the burden of
+   * knowing which one to use on the person typing.
+   */
+  offered?: OfferedItem[];
+  /**
+   * Null clears, exactly as `onPick` does. Typing over a chosen suggestion has
+   * to unmake it, or the host acts on a name that is no longer on screen.
+   */
+  onPickOffered?: (offered: OfferedItem | null) => void;
+  /**
+   * Show `offered` on focus, before a single character is typed.
+   *
+   * Only ever the host's suggestions — 806 catalog rows are a database, not a
+   * list. This is what turns "here are the expansions that exist" from a
+   * paragraph into something you can click.
+   */
+  offerWhenEmpty?: boolean;
 }) {
   const [names, setNames] = useState<PickedItem[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -134,9 +257,21 @@ export function ItemPicker({
     };
   }, []);
 
+  /**
+   * True while the box shows a suggestion that has no catalog row behind it.
+   *
+   * `value` being null normally means "nothing is chosen", and the effect below
+   * blanks the box on it. A suggestion from BoardGameGeek or the title lookup
+   * is *also* a null `value` — there is no id to hold — so without this flag,
+   * clicking one straight after a catalog pick would empty the box the instant
+   * it was filled.
+   */
+  const offeredRef = useRef(false);
+
   // A pick made elsewhere — the form being reset, or a parent arriving with the
   // item being edited — has to show up in the box.
   useEffect(() => {
+    if (value == null && offeredRef.current) return;
     setQuery(value?.name ?? '');
   }, [value?.id, value?.name]);
 
@@ -162,33 +297,84 @@ export function ItemPicker({
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo((): Row[] => {
     if (!names) return [];
-    const terms = normalise(query).split(' ').filter(Boolean);
-    if (terms.length === 0) return [];
-    return names
-      .filter((i) => i.id !== excludeId && (!filter || filter(i)))
-      .map((item) => ({ item, score: rank(item.name, terms) }))
-      .filter((r): r is { item: PickedItem; score: number } => r.score !== null)
-      .sort((a, b) => a.score - b.score || a.item.name.localeCompare(b.item.name))
-      .slice(0, MAX_SUGGESTIONS)
-      .map((r) => r.item);
-  }, [names, query, excludeId, filter]);
 
-  function choose(item: PickedItem) {
-    setQuery(item.name);
+    const catalogRows: Row[] = names
+      .filter((i) => i.id !== excludeId && (!filter || filter(i)))
+      .map((item) => ({
+        key: `catalog:${item.id}`,
+        name: item.name,
+        kind: item.kind,
+        source: 'catalog' as const,
+        item,
+        offered: null,
+      }));
+
+    // A suggestion whose name is already a catalog row is that row, and showing
+    // both would offer the same thing twice with two different levels of
+    // certainty beside it. The catalog wins: it is the one with an id.
+    const known = new Set(catalogRows.map((r) => normalise(r.name)));
+    const offeredRows: Row[] = (offered ?? [])
+      .filter((o) => !known.has(normalise(o.name)))
+      .map((o) => ({
+        key: o.key,
+        name: o.name,
+        kind: o.kind,
+        source: o.source,
+        item: null,
+        offered: o,
+      }));
+
+    const terms = normalise(query).split(' ').filter(Boolean);
+    if (terms.length === 0) {
+      return offerWhenEmpty ? offeredRows.slice(0, MAX_OFFERED) : [];
+    }
+
+    return [...catalogRows, ...offeredRows]
+      .map((row) => ({ row, score: rank(row.name, terms) }))
+      .filter((r): r is { row: Row; score: number } => r.score !== null)
+      // Source breaks a tie and nothing more. A guess that matches what was
+      // typed better than a catalog row still comes first — the label is what
+      // says how much it is worth, not the position.
+      .sort(
+        (a, b) =>
+          a.score - b.score ||
+          SOURCE_ORDER[a.row.source] - SOURCE_ORDER[b.row.source] ||
+          a.row.name.localeCompare(b.row.name),
+      )
+      .slice(0, MAX_SUGGESTIONS)
+      .map((r) => r.row);
+  }, [names, query, excludeId, filter, offered, offerWhenEmpty]);
+
+  function choose(row: Row) {
+    setQuery(row.name);
     setOpen(false);
     setActive(0);
-    onPick(item);
+    // Both callbacks fire on every choice, and **the clear always goes first**.
+    // A host that reduces the two into one piece of state would otherwise have
+    // the trailing null wipe the choice that had just been made — an id from
+    // one click and a name from the next is the bug this ordering prevents.
+    if (row.item) {
+      offeredRef.current = false;
+      onPickOffered?.(null);
+      onPick(row.item);
+    } else if (row.offered) {
+      offeredRef.current = true;
+      onPick(null);
+      onPickOffered?.(row.offered);
+    }
   }
 
   function onType(next: string) {
     setQuery(next);
     setOpen(true);
     setActive(0);
+    offeredRef.current = false;
     // Editing the text unmakes the choice. Leaving the old id attached to a
     // name that no longer matches it is how a picker links the wrong game.
     if (value) onPick(null);
+    onPickOffered?.(null);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -244,7 +430,9 @@ export function ItemPicker({
             className="picker__clear"
             onClick={() => {
               setQuery('');
+              offeredRef.current = false;
               onPick(null);
+              onPickOffered?.(null);
             }}
             aria-label="Clear"
           >
@@ -259,8 +447,8 @@ export function ItemPicker({
 
       {open && suggestions.length > 0 && (
         <ul className="picker__list" id={listId} role="listbox">
-          {suggestions.map((item, i) => (
-            <li key={item.id}>
+          {suggestions.map((row, i) => (
+            <li key={row.key}>
               <button
                 type="button"
                 role="option"
@@ -270,12 +458,19 @@ export function ItemPicker({
                 // the list before the click landed.
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  choose(item);
+                  choose(row);
                 }}
                 onMouseEnter={() => setActive(i)}
               >
-                <span className="picker__opt-name">{item.name}</span>
-                <span className="picker__kind">{KIND_LABEL[item.kind]}</span>
+                <span className="picker__opt-name">{row.name}</span>
+                <span className="picker__kind">{KIND_LABEL[row.kind]}</span>
+                {/* Every row says where it came from, including the certain
+                    ones. Labelling only the doubtful sources would leave an
+                    unlabelled row meaning "trustworthy" by omission, which is
+                    exactly the reading a wrong guess would benefit from. */}
+                <span className={`picker__src picker__src--${row.source}`}>
+                  {SOURCE_LABEL[row.source]}
+                </span>
               </button>
             </li>
           ))}

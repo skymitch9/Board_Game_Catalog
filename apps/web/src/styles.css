@@ -232,6 +232,18 @@ textarea { resize: vertical; }
   flex: none; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.02em;
   color: var(--muted);
 }
+/* Where a suggestion came from. Three sources of very different trustworthiness
+   land in one list, so each row says which it is — and they are coloured apart
+   rather than merely worded apart, because the list is scanned, not read. */
+.picker__src {
+  flex: none; font-size: 0.68rem; padding: 0.05rem 0.35rem; border-radius: 999px;
+  white-space: nowrap;
+}
+.picker__src--catalog { background: var(--good-bg); color: var(--good); }
+.picker__src--component { background: var(--info-bg); color: var(--info); }
+/* Amber, and the only one that is. A free title search returns confident
+   nonsense on a single shared word; the label is the whole defence. */
+.picker__src--lookup { background: var(--warn-bg); color: var(--warn); }
 /* The chosen row, stated rather than implied — text in the box is only text
    until it resolves to an id, and that difference decides what the button does. */
 .picker__chosen {
@@ -277,6 +289,26 @@ textarea { resize: vertical; }
   .relation-add__row { flex-direction: column; align-items: stretch; }
   .relation-add__what, .relation-add__kind { width: 100%; }
 }
+
+/* The panel both "+ Add" and "+ Link" open. Everything below the picker row is
+   the answer to *what does the catalog already know about this*, which is why
+   it is a block under the controls rather than a hint beside them. */
+.add-related__source { margin: 0.4rem 0 0; }
+.add-related__outcome {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem;
+  margin-top: 0.6rem; padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+}
+.add-related__outcome .relation-add__note { margin: 0; }
+/* Only the outcome that moves a row away from another game is coloured. The
+   other three are ordinary, and tinting them all would make the warning
+   invisible by making it usual. */
+.add-related__outcome--warn { border-color: var(--warn); background: var(--warn-bg); }
+.add-related__outcome--warn .relation-add__note { color: var(--warn); }
+.add-related__owned {
+  display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--muted);
+}
+.add-related__owned input { width: auto; margin: 0; }
 
 .row-2, .row-3, .row-4 { display: grid; gap: 0.75rem; }
 .row-2 { grid-template-columns: 1fr 1fr; }
@@ -891,20 +923,6 @@ code {
 .job-archive { margin-top: 0.75rem; }
 .job-archive > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
 
-/* --- Expansion picker --- */
-.expansion-picker { margin-bottom: 1rem; }
-.expansion-picker h3 { margin: 0 0 0.25rem; font-size: 1rem; }
-.expansion-picker__list {
-  display: flex; flex-direction: column; gap: 0.25rem; max-height: 240px; overflow-y: auto;
-}
-.expansion-picker__item {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem;
-  background: var(--card-bg); cursor: pointer; text-align: left;
-  font: inherit; transition: border-color 0.1s;
-}
-.expansion-picker__item:hover { border-color: var(--accent); }
-
 /* --- Cover picker ---------------------------------------------------------
    One item, several known printings, one cover chosen. Lives inside the edit
    form rather than on a screen of its own, so picking and saving are the same
@@ -974,6 +992,19 @@ code {
 }
 .completeness__note--block { margin: 0.5rem 0; }
 .completeness__want { flex: none; padding: 0.25rem 0.55rem; font-size: 0.78rem; }
+/* "I have it", beside "+ Wishlist" — and the two must not read as one control
+   with two endings. This one is filled rather than outlined, and wears the same
+   green as the `owned` badge that replaces it once pressed, so the button and
+   its consequence are visibly the same colour. Nudged left of the wishlist
+   button by the gap the row already has; nothing here changes `.completeness__want`. */
+.completeness__have {
+  flex: none; padding: 0.25rem 0.55rem; font-size: 0.78rem;
+  background: var(--good-bg); color: var(--good); border: 1px solid transparent;
+}
+.completeness__have:hover:not(:disabled) { border-color: var(--good); }
+/* Where the row we made lives. A quiet aside, not a third button — it is how
+   you check what a tap just did, and how you undo it. */
+.completeness__ours { flex: none; font-size: 0.78rem; }
 
 /* The toggle is a card-width row elsewhere; inside a card it needs its own
    margins to reach the edges rather than floating in the padding. */

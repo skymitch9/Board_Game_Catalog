@@ -9,7 +9,7 @@ import {
 import { api, type RetagSuggestion } from '../api';
 import { useAsync } from '../hooks';
 import { KIND_LABEL } from '../components/ItemTree';
-import { RELATION_LABEL } from './ItemPage';
+import { RELATION_LABEL } from '../components/AddRelated';
 import { ErrorBox, Spinner } from '../components/ui';
 import { Link } from '../router';
 

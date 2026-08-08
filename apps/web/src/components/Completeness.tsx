@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import type {
-  ComponentStatus,
-  CompletenessSection,
-  GameCompleteness,
-  ItemDetail,
+import {
+  fillableFieldsFor,
+  type ComponentStatus,
+  type CompletenessSection,
+  type CopyStatus,
+  type GameCompleteness,
+  type ItemDetail,
 } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { parseStamp } from '../lib/dates';
+import { Link } from '../router';
 import { Badge, ErrorBox, Spinner } from './ui';
 
 /**
@@ -236,26 +239,54 @@ function MissingRow({
 
       {component.note && <span className="completeness__note">{component.note}</span>}
 
+      {/* Where the catalog row is, once there is one. The name above links to
+          BoardGameGeek, which is right while this is only a thing that exists —
+          but the moment a tap here creates a row, the useful question becomes
+          "what did I just make?", and the answer was two screens away. It is
+          also the undo: changing or deleting the copy happens on that page. */}
+      {component.matchedItemId != null && (
+        <Link to={`/items/${component.matchedItemId}`} className="completeness__ours">
+          in the catalog
+        </Link>
+      )}
+
       {canEdit && component.state !== 'held' && (
-        <WishlistButton component={component} gameId={gameId} onAdded={onChanged} />
+        <AddComponent component={component} gameId={gameId} onAdded={onChanged} />
       )}
     </li>
   );
 }
 
 /**
- * "I'm missing this" → "it's on my list", in one tap.
+ * "I'm missing this" → recorded, in one tap. Two taps, because there are two
+ * ways of missing something.
+ *
+ * *"Should the 'what exists' page also maybe include a quick button to add to
+ * catalog next to add to wishlist?"* — the owner. A row lands in this list
+ * whenever the catalog does not hold it, and that has two quite different
+ * causes: the thing is not theirs, or it *is* theirs and nobody ever wrote it
+ * down. Until now only the first had a button, so a shelf full of uncatalogued
+ * accessories meant leaving the page for each one.
+ *
+ * ⚠️ **Neither button is "add to catalog", and the second one must never be
+ * labelled that way.** Wishlisting already adds to the catalog — it creates the
+ * item *and* a copy. The only difference between these two paths is one column,
+ * `copy.status`, so a label claiming one adds to the catalog and the other does
+ * not would be a false statement about what the buttons do. They are named for
+ * the thing that actually differs: whether the owner has it.
  *
  * Built with the two write routes that already exist — create the item, then
- * create a `wanted` copy — and no third one. That is the same rule the wishlist
- * and the cover picker follow: a second way to change a copy's status is a
- * second thing to keep correct.
+ * create a copy — and no third one. That is the rule the wishlist and the cover
+ * picker follow: a second way to set a copy's status is a second thing to keep
+ * correct.
  *
- * The loop visibly closes. Once added, the component matches by BoardGameGeek
- * id on the next read and comes back as `uncertain` reading "Already on your
- * wishlist" — still counted as missing, because it still is.
+ * The loop visibly closes, differently for each. A **wanted** row comes back as
+ * `uncertain` reading "Already on your wishlist" and is *still counted as
+ * missing*, because it still is. An **owned** row comes back `held`: it counts
+ * towards the figure, both buttons disappear, and an `owned` badge replaces
+ * them.
  */
-function WishlistButton({
+function AddComponent({
   component,
   gameId,
   onAdded,
@@ -264,29 +295,44 @@ function WishlistButton({
   gameId: number;
   onAdded: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<CopyStatus | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   // Nothing to add: the catalog already holds this, it just has no copy or a
-  // wanted one. Offering "add to wishlist" would create a duplicate item and
-  // fail on the unique BoardGameGeek id index.
+  // wanted one. Offering to add it would create a duplicate item and fail on
+  // the unique BoardGameGeek id index.
   if (component.matchedItemId != null) return null;
 
-  async function add() {
-    setBusy(true);
+  async function add(status: CopyStatus) {
+    setBusy(status);
     setError(null);
     try {
+      const publisher = component.publishers?.[0]?.name ?? null;
+      /*
+        The same door a lookup has to come through.
+
+        `fillableFieldsFor` is the policy on what a row of this kind may hold,
+        and BoardGameGeek's component list is no more entitled to bypass it than
+        a name search is. It changes nothing for the overwhelming majority —
+        `description` and the player counts are the fields it refuses an
+        accessory, and none of them are sent here. It bites on exactly one case,
+        and it is a real one: BGG credits fan-made components to
+        `(Public Domain)`, which is a spelling `isTraditionalPublisher`
+        recognises, and a row with that publisher is one the catalog says cannot
+        have a publisher or a year at all.
+      */
+      const allowed = new Set<string>(fillableFieldsFor(component.kind, null, publisher));
       const { item } = await api.createItem({
         name: component.name,
         kind: component.kind,
         parentItemId: gameId,
         bggId: component.bggId,
-        yearPublished: component.yearPublished,
-        publisher: component.publishers?.[0]?.name ?? null,
+        yearPublished: allowed.has('yearPublished') ? component.yearPublished : null,
+        publisher: allowed.has('publisher') ? publisher : null,
         thumbnailUrl: component.thumbnailUrl,
       });
       await api.createCopy(item.id, {
-        status: 'wanted',
+        status,
         quantity: 1,
         format: 'physical',
         isSleeved: false,
@@ -296,21 +342,44 @@ function WishlistButton({
     } catch (err) {
       setError(err);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
     <>
+      {/*
+        Deliberately not a matched pair.
+
+        Two one-tap buttons side by side that write different things is a
+        mis-tap waiting to happen, and this pair is asymmetric in consequence:
+        the wrong wishlist entry is noise, while the wrong "I have it" is the
+        catalog stating that something is on a shelf it is not on — which is the
+        one claim this whole feature exists to get right.
+
+        So they differ in every way a thumb reads at speed: colour (the owned
+        one carries the same green as the `owned` badge it will produce, the
+        wishlist one stays the quiet outline it has always been), shape, and
+        phrasing — a first-person statement of fact beside a noun. "+ Own" and
+        "+ Wishlist" would scan as one control with two endings.
+      */}
+      <button
+        type="button"
+        className="btn completeness__have"
+        disabled={busy != null}
+        onClick={() => void add('owned')}
+      >
+        {busy === 'owned' ? 'Adding…' : 'I have it'}
+      </button>
       <button
         type="button"
         className="btn btn-quiet completeness__want"
-        disabled={busy}
-        onClick={() => void add()}
+        disabled={busy != null}
+        onClick={() => void add('wanted')}
       >
-        {busy ? 'Adding…' : '+ Wishlist'}
+        {busy === 'wanted' ? 'Adding…' : '+ Wishlist'}
       </button>
-      {error != null && <ErrorBox error={error} what="Could not add to the wishlist" />}
+      {error != null && <ErrorBox error={error} what="Could not record that" />}
     </>
   );
 }
