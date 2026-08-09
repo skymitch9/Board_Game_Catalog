@@ -68,12 +68,23 @@ Result: expansions **4 of 7 → 6 of 7**, accessories **2 of 14 → 5 of 14**, a
 the single remaining `uncertain` is *"Already on your wishlist"* against
 Sorcerers & Squires — which is correct and should stay.
 
-⚠️ **858 and 859 were created earlier the same day by the completeness card's
-own "I have it" button, and it does not set `bgg_id`.** That is why they came
-back as uncertain against the very list that created them. Worth fixing at
-source — `AddComponent` in `Completeness.tsx` already has `component.bggId` in
-hand when it calls `api.createItem`. Until then, expect every "I have it" to
-produce one new uncertain row.
+**Where the missing ids came from — and it is not the "I have it" button.**
+An earlier version of this section blamed the completeness card and was wrong.
+`AddComponent` in `Completeness.tsx` passes `bggId: component.bggId` straight
+through to `api.createItem` (line 443), `createItemSchema` accepts it, and a
+round-trip through the local worker confirmed it is stored. **Anything added
+from the card comes back `held` on the next read, not `uncertain`.**
+
+858 and 859 came from the *accessory-implies-the-game* sweep further down this
+file: six Here to Slay accessories existed with no expansion row behind them, so
+the two expansions were inferred and inserted by hand. That sweep reasoned from
+our own shelf, never had a `game_component` row in hand, and so had no id to
+copy. 507, 510 and 297 predate the component feature entirely.
+
+The lesson is about the sweep, not the button: **an item created by inference
+about our own catalog starts with no BoardGameGeek identity, and this feature
+treats no-identity as not-owned.** Any future sweep of that kind should end by
+matching what it created against `game_component` and setting the ids.
 
 **Left alone deliberately:** BGG's single `Acrylic Standees` (369501) against
 our three standee sets, and `Play Mat` / `Expansion Play Mat 2-pack` against our
