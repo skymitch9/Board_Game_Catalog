@@ -106,6 +106,51 @@ Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
 Mat` are retail bundles against our Kickstarter mats. Those four are almost
 certainly genuinely not owned.
 
+### Ten more `bgg_id`s, and the owner correcting two of my matches — 2026-08-09
+
+Uncertain rows **20 → 13**. The remaining 13 are 8 correct wishlist entries and
+the 5 Dice Throne sleeves, which no id can fix (see the section below).
+
+| Item | → | Component | Note |
+|---|---|---|---|
+| 192 | 429843 | Twisted Cryptids: Cryptid Culture | ours says "Expansion" on the end |
+| 254 | 440472 | Slay the Spire: Character & Deck Playmats | **the matcher had this wrong** |
+| 258 | 440473 | Slay the Spire: Table Playmat | ours adds "& Carry Bag" |
+| 257 | 420682 | Slay the Spire: Beta Art | |
+| 162 | 474545 | Deep Rock Galactic: Dice bag | ours says "KS Exclusive Dice Bag" |
+| 236 | 422829 | Deep Rock Galactic: Dice Tray | **a bag and a tray are both owned** |
+| 495 | 474551 | Deep Rock Galactic: Hidden cave segments | ours says "Randomizers" |
+| 423 | 443289 | Cyberpunk: Female V with Mantis Blades | |
+| 424 | 443290 | Cyberpunk: V with Mantis Blades | |
+| 425 | 429978 | Cyberpunk: Johnny Silverhand **& NCPD** | ⚠️ **not** 430049 |
+
+```sql
+-- reversal
+UPDATE item SET bgg_id = NULL
+ WHERE id IN (192, 254, 258, 257, 162, 236, 495, 423, 424, 425);
+```
+
+⚠️ **Two traps, both caught by the owner rather than by the matcher.**
+
+**Slay the Spire.** BGG's `Character & Deck Playmats` (440472) is a *base game*
+product, and we own it as item **254**. The name matcher hinted it against item
+**127**, `Downfall - Character Playmats` — a different, unreleased product for a
+different expansion, which we hold only as a preorder. Both rows lacked an id
+and the matcher took the wrong one. Item 127 stays id-less deliberately: BGG
+does not list a Downfall playmat yet.
+
+**Cyberpunk 2077.** BGG lists **two** Johnny Silverhand entries — 430049
+`Johnny Silverhand` and 429978 `Johnny Silverhand & NCPD`. Ours is the second.
+Anything scripted over this family must not take the first hit.
+
+**On "it's a preorder, should we wait?" — no, and the schema already says so.**
+`preordered` counts as **held** in `getGameCompleteness`, deliberately: *"money
+already spent on a box in the post, and putting it back on a shopping list is
+how a thing gets bought twice."* The `bgg_id` records **which product a row is**;
+`copy.status` records **whether it has arrived**. They are independent, so
+setting an id early costs nothing and loses nothing. All seven Cyberpunk rows
+and six Slay the Spire Downfall rows are `preordered` and already counted.
+
 ### Every `uncertain` in the catalog, audited 2026-08-09
 
 Ran the real `buildCompleteness` over all **139 checked games** at once — same
