@@ -58,15 +58,27 @@ answer — the expansions were `uncertain` (a name matched), the accessories wer
 | 507 | NULL | **369125** | Warrior & Druids Meeples — *BGG's own typo*, "Warrior" singular |
 | 510 | NULL | **369244** | Berserkers & Necromancers Meeples |
 | 297 | NULL | **369040** | Central Play Mat — ours carries a "KS Exclusive" prefix |
+| 301 | NULL | **369501** | Acrylic Standees — run by the owner 00:48 UTC |
 
 ```sql
 -- reversal
-UPDATE item SET bgg_id = NULL WHERE id IN (858, 859, 507, 510, 297);
+UPDATE item SET bgg_id = NULL WHERE id IN (858, 859, 507, 510, 297, 301);
 ```
 
-Result: expansions **4 of 7 → 6 of 7**, accessories **2 of 14 → 5 of 14**, and
+Result: expansions **4 of 7 → 6 of 7**, accessories **2 of 14 → 6 of 14**, and
 the single remaining `uncertain` is *"Already on your wishlist"* against
 Sorcerers & Squires — which is correct and should stay.
+
+**301 and not 302/506/509.** BGG lists one `Acrylic Standees` (369501, 2020)
+against four standee rows of ours. 301 is the only one whose name contains the
+phrase, plural, and it is the base-game Kickstarter set BGG's row describes;
+506 and 509 are expansion standee sets and 302 is a single Dragon standee. The
+other three stay id-less on purpose — one-to-many, and a wrong id is harder to
+notice later than a missing one.
+
+Still not mapped, and probably genuinely not owned: `Bigger Box` and
+`Sorcerers & Squires Meeple Set` are 2027 products, and `10/6 Play Mat Bundle`
+and `Here to Sleigh: Play Mat` are retail bundles against our Kickstarter mats.
 
 **Where the missing ids came from — and it is not the "I have it" button.**
 An earlier version of this section blamed the completeness card and was wrong.
@@ -93,6 +105,47 @@ harder to notice later than a missing one. `Bigger Box` and `Sorcerers & Squires
 Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
 Mat` are retail bundles against our Kickstarter mats. Those four are almost
 certainly genuinely not owned.
+
+### Every `uncertain` in the catalog, audited 2026-08-09
+
+Ran the real `buildCompleteness` over all **139 checked games** at once — same
+method as the Here to Slay diagnosis, three `--json` pulls and one `tsx` script.
+**20 uncertain rows exist catalog-wide**, and they are not one problem:
+
+| Group | Count | What it means |
+|---|---|---|
+| **A** Already on your wishlist | **8** | Correct. Ark Nova ×3, Fractured Sky ×4, Here to Slay ×1. Leave alone |
+| **B** In the catalog, no copy recorded | **0** | Nothing in this state |
+| **C** Name matched, no `bgg_id` | **12** | The only fixable group — and only *some* of it |
+
+Group C splits again, which is the finding worth keeping:
+
+**Six are genuine** — set the id and they become `held`: Twisted Cryptids
+*Cryptid Culture*, Cyberpunk 2077 *Female V with Mantis Blades* /
+*Johnny Silverhand & NCPD* / *V with Mantis Blades*, Deep Rock Galactic
+*Hidden cave segments*, and Slay the Spire *Character & Deck Playmats*.
+
+**Five are the matcher being loose, and an id would be wrong.** One row —
+*Dice Throne: Minimalist Card Sleeves* — is hinted against **three different
+components in three different games** (Outcasts/Raveness, X-Men/Wolverine,
+Mystic Brawler). It cannot be all three. Same shape for the two Premium Sleeves
+rows: a set hinted against a single-hero sleeve. And *Deep Rock Galactic: Dice
+bag* is hinted against *Expansions Dice Tray* — a bag is not a tray.
+
+⚠️ **The Dice Throne sleeves are the interesting failure.** `withoutGamePrefix`
+strips the *game's* name, but these components are named for a **hero** the game
+name does not contain, so what is compared is "Minimalist Card Sleeves" against
+"Card Sleeves - Raveness" — mostly shared words describing a product category
+rather than a product. Any tightening should be measured against these five
+before it is believed.
+
+**And the buttons are not the cause.** 24 of 25 items created in the last two
+days carry a `bgg_id`; the two that do not are from 08-07 and read as hand-typed
+(`SCALES OF FATE METAL UPGRADE KIT`, `King of Tokyo Playmat`). The Terraria
+promo packs added from the card at 23:19 carry 468161/468163 with clean UTF-8
+(`E28093`, a real en dash — verified with `hex()` because the console lied about
+it once). The one UI path that legitimately makes an id-less row is *"Use
+'<name>' anyway"* in the add panel, and that is correct: nothing is known.
 
 ### Landed earlier, now deployed by the above
 
