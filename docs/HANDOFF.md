@@ -2,7 +2,57 @@
 
 Everything needed to continue or finish this without Claude.
 
-## ⏭️ NEXT THREAD — the vintage pop-art restyle
+## ✅ SHIPPED — the vintage pop-art restyle, 2026-08-09
+
+| | |
+|---|---|
+| Live worker version | **`6ca9be76-701c-4d1f-8866-e9e16cd39139`** |
+| Roll back to | `4d303298-2636-450f-acfc-a0ce5edcf224` — everything except the restyle |
+| Commits | `154a9d3`, `99f60b4`, `987ef5c` |
+| Migrations | **none** — CSS, two font files and one `index.html` meta change |
+| Pushed | **yes** — `origin/main` is level for the first time this session |
+
+✅ **Confirmed by the owner: the deployed pages render.** That closes the
+verification gap on *everything* shipped today — the arrivals checklist, the
+wishlist camera and its expansion picker, and the Export page — none of which a
+session can check for itself, because Access intercepts every route at the edge
+including static assets. `curl` on `/fonts/bangers.woff2` from a terminal
+returns nothing at all.
+
+⚠️ **The one thing still worth a glance is the font path**, because it fails
+*silently and legibly*: if `/fonts/*.woff2` did not survive the asset pipeline,
+headings simply fall back to Trebuchet and the site looks like a slightly odd
+sans-serif rather than broken. Verified in `dist/` locally and in the built CSS,
+never against production. **Headings should be comic caps** — if they are not,
+that is the cause.
+
+### What it is
+
+A token swap plus two thin layers, not a rewrite: every colour already came from
+~18 custom properties. Aged paper and cream panels, charcoal ink, mustard/dusty
+blue/brick/coral, all desaturated. Panels get a 2px ink border and a hard 3px
+offset shadow; buttons press into their own shadow; fields take the same border
+with an *inset* shadow, because a field is a hole in the paper rather than an
+object on it.
+
+Bangers and Luckiest Guy are **self-hosted** — see
+[`apps/web/public/fonts/README.md`](../apps/web/public/fonts/README.md). 40 KB
+for the pair, and it keeps the app's zero-third-party-request property.
+
+The full reasoning — why there is no hero, why exactly one starburst and one
+speech bubble, why `.card` is deliberately *not* rotated, and why the viewfinder
+stays black — is in the commit messages and in the comments at the top of
+`styles.css`, which is where somebody editing it will actually be.
+
+### Still not done
+
+- **Nobody has seen it on a real phone.** Measured at a 390px content width in
+  desktop Chrome, which is not iOS Safari. `background-attachment: fixed` on the
+  halftone is the most likely thing to behave differently.
+- **Light mode is the unseen half here.** The owner reviewed in dark mode; the
+  cream paper version has only been seen in screenshots.
+
+## ⏭️ NEXT — the vintage pop-art restyle (superseded, see above)
 
 📄 **[`claude-vintage-pop-art-board-game-prompt.md`](claude-vintage-pop-art-board-game-prompt.md)**,
 supplied by the owner 2026-08-09: *"make a new thread and consider this… We will
