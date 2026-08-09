@@ -15,9 +15,10 @@ has arrived so you can exclude things that didn't arrive with the preorder."*
 | New endpoint | `GET /api/items/:id/arrivals` — **read-only** |
 | New component | `apps/web/src/components/Arrivals.tsx` |
 | Touched | `packages/core/src/schemas.ts`, `packages/db/src/items.ts`, `apps/worker/src/routes/catalog.ts`, `apps/web/src/api.ts`, `ItemPage.tsx`, `styles.css` |
-| Live worker version | **`124ca437-5976-4af2-a4ea-92afee8a232b`** — first deploy, 2026-08-09 |
-| Roll back to | `2f1a26a3-c60c-4292-850e-167d58a3935a` |
-| Status | shipped; a second commit reworked the layout for phones — see below |
+| Live worker version | **`bf029d3e-3b5d-470c-aaef-740fdcaa6ce1`** — the phone layout, 2026-08-09 |
+| Previous version | `124ca437-5976-4af2-a4ea-92afee8a232b` — the feature without the phone layout |
+| Roll back to | `2f1a26a3-c60c-4292-850e-167d58a3935a` to remove the feature entirely |
+| Commits | `35fd354` (the feature), `0cc2030` (the phone layout) |
 
 **197 preordered rows across 34 games** in production, so this had live data to
 bite on the moment it deployed. The big ones: Dungeon Crawler Carl **23**,
