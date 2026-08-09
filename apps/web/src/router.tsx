@@ -44,6 +44,7 @@ export type Route =
   | { name: 'editItem'; id: number }
   | { name: 'people' }
   | { name: 'wishlist' }
+  | { name: 'export' }
   // `?mode=` and `?add=` let an entry point elsewhere land on the right tab,
   // rather than on the right page and the wrong one. Both are optional and both
   // fall back to the page's own default, so an unrecognised value is harmless.
@@ -125,6 +126,10 @@ function parse(pathname: string, search: string): Route {
 
   if (parts[0] === 'people' && parts.length === 1) return { name: 'people' };
   if (parts[0] === 'wishlist' && parts.length === 1) return { name: 'wishlist' };
+  // `/export`, with no extension — the files themselves are `/api/export.csv`
+  // and `/api/export.json`, and the Worker only hands non-`/api` paths to this
+  // router, so the two can never be confused for each other.
+  if (parts[0] === 'export' && parts.length === 1) return { name: 'export' };
   // One flat route, no hash segments: a standalone PWA on iOS re-prompts for
   // camera permission on every route change (WebKit #215884). The tab is a
   // query parameter for the same reason — changing it must not change the path.

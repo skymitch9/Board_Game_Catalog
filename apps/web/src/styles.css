@@ -687,8 +687,21 @@ textarea { resize: vertical; }
   display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.83rem;
 }
 
-.export-links { margin-left: auto; display: inline-flex; gap: 0.85rem; }
 .result-count { display: flex; align-items: center; }
+
+/* --- export ------------------------------------------------------------- */
+
+/* A row per format: what it is on the left, the download on the right. The
+   button never shrinks — it is the only thing on the card you press. */
+.export-option { display: flex; align-items: center; gap: 1rem; }
+.export-option h2 { margin: 0 0 0.2rem; font-size: 1rem; }
+.export-option .btn { flex: none; }
+
+@media (max-width: 560px) {
+  /* Stack, so the button keeps its full width to be tapped at — the same
+     answer `.lookup-fill__row` gives one card over. */
+  .export-option { flex-direction: column; align-items: stretch; }
+}
 
 /* --- paging ------------------------------------------------------------- */
 

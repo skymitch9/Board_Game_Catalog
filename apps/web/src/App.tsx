@@ -11,6 +11,7 @@ import { ScanPage } from './pages/ScanPage';
 import { ScanJobsPage, ScanJobReviewPage } from './pages/ScanJobsPage';
 import { RetagPage } from './pages/RetagPage';
 import { DetailsQueuePage } from './pages/DetailsQueuePage';
+import { ExportPage } from './pages/ExportPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { CoverHealthBanner } from './components/CoverHealthBanner';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
@@ -48,6 +49,11 @@ function Routes({ me }: { me: MeResponse }) {
       return <DetailsQueuePage me={me} />;
     case 'wishlist':
       return <WishlistPage me={me} />;
+    // Gated the same way the link is, and for the same reason the People route
+    // is: the API behind it requires `editCatalog`, so a rater reaching the URL
+    // would otherwise get a page whose every button 403s.
+    case 'export':
+      return me.capabilities.includes('editCatalog') ? <ExportPage /> : <NotFoundPage />;
     case 'people':
       return me.capabilities.includes('manageUsers') ? (
         <PeoplePage me={me} />
@@ -139,6 +145,17 @@ export default function App() {
             </Link>
           )}
           {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
+          {/* Taking the collection away with you is a place, not an action —
+              two formats that are not interchangeable, so something has to
+              offer the choice. It used to be two bare links in the collection
+              page's result count, where the one thing on screen that protects
+              against losing everything sat beside the paging text.
+
+              Unconditional, unlike the maintenance links above: those hide
+              when they have nothing outstanding, and there is no such thing as
+              having nothing to back up. The page itself says so when the
+              catalog is empty. */}
+          {canEdit && <Link to="/export">Export</Link>}
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}
             {me.data.role !== 'owner' && <span className="role-tag"> {me.data.role}</span>}

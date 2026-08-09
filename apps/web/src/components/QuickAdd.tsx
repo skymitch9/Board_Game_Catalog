@@ -324,21 +324,3 @@ function Suggestion({
   );
 }
 
-/** Download buttons for the JSON and CSV exports. */
-export function ExportLinks() {
-  const [meta] = useAsync(() => api.meta(), []);
-  const empty = meta.state === 'ok' && meta.data.stats.totalItems === 0;
-
-  if (empty) return null;
-
-  return (
-    <span className="export-links">
-      <a href="/api/export.json" download>
-        Backup (JSON)
-      </a>
-      <a href="/api/export.csv" download>
-        Spreadsheet (CSV)
-      </a>
-    </span>
-  );
-}

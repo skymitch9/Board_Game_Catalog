@@ -4,7 +4,6 @@ import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
 import { Link, collectionPath, replaceUrl, type CollectionFilters } from '../router';
 import { GroupCard, ItemCard, KIND_LABEL } from '../components/ItemTree';
-import { ExportLinks } from '../components/QuickAdd';
 import { EmptyState, ErrorBox, Pager, Spinner } from '../components/ui';
 
 /**
@@ -367,7 +366,9 @@ export function CollectionPage({ me, filters }: { me: MeResponse; filters: Colle
             {filtersActive && ' matching'}
             {items.data.pageCount > 1 &&
               ` · page ${items.data.page} of ${items.data.pageCount}`}
-            {canEdit && <ExportLinks />}
+            {/* The two export links used to hang off the end of this line. They
+                are on `/export` now — a backup is not a fact about which page of
+                the collection you are looking at. */}
           </p>
           <div className="item-list">
             {items.data.entries.map((entry) =>
