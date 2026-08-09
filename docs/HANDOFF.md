@@ -106,6 +106,61 @@ Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
 Mat` are retail bundles against our Kickstarter mats. Those four are almost
 certainly genuinely not owned.
 
+## ⏭️ Deferred to its own thread — marking things sold or given away
+
+*"We also have no way to mark things sold or given away or any statuses
+manually. I gave away item 303 since another item covered it and I have many
+other games I want to give away or sell. Can we add a way to edit it and then
+change its status tag from owned to lent or sold or something. This can be in a
+different thread."* — the owner, 2026-08-09. **Not built. Do not start it
+without reading this first.**
+
+⚠️ **Half of it already exists, so this is probably not the feature it sounds
+like.** `COPY_STATUSES` in `packages/core/src/constants.ts` is already
+`['owned','wanted','preordered','lent','sold']`, migration 0001 has the matching
+CHECK, and **`CopyEditor.tsx:102` already renders a `<select>` over all five**.
+So a copy *can* be moved from `owned` to `sold` today. Find out why that did not
+reach the owner before writing any code — the likely answers are
+discoverability (where `CopyEditor` is reachable from) or that neither `sold`
+nor `lent` means *given away*.
+
+| Known | |
+|---|---|
+| Item 303 | `The Binding of Isaac: Four Souls - Gold Box Expansion`, copy 298, still `owned` — the owner says it is gone |
+| Missing vocabulary | Nothing distinguishes *sold* from *given away*; `lent` implies it is coming back |
+| Likely blast radius | A new status value touches `constants.ts`, a CHECK-constraint migration, every `status IN (...)` query, the completeness "held" rule, and the collection filter |
+
+⚠️ The completeness feature reads `owned/lent/preordered` as **held**. Any new
+status has to declare which side of that line it sits on, or a game you gave
+away starts counting towards "you own 6 of 7".
+
+### The non-English edition filter, shipped — 2026-08-09
+
+| | |
+|---|---|
+| Live worker version | **`2f1a26a3-c60c-4292-850e-167d58a3935a`** |
+| Roll back to | `5e4538ea-2598-4cdc-b4b3-0c04da1f6f93` |
+| Commit | `72b0c63` — **no migration**, computed on read |
+
+`isNonEnglishEdition` in `packages/core/src/completeness.ts`, a `nonEnglish`
+group on the report, a fourth `<Aside>`. **45 of 672** chaseable official
+components move; Catan's expansions fall **84 → 57**, Codenames 29 → 19.
+
+⚠️ **The false positive the owner predicted was real, and it is `die`** — the
+German article and the English singular of *dice*. A first cut flagged
+`Veiled Fate: Fate Die` and `Veiled Fate: Renewal Die` as German. The fix is the
+strong/weak split now in the code: words absent from English flag alone, words
+that are also English need a second. Both rows survive, and the split *gained*
+three Polish Codenames entries the naive version missed. **Those two names are
+the regression test for any future edit to the word lists.**
+
+**What it does not fix, which is most of what is left.** 27 of Catan's remaining
+components are English-named regional one-offs — `Catan Geographies: Mallorca`,
+`Austria`, `Corsica`. A `Geographies|Scenario` rule was considered and rejected:
+`Catan Scenarios: Oil Springs` is a real, buyable mini-expansion in exactly that
+pattern. The owner's ruling, and it applies to Monopoly when it lands:
+*"some versions have 1 million sub products and we can't win every battle."*
+
 ### The bundled-components bypass, shipped — 2026-08-09
 
 | | |
