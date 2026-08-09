@@ -37,6 +37,52 @@ every HTTP route.** That is the way to answer "what does production actually
 hold" without a signed-in browser. `d1 list` working while `migrations list
 --remote` answered `7403` was a transient; a straight retry of `execute` worked.
 
+### Here to Slay: five `bgg_id`s set in production, 2026-08-09
+
+*"Here to slay has uncertain results but I'm certain we own them all. Except for
+the wishlist item."* — the owner. They were right, and the report agreed once it
+had ids to agree with.
+
+**Diagnosed by running the real `buildCompleteness` over production rows**, not
+by reading names: pull `game_component` and the owned tree with
+`wrangler d1 execute --remote --json`, then `npx tsx` a script importing
+`packages/core/src/completeness.ts`. That is the only way to tell `uncertain`
+from `missing` without a signed-in browser, and the distinction was the whole
+answer — the expansions were `uncertain` (a name matched), the accessories were
+`missing` (nothing matched at all).
+
+| Item | Was | Now | BGG component |
+|---|---|---|---|
+| 858 | NULL | **321259** | Here to Slay: Warriors & Druids Expansion — name character-identical |
+| 859 | NULL | **349286** | Here to Slay: Berserkers & Necromancers |
+| 507 | NULL | **369125** | Warrior & Druids Meeples — *BGG's own typo*, "Warrior" singular |
+| 510 | NULL | **369244** | Berserkers & Necromancers Meeples |
+| 297 | NULL | **369040** | Central Play Mat — ours carries a "KS Exclusive" prefix |
+
+```sql
+-- reversal
+UPDATE item SET bgg_id = NULL WHERE id IN (858, 859, 507, 510, 297);
+```
+
+Result: expansions **4 of 7 → 6 of 7**, accessories **2 of 14 → 5 of 14**, and
+the single remaining `uncertain` is *"Already on your wishlist"* against
+Sorcerers & Squires — which is correct and should stay.
+
+⚠️ **858 and 859 were created earlier the same day by the completeness card's
+own "I have it" button, and it does not set `bgg_id`.** That is why they came
+back as uncertain against the very list that created them. Worth fixing at
+source — `AddComponent` in `Completeness.tsx` already has `component.bggId` in
+hand when it calls `api.createItem`. Until then, expect every "I have it" to
+produce one new uncertain row.
+
+**Left alone deliberately:** BGG's single `Acrylic Standees` (369501) against
+our three standee sets, and `Play Mat` / `Expansion Play Mat 2-pack` against our
+three play-mat sets — one-to-many, so any pick is a guess, and a wrong id is
+harder to notice later than a missing one. `Bigger Box` and `Sorcerers & Squires
+Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
+Mat` are retail bundles against our Kickstarter mats. Those four are almost
+certainly genuinely not owned.
+
 ### Landed earlier, now deployed by the above
 
 Promos and collectibles are now split out of the completeness figures — the
