@@ -30,6 +30,7 @@ import {
   listItemAliases,
   listItemNames,
   listItemTrees,
+  listPreorderArrivals,
   listRelationPairs,
   listTopLevelItems,
   listWishlist,
@@ -140,6 +141,27 @@ export const catalogRoutes = new Hono<AppBindings>()
     const completeness = await getGameCompleteness(c.env.DB, id);
     if (!completeness) return c.json({ error: 'not_found' }, 404);
     return c.json(completeness);
+  })
+
+  /**
+   * What is on preorder anywhere under this item — the "what turned up?" list.
+   *
+   * `read`, not `editCatalog`, and read-only in the strictest sense: it says
+   * which copies a pledge is still waiting on, and applying the answer is an
+   * ordinary `PATCH /api/copies/:id` per row. Same shape as `/retag` and
+   * `/wishlist`, and for the same reason — a second way to change a copy's
+   * status would be a second thing to keep honest.
+   *
+   * Scoped to the subtree rather than the whole game, so a game holding two
+   * pledges can have one confirmed without the other being offered up with it.
+   */
+  .get('/items/:id/arrivals', async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const arrivals = await listPreorderArrivals(c.env.DB, id);
+    if (!arrivals) return c.json({ error: 'not_found' }, 404);
+    return c.json({ arrivals });
   })
 
   /**

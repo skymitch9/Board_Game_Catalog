@@ -21,6 +21,7 @@ import type {
   ItemPage,
   ItemQuery,
   MeResponse,
+  PreorderArrival,
   Rating,
   RelatedItemRef,
   UpdateCopyInput,
@@ -152,6 +153,16 @@ export const api = {
    * shopping list.
    */
   wishlist: () => req<{ entries: WishlistEntry[] }>('/api/wishlist'),
+
+  /**
+   * Everything on preorder under one item — the checklist behind "it arrived".
+   *
+   * Read-only. Confirming a row is `updateCopy(copyId, { status: 'owned' })`,
+   * the same call the wishlist's "bought it" makes, so there is one implementation
+   * of what it means for a box to turn up.
+   */
+  arrivals: (itemId: number) =>
+    req<{ arrivals: PreorderArrival[] }>(`/api/items/${itemId}/arrivals`),
 
   createItem: (data: CreateItemInput) =>
     post('/api/items', data) as Promise<{ item: Item; adopted: Item[] }>,

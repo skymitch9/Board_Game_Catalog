@@ -518,6 +518,44 @@ export interface WishlistEntry {
   addedAt: string;
 }
 
+/**
+ * One preordered copy somewhere under the item being asked about — a line on
+ * the "what turned up?" checklist.
+ *
+ * Subtree-shaped rather than root-shaped, and that is the whole point: a pledge
+ * arrives as a box holding a game and everything filed under it, so the unit
+ * being confirmed is a *branch* of the tree, not a game and not a single row.
+ * Asking from an expansion's page therefore offers that expansion and its
+ * accessories, and nothing from the base game beside it.
+ *
+ * `copyId` is the identity for the same reason it is on `WishlistEntry`: being
+ * on preorder is a property of the copy, and the copy is what gets flipped to
+ * `owned` when the box is opened.
+ */
+export interface PreorderArrival {
+  copyId: number;
+  itemId: number;
+  name: string;
+  kind: (typeof ITEM_KINDS)[number];
+  /**
+   * How far below the item asked about this sits — 0 is that item's own copy.
+   *
+   * Carried so the checklist can indent, which is not decoration: a pledge with
+   * eleven rows in it is read as "the game, and these under it", and a flat list
+   * of eleven names makes the owner work out the shape for themselves.
+   */
+  depth: number;
+  parentItemId: number | null;
+  parentName: string | null;
+  /** Identical copies on the one row — "×3" on the checklist. */
+  quantity: number;
+  format: (typeof COPY_FORMATS)[number];
+  /** Whatever was written on the copy — "wave 2", "KS exclusive". */
+  notes: string | null;
+  /** When the preorder was recorded, as an ISO instant. */
+  addedAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Filling in details — a paid lookup that outlives the request that asked
 // ---------------------------------------------------------------------------

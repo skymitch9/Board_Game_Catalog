@@ -2,6 +2,89 @@
 
 Everything needed to continue or finish this without Claude.
 
+## ✅ "It arrived" — a preorder lands in one pass, 2026-08-09
+
+*"we need a 1 button click to change a pre order game from preordered to owned
+and to have it update all the expansion too. It should prompt you and say what
+has arrived so you can exclude things that didn't arrive with the preorder."*
+— the owner.
+
+| | |
+|---|---|
+| Migration | **none** — no schema change, nothing stored |
+| New endpoint | `GET /api/items/:id/arrivals` — **read-only** |
+| New component | `apps/web/src/components/Arrivals.tsx` |
+| Touched | `packages/core/src/schemas.ts`, `packages/db/src/items.ts`, `apps/worker/src/routes/catalog.ts`, `apps/web/src/api.ts`, `ItemPage.tsx`, `styles.css` |
+| Status | **committed, NOT deployed** — see "still to do" below |
+
+A card appears above everything else on any item page with a preordered copy
+anywhere under it: *"On preorder 13"* and one **It arrived** button. Pressing it
+opens the checklist with every row **already ticked**; the work is unticking
+what did not turn up, and unticked rows are left exactly as they were.
+
+### The three decisions worth not re-litigating
+
+⚠️ **It walks the subtree, not `root_game_id`.** The cheaper join is wrong: a
+game can hold two pledges at once — a base game bought years ago and an
+expansion wave still in the post — and confirming one must not offer up the
+other. Asking from an expansion's page therefore lists that expansion's branch
+and nothing from the base game beside it. Verified locally: asking from item 112
+returned 3 rows, asking from item 111 returned 13.
+
+⚠️ **There is no bulk write endpoint, deliberately.** Each ticked row is an
+ordinary `PATCH /api/copies/:id` with `{ status: 'owned' }` — the same call the
+wishlist's "bought it" and the copy editor's dropdown make. This is the rule
+already written on `/wishlist` and `/retag`: *a second way to change a copy's
+status is a second thing to keep honest.* The endpoint added here decides **what
+to offer** and never what to do with it. The consequence is the good one: a
+partial failure leaves whatever did not save still `preordered` and still on the
+list, so it is reported (`"8 of 11 saved…"`) and retried rather than rolled back.
+
+**Indentation is conditional, and that is not cosmetic.** A row is indented only
+when its parent is *also on the list*. An accessory whose expansion arrived
+months ago sits two levels down with nothing above it to belong to, so it is
+rendered flush and names its parent instead — otherwise the shape of the list
+lies about the shape of the tree.
+
+### Measured, `npm run dev:worker` against the local D1
+
+A fixture seeded the shapes the 8 real Ark Nova preorders do not cover: depth 0,
+depth 2 under a preordered parent, depth 2 under an **owned** parent, depth 3,
+quantity 2, digital, and notes. **It has been deleted again** — the local D1 is
+back to its 88 items / 10 copies / 8 preordered.
+
+| Checked | Result |
+|---|---|
+| 13 rows, depths 0–3, ordered by depth then sort name | ✅ |
+| Ticked 11 of 13, pressed once | ✅ 12 owned / 2 preordered in D1 — **exactly the two unticked rows survived** |
+| The two left behind | ✅ still `preordered`, still on the list, banner re-read "On preorder 2" |
+| One-row list | ✅ *"Mat Carry Tube" has arrived and is now owned.*, card then disappears |
+| Item with no preorders (35) | ✅ `{"arrivals":[]}`, **renders nothing at all** |
+| No such item / bad id | ✅ 404 / 400 |
+| `EXPLAIN QUERY PLAN` | `idx_item_parent` (covering) for the walk, `idx_copy_status` for the copies — no table scan |
+
+⚠️ **The bug the browser caught and the API could not.** `.arrival-note` takes a
+full flex basis, and without `flex-wrap` on the row it collapsed the *name* —
+the only shrinkable thing there — to zero width, leaving rows reading
+"EXPANSION · wave 2" about no identifiable object. Two of the thirteen rows were
+nameless on screen while the JSON behind them was perfect. **Anything added to
+that row must be checked in a browser, not in curl.**
+
+### Still to do
+
+- **Not deployed.** `npm run deploy` after committing; there is no migration, so
+  the order does not matter and a rollback is a plain revert.
+- **Phone width is reasoned, not measured.** The media query is a copy of the
+  one `.child-kind` already carries in the item tree, and the row wraps, but
+  `resize_window` did not change the captured viewport, so nobody has *looked*
+  at it under 560px.
+- **Only the item page has it.** A collection-page group card already says
+  "N on the way" in its footer and could carry the same button. Not built —
+  the owner asked for the game page.
+- **Partial arrival of one row is out of scope.** A copy with `quantity: 3` is
+  ticked or not; if one of the three turned up, untick it and edit the copy by
+  hand. The checklist says so on the row.
+
 ## State at 2026-08-08, end of session
 
 **Everything is shipped. Working tree clean, `main` pushed through `086ac07`,

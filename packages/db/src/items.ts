@@ -11,6 +11,7 @@ import type {
   ItemPage,
   ItemQuery,
   MatchedChild,
+  PreorderArrival,
   Rating,
   CoverLender,
   InheritedDetail,
@@ -1907,6 +1908,100 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
       addedAt: toIso(r.added_at),
     };
   });
+}
+
+/**
+ * How far below the item asked about the arrivals walk will go.
+ *
+ * The same guard, for the same reason, as `MAX_ANCESTOR_DEPTH` one direction
+ * up: `updateItem` refuses to make a loop, but a recursive CTE meeting one that
+ * arrived by another route would not stop on its own, and a hung read is worse
+ * than a short list. Deliberately the same number — a tree is as deep read from
+ * either end.
+ */
+const MAX_SUBTREE_DEPTH = MAX_ANCESTOR_DEPTH;
+
+/**
+ * Everything under this item that is paid for and not yet here.
+ *
+ * The list behind "mark this preorder as arrived". A pledge does not turn up as
+ * one row: the game, four expansions and six accessories are eleven copies
+ * across three levels of the tree, and confirming them one at a time is the
+ * thing the owner asked to stop doing.
+ *
+ * **Subtree, not root tree.** `root_game_id` would have been the cheaper join
+ * and is wrong here — a game can hold two pledges at once (a base game bought
+ * years ago, an expansion wave still in the post), and confirming one must not
+ * offer up the other. Walking `parent_item_id` down from the item asked about
+ * scopes the question to the branch the person is looking at.
+ *
+ * Returns `null` when there is no such item, so the caller can tell "nothing on
+ * preorder" from "no such game" — an empty array is a real answer.
+ *
+ * Nothing is written. Flipping a row is an ordinary `PATCH /api/copies/:id`;
+ * this endpoint decides *what to offer*, never what to do with it.
+ */
+export async function listPreorderArrivals(
+  db: D1Database,
+  id: number,
+): Promise<PreorderArrival[] | null> {
+  const exists = await db.prepare('SELECT 1 FROM item WHERE id = ?').bind(id).first();
+  if (!exists) return null;
+
+  const { results } = await db
+    .prepare(
+      `WITH RECURSIVE sub(id, depth) AS (
+         SELECT ?1, 0
+         UNION ALL
+         SELECT i.id, s.depth + 1
+           FROM item i JOIN sub s ON i.parent_item_id = s.id
+          WHERE s.depth < ?2
+       )
+       SELECT c.id            AS copy_id,
+              c.quantity      AS quantity,
+              c.format        AS format,
+              c.notes         AS notes,
+              c.created_at    AS added_at,
+              s.depth         AS depth,
+              i.id            AS item_id,
+              i.name          AS name,
+              i.kind          AS kind,
+              p.id            AS parent_item_id,
+              p.name          AS parent_name
+         FROM sub s
+         JOIN item i ON i.id = s.id
+         JOIN copy c ON c.item_id = i.id AND c.status = 'preordered'
+         LEFT JOIN item p ON p.id = i.parent_item_id
+        ORDER BY s.depth, COALESCE(i.sort_name, i.name), c.id`,
+    )
+    .bind(id, MAX_SUBTREE_DEPTH)
+    .all<{
+      copy_id: number;
+      quantity: number | null;
+      format: string | null;
+      notes: string | null;
+      added_at: string;
+      depth: number;
+      item_id: number;
+      name: string;
+      kind: string;
+      parent_item_id: number | null;
+      parent_name: string | null;
+    }>();
+
+  return results.map((r) => ({
+    copyId: r.copy_id,
+    itemId: r.item_id,
+    name: r.name,
+    kind: r.kind as PreorderArrival['kind'],
+    depth: r.depth,
+    parentItemId: r.parent_item_id,
+    parentName: r.parent_name,
+    quantity: r.quantity ?? 1,
+    format: (r.format as PreorderArrival['format']) ?? 'physical',
+    notes: r.notes,
+    addedAt: toIso(r.added_at),
+  }));
 }
 
 /** Top-level items and their kinds — the input to a re-tagging pass. */

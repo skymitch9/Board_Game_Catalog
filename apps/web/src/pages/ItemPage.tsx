@@ -15,6 +15,7 @@ import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Link, navigate } from '../router';
 import { AddRelatedPanel, RELATION_LABEL } from '../components/AddRelated';
+import { Arrivals } from '../components/Arrivals';
 import { Completeness } from '../components/Completeness';
 import { CopyForm, CopyRow } from '../components/CopyEditor';
 import { ItemForm } from '../components/ItemForm';
@@ -157,6 +158,19 @@ export function ItemPage({
       </header>
 
       {changeNote && <p className="lookup-filled">{changeNote}</p>}
+
+      {/* Above everything else on purpose. A preorder landing is why the page
+          was opened — nobody navigates to Cyberpunk 2077 to fill in its player
+          count on the day the box turns up. It renders nothing at all for the
+          items that have nothing on the way, which is nearly all of them. */}
+      <Arrivals
+        item={item}
+        canEdit={canEdit}
+        onArrived={(note) => {
+          setChangeNote(note);
+          reload();
+        }}
+      />
 
       {canEdit && (
         <LookupDetails
