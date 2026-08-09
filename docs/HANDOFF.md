@@ -106,6 +106,60 @@ Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
 Mat` are retail bundles against our Kickstarter mats. Those four are almost
 certainly genuinely not owned.
 
+### The bundled-components bypass, shipped — 2026-08-09
+
+| | |
+|---|---|
+| Live worker version | **`5e4538ea-2598-4cdc-b4b3-0c04da1f6f93`** |
+| Roll back to | `a440debc-1781-499b-a37b-105fd8b16bbd` (columns are nullable; old code ignores them) |
+| Migration | **0022 applied to production**, `d1_migrations` row written |
+| Commit | `0d57fd3` |
+
+⚠️ **`wrangler d1 migrations apply --remote` does not work on this account.** It
+answers `7403 — the given account is not valid or is not authorized to access
+this service`, the same error `migrations list --remote` gives. **`d1 execute
+--remote` is unaffected**, so migrations have to be applied as plain SQL plus a
+bookkeeping insert:
+
+```bash
+npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangler.toml \
+  --command "<the ALTER/CREATE statements>; INSERT INTO d1_migrations (name) VALUES ('00NN_name.sql');"
+```
+
+Without that final INSERT, the next successful `migrations apply` would try to
+re-run it. Verified after applying: 1,437 component rows intact, latest
+migration reads `0022_component_manual.sql`.
+
+**Order matters and was followed:** migrate, verify, *then* deploy. The new
+`getGameCompleteness` selects `manual_state, manual_note`; deploying that
+against the 0021 schema would have thrown *no such column* on every item page in
+the catalog.
+
+### All 17 Dice Throne sleeve components marked bundled — 2026-08-09
+
+*"Run came bundled on all sleeve stuff for dice throne."* — the owner.
+
+**Uncertain rows 13 → 8, and the 8 left are all correct wishlist entries.** The
+name-only group is now **empty catalog-wide** — every remaining `uncertain` is
+the report saying something true.
+
+Checked first that none was already proven held by a `bgg_id` match (**0 of 17**
+were), so nothing traded machine proof for a hand claim. Six of the seventeen
+are third-party and land in that group rather than the headline figure; the rest
+count. Santa vs Krampus, Mystic Brawler and Alchemist now read **1 of 1
+accessories — complete**.
+
+```sql
+-- reversal
+UPDATE game_component SET manual_state = NULL, manual_note = NULL, manual_at = NULL
+ WHERE id IN (16,17,804,812,815,858,863,909,910,1015,1145,1147,1148,1152,1154,1160,1163);
+```
+
+The eleven that were never `uncertain` are the point worth noticing: only **5**
+of the 17 had a name close enough to be hinted at. The other twelve were plain
+`missing`, and no amount of matcher tuning would have surfaced them — which is
+the argument for the bypass existing rather than the floor being lowered.
+
 ### Ten more `bgg_id`s, and the owner correcting two of my matches — 2026-08-09
 
 Uncertain rows **20 → 13**. The remaining 13 are 8 correct wishlist entries and
