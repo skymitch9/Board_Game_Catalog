@@ -15,7 +15,13 @@ has arrived so you can exclude things that didn't arrive with the preorder."*
 | New endpoint | `GET /api/items/:id/arrivals` — **read-only** |
 | New component | `apps/web/src/components/Arrivals.tsx` |
 | Touched | `packages/core/src/schemas.ts`, `packages/db/src/items.ts`, `apps/worker/src/routes/catalog.ts`, `apps/web/src/api.ts`, `ItemPage.tsx`, `styles.css` |
-| Status | **committed, NOT deployed** — see "still to do" below |
+| Live worker version | **`124ca437-5976-4af2-a4ea-92afee8a232b`** — first deploy, 2026-08-09 |
+| Roll back to | `2f1a26a3-c60c-4292-850e-167d58a3935a` |
+| Status | shipped; a second commit reworked the layout for phones — see below |
+
+**197 preordered rows across 34 games** in production, so this had live data to
+bite on the moment it deployed. The big ones: Dungeon Crawler Carl **23**,
+Ascension 15th Anniversary **22** (45 units), Cult of the Lamb **13**, Altera 10.
 
 A card appears above everything else on any item page with a preordered copy
 anywhere under it: *"On preorder 13"* and one **It arrived** button. Pressing it
@@ -70,20 +76,62 @@ the only shrinkable thing there — to zero width, leaving rows reading
 nameless on screen while the JSON behind them was perfect. **Anything added to
 that row must be checked in a browser, not in curl.**
 
+### The phone layout, and the note problem the real data exposed
+
+The first cut was designed against an 8-row fixture and fell over on the real
+22-row Ascension pledge. **Every one of those 22 rows carries the same
+150-character note** — it describes the *pledge*, not the thing — and the first
+layout gave each note a line of its own. Twenty-two identical lines.
+
+| Fix | |
+|---|---|
+| `commonNote` | The note two or more rows share is hoisted above the list and said once |
+| `noteResidual` | A row that *extends* the shared note shows only what it adds |
+| Row stacks under 560px | Name on line one, `kind · ×N · digital · note` on line two, aligned past the checkbox |
+| `.arrivals .form-actions` is `position: sticky; bottom: 0` | 22 rows is three screens; the confirm button was at the bottom of all of them |
+
+⚠️ **A first version demanded that all notes be *equal*, and it never fired on
+the data it was written for.** Twenty rows match exactly; the base game appends
+a sentence about playtime research and one expansion appends one about having no
+BoardGameGeek entry. So it is a shared *prefix*, and the two odd rows now show
+only their extra sentence rather than 150 characters of something already on
+screen. **`commonNote` requires two rows to agree and refuses to break a tie** —
+with nothing to choose between two notes, hoisting either makes the other read
+as the exception.
+
+### Three CSS traps, all found by measuring rather than looking
+
+1. **`flex-wrap` on the row is load-bearing.** The note takes a full basis;
+   with nowhere to wrap it collapsed the *name* — the only shrinkable thing —
+   to zero width. Two of thirteen rows rendered nameless while the JSON behind
+   them was perfect.
+2. **`.arrival-meta` needs `max-width: 45%` on desktop.** A `nowrap` note has an
+   enormous natural basis and flexbox shrinks in proportion to basis, so the
+   metadata kept most of the row and squeezed the base game's name into a
+   three-line column.
+3. **The phone rule must be `flex: 1 1 0`, not `1 1 auto`.** With an auto basis a
+   long name is wider than what is left beside the checkbox, so the whole span
+   wrapped to the next flex line and **stranded the checkbox on a line of its
+   own** — a column of tick boxes with holes in it.
+
+⚠️ **`resize_window` silently does nothing to a maximised Chrome window** —
+`innerWidth` stayed 2498 and reported success. The phone layout was verified by
+extracting the real `max-width: 560px` rules out of `document.styleSheets`,
+applying them unconditionally, and squeezing `body` to 390px. Measured, not
+eyeballed: 0 stranded checkboxes, 0 rows overflowing right, metadata below the
+name on every row, 9 names wrapping to two lines, and the sticky bar yielding to
+the last row at the end of the scroll.
+
 ### Still to do
 
-- **Not deployed.** `npm run deploy` after committing; there is no migration, so
-  the order does not matter and a rollback is a plain revert.
-- **Phone width is reasoned, not measured.** The media query is a copy of the
-  one `.child-kind` already carries in the item tree, and the row wraps, but
-  `resize_window` did not change the captured viewport, so nobody has *looked*
-  at it under 560px.
 - **Only the item page has it.** A collection-page group card already says
   "N on the way" in its footer and could carry the same button. Not built —
   the owner asked for the game page.
 - **Partial arrival of one row is out of scope.** A copy with `quantity: 3` is
   ticked or not; if one of the three turned up, untick it and edit the copy by
-  hand. The checklist says so on the row.
+  hand. Ascension Sleeves is the live case — **quantity 24**.
+- **Nobody has run it on a real phone.** The layout is measured at a 390px
+  content width in desktop Chrome, which is not the same as iOS Safari.
 
 ## State at 2026-08-08, end of session
 

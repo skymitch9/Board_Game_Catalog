@@ -510,36 +510,86 @@ textarea { resize: vertical; }
 .arrivals { border-left: 3px solid var(--transit); }
 .arrivals-failed { margin: 0 0 1rem; }
 
+/* Said once above the list instead of on all twenty-two rows — see
+   `sharedNote`. One line, because it is context and not a decision. */
+.arrivals-shared {
+  margin: 0 0 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 .arrivals-list { list-style: none; margin: 0.5rem 0 0.9rem; padding: 0; }
 .arrival { border-bottom: 1px solid var(--line); }
 .arrival:last-child { border-bottom: none; }
 /* The whole row is the label, so the tap target is the line rather than a
-   16px box — this is read on a phone with a box of games in the other hand.
-   `flex-wrap` is load-bearing and not tidiness: the note below takes a full
-   basis, and without somewhere to wrap to it collapses the name — which is
-   shrinkable — to nothing, leaving a row that says "EXPANSION, wave 2" about
-   no identifiable thing. */
+   16px box — this is read on a phone with a box of games in the other hand. */
 .arrival label {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+  display: flex; align-items: center; gap: 0.6rem;
   padding: 0.55rem 0; font-size: 0.9rem; cursor: pointer;
 }
 .arrival input { width: auto; flex-shrink: 0; margin: 0; }
 /* Overrides the shared `.child-name`'s `flex: 1`, which has no basis to hold
-   on to. The name is the only thing on this row that must survive. */
+   on to. The name is the only thing on this row that must survive — everything
+   in `.arrival-meta` merely qualifies it. */
 .arrival .child-name { flex: 1 1 10rem; white-space: normal; }
 /* Unticked is "did not turn up", not "disabled" — still legible, visibly set
    aside, and one tap from coming back. Struck through because the row is a
    claim about the shelf that this pass is declining to make. */
 .arrival--held label { opacity: 0.5; }
 .arrival--held .child-name { text-decoration: line-through; }
+
+/* Everything that qualifies the name, kept together so the phone can move it
+   to a line of its own in one rule rather than four. `min-width: 0` is what
+   lets the note inside it truncate instead of pushing the row wider. */
+/*
+  `max-width` is doing real work here. A residual note is `nowrap`, so its
+  natural basis is enormous, and flexbox shrinks items in proportion to that
+  basis — the meta block kept most of the row and squeezed the base game's name
+  into a three-line column beside a one-line note. Capping it at 45% puts the
+  name first, which is the only thing on the row anyone decides with.
+*/
+.arrival-meta {
+  display: flex; align-items: center; gap: 0.5rem;
+  flex: 0 1 auto; min-width: 0; max-width: 45%;
+}
+.arrival-meta .child-kind { width: auto; }
+/* One line, ellipsis, full text in the tooltip. A pledge note runs to 150
+   characters and twenty rows can carry the same one. */
 .arrival-note {
-  flex: 1 1 100%; font-size: 0.78rem; color: var(--muted); font-style: italic;
+  font-size: 0.78rem; color: var(--muted); font-style: italic;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+/* The action row follows a list that can be twenty-two rows long, so it is
+   pinned to the bottom of the viewport rather than left at the end of the
+   scroll. `sticky` and not `fixed`: it belongs to the panel, and it must stop
+   existing the moment the panel is closed or scrolled past. */
+.arrivals .form-actions {
+  position: sticky; bottom: 0; z-index: 1;
+  margin: 0 -1rem -1rem; padding: 0.7rem 1rem;
+  background: var(--card); border-top: 1px solid var(--line);
 }
 
 @media (max-width: 560px) {
-  /* Same reason `.child-kind` loses its fixed width in the tree: at this width
-     a 5.5rem gutter eats the name it is labelling. */
-  .arrival .child-kind { width: auto; }
+  /*
+    The row stacks: name on the first line, everything qualifying it on the
+    second, aligned past the checkbox so the column of boxes stays a column.
+
+    Measured against the real Ascension pledge — 22 rows, names like "Ascension
+    Curse of the Golden Isles (Center Deck Set)". Side by side at this width the
+    name got about eight characters; stacked it gets the line.
+  */
+  .arrival label { flex-wrap: wrap; row-gap: 0.15rem; }
+  /*
+    `1 1 0`, not `1 1 auto`. With an auto basis a name like "Ascension Curse of
+    the Golden Isles (Center Deck Set)" is wider than what is left beside the
+    checkbox, so the whole span wrapped to the next flex line and left the
+    checkbox stranded on a line of its own — a column of tick boxes with holes
+    in it. A zero basis makes it shrink and wrap *inside* its own column, level
+    with the checkbox, which is also where the metadata line below lines up.
+  */
+  .arrival .child-name { flex: 1 1 0; min-width: 0; }
+  /* The cap above is a desktop rule — on its own line the meta wants the width,
+     and the note truncating against the screen edge is the intended behaviour. */
+  .arrival-meta { flex-basis: 100%; max-width: none; padding-left: 1.6rem; }
 }
 
 .child-list li { border-bottom: 1px solid var(--line); }
