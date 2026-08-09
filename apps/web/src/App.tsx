@@ -14,6 +14,7 @@ import { DetailsQueuePage } from './pages/DetailsQueuePage';
 import { ExportPage } from './pages/ExportPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { CoverHealthBanner } from './components/CoverHealthBanner';
+import { ThemeToggle } from './components/ThemeToggle';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
 function Routes({ me }: { me: MeResponse }) {
@@ -156,6 +157,9 @@ export default function App() {
               having nothing to back up. The page itself says so when the
               catalog is empty. */}
           {canEdit && <Link to="/export">Export</Link>}
+          {/* Last before the signed-in name, and shown to everyone including
+              readers — how the app looks is not a permission. */}
+          <ThemeToggle />
           <span className="who" title={me.data.email}>
             {me.data.displayName || me.data.email}
             {me.data.role !== 'owner' && <span className="role-tag"> {me.data.role}</span>}

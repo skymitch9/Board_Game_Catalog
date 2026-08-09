@@ -114,8 +114,19 @@
   Deleting dark mode would have been the easier read of "aged paper background"
   and the wrong one — this app is used in a shop at 6pm.
 */
-@media (prefers-color-scheme: dark) {
-  :root {
+/*
+  ⚠️ An attribute, not `@media (prefers-color-scheme: dark)`.
+
+  The OS preference is still what decides by default — it is simply resolved in
+  the inline script in `index.html` rather than here, which is what lets this
+  palette be written **once**. Under a media query the app could not honour a
+  user who picks light while their phone is dark, and expressing both would mean
+  maintaining thirty tokens in two places where any miss is silent.
+
+  So: the script always stamps an explicit `light` or `dark`, and this is the
+  only rule that paints dark. See `src/lib/theme.ts` for the three-way choice.
+*/
+:root[data-theme='dark'] {
     --paper: #1b1814;
     --paper-deep: #141109;
     --charcoal: #0b0907;
@@ -158,7 +169,6 @@
     --halftone:
       radial-gradient(circle at 1px 1px, rgba(236, 224, 203, 0.05) 1px, transparent 0),
       radial-gradient(circle at 4px 4px, rgba(236, 224, 203, 0.03) 1px, transparent 0);
-  }
 }
 
 /*
@@ -272,6 +282,51 @@ a:hover { text-decoration: underline; }
   text-shadow: 2px 2px 0 var(--brick);
 }
 .brand:hover { text-decoration: none; color: var(--mustard); }
+/* --- the theme cog ------------------------------------------------------- */
+
+.theme-toggle { position: relative; display: flex; align-items: center; }
+/* A square target rather than a text link: it is an icon, and 34px is the
+   smallest thing a thumb reliably hits. Ink-outlined like every other button. */
+.theme-toggle__cog {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+  color: var(--text); background: var(--card);
+  border: var(--ink) solid var(--ink-color); border-radius: 7px;
+  box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.22);
+  cursor: pointer;
+}
+.theme-toggle__cog:hover { color: var(--accent); }
+.theme-toggle__cog:active { transform: translate(2px, 2px); box-shadow: none; }
+
+/*
+  The menu. Right-aligned to the cog because the cog is the last thing in the
+  bar — anchored left it would hang off the screen on a phone.
+
+  z-index sits above the cover-health banner, which is the only thing that ever
+  renders directly beneath the top bar.
+*/
+.theme-menu {
+  position: absolute; top: calc(100% + 0.5rem); right: 0; z-index: 20;
+  min-width: 12rem;
+  display: flex; flex-direction: column;
+  background: var(--card);
+  border: var(--ink) solid var(--ink-color); border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+  padding: 0.3rem;
+}
+.theme-menu__opt {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  padding: 0.5rem 0.55rem; border-radius: 6px;
+  background: none; border: none; cursor: pointer;
+  font: inherit; font-size: 0.9rem; color: var(--text); text-align: left;
+}
+.theme-menu__opt:hover { background: var(--paper-deep); }
+.theme-menu__opt--on { background: var(--mustard); color: var(--charcoal); }
+.theme-menu__opt--on .muted { color: var(--charcoal); opacity: 0.75; }
+/* Fixed width so the rows do not shift sideways as the tick moves. */
+.theme-menu__tick { width: 1em; flex: none; font-weight: 700; }
+.theme-menu__label { display: flex; flex-direction: column; line-height: 1.25; }
+
 .who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role-tag {
   background: var(--warn-bg); color: var(--warn);
