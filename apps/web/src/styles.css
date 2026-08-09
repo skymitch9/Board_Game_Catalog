@@ -116,11 +116,22 @@
 */
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #1e1b18;
-    --paper-deep: #17140f;
-    --charcoal: #0f0d0b;
+    --paper: #1b1814;
+    --paper-deep: #141109;
+    --charcoal: #0b0907;
     --bg: var(--paper);
-    --card: #262119;
+    /*
+      ⚠️ The card has to sit clearly *above* the page here, and at #262119
+      against #1e1b18 it did not — an eight-point lightness gap that carries a
+      panel on cream is nothing on a dark ground, so every card read as a
+      hairline groove rather than as a sheet lying on the board. The ink border
+      cannot rescue it either, because ink is darker than both.
+
+      Widened to about twice the gap, and the drop shadow deepened with it. This
+      is the half of the theme most people actually see: a phone in a shop in
+      the evening is in dark mode.
+    */
+    --card: #302a20;
     --text: #ece0cb;
     --muted: #a39683;
     --line: #453c2f;
@@ -142,8 +153,8 @@
     --transit: #6fb3b3;
     --transit-bg: #1d3634;
 
-    --ink-color: #0f0d0b;
-    --panel-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+    --ink-color: #0b0907;
+    --panel-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
     --halftone:
       radial-gradient(circle at 1px 1px, rgba(236, 224, 203, 0.05) 1px, transparent 0),
       radial-gradient(circle at 4px 4px, rgba(236, 224, 203, 0.03) 1px, transparent 0);
@@ -1100,6 +1111,39 @@ textarea { resize: vertical; }
 /* --- people ------------------------------------------------------------- */
 
 .topbar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 1rem; min-width: 0; }
+
+/*
+  The nav had been left as plain accent-coloured links, on the reading that the
+  brief says to keep navigation "clean and conventional". That was half right:
+  beside an inked masthead on cream paper, default blue links stop reading as a
+  deliberate choice and start reading as the part nobody styled.
+
+  So they stay conventional — body font, no chips, no boxes, nothing that
+  competes with the masthead — and become *printed*: charcoal ink rather than
+  web blue, with a mustard marker stroke under the one you are hovering. The
+  underline is a background rather than `text-decoration` so it can be a fat
+  highlighter stroke sitting behind the baseline instead of a hairline.
+*/
+.topbar-right a {
+  color: var(--text);
+  font-weight: 600;
+  padding: 0.1rem 0.15rem;
+  background-image: linear-gradient(var(--mustard), var(--mustard));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0 0.4em;
+  transition: background-size 0.12s ease-out;
+}
+.topbar-right a:hover {
+  text-decoration: none;
+  color: var(--text);
+  background-size: 100% 0.4em;
+}
+/* A keyboard user gets the same mark, not a different one. */
+.topbar-right a:focus-visible { background-size: 100% 0.4em; outline: none; }
+@media (prefers-reduced-motion: reduce) {
+  .topbar-right a { transition: none; }
+}
 /* The links keep their full size; only the signed-in name gives ground, because
    it is the one thing here nobody navigates with. */
 @media (max-width: 560px) {
