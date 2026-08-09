@@ -139,6 +139,95 @@ export function isCollectible(name: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Editions in another language
+// ---------------------------------------------------------------------------
+
+/**
+ * A script English does not use. The one signal here that cannot be argued
+ * with — Greek, Cyrillic, Hebrew, Arabic, Thai, kana, CJK, Hangul.
+ */
+const NON_LATIN_SCRIPT =
+  /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿ฀-๿぀-ヿ㐀-鿿가-힯]/;
+
+/**
+ * Letters English product titles essentially never carry.
+ *
+ * Weaker than it looks — *Pokémon* and *Café* are English-market names — which
+ * is why this runs **after** the strong words and never alone decides anything
+ * a strong word already settled.
+ */
+const NON_ENGLISH_LETTER = /[äöüßàâçéèêëîïôœùûñãõáíóúłżźśćęąńěů]/i;
+
+/**
+ * Words that appear in no English board-game title, so one is enough.
+ *
+ * `van`, `het`, `des`, `du`, `pour`, `del` are function words in their own
+ * languages and simply absent from English titles; the rest are nouns
+ * (`Siedler`, `Kolonisten`, `Erweiterung`, `Szenarien`) that name the product
+ * category in German, Dutch or Polish.
+ */
+const STRONG_FOREIGN = new Set([
+  'siedler', 'kolonisten', 'erweiterung', 'szenario', 'szenarien', 'scenariusze', 'cenarios',
+  'duell', 'sonderkarte', 'kartenspiel', 'spielen', 'jeu', 'jeux', 'juego', 'gioco', 'jogo',
+  'jogos', 'fur', 'vom', 'zur', 'zum', 'des', 'dem', 'den', 'van', 'het', 'een', 'du', 'aux',
+  'pour', 'del', 'della', 'gli', 'buch', 'ausgabe', 'edicion', 'tajniacy',
+]);
+
+/**
+ * Words that are foreign **and** ordinary English, so one proves nothing.
+ *
+ * ⚠️ **`die` is why this list exists.** It is the German article and it is also
+ * the English singular of *dice*, which on a board-game catalogue is a
+ * collision waiting to happen. A first cut flagged *"Veiled Fate: Fate Die"*
+ * and *"Veiled Fate: Renewal Die"* as German. Requiring two of these before
+ * flagging clears both, and cost nothing: every genuinely foreign title that
+ * relies on weak words alone carries several.
+ */
+const WEAK_FOREIGN = new Set([
+  'die', 'der', 'das', 'de', 'la', 'le', 'les', 'el', 'los', 'las', 'i', 'w', 'na', 'y',
+  'per', 'il', 'lo', 'und', 'mit', 'im', 'auf', 'ein', 'eine', 'von', 'dos',
+]);
+
+/**
+ * Is this an edition in a language the owner does not read?
+ *
+ * *"We also have no way to… can we add a filter to exclude versions that aren't
+ * English or ones that have an alternate language in their name. We might have
+ * some false positives."* — the owner, 2026-08-09. They were right about the
+ * false positives, and finding them is what shaped the strong/weak split above.
+ *
+ * Measured against production the same day: **45 of 672** chaseable official
+ * components. Catan falls 93 → 66, Codenames 29 → 19, Qwirkle 5 → 3.
+ *
+ * ⚠️ **This does not finish Catan, and nothing name-based will.** Of the 96
+ * official components left on it, **27 are English-named regional one-offs** —
+ * `Catan Geographies: Mallorca`, `Austria`, `Corsica`. English title, and a
+ * product you cannot buy in Arizona. A "Geographies/Scenario" rule was
+ * considered and rejected: `Catan Scenarios: Oil Springs` is a real, buyable
+ * mini-expansion sitting in exactly that naming pattern. The owner's own
+ * verdict on this: *"we can't win every battle."*
+ *
+ * The untested risk runs the other way. An English-market game with a foreign
+ * title — *Azul*, *La Granja* — or a diacritic in an English name would be
+ * flagged wrongly. Nothing in the catalog trips it today, which is precisely
+ * why these are set aside behind a disclosure rather than dropped.
+ */
+export function isNonEnglishEdition(name: string): boolean {
+  if (NON_LATIN_SCRIPT.test(name)) return true;
+
+  const words = new Set(
+    (name.toLowerCase().match(/[\p{L}\p{N}'’-]+/gu) ?? []).map((w) => w),
+  );
+  for (const w of words) if (STRONG_FOREIGN.has(w)) return true;
+
+  if (NON_ENGLISH_LETTER.test(name)) return true;
+
+  let weak = 0;
+  for (const w of words) if (WEAK_FOREIGN.has(w)) weak += 1;
+  return weak >= 2;
+}
+
+// ---------------------------------------------------------------------------
 // Do we have it?
 // ---------------------------------------------------------------------------
 
@@ -375,6 +464,16 @@ export interface GameCompleteness {
    */
   collectibles: { total: number; held: number; components: ComponentStatus[] };
   /**
+   * Official, but published in another language. Never counted, always
+   * available — the same bargain as `thirdParty` and `collectibles`.
+   *
+   * Kept apart from `collectibles` rather than folded in, for the reason those
+   * two are kept apart from each other: they answer different questions. One is
+   * *you cannot buy this*, this one is *you could buy it and could not read
+   * it*, and a German reprint of a game you own is not a promo.
+   */
+  nonEnglish: { total: number; held: number; components: ComponentStatus[] };
+  /**
    * Components the owner marked as held by hand — a *review* list, not a split.
    *
    * ⚠️ **These are already counted in the sections above**, unlike `thirdParty`
@@ -452,8 +551,13 @@ export function buildCompleteness(input: {
   // Only what survives that is asked whether it is chaseable.
   const third = live.filter((s) => s.official === false).sort(byRecency);
   const official = live.filter((s) => s.official === true);
-  const chaseable = official.filter((s) => !isCollectible(s.name));
+  // Collectible before non-English, so a German promo card lands under promos.
+  // Both are "set aside"; the ordering only decides which sentence explains it,
+  // and "you cannot buy this" is the more useful of the two to be told.
   const collectible = official.filter((s) => isCollectible(s.name)).sort(byRecency);
+  const buyable = official.filter((s) => !isCollectible(s.name));
+  const foreign = buyable.filter((s) => isNonEnglishEdition(s.name)).sort(byRecency);
+  const chaseable = buyable.filter((s) => !isNonEnglishEdition(s.name));
 
   return {
     itemId: input.itemId,
@@ -471,6 +575,11 @@ export function buildCompleteness(input: {
       total: collectible.length,
       held: collectible.filter((s) => s.state === 'held').length,
       components: collectible,
+    },
+    nonEnglish: {
+      total: foreign.length,
+      held: foreign.filter((s) => s.state === 'held').length,
+      components: foreign,
     },
     // Drawn from `live` rather than from any one split, because a hand-marked
     // component can be official, third-party or a collectible and the owner

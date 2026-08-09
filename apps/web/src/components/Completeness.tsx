@@ -116,10 +116,11 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
               there would be a plain untruth about data on the same screen. */}
           {data.expansions.total === 0 && data.accessories.total === 0 && (
             <p className="muted">
-              {data.collectibles.total > 0 ? (
+              {data.collectibles.total + data.nonEnglish.total > 0 ? (
                 <>
-                  Everything BoardGameGeek lists as official for this game is a promo or a
-                  collectible — nothing to chase.
+                  Everything BoardGameGeek lists as official for this game is set aside
+                  below — a promo, a collectible or an edition in another language. Nothing
+                  to chase.
                 </>
               ) : (
                 <>
@@ -163,6 +164,20 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
           />
 
           <Aside
+            group={data.nonEnglish}
+            id={`non-english-${data.itemId}`}
+            summary={(n) => (
+              <>
+                {n} {n === 1 ? 'edition' : 'editions'} in another language
+              </>
+            )}
+            explanation="German, Dutch, Polish, Japanese and the like — real products, but not ones you could read, so they do not count towards the figures above. Sorted out by name: if something English is hiding in here, that is why."
+            gameId={data.itemId}
+            canEdit={canEdit}
+            onChanged={refresh}
+          />
+
+          <Aside
             group={data.thirdParty}
             id={`third-party-${data.itemId}`}
             summary={(n) => (
@@ -178,8 +193,8 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
 
           <p className="completeness__footnote">
             Checked {formatWhen(data.checkedAt)}. Official components you could still buy
-            only — promos, collectibles and anything a different publisher made are counted
-            separately.
+            and read only — promos, collectibles, other-language editions and anything a
+            different publisher made are counted separately.
             {data.unclassified > 0 && (
               <>
                 {' '}
