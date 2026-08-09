@@ -37,6 +37,21 @@ Measured 2026-08-05 against production: **83 rooted games with a `bgg_id` list
 1,148 components** between them (680 expansions, 468 accessories, 1,120 distinct
 BoardGameGeek ids).
 
+**Re-measured 2026-08-08, and the sweep is now caught up:**
+
+| | |
+|---|---|
+| Eligible games (rooted, with a `bgg_id`) | **139** |
+| Of those, checked | **139** — none never-checked, none due |
+| Components stored | **1,437** |
+| Unclassified | **0** |
+| Stale / not-found | **0** / **0** |
+| Last sweep | 2026-08-08 21:55 UTC |
+
+The jump from 83 games is the `bgg_id` audit (197 → 232 ids) feeding straight
+into eligibility. **Nothing needs running** — the cron and the manual backfills
+have cleared both passes.
+
 Looking that up on demand would mean a ~1.1s BoardGameGeek call per item-page
 view, would go blank whenever BGG did, and — the real point — could never notice
 that *something new had been published*. A stored history can. That is the half
@@ -122,6 +137,10 @@ Ark Nova, measured:
 Across the whole local catalog: **665 official** (422 expansions, 243
 accessories) against **472 third-party** (203, 269).
 
+Production, live rows only, 2026-08-08: **954 official** (666 expansions, 288
+accessories) against **483 third-party** (210, 273). Roughly a third of
+everything BoardGameGeek links is somebody else's product.
+
 ### The split is recomputable for free
 
 `POST /api/components/reclassify` re-decides every row from stored publishers
@@ -175,6 +194,26 @@ Not included, each for a reason checked against the real names:
 | Twisted Cryptids — accessories | 19 → 8 (eleven vinyl cryptids) |
 | Here to Slay — accessories | 23 → 14 |
 | Catan — expansions | 82 → 80 |
+
+### And against production, where it actually runs
+
+**282 of 954** live official components filtered — a slightly higher share than
+local, because production holds games local does not. The games it helps most:
+
+| Game | Before → after |
+|---|---|
+| Terraforming Mars — expansions | 76 → 19 |
+| Unstable Unicorns — accessories | **17 → 1** |
+| Unstable Unicorns — expansions | 24 → 9 |
+| Happy Little Dinosaurs — expansions | 17 → 4 |
+| Codenames — expansions | 38 → 28 |
+| Aeon's End — expansions | 31 → 19 |
+| Scythe — expansions | 16 → 5 |
+| Twisted Cryptids — accessories | 19 → 8 |
+
+Unstable Unicorns and Happy Little Dinosaurs are not in the local catalog and
+were not part of the calibration; they are the strongest results either way,
+which is the useful kind of surprise.
 
 ⚠️ **Catan is the case this does not fix**, and knowingly. Its fifty regional
 scenarios ("Catan Geographies: Mallorca", "Die Siedler von Catan: Hochzeitsturm")

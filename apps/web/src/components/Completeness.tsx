@@ -182,8 +182,9 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
 /**
  * Above this many rows, a section starts shut.
  *
- * **Measured on the local catalog, 2026-08-08**, because production's
- * `game_component` is still empty. Catan (item 54) is the case the owner named
+ * **Measured on the local catalog, 2026-08-08.** Production holds more — 1,437
+ * components against 1,106 — so if anything this understates the wall.
+ * Catan (item 54) is the case the owner named
  * and it is worse than "82 items": 82 official expansions, **0 held**, so all 82
  * are listed — plus 14 accessories, also all listed, and 59 third-party already
  * behind their own disclosure. Rendered at 386px the card is **8,538px, ten

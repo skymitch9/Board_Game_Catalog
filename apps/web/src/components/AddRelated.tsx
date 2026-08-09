@@ -167,11 +167,16 @@ function componentToOffer(c: ComponentStatus): OfferedItem {
  * BoardGameGeek call is made from here, for the same reason the report itself
  * never makes one.
  *
- * ⚠️ **`game_component` is empty catalog-wide today**, so this is usually the
- * silent half of the list. Every reason it can be empty gets its own sentence:
- * a picker that simply showed nothing would be indistinguishable from a game
- * that genuinely has no expansions, which is the misreading this feature exists
- * to prevent everywhere else.
+ * Every reason the list can be empty still gets its own sentence. A picker that
+ * simply showed nothing would be indistinguishable from a game that genuinely
+ * has no expansions, which is the misreading this feature exists to prevent
+ * everywhere else — and the reasons did not stop mattering when the data
+ * arrived: a game with no `bgg_id` has 525 catalog-wide company.
+ *
+ * (This once warned that `game_component` was empty catalog-wide. Verified
+ * against production 2026-08-08: **1,437 components across 139 games, all 139
+ * checked, none unclassified**. The sweep is caught up, so this is now the loud
+ * half of the list.)
  *
  * Third-party components — inserts, sleeves, upgrade kits by other publishers —
  * are left out, and so are promos and collectibles. Both are long tails that

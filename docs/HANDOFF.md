@@ -16,7 +16,28 @@ day started (`29f2c67`).
 | Catalog | **806 items**, 806 copies, 573 owned, 29 wanted |
 | `item_alias` | **72 rows across 18 items** — the D&D spellings, all `source = 'manual'` |
 
-### Landed after the above, committed and **not yet deployed**
+### Deployed 2026-08-08, late session
+
+| | |
+|---|---|
+| Live worker version | **`a440debc-1781-499b-a37b-105fd8b16bbd`** |
+| Roll back to | `7cfae0a7-0cfe-4dae-a58b-ea5b94d45e33` |
+| Commits | `37de4b1`, `c50979e`, pushed to `origin/main` |
+| Migrations | **None** — the promo split is computed on read |
+
+**`game_component` needed nothing.** Checked before assuming: 139 eligible
+games, all 139 checked, 1,437 components, 0 unclassified, 0 due, 0 stale. The
+filter had live data to bite on the moment it deployed — **282 of 954** official
+components move. Unstable Unicorns' accessories go 17 → 1 and Happy Little
+Dinosaurs' expansions 17 → 4; neither game is in the local catalog, so neither
+was part of the calibration.
+
+⚠️ **`wrangler d1 execute --remote` can read production even though Access blocks
+every HTTP route.** That is the way to answer "what does production actually
+hold" without a signed-in browser. `d1 list` working while `migrations list
+--remote` answered `7403` was a transient; a straight retry of `execute` worked.
+
+### Landed earlier, now deployed by the above
 
 Promos and collectibles are now split out of the completeness figures — the
 owner's *"we're getting bogged down by things like promo cards, or limited 1-off
@@ -32,9 +53,16 @@ catalog: 180 of 660 official components move, Terraforming Mars' expansions fall
 its regional scenarios say nothing in their names.
 
 **No migration.** The split is computed on read from `game_component.name`, so
-`npm run deploy` is all it needs and a rollback is a revert. Verified locally
-against the real component rows through `GET /api/items/:id/completeness` and in
-the browser on items 49, 59 and 109.
+a rollback is a plain revert. Verified locally against the real component rows
+through `GET /api/items/:id/completeness` and in the browser on items 49, 59 and
+109, then re-measured against production before deploying.
+
+Also verified, because it was the owner's question: adding a collectible with
+"I have it" creates a **real catalog row nested under the game**, shows an
+`owned` badge in the normal Expansions & accessories tree, comes back `held`
+inside the disclosure with both buttons gone, and puts *"· you have N"* on the
+header. It does **not** move the "X of Y" figure — out of the numerator and the
+denominator alike, which is the same bargain third-party has always had.
 
 ### ⚠️ Work in flight at the moment this was written
 
@@ -997,9 +1025,13 @@ details work took **0018** and `series` took **0019**.
 
 A separate agent is researching Dice Throne playmats.
 
-**Do yourself:** `game_component` is empty and the weekly cron next fires Sun 9
+~~**Do yourself:** `game_component` is empty and the weekly cron next fires Sun 9
 Aug. From a signed-in browser console, ~8 runs covers the catalog:
-`await (await fetch('/api/components/backfill',{method:'POST'})).json()`.
+`await (await fetch('/api/components/backfill',{method:'POST'})).json()`.~~
+**Done — verified against production 2026-08-08 23:5x UTC: 1,437 components
+across 139 games, 139 checked, 0 due, 0 unclassified, 0 stale, last sweep 21:55
+UTC. Nothing left to run.** Kept struck through rather than deleted because two
+code comments were still asserting the table was empty and were wrong for days.
 
 Scan jobs 5, 6 and 7 **no longer need retrying — they finished on their own**
 the moment the fix went live: 73/73, 74/74 and 36/36, and they now sit at
