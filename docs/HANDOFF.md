@@ -106,7 +106,13 @@ Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
 Mat` are retail bundles against our Kickstarter mats. Those four are almost
 certainly genuinely not owned.
 
-## ⏭️ NEXT SESSION — disposal & copy history
+## ⏭️ ON HOLD — disposal & copy history
+
+⏸️ **Do not start this, and do not re-ask the `lent` question, until the weekly
+usage limit resets.** The owner's instruction, 2026-08-09: *"keep holding the
+lent question until the weekly reset happens."* The plan is finished and
+waiting; what it needs is a decision, and the decision needs budget behind it to
+act on.
 
 📄 **The plan is written: [`info/copy-status-history.md`](info/copy-status-history.md).**
 Read it before touching anything; it is the whole design, measured against
@@ -158,6 +164,27 @@ nor `lent` means *given away*.
 ⚠️ The completeness feature reads `owned/lent/preordered` as **held**. Any new
 status has to declare which side of that line it sits on, or a game you gave
 away starts counting towards "you own 6 of 7".
+
+### Doomlings settled, and the "I have it" button proved correct in production
+
+The Kickstarter **Gold Box** contains the base game plus **five** expansions —
+Dinolings (361645), Mythlings (361646), Techlings (376383), Multicolor (376384,
+sold as *"Dual Color"*) and The Meaning of Life (376382) — plus the exclusive
+community playmat (376377, already held as item 877). Confirmed from the
+publisher's own reveal, not inferred from the 2022 clustering:
+<https://doomlings.com/blogs/doomlings/gold-box-revealed>
+
+The owner marked all five through the completeness card. **Verified after:
+9 Doomlings rows, 0 missing `bgg_id`, 0 broken parent/root links.** That is the
+direct evidence for the claim made earlier in this file — the card's "I have it"
+button sets the id and nests the row correctly, and it is why raw `INSERT`s were
+refused as an alternative when Access blocked the API.
+
+**Owned:** Overlush (item 876) is correct and should stay. **Not owned, and
+correctly still missing:** *Overlush Stretch Goals and Rebalance Pack* (406125),
+*Upgrade Pack* (376385) and *Doomsleeves* (376378). The owner bought the box
+after the campaign closed, so no stretch-goal content ever shipped to them — the
+general rule for this catalog, since stretch goals reach backers only.
 
 ### The non-English edition filter, shipped — 2026-08-09
 
