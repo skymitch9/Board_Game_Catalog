@@ -106,7 +106,32 @@ Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
 Mat` are retail bundles against our Kickstarter mats. Those four are almost
 certainly genuinely not owned.
 
-## ⏭️ Deferred to its own thread — marking things sold or given away
+## ⏭️ NEXT SESSION — disposal & copy history
+
+📄 **The plan is written: [`info/copy-status-history.md`](info/copy-status-history.md).**
+Read it before touching anything; it is the whole design, measured against
+production on 2026-08-09.
+
+*"For sold and lent we can mark them as not owned anymore but we should keep a
+history of them items. Map this feature for tomorrow's reset."* — the owner.
+
+The four things that decide the shape, all in that doc:
+
+1. **`lent` and `sold` have existed since 0001 and have never been used** — 0
+   rows each in production. The feature is not "add statuses"; find out what
+   actually stopped the owner before writing a migration.
+2. **One question has to go to the owner first.** They said `lent` should stop
+   counting as owned. That makes a game lent to a friend reappear on the
+   shopping list — the exact "bought twice" failure `preordered` counts as held
+   to avoid. Recommendation and both readings are in §2.
+3. **"Held" is defined four times in two different ways** across
+   `packages/db` and `packages/core`. Consolidate before adding a value.
+4. **History must not cascade.** `copy` cascades from `item`, so the obvious FK
+   erases the record that you ever owned the thing — the one fact being kept.
+
+---
+
+## ⏭️ Superseded note — marking things sold or given away
 
 *"We also have no way to mark things sold or given away or any statuses
 manually. I gave away item 303 since another item covered it and I have many
