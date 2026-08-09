@@ -79,19 +79,39 @@ new *given away* leave ownership. Ask, then build. Both readings are cheap to
 implement — but only if the two axes exist. If they stay one boolean, the answer
 is a coin flip that will be wrong half the time.
 
-### ⚠️ "Held" is currently defined four times, in two different ways
+### ✅ "Held" is now defined once — done 2026-08-09, before the feature
 
-| Definition | Where |
-|---|---|
-| `owned, lent, preordered` | `packages/db/src/components.ts:564` (completeness) |
-| `owned, lent` | `packages/db/src/items.ts:382` |
-| `owned, lent` | `packages/db/src/items.ts:622` (the owned count) |
-| `owned, lent` | `packages/core/src/schemas.ts:716` |
+**This prerequisite is complete.** It was worse than this section recorded:
+not four definitions but **eight SQL clauses** across three files, in two
+spellings, with nothing naming the distinction between them.
 
-**Consolidate these into `packages/core` before adding a status**, or the new
-value has to be added correctly in four places by hand and any miss is silent.
-This is the `CLAUDE.md` rule — *"exactly one implementation of anything that
-makes a decision"* — and it is currently being broken.
+| Now | Means | Set |
+|---|---|---|
+| `HELD_STATUSES` | *"do we have it — stop looking"* | `owned, lent, preordered` |
+| `OWNED_COPY_STATUSES` | *"how many copies do we actually have"* | `owned, lent` |
+
+Both in `packages/core/src/constants.ts` (a leaf module — safe under the
+load-bearing import order), reachable from SQL through `statusList()` in
+`packages/db/src/copies.ts`.
+
+⚠️ **The two sets differ by exactly `preordered`, and that is a decision, not
+drift.** A box in the post is a reason not to buy another; it is not a copy you
+can count, sleeve or hand across a table. Counting it would inflate "573 owned
+copies" with things nobody has yet.
+
+⚠️ **There is a third rule and it stays a literal.** `countOwnedCopies` counts
+`owned` **alone** — excluding `lent` as well as `preordered` — because its caller
+is a barcode scan asking "do I already have this, and how many?", and a copy at a
+friend's house cannot go on the table tonight. Deliberately *not* given an
+exported constant: one caller, one question, and a third named set would invite
+somebody to pick it without reading why.
+
+**So adding a status is now a one-line change in one file** — which is the whole
+point, and the reason this was worth doing before the decision below is answered.
+
+Proved behaviour-preserving rather than assumed: ten endpoints captured before
+and after against seeded data covering `owned`/`lent`/`sold`/`preordered`/
+`wanted`, physical and digital, and duplicates — **byte-for-byte identical**.
 
 ---
 

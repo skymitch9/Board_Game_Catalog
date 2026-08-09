@@ -21,6 +21,40 @@ export const COPY_STATUSES = ['owned', 'wanted', 'preordered', 'lent', 'sold'] a
 export type CopyStatus = (typeof COPY_STATUSES)[number];
 
 /**
+ * "Do we have this — should I stop looking for it?"
+ *
+ * The question completeness asks. `preordered` counts, deliberately: it is
+ * money already spent on a box in the post, and putting it back on a shopping
+ * list is how a thing gets bought twice. `lent` counts because a game at a
+ * friend's house is still yours and is coming back.
+ */
+export const HELD_STATUSES: readonly CopyStatus[] = ['owned', 'lent', 'preordered'];
+
+/**
+ * "How many copies do we actually have?"
+ *
+ * The question the collection counts ask — owned copies, duplicates, the
+ * physical/digital split. **The difference from `HELD_STATUSES` is exactly
+ * `preordered`, and it is not an oversight:** a box that has not arrived is a
+ * reason not to buy another, but it is not a copy you can count, sleeve or
+ * hand across a table. Counting it would inflate "573 owned copies" with things
+ * nobody has yet.
+ *
+ * ⚠️ These two were the *same* rule written out by hand in eight SQL clauses
+ * across three files, in two different spellings, with nothing naming the
+ * distinction — which is why the difference read as an inconsistency rather
+ * than a decision. See `docs/info/copy-status-history.md` §2: adding a status
+ * without one definition to change means adding it correctly in eight places,
+ * and any miss is silent.
+ *
+ * ⚠️ There is a third rule, and it is also deliberate: `countOwnedCopies` in
+ * `packages/db/src/copies.ts` counts **`owned` alone**. Its caller is a barcode
+ * scan asking "do I already have this, and how many?", and a lent copy is not
+ * one you can put on the table tonight.
+ */
+export const OWNED_COPY_STATUSES: readonly CopyStatus[] = ['owned', 'lent'];
+
+/**
  * Whether a copy is a thing or a licence.
  *
  * Every D&D Beyond book is the second: owning the Monster Manual digitally

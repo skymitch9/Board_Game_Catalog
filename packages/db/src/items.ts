@@ -21,6 +21,7 @@ import type {
 import {
   COLLECTION_PAGE_SIZE,
   INHERITED_FIELDS,
+  OWNED_COPY_STATUSES,
   detailGapBranches,
   foldSearchText,
   inheritCover,
@@ -30,7 +31,7 @@ import {
 } from '@bgc/core';
 import { getRelatedItems } from './relations.js';
 import { preserveDisplacedCover } from './editions.js';
-import { mapCopyRow, toIso, type CopyRow } from './copies.js';
+import { mapCopyRow, statusList, toIso, type CopyRow } from './copies.js';
 
 export interface ItemRow {
   id: number;
@@ -380,7 +381,7 @@ function matchingRootsSql(
     where.push(
       `EXISTS (SELECT 1 FROM item i4 JOIN copy c4 ON c4.item_id = i4.id
                 WHERE i4.root_game_id = i2.root_game_id
-                  AND c4.status IN ('owned','lent')
+                  AND c4.status IN (${statusList(OWNED_COPY_STATUSES)})
                 GROUP BY i4.id
                HAVING SUM(c4.quantity) > 1)`,
     );
@@ -620,14 +621,16 @@ async function summariseGroups(
     db
       .prepare(
         `${scoped.cte}SELECT k.gkey,
-                COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') THEN c.quantity END), 0) AS owned,
+                COALESCE(SUM(CASE WHEN c.status IN (${statusList(OWNED_COPY_STATUSES)}) THEN c.quantity END), 0) AS owned,
                 -- Apart, not together: a group card reading "45 wanted" over 22
-                -- items was every pledge in the tree counted as a wish.
+                -- items was every pledge in the tree counted as a wish. Which is
+                -- also why preordered is not in the set above; see
+                -- OWNED_COPY_STATUSES.
                 COALESCE(SUM(CASE WHEN c.status = 'wanted' THEN c.quantity END), 0) AS wanted,
                 COALESCE(SUM(CASE WHEN c.status = 'preordered' THEN c.quantity END), 0) AS preordered,
-                COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') AND c.format = 'digital'
+                COALESCE(SUM(CASE WHEN c.status IN (${statusList(OWNED_COPY_STATUSES)}) AND c.format = 'digital'
                                   THEN c.quantity END), 0) AS digital,
-                COALESCE(SUM(CASE WHEN c.status IN ('owned','lent') AND c.format = 'physical'
+                COALESCE(SUM(CASE WHEN c.status IN (${statusList(OWNED_COPY_STATUSES)}) AND c.format = 'physical'
                                   THEN c.quantity END), 0) AS physical
            FROM (${matchedRoots}) k
            JOIN item it ON it.root_game_id = k.root_id
@@ -2105,6 +2108,11 @@ export async function collectionStats(db: D1Database): Promise<{
   /** Licences rather than objects — the D&D Beyond half of the shelf. */
   digitalCopies: number;
 }> {
+  // Named once here because it appears three times below, and the three have to
+  // agree: "10 owned copies, 2 of them duplicated, 4 of them digital" is three
+  // readings of one shelf.
+  const OWNED = statusList(OWNED_COPY_STATUSES);
+
   const row = await db
     .prepare(
       `SELECT
@@ -2113,16 +2121,16 @@ export async function collectionStats(db: D1Database): Promise<{
          (SELECT COUNT(*) FROM item WHERE kind IN ('accessory','promo','upgrade')) AS accessories,
          (SELECT COUNT(*) FROM item)                                         AS total_items,
          (SELECT COALESCE(SUM(quantity), 0) FROM copy
-           WHERE status IN ('owned','lent'))                                 AS owned_copies,
+           WHERE status IN (${OWNED}))                                       AS owned_copies,
          -- COUNT, not SUM(quantity): these two are list lengths, and the
          -- wishlist page they link to counts rows. See the doc comment above.
          (SELECT COUNT(*) FROM copy WHERE status = 'wanted')                 AS wanted_entries,
          (SELECT COUNT(*) FROM copy WHERE status = 'preordered')             AS preordered_entries,
          (SELECT COUNT(*) FROM (
-            SELECT item_id FROM copy WHERE status IN ('owned','lent')
+            SELECT item_id FROM copy WHERE status IN (${OWNED})
              GROUP BY item_id HAVING SUM(quantity) > 1))                     AS duplicated_items,
          (SELECT COALESCE(SUM(quantity), 0) FROM copy
-           WHERE format = 'digital' AND status IN ('owned','lent'))          AS digital_copies`,
+           WHERE format = 'digital' AND status IN (${OWNED}))                AS digital_copies`,
     )
     .first<{
       base_games: number;

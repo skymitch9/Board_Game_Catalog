@@ -1,4 +1,20 @@
-import type { Copy, CreateCopyInput, UpdateCopyInput } from '@bgc/core';
+import type { Copy, CopyStatus, CreateCopyInput, UpdateCopyInput } from '@bgc/core';
+
+/**
+ * A status set as a SQL literal list: `'owned','lent'`.
+ *
+ * For embedding in an `IN (…)` clause. Not parameterised, and it does not need
+ * to be — the only inputs are the frozen arrays in `packages/core/constants.ts`,
+ * which are compile-time constants and never reach here from a request. Bound
+ * parameters would be the right answer the moment that stops being true.
+ *
+ * It exists so `HELD_STATUSES` and `OWNED_COPY_STATUSES` can be *used* rather
+ * than re-typed: a constant nobody can reference from SQL is a constant that
+ * gets copied by hand, which is the state this replaced.
+ */
+export function statusList(statuses: readonly CopyStatus[]): string {
+  return statuses.map((s) => `'${s}'`).join(',');
+}
 
 export interface CopyRow {
   id: number;
@@ -55,6 +71,13 @@ export function mapCopyRow(r: CopyRow): Copy {
  * identical copies. Only `owned` counts — a wanted or preordered copy is not
  * something you are holding, which matters because the caller is a barcode scan
  * answering "do I already have this, and how many?".
+ *
+ * ⚠️ **Deliberately narrower than both `HELD_STATUSES` and
+ * `OWNED_COPY_STATUSES`**, and the odd one out on purpose: it excludes `lent`
+ * as well as `preordered`, because a copy at a friend's house cannot be put on
+ * the table tonight. Left as a literal rather than given a constant of its own —
+ * one caller, one question, and a third exported set would invite somebody to
+ * pick it by name without reading why.
  */
 export async function countOwnedCopies(db: D1Database, itemId: number): Promise<number> {
   const row = await db

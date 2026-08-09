@@ -1,4 +1,5 @@
 import {
+  HELD_STATUSES,
   buildCompleteness,
   isOfficialComponent,
   type ComponentBackfillRun,
@@ -7,6 +8,7 @@ import {
   type OwnedThing,
   type PublisherRef,
 } from '@bgc/core';
+import { statusList } from './copies.js';
 
 /**
  * "What am I missing" — storage and reads for `game_component` /
@@ -557,11 +559,14 @@ export async function getGameCompleteness(
     db.prepare('SELECT checked_at, outcome FROM component_check WHERE item_id = ?').bind(rootId),
     // Everything in the tree, and what we hold of it. `preordered` counts as
     // held: it is money already spent on a box in the post, and putting it back
-    // on a shopping list is how a thing gets bought twice.
+    // on a shopping list is how a thing gets bought twice. The set itself lives
+    // in `packages/core/constants.ts` — this is the only query that asks the
+    // "should I stop looking for it?" question, and the counts elsewhere ask a
+    // different one.
     db
       .prepare(
         `SELECT i.id, i.name, i.bgg_id,
-                MAX(CASE WHEN c.status IN ('owned','lent','preordered') THEN 1 ELSE 0 END) AS held,
+                MAX(CASE WHEN c.status IN (${statusList(HELD_STATUSES)}) THEN 1 ELSE 0 END) AS held,
                 MAX(CASE WHEN c.status = 'wanted' THEN 1 ELSE 0 END) AS wanted
            FROM item i
            LEFT JOIN copy c ON c.item_id = i.id
