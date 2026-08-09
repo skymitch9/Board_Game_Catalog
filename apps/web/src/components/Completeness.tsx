@@ -130,6 +130,23 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
             </p>
           )}
 
+          {/* First of the three, because it is the only one whose contents are
+              *counted* above — a claim the owner made rather than a category
+              the software excluded. It has to be the easiest to find again. */}
+          <Aside
+            group={data.manual}
+            id={`manual-${data.itemId}`}
+            summary={(n) => (
+              <>
+                {n} marked as owned by hand{n === 1 ? '' : ''} — no separate catalog row
+              </>
+            )}
+            explanation="You said you have these, so they count towards the figures above. Use Undo on any row to hand it back to the ordinary rules."
+            gameId={data.itemId}
+            canEdit={canEdit}
+            onChanged={refresh}
+          />
+
           <Aside
             group={data.collectibles}
             id={`collectibles-${data.itemId}`}
@@ -367,7 +384,77 @@ function MissingRow({
       {canEdit && component.state !== 'held' && (
         <AddComponent component={component} gameId={gameId} onAdded={onChanged} />
       )}
+
+      {canEdit && <ManualHave component={component} onChanged={onChanged} />}
     </li>
+  );
+}
+
+/**
+ * "We have it, it just isn't a row" — and the undo for it.
+ *
+ * *"For dice throne everything we have has sleeves, they either came in the KS
+ * or an accessory pack. For the sleeves or any accessories maybe we need a new
+ * solution or a bgg link bypass."* — the owner.
+ *
+ * **A third control on a row that already has two, and the placement is the
+ * whole design.** The pair above is deliberately asymmetric because a mis-tap
+ * on "I have it" writes a false claim about a shelf. This one writes the *same*
+ * claim by a different mechanism, so it cannot sit beside them as an equal: it
+ * is quiet, it is last, and it says what makes it different rather than what it
+ * shares. "I have it" makes a catalog row; this one asserts there will never be
+ * one to make.
+ *
+ * Once set, the row leaves every outstanding list — `sectionFor` keeps only
+ * `state !== 'held'` — so the undo lives in the `manual` review group, which
+ * exists for exactly that reason. Rendering the undo here too means the group
+ * needs no special row of its own.
+ */
+function ManualHave({
+  component,
+  onChanged,
+}: {
+  component: ComponentStatus;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const marked = component.manualState === 'have';
+
+  // Nothing to bypass: the catalog already holds a row for this, so the
+  // ordinary buttons say something true and a hand-written claim would only
+  // add a second, weaker source for the same fact.
+  if (!marked && component.matchedItemId != null) return null;
+
+  async function set(state: 'have' | null) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setComponentManual(
+        component.id,
+        state,
+        state === 'have' ? 'Came bundled — no separate row.' : null,
+      );
+      onChanged();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="btn btn-quiet btn-inline completeness__bundled"
+        disabled={busy}
+        onClick={() => void set(marked ? null : 'have')}
+      >
+        {busy ? 'Saving…' : marked ? 'Undo' : 'Came bundled'}
+      </button>
+      {error != null && <ErrorBox error={error} what="Could not record that" />}
+    </>
   );
 }
 

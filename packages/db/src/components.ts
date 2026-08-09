@@ -346,6 +346,46 @@ export async function reclassifyStoredComponents(
 }
 
 // ---------------------------------------------------------------------------
+// The owner's own verdict
+// ---------------------------------------------------------------------------
+
+/**
+ * Say by hand that we hold a component, or withdraw that.
+ *
+ * See migration 0022: the case this exists for is a component **no
+ * BoardGameGeek id can ever settle**, because what we own is not the product
+ * BGG lists — sleeves that came inside a Kickstarter box against eleven
+ * per-hero sleeve entries.
+ *
+ * Scoped to one `game_component` row, which is one component *of one game*.
+ * That is deliberate: the same BoardGameGeek id can be a component of several
+ * games we own, and "the sleeves came in the box" may be true of one and false
+ * of another.
+ *
+ * Passing `null` clears the verdict and hands the row back to the ordinary
+ * id-and-name rules — the undo, and the reason `manual_at` is stamped rather
+ * than the row being rewritten.
+ */
+export async function setComponentManualState(
+  db: D1Database,
+  componentId: number,
+  state: 'have' | null,
+  note: string | null,
+): Promise<boolean> {
+  const res = await db
+    .prepare(
+      `UPDATE game_component
+          SET manual_state = ?2,
+              manual_note  = ?3,
+              manual_at    = CASE WHEN ?2 IS NULL THEN NULL ELSE datetime('now') END
+        WHERE id = ?1`,
+    )
+    .bind(componentId, state, state == null ? null : note)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
 // Choosing what to work on
 // ---------------------------------------------------------------------------
 
@@ -510,7 +550,7 @@ export async function getGameCompleteness(
     db
       .prepare(
         `SELECT id, bgg_id, name, kind, publishers, year_published, thumbnail_url,
-                official, stale_at
+                official, stale_at, manual_state, manual_note
            FROM game_component WHERE item_id = ?`,
       )
       .bind(rootId),
@@ -546,6 +586,8 @@ export async function getGameCompleteness(
     thumbnail_url: string | null;
     official: number | null;
     stale_at: string | null;
+    manual_state: string | null;
+    manual_note: string | null;
   }[];
   const check = ((batched[2]?.results ?? [])[0] ?? null) as {
     checked_at: string;
@@ -569,6 +611,8 @@ export async function getGameCompleteness(
     thumbnailUrl: r.thumbnail_url,
     official: r.official == null ? null : r.official === 1,
     stale: r.stale_at != null,
+    manualState: r.manual_state === 'have' ? 'have' : null,
+    manualNote: r.manual_note,
   }));
 
   const owned: OwnedThing[] = ownedRows.map((r) => ({

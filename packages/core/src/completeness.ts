@@ -156,6 +156,17 @@ export interface KnownComponent {
   official: boolean | null;
   /** True when BoardGameGeek has stopped listing this. Kept, never deleted. */
   stale: boolean;
+  /**
+   * The owner's own verdict, when no BoardGameGeek id can carry one.
+   *
+   * See migration 0022. `'have'` means *we hold this, it just is not a catalog
+   * row of its own* — sleeves that came inside a Kickstarter box, an accessory
+   * pack that BoardGameGeek lists per hero. Null means the ordinary rules
+   * decide.
+   */
+  manualState?: 'have' | null;
+  /** Why, in the owner's words. Shown verbatim rather than paraphrased. */
+  manualNote?: string | null;
 }
 
 /** One thing in our catalog that could be a component of this game. */
@@ -226,6 +237,14 @@ function withoutGamePrefix(title: string, gameName: string): string {
  * the component as missing, because `isConfidentMatch` was built for matching
  * spine text where a false positive costs a tap, and this is a context where a
  * false positive costs a purchase the owner wanted and never explains itself.
+ *
+ * **The one exception is the owner saying so directly**, and it is checked
+ * first. `manual_state` exists precisely for components no id can ever settle —
+ * sleeves that came inside a Kickstarter box, which BoardGameGeek lists per
+ * hero and which were never a separate purchase. The strict rule is there to
+ * stop *the software* guessing; it was never meant to overrule the person
+ * holding the box. Its note is carried through so the row still says why it is
+ * held, rather than presenting a human verdict as machine proof.
  */
 function statusFor(
   component: KnownComponent,
@@ -233,6 +252,14 @@ function statusFor(
   gameName: string,
 ): ComponentStatus {
   const base = { ...component, matchedItemId: null, matchedName: null, note: null };
+
+  if (component.manualState === 'have') {
+    return {
+      ...base,
+      state: 'held',
+      note: component.manualNote?.trim() || 'Marked as owned by hand — no separate catalog row.',
+    };
+  }
 
   const byId = owned.find((o) => o.bggId != null && o.bggId === component.bggId);
   if (byId) {
@@ -348,6 +375,18 @@ export interface GameCompleteness {
    */
   collectibles: { total: number; held: number; components: ComponentStatus[] };
   /**
+   * Components the owner marked as held by hand — a *review* list, not a split.
+   *
+   * ⚠️ **These are already counted in the sections above**, unlike `thirdParty`
+   * and `collectibles`, which this deliberately does not resemble in meaning
+   * despite sharing a shape. It exists because `sectionFor` puts only
+   * `state !== 'held'` into `outstanding`: the moment a component is marked, it
+   * leaves the visible list and there is nowhere left to click undo. A verdict
+   * you cannot see is a verdict you cannot withdraw, and this one is a human
+   * claim rather than a machine one — so it has to stay auditable.
+   */
+  manual: { total: number; held: number; components: ComponentStatus[] };
+  /**
    * Components whose own publisher has not been fetched yet.
    *
    * Counted in neither total. A component with no publisher cannot be placed on
@@ -433,6 +472,17 @@ export function buildCompleteness(input: {
       held: collectible.filter((s) => s.state === 'held').length,
       components: collectible,
     },
+    // Drawn from `live` rather than from any one split, because a hand-marked
+    // component can be official, third-party or a collectible and the owner
+    // still needs one place to find what they claimed.
+    manual: (() => {
+      const marked = live.filter((s) => s.manualState === 'have').sort(byRecency);
+      return {
+        total: marked.length,
+        held: marked.filter((s) => s.state === 'held').length,
+        components: marked,
+      };
+    })(),
     unclassified: live.filter((s) => s.official == null).length,
     stale: statuses.filter((s) => s.stale).length,
   };

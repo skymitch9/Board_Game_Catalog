@@ -1,6 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { componentCoverage, reclassifyStoredComponents } from '@bgc/db';
+import {
+  componentCoverage,
+  reclassifyStoredComponents,
+  setComponentManualState,
+} from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
 import { RUN_BGG_CALLS, runComponentBackfill } from '../lib/component-backfill.js';
@@ -25,6 +29,17 @@ const backfillSchema = z.object({
   force: z.coerce.boolean().optional(),
   /** One game only — the item page's "Check now". */
   itemId: z.coerce.number().int().positive().optional(),
+});
+
+/**
+ * `state: null` is the undo, and it is why this is nullable rather than a
+ * separate delete route. `note` is only meaningful alongside a verdict; the
+ * db layer drops it when the verdict is cleared, so a withdrawn claim cannot
+ * leave its reasoning behind to be read as still true.
+ */
+const manualSchema = z.object({
+  state: z.literal('have').nullable(),
+  note: z.string().max(200).nullish(),
 });
 
 export const componentRoutes = new Hono<AppBindings>()
@@ -67,6 +82,39 @@ export const componentRoutes = new Hono<AppBindings>()
       ...(parsed.data.itemId != null ? { itemId: parsed.data.itemId } : {}),
     });
     return c.json({ run });
+  })
+
+  /**
+   * The owner saying "we have this" about a component with no row of its own.
+   *
+   * `PUT` rather than `POST`: setting the same verdict twice is the same
+   * verdict, and the undo is the same route with `state: null` rather than a
+   * second endpoint that could drift from this one.
+   *
+   * Deliberately **not** wired into `createItem`. Every other "I have it" path
+   * makes a catalog row; this one exists precisely because a row would be a lie
+   * — there is no separate product on the shelf to describe.
+   */
+  .put('/:id/manual', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json({ error: 'bad_request', detail: 'component id must be a positive integer' }, 400);
+    }
+
+    const parsed = manualSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+    }
+
+    const note = parsed.data.note?.trim();
+    const changed = await setComponentManualState(
+      c.env.DB,
+      id,
+      parsed.data.state,
+      note ? note : null,
+    );
+    if (!changed) return c.json({ error: 'not_found' }, 404);
+    return c.json({ id, state: parsed.data.state, note: note ?? null });
   })
 
   /**

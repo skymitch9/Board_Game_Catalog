@@ -226,6 +226,20 @@ export const api = {
     }>;
   },
 
+  /**
+   * Say by hand that we hold a component, or withdraw that.
+   *
+   * For components no BoardGameGeek id can settle — sleeves that came inside a
+   * Kickstarter box against BGG's eleven per-hero sleeve entries. `state: null`
+   * is the undo. Takes a `game_component` row id, not an item id.
+   */
+  setComponentManual: (componentId: number, state: 'have' | null, note?: string | null) =>
+    put(`/api/components/${componentId}/manual`, { state, note: note ?? null }) as Promise<{
+      id: number;
+      state: 'have' | null;
+      note: string | null;
+    }>,
+
   /** Record every crowdfunding cover as a printing, so swapping away keeps it. */
   recordCampaignCovers: () =>
     post('/api/editions/campaign', {}) as Promise<{

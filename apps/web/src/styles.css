@@ -1019,6 +1019,16 @@ code {
 /* Where the row we made lives. A quiet aside, not a third button — it is how
    you check what a tap just did, and how you undo it. */
 .completeness__ours { flex: none; font-size: 0.78rem; }
+/* "Came bundled" — a third control on a row that already argues two are one too
+   many. So it is deliberately the quietest thing here: underlined text rather
+   than a filled or outlined button, smaller than both, and last in the row. It
+   writes the same claim as "I have it" by a different route, and a thumb moving
+   fast must not be able to mistake it for either of them. */
+.completeness__bundled {
+  flex: none; font-size: 0.74rem; padding: 0.25rem 0.3rem;
+  color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
+}
+.completeness__bundled:hover:not(:disabled) { color: var(--fg); }
 
 /* The toggle is a card-width row elsewhere; inside a card it needs its own
    margins to reach the edges rather than floating in the padding. */
