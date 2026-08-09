@@ -799,7 +799,54 @@ textarea { resize: vertical; }
   The left rule is the whole decoration: it sits above the fold on the pages
   that have it, and a fully tinted card there would shout over the game.
 */
-.arrivals { border-left: 3px solid var(--transit); }
+/*
+  The one starburst in the app, and the brief's "sparingly" is why there is one.
+
+  A starburst says *look, this is the exciting thing* — so it belongs on the
+  single event in a catalog that actually is one: a preorder you paid for months
+  ago turning up. Everything else here is inventory. Put one on a card, a badge
+  and a banner and it stops meaning anything, which is the failure mode the
+  brief spends four bullets warning about.
+
+  Decoration only — `aria-hidden` by being a pseudo-element, so it is invisible
+  to a screen reader and adds nothing to read out. The heading beside it already
+  says "On preorder 8".
+
+  It is also the one thing carrying the brief's "slightly rotated" instruction.
+  Rotation is safe *here* because this is a leaf pseudo-element with no children,
+  no text to sub-pixel-render and nothing sticky inside it — unlike `.card`,
+  where the same instruction was declined for exactly those reasons.
+*/
+.arrivals { border-left: 3px solid var(--transit); position: relative; }
+/*
+  Pinned to the corner and mostly *outside* it. At 42px tucked inside the edge
+  it crowded the "It arrived" button — a decoration overlapping the one control
+  on the card is worse than no decoration, so it moved out and got smaller.
+*/
+.arrivals::before {
+  content: '';
+  position: absolute;
+  top: -19px;
+  right: -15px;
+  width: 34px;
+  height: 34px;
+  background: var(--mustard);
+  /* A twelve-point flash. `clip-path` rather than stacked rotated squares:
+     one element, no extra DOM, and it clips the border away cleanly. */
+  clip-path: polygon(
+    50% 0%, 60% 18%, 79% 9%, 78% 30%, 97% 30%, 85% 46%,
+    100% 60%, 80% 65%, 88% 84%, 67% 79%, 63% 99%, 50% 83%,
+    37% 99%, 33% 79%, 12% 84%, 20% 65%, 0% 60%, 15% 46%,
+    3% 30%, 22% 30%, 21% 9%, 40% 18%
+  );
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+/* Nothing to celebrate on a screen somebody has asked to keep quiet, and a
+   spiky shape at the edge of a panel is the first thing to go. */
+@media (prefers-contrast: more) {
+  .arrivals::before { display: none; }
+}
 .arrivals-failed { margin: 0 0 1rem; }
 
 /* Said once above the list instead of on all twenty-two rows — see
@@ -1104,6 +1151,20 @@ code {
 }
 
 @media (max-width: 560px) {
+  /*
+    Display type comes back down. A game title is the longest string in the app
+    — "Ascension 15th Anniversary Collector's Edition" — and at 2rem Bangers on
+    a 390px screen it takes four lines before the page has said anything else.
+
+    The masthead's stroke thins with it. `-webkit-text-stroke` does not scale
+    with font-size, so a 3px stroke that reads as a confident outline at 1.4rem
+    starts closing up Bangers' counters once the letters shrink.
+  */
+  h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.15rem; }
+  .brand { font-size: 1.15rem; -webkit-text-stroke-width: 2px; }
+  .empty h2, .empty h3 { font-size: 1.25rem; }
+
   .page-head { flex-direction: column; align-items: stretch; }
   .child-kind { width: auto; }
   /*
@@ -1148,18 +1209,37 @@ code {
    can write to the catalog, so the row is three wide or four depending on who
    is looking. minmax(0, 1fr) keeps a long label from widening its column. */
 .scan-modes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.5rem; }
+/* Tabs as small panels, like every other pressable thing. The selected one is
+   filled mustard rather than outlined in accent: an inset ring is a web idiom
+   and reads as a focus state, where a filled tab reads as the one you are on. */
 .scan-mode {
   display: flex; flex-direction: column; gap: 0.15rem;
   padding: 0.6rem 0.5rem; text-align: left;
-  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card);
+  border: var(--ink) solid var(--ink-color); border-radius: 8px;
+  box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.18);
   cursor: pointer; font: inherit; color: inherit;
 }
+.scan-mode strong { font-family: var(--font-label); font-weight: 400; letter-spacing: 0.02em; }
 .scan-mode span { font-size: 0.75rem; line-height: 1.25; }
-.scan-mode--on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.scan-mode--on {
+  background: var(--mustard); color: var(--charcoal);
+  box-shadow: none; transform: translate(2px, 2px);
+}
+.scan-mode--on .muted { color: var(--charcoal); opacity: 0.75; }
 
+/*
+  The viewfinder gets an ink frame — a panel with a photograph in it — but the
+  inside **stays black** and is not themed. That is not an oversight: it is a
+  live camera feed, and tinting the surround changes how the picture reads while
+  somebody is judging whether a barcode is in frame. Black is also the only
+  neutral that does not throw off perceived exposure.
+*/
 .camera-stage {
   position: relative; overflow: hidden;
-  background: #000; border-radius: 12px;
+  background: #000;
+  border: var(--ink) solid var(--ink-color); border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
   display: flex; align-items: center; justify-content: center;
   /* Take whatever is left after the header and tabs, so the shutter pinned to
      its bottom edge is always on screen. */
@@ -1190,7 +1270,18 @@ code {
 .camera-stage__overlay .muted { max-width: 34ch; font-size: 0.85rem; }
 
 .camera-stage__actions { position: absolute; left: 0; right: 0; bottom: 1rem; display: flex; justify-content: center; }
-.camera-stage__actions button { padding: 0.8rem 1.5rem; font-size: 1rem; border-radius: 999px; }
+/* The shutter keeps its pill shape — it is a camera control sitting on a live
+   image, and the one place a round target beats a printed panel. Inked so it
+   still belongs to the design, and mustard so it is findable against any frame
+   the camera happens to be pointing at. */
+.camera-stage__actions button {
+  padding: 0.8rem 1.5rem; font-size: 1rem; border-radius: 999px;
+  background: var(--mustard); color: var(--charcoal);
+  border: var(--ink) solid var(--ink-color);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  font-family: var(--font-label); font-weight: 400; letter-spacing: 0.02em;
+  cursor: pointer;
+}
 
 .camera-stage__status {
   position: absolute; left: 0; right: 0; bottom: 0.5rem;
@@ -1243,7 +1334,9 @@ code {
   .scan-mode { padding: 0.45rem 0.25rem; text-align: center; align-items: center; }
   .scan-mode strong { font-size: 0.78rem; }
   .scan-mode span { display: none; }
-  .scan-header h1 { font-size: 1.25rem; }
+  /* Lower again than the general phone size: this header shares the viewport
+     with a camera that wants every pixel it can get. */
+  .scan-header h1 { font-size: 1.35rem; }
 }
 
 .shelf-actions { display: flex; gap: 0.5rem; }
