@@ -135,6 +135,12 @@ migration reads `0022_component_manual.sql`.
 against the 0021 schema would have thrown *no such column* on every item page in
 the catalog.
 
+✅ **Confirmed live by the owner: "What else exists" loads.** That check had to
+come from a signed-in browser — Access intercepts every route at the edge, so a
+session can verify the schema, the data and the logic against live rows with
+`d1 execute --remote` and still not know whether the deployed Worker serves a
+page. **Ask for that one page load; do not infer it from a clean deploy.**
+
 ### All 17 Dice Throne sleeve components marked bundled — 2026-08-09
 
 *"Run came bundled on all sleeve stuff for dice throne."* — the owner.
