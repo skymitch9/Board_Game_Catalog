@@ -1,54 +1,187 @@
+/* ---------------------------------------------------------------------------
+   Muted vintage pop-art, applied to a catalog rather than to a poster.
+
+   The brief asked for aged paper, halftone dots, comic panels and thick
+   charcoal outlines. What it described was a *marketing* site — hero banner,
+   featured games, events, newsletter signup — and this is a private tool used
+   one-handed in a shop, so the visual language was taken and the furniture was
+   not. There is no hero. The panels are the cards that already existed.
+
+   ⚠️ **Restraint is the whole brief, and it is the easy part to lose.** The
+   instruction was "muted", "subtle", "sparingly", "so text remains easy to
+   read" — a comic pastiche that shouts is a failure of this design, not an
+   enthusiastic reading of it. Every texture here is deliberately near the
+   threshold of noticing.
+
+   It is a **token swap plus two thin layers** (a paper texture and a display
+   typeface), not a rewrite. Every colour in this file already came from the
+   variables below, so restyling meant redefining them rather than touching
+   1,200 lines of hard-won layout — several rules of which are load-bearing and
+   have already eaten a name three times when disturbed.
+   --------------------------------------------------------------------------- */
+
+/* Latin subsets, served from our own assets. See public/fonts/README.md for
+   why these are committed rather than linked — this app makes no third-party
+   requests and decoration was not the thing to break that for. */
+@font-face {
+  font-family: 'Bangers';
+  src: url('/fonts/bangers.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Luckiest Guy';
+  src: url('/fonts/luckiest-guy.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --bg: #f6f7f9;
-  --card: #ffffff;
-  --text: #1a1d23;
-  --muted: #6b7280;
-  --line: #e4e7ec;
-  --accent: #2563eb;
-  --good: #15803d;
-  --good-bg: #dcfce7;
-  --warn: #b45309;
-  --warn-bg: #fef3c7;
-  --bad: #b91c1c;
-  --bad-bg: #fee2e2;
-  --info-bg: #e0e7ff;
-  --info: #3730a3;
-  /* Paid for, not here yet. Cyan is the one hue left that is not already
-     spoken for — green is owned, amber is wanted, indigo is lent, red is
-     broken — and it reads as in-transit rather than as a warning. */
-  --transit: #0e7490;
-  --transit-bg: #cffafe;
+  /* --- the printed palette ------------------------------------------------
+     Mustard, dusty blue, brick, coral and charcoal on aged paper. Every one is
+     desaturated: the brief rules out neon, pure white and saturated primaries,
+     and those are exactly what a naive comic palette reaches for. */
+  --paper: #f2e8d5;
+  --paper-deep: #e8dbc3;
+  --charcoal: #2b2622;
+  --mustard: #d99a2b;
+  --dusty-blue: #4a7c9b;
+  --brick: #a8443a;
+  --coral: #d9705f;
+
+  --bg: var(--paper);
+  /* Cards are a shade lighter than the page so a panel lifts off it without
+     going white — white is explicitly out, and it is what makes comic pastiche
+     look like a template. */
+  --card: #fbf5e9;
+  --text: var(--charcoal);
+  --muted: #7a6e60;
+  --line: #cdbb9c;
+  --accent: var(--dusty-blue);
+
+  /* The status hues keep their *meanings* and change their clothes. Green is
+     still owned, amber still wanted, and the set stays mutually
+     distinguishable — this is the one part of the palette that carries
+     information rather than mood, so it is tuned for separation first and
+     period feel second. */
+  --good: #4e7a44;
+  --good-bg: #dfe4c8;
+  --warn: #9a6a12;
+  --warn-bg: #f2e2b8;
+  --bad: var(--brick);
+  --bad-bg: #f0d6cf;
+  --info: #3f6480;
+  --info-bg: #d8e2e9;
+  /* Paid for, not here yet. Still the one hue nothing else claims — a faded
+     teal now rather than cyan, because cyan is the neon the brief rules out. */
+  --transit: #2f7d84;
+  --transit-bg: #d2e5e2;
+
+  /* --- the comic layer ---------------------------------------------------- */
+  /* Thick charcoal outline and a hard offset shadow: the two marks that make a
+     box read as a printed panel. Kept as tokens so the weight can be tuned in
+     one place rather than in forty rules. */
+  --ink: 2px;
+  --ink-color: var(--charcoal);
+  --panel-shadow: 3px 3px 0 rgba(43, 38, 34, 0.18);
+  --panel-radius: 10px;
+  /* Halftone. Two offset dot grids at 6px, at ~4% — visible as tone, not as
+     dots, until you put your face against the screen. */
+  --halftone:
+    radial-gradient(circle at 1px 1px, rgba(43, 38, 34, 0.055) 1px, transparent 0),
+    radial-gradient(circle at 4px 4px, rgba(43, 38, 34, 0.035) 1px, transparent 0);
+  --halftone-size: 6px 6px;
+
+  --font-display: 'Bangers', 'Luckiest Guy', 'Trebuchet MS', system-ui, sans-serif;
+  --font-label: 'Luckiest Guy', 'Bangers', 'Trebuchet MS', system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', sans-serif;
+
   color-scheme: light dark;
 }
 
+/*
+  Dark mode is kept, and it is *not* a pop-art poster at night.
+
+  The brief is built on aged paper, and there is no such thing as dark aged
+  paper — so this is the same ink on a dark board rather than an inversion of
+  the cream. The five accents are lifted just enough to hold their meaning
+  against it, and the halftone is switched to a light dot: a dark dot on a dark
+  ground is invisible, which would silently drop the texture for anyone whose
+  phone is in dark mode, which is most of them in the evening.
+
+  Deleting dark mode would have been the easier read of "aged paper background"
+  and the wrong one — this app is used in a shop at 6pm.
+*/
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14171c;
-    --card: #1c2027;
-    --text: #e8eaed;
-    --muted: #9aa3af;
-    --line: #2b313a;
-    --accent: #60a5fa;
-    --good: #4ade80;
-    --good-bg: #14361f;
-    --warn: #fbbf24;
-    --warn-bg: #3a2c07;
-    --bad: #f87171;
-    --bad-bg: #3d1a1a;
-    --info-bg: #1e2a52;
-    --info: #a5b4fc;
-    --transit: #22d3ee;
-    --transit-bg: #0b3a44;
+    --paper: #1e1b18;
+    --paper-deep: #17140f;
+    --charcoal: #0f0d0b;
+    --bg: var(--paper);
+    --card: #262119;
+    --text: #ece0cb;
+    --muted: #a39683;
+    --line: #453c2f;
+    --accent: #7fb0cd;
+
+    --mustard: #e5b45c;
+    --dusty-blue: #7fb0cd;
+    --brick: #d4776b;
+    --coral: #e08e7d;
+
+    --good: #8fbb7e;
+    --good-bg: #2b3720;
+    --warn: #d9a441;
+    --warn-bg: #3d3016;
+    --bad: #d4776b;
+    --bad-bg: #3d221e;
+    --info: #93b4c9;
+    --info-bg: #24333d;
+    --transit: #6fb3b3;
+    --transit-bg: #1d3634;
+
+    --ink-color: #0f0d0b;
+    --panel-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+    --halftone:
+      radial-gradient(circle at 1px 1px, rgba(236, 224, 203, 0.05) 1px, transparent 0),
+      radial-gradient(circle at 4px 4px, rgba(236, 224, 203, 0.03) 1px, transparent 0);
+  }
+}
+
+/*
+  Everything above is decoration, and decoration must not win an argument with
+  a person's own settings. Reduced motion is respected elsewhere; here the
+  texture itself is dropped for anyone who has asked for less.
+*/
+@media (prefers-contrast: more) {
+  :root {
+    --halftone: none;
+    --muted: #4a423a;
+    --line: var(--charcoal);
   }
 }
 
 * { box-sizing: border-box; }
 
+/*
+  The paper. Halftone over a flat ground, fixed so the dots belong to the sheet
+  rather than sliding under the content as it scrolls — a moving texture reads
+  as a bug on a phone.
+
+  `background-attachment: fixed` is a known repaint cost on iOS Safari, which is
+  why the dots are on the *body* and nowhere else: one fixed layer for the whole
+  app, not one per card.
+*/
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--halftone);
+  background-size: var(--halftone-size);
+  background-attachment: fixed;
   color: var(--text);
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 16px/1.5 var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -58,9 +191,32 @@ main {
   padding: 0 1rem 5rem;
 }
 
-h1 { font-size: 1.45rem; margin: 0.2rem 0; letter-spacing: -0.01em; }
-h2 { font-size: 1rem; margin: 0 0 0.75rem; }
-h3 { font-size: 1.05rem; margin: 0 0 0.5rem; }
+/*
+  Display type on headings only, and body copy left alone.
+
+  Bangers is a caps-only comic face with tight spacing: excellent for four words
+  and unreadable for a paragraph, which is exactly what the brief says. So it
+  gets `h1`, and `h2` — a section title like "Expansions & accessories" — with
+  the letter-spacing opened back up, because the face sets tight and a heading
+  in a cramped all-caps run is slower to read than the plain one it replaced.
+
+  ⚠️ **Sizes go UP, not just the family across.** Bangers has a small x-height
+  for its em, so a 1.45rem heading in it lands visibly smaller than the system
+  font it replaced. Matching the old numbers would have quietly shrunk every
+  title on the site.
+*/
+h1 {
+  font: 400 2rem/1.15 var(--font-display);
+  letter-spacing: 0.02em;
+  margin: 0.2rem 0;
+  color: var(--text);
+}
+h2 {
+  font: 400 1.3rem/1.2 var(--font-display);
+  letter-spacing: 0.03em;
+  margin: 0 0 0.75rem;
+}
+h3 { font: 400 1.2rem/1.2 var(--font-display); letter-spacing: 0.03em; margin: 0 0 0.5rem; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
@@ -83,11 +239,28 @@ a:hover { text-decoration: underline; }
   flex-wrap: wrap;
   gap: 0.4rem 1rem;
   padding: 0.9rem 0;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.75rem;
+  /* The masthead rule — thicker than a hairline, in ink. */
+  border-bottom: var(--ink) solid var(--ink-color);
 }
-.brand { font-weight: 650; color: var(--text); }
-.brand:hover { text-decoration: none; color: var(--accent); }
+/*
+  The masthead. The one place the brief's cream-lettering-with-outline treatment
+  is used, because it is the only text on the site that is a *logo* rather than
+  a label — and applied anywhere else it would cost legibility for decoration.
+
+  `paint-order: stroke fill` is what keeps the stroke outside the glyph; without
+  it the 3px stroke eats into the letterforms and Bangers' already-tight
+  counters fill in. `-webkit-text-stroke` alone centres the stroke on the path.
+*/
+.brand {
+  font: 400 1.4rem/1 var(--font-display);
+  letter-spacing: 0.03em;
+  color: var(--card);
+  -webkit-text-stroke: 3px var(--ink-color);
+  paint-order: stroke fill;
+  text-shadow: 2px 2px 0 var(--brick);
+}
+.brand:hover { text-decoration: none; color: var(--mustard); }
 .who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role-tag {
   background: var(--warn-bg); color: var(--warn);
@@ -110,10 +283,25 @@ a:hover { text-decoration: underline; }
 
 /* --- surfaces ----------------------------------------------------------- */
 
+/*
+  A comic panel: thick charcoal outline, hard offset shadow, no blur.
+
+  The offset is 3px and flat — a soft drop shadow reads as a web card, a hard
+  one reads as ink on paper with the sheet lifting. Radius stays generous rather
+  than square, because the panels here are stacked in a scrolling list on a
+  phone, and a run of hard-cornered boxes at that density reads as a table.
+
+  ⚠️ **The tilt the brief asks for is deliberately not applied to `.card`.**
+  "Slightly rotated decorative elements" is right for a starburst and wrong for
+  a container: rotating a card rotates its scrollable children, throws sub-pixel
+  text rendering, and breaks `position: sticky` inside it — which the arrivals
+  panel depends on. Tilt lives on the small decorations further down.
+*/
 .card {
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--ink) solid var(--ink-color);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
   padding: 1rem;
   margin-bottom: 1rem;
 }
@@ -153,7 +341,50 @@ a:hover { text-decoration: underline; }
 .count { color: var(--muted); font-weight: 400; }
 .description { white-space: pre-wrap; color: var(--muted); font-size: 0.92rem; }
 
-.empty { text-align: center; padding: 3rem 1rem; }
+/*
+  The one speech bubble in the app, and the brief's "sparingly" is the whole
+  reason there is exactly one.
+
+  An empty state is the only place in a catalog that is *addressing you* rather
+  than listing something — "Nothing wanted yet", "No such page" — so it is the
+  only place a bubble is saying what a bubble says. Putting one round a card, a
+  badge or a banner would make the device meaningless by repetition.
+
+  The tail is two triangles: an ink one and a paper one a pixel inside it,
+  which is how you get an outlined tail out of borders without an SVG.
+*/
+.empty {
+  position: relative;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  margin: 1.5rem 0 2.5rem;
+  background: var(--card);
+  border: var(--ink) solid var(--ink-color);
+  border-radius: 18px;
+  box-shadow: var(--panel-shadow);
+}
+.empty::before,
+.empty::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 2.5rem;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+/* The ink triangle. */
+.empty::before {
+  border-width: 22px 20px 0 0;
+  border-color: var(--ink-color) transparent transparent transparent;
+}
+/* The paper one, inset so the ink reads as an outline rather than a fill. */
+.empty::after {
+  margin-left: 3px;
+  border-width: 17px 15px 0 0;
+  border-color: var(--card) transparent transparent transparent;
+}
+.empty h2, .empty h3 { font-size: 1.5rem; }
 .errorbox {
   display: flex; flex-direction: column; gap: 0.25rem;
   background: var(--bad-bg); color: var(--bad);
@@ -176,30 +407,63 @@ a:hover { text-decoration: underline; }
 
 /* --- controls ----------------------------------------------------------- */
 
+/*
+  Buttons are small panels. Same outline and the same flat shadow, halved —
+  a button carrying the full 3px offset looks detached from the card holding it.
+
+  The press moves the button *into* its own shadow, which is the one bit of
+  motion in this design and the only place it belongs: it is the printed-object
+  metaphor doing something useful, and it gives a physical acknowledgement on a
+  screen being tapped one-handed.
+*/
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
   padding: 0.45rem 0.85rem;
-  font: inherit; font-size: 0.9rem; font-weight: 500;
-  border-radius: 8px; border: 1px solid var(--line);
+  font: inherit; font-size: 0.9rem; font-weight: 600;
+  border-radius: 7px; border: var(--ink) solid var(--ink-color);
   background: var(--card); color: var(--text);
+  box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.22);
   cursor: pointer; white-space: nowrap;
+  transition: transform 0.04s ease-out, box-shadow 0.04s ease-out;
 }
-.btn:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-primary:hover { color: #fff; filter: brightness(1.08); }
-.btn-quiet { background: transparent; }
-.btn-danger { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
-.btn-danger:hover { color: var(--bad); filter: brightness(1.05); }
+.btn:hover { color: var(--accent); text-decoration: none; }
+.btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
+/* Honour the setting: this is decoration and somebody has said they do not
+   want it. The button still changes on press, it simply does not move. */
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  .btn:active:not(:disabled) { transform: none; box-shadow: 1px 1px 0 rgba(43, 38, 34, 0.22); }
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+/* Mustard, not the blue accent. The primary action is the warmest thing on the
+   page and the ink stays charcoal on it — a coloured button with a coloured
+   border is where period palettes turn into bootstrap. */
+.btn-primary { background: var(--mustard); color: var(--charcoal); }
+.btn-primary:hover { color: var(--charcoal); filter: brightness(1.06); }
+.btn-quiet { background: transparent; box-shadow: none; border-color: var(--line); }
+.btn-quiet:hover { border-color: var(--ink-color); }
+.btn-danger { background: var(--bad-bg); color: var(--bad); }
+.btn-danger:hover { color: var(--bad); filter: brightness(1.03); }
 .danger-text:hover { color: var(--bad); border-color: var(--bad); }
 .confirm-group { display: inline-flex; gap: 0.4rem; }
 
+/*
+  Fields get the ink outline too, or the design comes apart exactly where
+  somebody is looking hardest: a hairline search box inside a 2px panel reads
+  as an unstyled control that was missed.
+
+  Inset rather than raised — a field is a hole in the paper, not an object
+  sitting on it, so the shadow goes inwards while buttons and panels come
+  forward. That is also what keeps the two apart at a glance on a form where
+  they sit side by side.
+*/
 input, select, textarea {
   width: 100%;
   padding: 0.5rem 0.6rem;
   font: inherit; font-size: 0.92rem;
-  color: var(--text); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 8px;
+  color: var(--text); background: var(--paper-deep);
+  border: var(--ink) solid var(--ink-color); border-radius: 7px;
+  box-shadow: inset 2px 2px 0 rgba(43, 38, 34, 0.07);
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 textarea { resize: vertical; }
@@ -358,11 +622,26 @@ textarea { resize: vertical; }
    void. `object-fit: cover` fills the box, so a picture that does load hides it
    completely. Several covers in the catalog are somebody else's file behind
    hotlink protection — those used to leave a hole in the row. */
+/*
+  Box art, pasted onto the panel. An ink edge is what makes a photograph sit on
+  printed paper instead of floating; the dashed variant below still marks a
+  deliberate blank, so the "picture has not loaded yet" state stays legible.
+
+  ⚠️ The dashed outline on `.thumb` itself is load-bearing and stays — several
+  covers are ~780 KB from other people's origins and rows sit in the
+  not-yet-loaded state for seconds. It is drawn as a solid ink edge with the
+  dash kept only for the true blank.
+*/
 .thumb {
-  width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex-shrink: 0;
-  background: var(--bg); border: 1px dashed var(--line);
+  width: 44px; height: 44px; border-radius: 4px; object-fit: cover; flex-shrink: 0;
+  background: var(--paper-deep); border: 1.5px solid var(--ink-color);
+  box-shadow: 1.5px 1.5px 0 rgba(43, 38, 34, 0.2);
 }
-.thumb-blank { background: var(--bg); border: 1px dashed var(--line); }
+.thumb-blank {
+  background: var(--paper-deep);
+  border: 1.5px dashed var(--line);
+  box-shadow: none;
+}
 .thumb-lg { width: 72px; height: 72px; }
 
 /* The lid on a group's contents. A real button, full width, thumb-sized: on a
@@ -463,9 +742,22 @@ textarea { resize: vertical; }
 
 /* --- badges ------------------------------------------------------------- */
 
+/*
+  Badges are the caption boxes. Outlined in ink and squared off to a small
+  radius rather than a pill: a pill is the most web-native shape there is, and
+  these carry the one thing on a card that has to read as *printed on* it.
+
+  `Luckiest Guy` here rather than Bangers — it is rounder and holds at 0.72rem,
+  where Bangers' tight caps start to fill in. Both are loaded; this is the one
+  place the second face earns its 17 KB.
+*/
 .badge {
-  display: inline-block; padding: 0.15em 0.55em;
-  border-radius: 999px; font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+  display: inline-block; padding: 0.2em 0.5em;
+  border: 1.5px solid var(--ink-color);
+  border-radius: 5px;
+  font-family: var(--font-label);
+  font-size: 0.72rem; font-weight: 400; letter-spacing: 0.03em;
+  line-height: 1.35; white-space: nowrap;
 }
 .badge-neutral { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
 .badge-owned { background: var(--good-bg); color: var(--good); }

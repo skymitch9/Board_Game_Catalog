@@ -4,7 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#1a1d23" />
+    <!-- The browser chrome above the page, which on a phone is a visible band
+         of colour touching the design. Two values so it matches the paper in
+         light and the board in dark; a single one made Safari's bar the old
+         slate blue-grey against a cream page. Keep these in step with `--paper`
+         in styles.css — they cannot read a CSS variable. -->
+    <meta name="theme-color" content="#f2e8d5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1e1b18" media="(prefers-color-scheme: dark)" />
     <title>Board Game Catalog</title>
   </head>
   <body>
