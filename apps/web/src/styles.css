@@ -689,6 +689,38 @@ textarea { resize: vertical; }
 
 .result-count { display: flex; align-items: center; }
 
+/* --- adding to the wishlist --------------------------------------------- */
+
+/* The three doors: type, barcode, photo. Borrows `.scan-mode` from the scanner
+   rather than growing a second tab style, but without the blurb line — this is
+   a panel inside a card, not a whole screen. */
+.wishlist-add__modes { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; }
+.wishlist-add__modes .scan-mode { flex: 1; padding: 0.5rem 0.6rem; text-align: center; }
+
+.wishlist-scan { display: flex; flex-direction: column; gap: 0.75rem; }
+.wishlist-scan__file { align-self: flex-start; cursor: pointer; }
+.wishlist-scan__results { display: flex; flex-direction: column; gap: 0.4rem; }
+
+/* The expansions offered once something has been added. A quiet block under a
+   finished job, not a second form. */
+.wishlist-expansions { margin: 0.75rem 0; }
+.wishlist-expansions__toggle { padding-left: 0; }
+.wishlist-expansions__list { list-style: none; margin: 0.5rem 0 0.75rem; padding: 0; }
+.wishlist-expansion { border-bottom: 1px solid var(--line); }
+.wishlist-expansion:last-child { border-bottom: none; }
+.wishlist-expansion label {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0; font-size: 0.88rem; cursor: pointer;
+}
+.wishlist-expansion input { width: auto; flex: none; margin: 0; }
+.wishlist-expansion .child-name { flex: 1 1 10rem; white-space: normal; }
+/* The report's own reason this is not simply held. Its own line, because it is
+   a sentence and the row above it is a name. */
+.wishlist-expansion__note {
+  flex-basis: 100%; padding-left: 1.6rem;
+  font-size: 0.78rem; color: var(--muted); font-style: italic;
+}
+
 /* --- export ------------------------------------------------------------- */
 
 /* A row per format: what it is on the left, the download on the right. The
@@ -775,7 +807,25 @@ code {
 @media (max-width: 560px) {
   .page-head { flex-direction: column; align-items: stretch; }
   .child-kind { width: auto; }
+  /*
+    ⚠️ `flex-wrap` is what makes the line below work, and without it that line
+    was actively destructive. `.child-status` asks for a full basis so the
+    status gets a line of its own — but `.child-row` does not wrap, so the
+    request was met by squeezing the only shrinkable thing on the row instead,
+    and `.child-name` is `flex: 1 1 0` with `overflow: hidden`. The name went to
+    zero width and every expanded game on a phone listed its contents as
+    "EXPANSION", "ACCESSORY", "EXPANSION" — no titles, and nothing big enough
+    to aim a thumb at.
+
+    Exactly the trap `.arrival label` hit one screen over. Any row in this file
+    that gives a child `flex-basis: 100%` has to be a wrapping row.
+  */
+  .child-row { flex-wrap: wrap; row-gap: 0.1rem; }
   .child-status { flex-basis: 100%; padding-left: 0; }
+  /* The whole row is the tap target either way, but a name that wraps rather
+     than ellipsising is worth the extra line here: this list is how you find
+     the expansion you are looking for. */
+  .child-row .child-name { white-space: normal; }
   .item-sub { white-space: normal; }
 }
 

@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { ITEM_KINDS, type ItemKind } from '@bgc/core';
+import { ITEM_KINDS, type Item, type ItemKind } from '@bgc/core';
 import { api } from '../api';
+import { copyDefaults } from '../lib/catalog-add';
 import { ErrorBox, Field } from './ui';
 import { ItemPicker, type PickedItem } from './ItemPicker';
 import { KIND_LABEL } from './ItemTree';
+import { WishlistExpansions } from './WishlistExpansions';
+import { WishlistScan } from './WishlistScan';
 
 /**
  * Put something on the wishlist.
@@ -41,6 +44,24 @@ import { KIND_LABEL } from './ItemTree';
  * has said it does not have one. Nothing here asks for a publisher or a player
  * count: the details lookup and the weekly sweeps fill those in, and a form
  * that demands them at the moment of wanting something is a form nobody uses.
+ *
+ * ## Three doors, and typing is still the one that opens
+ *
+ * The camera arrived later — *"utilize our existing technology for scanning
+ * barcodes and individual photos"* — and is offered as two tabs beside the
+ * field rather than in place of it. Typing stays the default because it is the
+ * only one that works with no light, no barcode and no signal, and because the
+ * screen it produces is the one this page has always had. See `WishlistScan`
+ * for the rungs and for which one is deliberately missing.
+ *
+ * ## What happens *after* an add is now the interesting half
+ *
+ * Adding used to close the form. It no longer does: whatever was added is
+ * handed to `WishlistExpansions`, which asks BoardGameGeek what else exists for
+ * it and offers those as a checklist. The owner's phrasing was "grab the
+ * expansions so we can quick add those", and the point is that wanting Everdell
+ * and wanting a couple of its expansions are one thought, four navigation steps
+ * apart.
  */
 export function WishlistAddForm({
   onAdded,
@@ -50,6 +71,21 @@ export function WishlistAddForm({
   onAdded: (message: string) => void;
   onClose: () => void;
 }) {
+  /**
+   * Which door. Typing is the default and the fallback for both others.
+   *
+   * Held here rather than inside a tab strip component so that switching tabs
+   * can throw away a half-finished scan — a candidate list left standing behind
+   * a form somebody has moved on from is an invitation to add the wrong thing.
+   */
+  const [mode, setMode] = useState<'type' | 'barcode' | 'photo'>('type');
+  /**
+   * The thing that just landed on the list, kept so its expansions can be
+   * offered. Null until something has been added, and the whole form becomes
+   * that panel once it is set — the job asked for is done, and what is left is
+   * an offer.
+   */
+  const [added, setAdded] = useState<{ id: number; name: string } | null>(null);
   const [picked, setPicked] = useState<PickedItem | null>(null);
   /** What is in the box, matched or not — the name a new item would take. */
   const [query, setQuery] = useState('');
@@ -118,24 +154,67 @@ export function WishlistAddForm({
       }
 
       await api.createCopy(itemId, {
-        quantity: Math.max(1, Number(quantity) || 1),
-        status: 'wanted',
-        // A wanted thing is a box you intend to buy. A licence is the rarer
-        // case and is edited in on the item page, the same choice `QuickAdd`
-        // makes for the same reason.
-        format: 'physical',
-        isSleeved: false,
-        isPunched: false,
+        // A wanted thing is a box you intend to buy, so `physical` — a licence
+        // is the rarer case and is edited in on the item page. Same defaults
+        // every "add what I just saw" path uses; see `lib/catalog-add.ts`.
+        ...copyDefaults('wanted', Number(quantity) || 1),
         notes: notes.trim() || null,
       });
 
       onAdded(`“${label}” is on the wishlist.`);
-      onClose();
+      // Not `onClose()` any more. The list behind this is already correct; what
+      // is left is the offer of this game's expansions, which needs the row that
+      // was just created to hang off.
+      setAdded({ id: itemId, name: label });
     } catch (err) {
       setError(err);
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * What is on the list now, and what else could be.
+   *
+   * Rendered instead of the form rather than under it: the form's fields still
+   * hold the thing that was just added, and leaving them editable beside a
+   * "done" message is an invitation to press Add twice.
+   */
+  if (added) {
+    return (
+      <div className="card wishlist-add">
+        <div className="section-head">
+          <h2>Added</h2>
+        </div>
+        <p className="muted small">
+          <strong>{added.name}</strong> is on the wishlist.
+        </p>
+
+        <WishlistExpansions itemId={added.id} gameName={added.name} onAdded={onAdded} />
+
+        <div className="form-actions">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              // Back to an empty form rather than closing: one trip to this
+              // screen is usually more than one thing wanted.
+              setAdded(null);
+              setPicked(null);
+              setQuery('');
+              setCreating(false);
+              setNotes('');
+              setQuantity('1');
+            }}
+          >
+            Add another
+          </button>
+          <button type="button" className="btn btn-quiet" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -144,8 +223,59 @@ export function WishlistAddForm({
         <h2>Add to the wishlist</h2>
       </div>
 
+      {/* Three doors on one question. Typing first because it is the only one
+          that needs no light, no barcode and no camera permission — and because
+          it is the screen this page has always had. */}
+      <div className="wishlist-add__modes" role="tablist">
+        {(
+          [
+            ['type', 'Type it'],
+            ['barcode', 'Barcode'],
+            ['photo', 'Photo'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={mode === id}
+            className={mode === id ? 'scan-mode scan-mode--on' : 'scan-mode'}
+            onClick={() => {
+              setMode(id);
+              setError(null);
+            }}
+          >
+            <strong>{label}</strong>
+          </button>
+        ))}
+      </div>
+
       {error != null && <ErrorBox error={error} what="Could not add that to the wishlist" />}
 
+      {mode !== 'type' && (
+        <>
+          <WishlistScan
+            // Remounted per tab, so switching away throws the camera and any
+            // half-read candidate list out rather than leaving them behind the
+            // other tab.
+            key={mode}
+            mode={mode}
+            onAdded={(item, message) => {
+              onAdded(message);
+              setAdded({ id: item.id, name: item.name });
+            }}
+            onError={setError}
+          />
+          <div className="form-actions">
+            <button type="button" className="btn btn-quiet" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+
+      {mode === 'type' && (
+        <>
       <Field
         label="What do you want?"
         hint="Type a name. Anything already in the catalog will offer itself."
@@ -277,6 +407,8 @@ export function WishlistAddForm({
           </span>
         )}
       </div>
+        </>
+      )}
     </form>
   );
 }

@@ -2,6 +2,161 @@
 
 Everything needed to continue or finish this without Claude.
 
+## ⏭️ NEXT THREAD — the vintage pop-art restyle
+
+📄 **[`claude-vintage-pop-art-board-game-prompt.md`](claude-vintage-pop-art-board-game-prompt.md)**,
+supplied by the owner 2026-08-09: *"make a new thread and consider this… We will
+be doing this next but lets finish the inflight work first."*
+
+**Nothing has been started.** It is a whole-site visual direction — aged-paper
+background, halftone dots, comic panels, Bangers/Luckiest Guy headlines — so it
+lands almost entirely in `apps/web/src/styles.css`, which is ~1,250 lines of
+heavily-reasoned CSS. Read the comments before replacing anything: several rules
+that look decorative are load-bearing, and the file now records three separate
+occasions where a flex row silently collapsed the one element that mattered.
+
+⚠️ **The two fonts are a problem this repo has not had before.** Everything is
+served from the Worker's own assets and there is no external font loading
+anywhere today. A restyle that adds Google Fonts introduces a third-party
+request on every page load — decide that deliberately, and check it against the
+`connect-src`/`font-src` reality of the deployed site rather than assuming.
+
+## Shipped 2026-08-09, later session
+
+| | |
+|---|---|
+| Live worker version | see the deploy note at the end of this section |
+| Commits | `2509082` (export), plus the wishlist and mobile-fix commit below |
+| Migrations | **none** — nothing in this batch touches the schema |
+
+### One Export in the top bar
+
+The JSON and CSV downloads used to hang off the end of the collection page's
+result count, beside *"806 entries · 171 games · page 1 of 5"*. They are now a
+single **Export** entry in the top bar next to Wishlist and People, opening
+`/export` — a page that names both formats and says what each is for.
+
+A place rather than an action, which is what the bar is for. Two formats that
+are not interchangeable, so something has to offer the choice; a lone button
+that silently downloaded one of them would have to pick. Two taps either way.
+The page also says what the CSV **is not** — a flattened one-row-per-copy view
+with no ratings, editions or tree shape — which matters if you reach for the
+wrong file before doing something drastic.
+
+Gated on `editCatalog` in both the link and the route, because the API behind it
+is; a rater reaching the URL gets NotFound rather than a page whose every button
+403s.
+
+### ⚠️ The expansions dropdown was unreadable on a phone — fixed
+
+*"we need the expansion/accessory drop dowwn to work on mobile. right now it
+just says expansion and we need to be able to see the title and click on it like
+the webpage."* — the owner. **This was live and had been for some time.**
+
+`.child-status` asks for `flex-basis: 100%` under 560px so the status gets a
+line of its own — but `.child-row` did not wrap, so the request was met by
+squeezing the only shrinkable thing on the row instead. `.child-name` is
+`flex: 1 1 0` with `overflow: hidden`, so it went to **zero width**, and every
+expanded game on a phone listed its contents as "EXPANSION", "ACCESSORY",
+"EXPANSION" — no titles and nothing to aim a thumb at.
+
+Fix is `flex-wrap: wrap` on `.child-row`, plus `white-space: normal` on the name
+so a long title takes a second line rather than ellipsising.
+
+**Proved rather than assumed**, by reverting only `flex-wrap` in the live page
+and re-measuring: name width **0px before, 267px after**, same rows, same
+viewport. The item page's own child list (`.child-link`) was never affected —
+names measured 179px and rows 39px tall throughout.
+
+⚠️ **This is the third time one flex row has silently eaten its own name**, after
+`.arrival label` and `.arrival-meta`. The rule, now written in the stylesheet:
+*any row in this file that gives a child `flex-basis: 100%` has to be a wrapping
+row.*
+
+### The wishlist can scan, and offers a game's expansions once it lands
+
+*"for wishlist add, utilize our existing technology for scanning barcodes and
+individual photos to add games to it. Also if a game is added, grab the
+expansions so we can quick add those… add a see expansions expansion area where
+we can check them to add them to wishlist too."* — the owner.
+
+| | |
+|---|---|
+| New | `WishlistScan.tsx`, `WishlistExpansions.tsx`, `lib/catalog-add.ts` |
+| Changed | `WishlistAdd.tsx` (three tabs, and it no longer closes on add), `Completeness.tsx` and `ScanPage.tsx` (onto the shared module) |
+
+**Three tabs — Type it, Barcode, Photo.** Typing stays the default: it is the
+only one that works with no light, no barcode and no camera permission, and it
+is the screen this page has always had. The camera rungs are the *same modules*
+`/scan` uses — `startScanLoop`, `captureFrame`, `CameraStage`, `api.barcode`,
+`api.identifyPhoto`. The slow paid rung (Claude on a barcode number, 1–2
+minutes) is deliberately **not** offered: it exists for a box you own and cannot
+identify, and it is far too much to spend on deciding whether to want something.
+
+⚠️ **This reverses a decision recorded on `WishlistPage`** — that sending
+somebody to the scanner for something they do not have was "always the wrong
+direction". The observation was right and the conclusion was half of one:
+standing in a shop holding a box you have not bought is exactly a box in your
+hand. What was wrong was sending them to `/scan`, which adds things as **owned**
+and navigates away.
+
+**Adding no longer closes the form.** What was added is handed to
+`WishlistExpansions`, which asks BoardGameGeek what else exists and offers it as
+a checklist behind *"See expansions (N)"*.
+
+⚠️ **Nothing is ticked to start with — the opposite of `Arrivals`, deliberately.**
+A preorder arriving already happened and the tick confirms it. Wanting an
+expansion has not happened, and wanting all sixteen is a claim nobody made.
+
+⚠️ **A component just added comes straight back in the list, and that was a
+double-add bug.** `outstanding` is everything not proven `held`, and a `wanted`
+copy is not held — so the two rows added in testing reappeared with
+`matchedItemId` set and the note "Already on your wishlist", tickable again, and
+the second attempt would fail on the unique `bgg_id` index. Filtered on
+`matchedItemId == null`, which is the same test `AddComponent` already applies
+for the same reason. Verified: **16 offered → add 2 → 14 offered.**
+
+**One BoardGameGeek call, fired once.** A game added a minute ago has never been
+swept, so `completeness` returns `never_checked` and there is nothing to show;
+the panel does one `POST /api/components/backfill?itemId=` and re-reads. Only
+here, on a row this session just created — never on the report, which has a
+button already.
+
+### `lib/catalog-add.ts` — the policy that was in three places
+
+`fillableFieldsFor` decides what a row of a given kind may hold at all, and
+forgetting it produces a dice tray for 2–6 players with a description of a dice
+game. The scanner, the completeness report and now the wishlist all create items
+out of lookup results, and all three carried their own copy of that gate. It now
+lives once, in `createItemFromCandidate` / `createItemFromComponent` /
+`addComponent`, with `copyDefaults` beside it.
+
+### Measured, `npm run dev:worker` against local D1
+
+| Checked | Result |
+|---|---|
+| Type-it add, then expansions | ✅ Ticket to Ride → "See expansions (16)", all unticked |
+| Tick 2, add | ✅ *"2 expansions of Ticket to Ride are on the wishlist too."*, and both land as `wanted` |
+| Double-add guard | ✅ 16 → 14 after the filter; before it, the two stayed tickable |
+| Barcode / Photo tabs | ✅ camera stage and hints render; Photo also offers "Choose a photo instead" |
+| The write path a scan runs | ✅ exercised directly — item with `bggId` + `wanted` copy, appears on `/api/wishlist` |
+| Export page and both files | ✅ 200 with `Content-Disposition` on `.csv` and `.json`; old links gone from the collection page |
+
+⚠️ **`ItemPicker` suggestions fire on `onMouseDown`, not `onClick`** — deliberate,
+so the input's blur cannot close the list first. A test driving it with
+`.click()` silently selects nothing and the Add button stays disabled. It cost
+three rounds here; dispatch a real `mousedown`.
+
+### Not verified
+
+- **No camera was available**, so a real barcode read and a real box photo have
+  not been through the wishlist path end to end. The modules are the ones `/scan`
+  already uses and the write path was exercised directly, but the capture itself
+  is untested here.
+- **Phone width is measured at a 390px content width in desktop Chrome**, not on
+  iOS Safari. `resize_window` does nothing to a maximised window — see the note
+  in the arrivals section for the technique that does work.
+
 ## ✅ "It arrived" — a preorder lands in one pass, 2026-08-09
 
 *"we need a 1 button click to change a pre order game from preordered to owned

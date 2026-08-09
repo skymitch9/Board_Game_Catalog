@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import {
-  fillableFieldsFor,
   type ComponentStatus,
   type CompletenessSection,
   type CopyStatus,
@@ -9,6 +8,7 @@ import {
 } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
+import { addComponent } from '../lib/catalog-add';
 import { parseStamp } from '../lib/dates';
 import { Link } from '../router';
 import { Badge, ErrorBox, Spinner } from './ui';
@@ -523,37 +523,11 @@ function AddComponent({
     setBusy(status);
     setError(null);
     try {
-      const publisher = component.publishers?.[0]?.name ?? null;
-      /*
-        The same door a lookup has to come through.
-
-        `fillableFieldsFor` is the policy on what a row of this kind may hold,
-        and BoardGameGeek's component list is no more entitled to bypass it than
-        a name search is. It changes nothing for the overwhelming majority —
-        `description` and the player counts are the fields it refuses an
-        accessory, and none of them are sent here. It bites on exactly one case,
-        and it is a real one: BGG credits fan-made components to
-        `(Public Domain)`, which is a spelling `isTraditionalPublisher`
-        recognises, and a row with that publisher is one the catalog says cannot
-        have a publisher or a year at all.
-      */
-      const allowed = new Set<string>(fillableFieldsFor(component.kind, null, publisher));
-      const { item } = await api.createItem({
-        name: component.name,
-        kind: component.kind,
-        parentItemId: gameId,
-        bggId: component.bggId,
-        yearPublished: allowed.has('yearPublished') ? component.yearPublished : null,
-        publisher: allowed.has('publisher') ? publisher : null,
-        thumbnailUrl: component.thumbnailUrl,
-      });
-      await api.createCopy(item.id, {
-        status,
-        quantity: 1,
-        format: 'physical',
-        isSleeved: false,
-        isPunched: false,
-      });
+      // The row and its copy, through the one door that applies
+      // `fillableFieldsFor` — see `lib/catalog-add.ts` for why a component list
+      // is no more entitled to bypass that policy than a name search is. The
+      // wishlist's own expansion picker writes through the same function.
+      await addComponent(component, gameId, status);
       onAdded();
     } catch (err) {
       setError(err);

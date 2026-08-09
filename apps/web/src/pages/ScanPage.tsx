@@ -4,7 +4,6 @@ import {
   PHOTO_LONG_EDGE,
   SHELF_LONG_EDGE,
   classifyShelfResults,
-  fillableFieldsFor,
   type BarcodeCandidate,
   type ClassifiedItem,
   type ItemKind,
@@ -13,6 +12,7 @@ import {
 } from '@bgc/core';
 import { api, ApiError, type BarcodeLookup } from '../api';
 import { captureFrame, fileToPhoto, onceSteady } from '../lib/camera';
+import { copyDefaults, createItemFromCandidate } from '../lib/catalog-add';
 import { preloadDecoder, startScanLoop } from '../lib/scanner';
 import { CameraStage } from '../components/CameraStage';
 import { QuickAdd } from '../components/QuickAdd';
@@ -210,42 +210,21 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
       setError(null);
       try {
         const kind = overrideKind ?? 'base';
-        const parentItemId = kind === 'base' ? null : (overrideParentId ?? null);
 
-        // A candidate describes *a game*, and this row may not be one. The
-        // lookup that produced it was given a title read off a box, so adding
-        // "Dice Throne Vanguard: Dice Tray" as an accessory would otherwise
-        // create it with 2–6 players, a 40 minute playing time and a
-        // description of a dice game. Same policy, and the same one function,
-        // as the paid details lookup — `packages/core/src/details.ts`.
-        const allowed: readonly string[] = fillableFieldsFor(kind, null);
-        const ifAllowed = <T,>(field: string, value: T): T | null =>
-          allowed.includes(field) ? value : null;
-
-        const { item } = await api.createItem({
-          name: candidate.name,
+        // A candidate describes *a game*, and this row may not be one — the
+        // lookup that produced it was given a title read off a box. The policy
+        // that stops "Dice Throne Vanguard: Dice Tray" acquiring 2–6 players and
+        // a description of a dice game lives in `lib/catalog-add.ts`, shared
+        // with the completeness report and the wishlist's scanner.
+        const item = await createItemFromCandidate(candidate, {
           kind,
-          parentItemId,
+          parentItemId: overrideParentId ?? null,
           pendingParentName: pendingParentName ?? null,
-          bggId: candidate.bggId,
-          yearPublished: candidate.yearPublished,
-          publisher: candidate.publisher,
-          thumbnailUrl: candidate.thumbnailUrl,
-          minPlayers: ifAllowed('minPlayers', candidate.minPlayers),
-          maxPlayers: ifAllowed('maxPlayers', candidate.maxPlayers),
-          playtimeMin: ifAllowed('playtimeMin', candidate.playtimeMin),
-          description: ifAllowed('description', candidate.description),
         });
 
         // Scanning a game means you own it — create a copy so it counts.
-        await api.createCopy(item.id, {
-          quantity: 1,
-          status: 'owned',
-          // Scanning a barcode or a cover means the thing is in front of you.
-          format: 'physical',
-          isSleeved: false,
-          isPunched: false,
-        });
+        // `physical`, because a barcode or a cover means it is in front of you.
+        await api.createCopy(item.id, copyDefaults('owned'));
 
         if (barcode && canEdit) {
           await api
