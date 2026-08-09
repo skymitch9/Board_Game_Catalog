@@ -136,6 +136,10 @@ export function WishlistExpansions({
   }
 
   const chosen = offered.filter((c) => picked.has(c.bggId));
+  // Compared against what is *offered*, not against `picked.size`: a failed add
+  // leaves ids in `picked` that are no longer on the list, and counting those
+  // would show "Clear all" over a list with boxes still unticked.
+  const allPicked = offered.length > 0 && chosen.length === offered.length;
 
   const toggle = (bggId: number) =>
     setPicked((prev) => {
@@ -239,6 +243,23 @@ export function WishlistExpansions({
                   : chosen.length === 1
                     ? 'Add it to the wishlist'
                     : `Add ${chosen.length} to the wishlist`}
+            </button>
+
+            {/* One button that flips, rather than a Select-all beside a Clear.
+                Two controls that each do nothing half the time is a worse
+                trade than one whose label says which half you are in — and the
+                list this sits under can be sixteen rows on a phone. */}
+            <button
+              type="button"
+              className="btn btn-quiet"
+              disabled={busy}
+              onClick={() =>
+                setPicked(
+                  allPicked ? new Set() : new Set(offered.map((c) => c.bggId)),
+                )
+              }
+            >
+              {allPicked ? 'Clear all' : `Select all ${offered.length}`}
             </button>
           </div>
         </>

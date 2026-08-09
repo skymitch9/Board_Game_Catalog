@@ -4,7 +4,15 @@ import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Link } from '../router';
 import { KIND_LABEL } from '../components/ItemTree';
-import { Badge, Cover, EmptyState, ErrorBox, ParentLabel, Spinner } from '../components/ui';
+import {
+  Badge,
+  ConfirmButton,
+  Cover,
+  EmptyState,
+  ErrorBox,
+  ParentLabel,
+  Spinner,
+} from '../components/ui';
 import { WishlistAddForm } from '../components/WishlistAdd';
 
 /**
@@ -125,6 +133,37 @@ export function WishlistPage({ me }: { me: MeResponse }) {
       // endpoint, and a second write path is a second one to keep correct.
       await api.updateCopy(entry.copyId, { status: 'owned' });
       setNotice(`“${entry.name}” is now marked as owned.`);
+      refresh();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Changed your mind — take it off the list.
+   *
+   * **Deletes the `wanted` copy and nothing else.** A wishlist row *is* a copy,
+   * so this is the ordinary `DELETE /api/copies/:id` — the same call the item
+   * page's copy list makes. No wishlist-specific write route, for the reason
+   * written on `/wishlist` itself: a second way to change what is on the list is
+   * a second thing to keep honest.
+   *
+   * ⚠️ **The catalog row stays**, deliberately, even when this was its only
+   * copy. Deleting the item would cascade to its children, ratings, barcodes and
+   * relations — and for a row that has been in the catalog for months and merely
+   * gained a wanted copy, that is destroying evidence to undo a shopping
+   * decision. What is left is an item with no copies, which the collection shows
+   * honestly as "not catalogued" and which can be deleted from its own page in
+   * two taps by somebody who has looked at what they are deleting.
+   */
+  async function removeWanted(entry: WishlistEntry) {
+    setBusy(entry.copyId);
+    setError(null);
+    try {
+      await api.deleteCopy(entry.copyId);
+      setNotice(`“${entry.name}” is off the wishlist.`);
       refresh();
     } catch (err) {
       setError(err);
@@ -276,6 +315,7 @@ export function WishlistPage({ me }: { me: MeResponse }) {
                           canEdit={canEdit}
                           busy={busy === entry.copyId}
                           onBought={() => void markBought(entry)}
+                          onRemoved={() => void removeWanted(entry)}
                         />
                       ))}
                   </ul>
@@ -294,11 +334,14 @@ function WishlistRow({
   canEdit,
   busy,
   onBought,
+  onRemoved,
 }: {
   entry: WishlistEntry;
   canEdit: boolean;
   busy: boolean;
   onBought: () => void;
+  /** Take it off the list — see `removeWanted` for what that does and does not delete. */
+  onRemoved: () => void;
 }) {
   return (
     <li className="candidate">
@@ -341,9 +384,24 @@ function WishlistRow({
       </div>
 
       {canEdit && (
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={onBought}>
-          {busy ? 'Saving…' : 'Mark as bought'}
-        </button>
+        <span className="wishlist-row__actions">
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={onBought}>
+            {busy ? 'Saving…' : 'Mark as bought'}
+          </button>
+          {/*
+            Two taps, via `ConfirmButton`, and quiet rather than red beside a
+            primary button — the pair is asymmetric in consequence and a thumb
+            moving fast must not read them as one control with two endings.
+            "Mark as bought" is recoverable in a tap; this is not.
+          */}
+          <ConfirmButton
+            className="btn btn-quiet danger-text"
+            confirmLabel="Really remove?"
+            onConfirm={onRemoved}
+          >
+            Remove
+          </ConfirmButton>
+        </span>
       )}
     </li>
   );

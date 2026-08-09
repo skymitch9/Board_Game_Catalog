@@ -67,17 +67,42 @@ splits it in two, and every later decision falls out of this:
 | `sold` / given away | no | no |
 | `wanted` | no | no |
 
-⚠️ **This is the one decision the owner has to make, because their words and
-this table disagree.** They said *"for sold and lent we can mark them as not
+⚠️ **This was the one decision the owner had to make, because their words and
+this table disagreed.** They said *"for sold and lent we can mark them as not
 owned anymore"*. Doing that to `lent` means **a game you lent to a friend
-reappears on your shopping list** — which is the exact failure
-`getGameCompleteness` was written to prevent (*"money already spent… is how a
-thing gets bought twice"*, and why `preordered` counts as held).
+reappears on your shopping list** — the exact failure `getGameCompleteness` was
+written to prevent (*"money already spent… is how a thing gets bought twice"*,
+and why `preordered` counts as held).
 
-**Recommendation:** `lent` stays **owned but not on shelf**; only `sold` and a
-new *given away* leave ownership. Ask, then build. Both readings are cheap to
-implement — but only if the two axes exist. If they stay one boolean, the answer
-is a coin flip that will be wrong half the time.
+### ✅ ANSWERED by the owner, 2026-08-09 — build to this
+
+| Question | Ruling |
+|---|---|
+| Does `lent` still count as owned? | **Yes — owned, but not on the shelf.** It keeps counting towards "we have this", so a lent game never reappears as missing or gets re-bought. Flagged as out of the house, not as gone. |
+| Is *given away* its own status? | **Yes — its own value, separate from `sold`.** |
+
+So the ruling **overrides the owner's earlier wording** on `lent` and keeps
+their wording on `sold`. Both readings were cheap; this is the one that does not
+re-create the bought-twice bug.
+
+`given_away` and `sold` behave **identically** — both leave ownership, neither
+counts as held, neither is on the shelf. The distinction is purely so the
+history reads truthfully later: item 303 was given away, and `sold` implies
+money changed hands. Cheap to add now, annoying to backfill once rows exist.
+
+**The two axes therefore both exist**, and the final table is:
+
+| status | own it? | on shelf? |
+|---|---|---|
+| `owned` | yes | yes |
+| `preordered` | yes | no |
+| `lent` | **yes** | no |
+| `sold` | no | no |
+| `given_away` | no | no |
+| `wanted` | no | no |
+
+Which maps onto the two sets consolidated below: `HELD_STATUSES` is the "own it"
+column, and neither new value joins it.
 
 ### ✅ "Held" is now defined once — done 2026-08-09, before the feature
 

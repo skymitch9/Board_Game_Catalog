@@ -694,6 +694,13 @@ textarea { resize: vertical; }
 /* The three doors: type, barcode, photo. Borrows `.scan-mode` from the scanner
    rather than growing a second tab style, but without the blurb line — this is
    a panel inside a card, not a whole screen. */
+/* "Mark as bought" and "Remove", stacked on a wide row and side by side when
+   the row wraps. `flex: none` so neither is squeezed by the body beside them. */
+.wishlist-row__actions {
+  display: flex; flex-direction: column; gap: 0.35rem; flex: none; align-self: flex-start;
+}
+.wishlist-row__actions .btn { white-space: nowrap; }
+
 .wishlist-add__modes { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; }
 .wishlist-add__modes .scan-mode { flex: 1; padding: 0.5rem 0.6rem; text-align: center; }
 
