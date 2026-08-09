@@ -25,8 +25,9 @@ request on every page load — decide that deliberately, and check it against th
 
 | | |
 |---|---|
-| Live worker version | see the deploy note at the end of this section |
-| Commits | `2509082` (export), plus the wishlist and mobile-fix commit below |
+| Live worker version | **`7066047c-ee0d-4c72-ba95-0eacb6671d2b`** |
+| Roll back to | `bf029d3e-3b5d-470c-aaef-740fdcaa6ce1` (arrivals, before any of this) |
+| Commits | `2509082` (export), `cadce4c` (wishlist camera + the mobile fix) |
 | Migrations | **none** — nothing in this batch touches the schema |
 
 ### One Export in the top bar
