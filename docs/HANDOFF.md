@@ -42,15 +42,25 @@ worker back alone. Only if the *data* were wrong would you need
 `npx wrangler d1 time-travel restore board-game-catalog --timestamp <before>`,
 and the table above says it is not.
 
-### ⏳ Not verified: nobody has loaded the deployed page
+### ✅ Confirmed by the owner: `/people` renders and **Make viewer** is there
 
-Access intercepts every route at the edge, and this session could not reach the
-internet at all — `curl` returned `000` (connection failure, **not** a 302) for
-`/api/health` on both hostnames, so it proves nothing either way. The deploy
-reported success and the schema is confirmed through D1, but **no one has seen
-the badge or the "Make viewer" button render in production.** Ask for one signed-in
-page load; do not infer it from a clean deploy. This is the same gap the 08-09
-restyle had, and the owner confirming is what closed it.
+*"i see make viewer it all looks good"* — 2026-08-10, on
+<https://boardgames.heygabi.ai/people>. That is the deploy verified end to end:
+the page loads, the new role shipped, and the role list now derives from `ROLES`
+rather than the hardcoded copy that would have made `viewer` assignable nowhere.
+
+**Why it had to come from a person.** Access intercepts every route at the edge,
+and this session had no outbound network at all — `curl` returned `000` for
+`/api/health` on both hostnames, which is a connection failure and **not** a
+302, so it proved nothing either way. A clean deploy plus a confirmed schema
+still does not tell you the Worker serves a page. Same gap the 08-09 restyle
+had, closed the same way: ask for one signed-in page load.
+
+⏳ **The badge itself is still unseen, and correctly so** — production has **0**
+pending users, and it is drawn only when somebody is actually waiting. Its
+absence is not a failure. It verifies itself the first time a real person signs
+in and lands as `pending`, which is exactly what the next invite produces. To
+force it early, sign in from any other Google account in a private window.
 
 ### Why the migration looks so paranoid — do not "simplify" it
 
