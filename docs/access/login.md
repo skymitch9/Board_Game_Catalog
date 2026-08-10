@@ -13,7 +13,7 @@ PIN for **Google SSO** without locking anybody out. Current live state lives in
 | | |
 |---|---|
 | Zero Trust team | `wispy-snowflake-2801.cloudflareaccess.com` (Free plan) |
-| Access applications | **two** — one per Worker URL (production, preview). Cloudflare mints one per URL |
+| Access applications | **two** — production and preview. ⚠️ Not "one per URL" any more: the production app now covers **two destinations**, see below |
 | Access policy | **Everyone** — anyone may authenticate; the *app* decides who gets in |
 | Login method | **One-time PIN** (6-digit code by email) |
 | Owner | `nbaslamking@gmail.com`, claimed on first sign-in |
@@ -29,6 +29,62 @@ the payload → `upsertUserOnLogin` looks the email up in `app_user`.
 **`auth.ts` never asks which identity provider produced the token.** It reads
 `payload.email`. That single fact is why this whole change is configuration
 only.
+
+---
+
+## Where the app lives — two hostnames, ONE Access application
+
+Added **2026-08-10**, verified live that day.
+
+| Hostname | What it is |
+|---|---|
+| **`boardgames.heygabi.ai`** | The public hostname. Created by `[[routes]] pattern = "boardgames.heygabi.ai"` + `custom_domain = true` in `apps/worker/wrangler.toml` — **the deploy creates the hostname and its DNS record**, which is why a config line, not a dashboard click, is what put the site online |
+| `board-game-catalog.bgc-worker.workers.dev` | Kept. It is the other AUD's destination and the fallback if the DNS record is ever wrong |
+
+### ⚠️ The new hostname is a *destination*, not a new application
+
+Cloudflare allows **up to five destinations per self-hosted application**.
+`boardgames.heygabi.ai` was added as a second destination on the existing
+application (`board-game-catalog - Cloudflare Workers`, id
+`5619e91e-475e-44f9-955e-134decf22f6d`) rather than as a new app.
+
+**It therefore inherits that application's AUD and its Production policy, and
+`CF_ACCESS_AUD` did not change.** Same principle the §"Does any code, secret or
+config change?" table states for adding an IdP: *the AUD tag belongs to the
+application*. A **new application** would have minted a third audience that had
+to be appended to `CF_ACCESS_AUD` in `wrangler.toml`.
+
+Confirmed rather than assumed: Access mints `kid=65e61dbe…` for this hostname,
+identical to the first entry already in `CF_ACCESS_AUD`, and
+`apps/worker/src/middleware/auth.ts:60-77` splits that list and accepts any of
+them. An unauthenticated request returns the correct `302` to the Access login,
+and a signed-in load renders live D1 data (168 games, 258 expansions, 410
+accessories, 30 wanted).
+
+### Gotcha: a "dead" new subdomain is usually the router
+
+`boardgames.heygabi.ai` looked completely unreachable on the owner's LAN for a
+long stretch **while serving correctly to everyone else**. The router
+(`192.168.1.1`) had cached the NXDOMAIN from before the record existed, against
+the zone's 30-minute negative TTL, and **`ipconfig /flushdns` does not clear it**
+— the cache is on the router, not on Windows.
+
+```powershell
+Resolve-DnsName boardgames.heygabi.ai -Server 1.1.1.1   # answers -> deployment is fine
+Resolve-DnsName boardgames.heygabi.ai                    # fails   -> local cache only
+```
+
+Stop querying for ~90 seconds and it clears on its own; retrying in a loop may
+*refresh* the negative entry on some consumer routers. Nothing server-side ever
+needed fixing, and a full false diagnosis was run before this was understood.
+
+### Zone-wide caching note
+
+`heygabi.ai` → Caching → Configuration → **Browser Cache TTL** was `4 hours`,
+overriding origin `Cache-Control` for every host in the zone. It is now
+**Respect Existing Headers** (changed 2026-08-10 for the audiobook site's sake).
+This host is in that zone, so if its assets ever ignore their own
+`Cache-Control`, check that setting before suspecting the Worker.
 
 ---
 

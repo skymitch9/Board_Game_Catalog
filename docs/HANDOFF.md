@@ -2,6 +2,35 @@
 
 Everything needed to continue or finish this without Claude.
 
+## ✅ SHIPPED — public hostname, 2026-08-10
+
+| | |
+|---|---|
+| Live at | **<https://boardgames.heygabi.ai>** — behind Cloudflare Access, owner-only, as intended |
+| Worker version | `04a13312-57b4-43d9-beee-959c05bdf576` |
+| Commit | `a9b8e58` — `apps/worker/wrangler.toml` only, an 18-line `[[routes]]` block |
+| Migrations | **none** |
+| Pushed | **yes** |
+
+`custom_domain = true` means the **deploy** created the hostname and its DNS
+record — a config line, not a dashboard click, is what put the site online. The
+`workers.dev` URL is deliberately kept as the fallback.
+
+⚠️ **`CF_ACCESS_AUD` was deliberately NOT changed, and that is correct.** The
+hostname was added as a *second destination* on the existing Access application
+rather than as a new application, so it inherits that app's audience and its
+Production policy (Cloudflare allows five destinations per app). Verified live:
+an unauthenticated request 302s to the Access login, and a signed-in load renders
+real D1 data. Full reasoning: [`access/login.md`](access/login.md) §"Where the
+app lives".
+
+⚠️ **If it looks unreachable from the house, it is almost certainly the router**
+caching NXDOMAIN — `ipconfig /flushdns` does not clear it. Check with
+`Resolve-DnsName <host> -Server 1.1.1.1`. This cost a full false diagnosis.
+
+Access is untouched and still enforcing. Nothing about the app, its data or its
+policies changed — only where it answers.
+
 ## ✅ SHIPPED — the vintage pop-art restyle, 2026-08-09
 
 | | |
