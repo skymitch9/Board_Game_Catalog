@@ -2,6 +2,95 @@
 
 Everything needed to continue or finish this without Claude.
 
+## ⏳ COMMITTED, NOT PUSHED, NOT DEPLOYED — the `viewer` role, 2026-08-10
+
+| | |
+|---|---|
+| Commits | `0c3f4ef` (the role + migration), `a623064` (the waiting badge) |
+| Migration | **`0023_viewer_role.sql` — written and tested locally, NOT applied to production** |
+| Pushed | **no** — `main` is 2 ahead of `origin/main` |
+| Deployed | **no** — production is still on the pre-`viewer` worker |
+| Working tree | clean |
+
+🚨 **Apply 0023 to production BEFORE deploying.** New code against the old CHECK
+means every "Make viewer" click fails on `SQLITE_CONSTRAINT`. `migrations apply
+--remote` 7403s on this account, so it is plain SQL plus the bookkeeping row:
+
+```bash
+# 0. before-counts — step 3 is meaningless without them
+npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangler.toml \
+  --command "SELECT (SELECT COUNT(*) FROM app_user) AS users, (SELECT COUNT(triggered_by) FROM research_run) AS run_links, (SELECT COUNT(approved_by) FROM app_user) AS approved_links, (SELECT COUNT(*) FROM user_item) AS ratings;"
+# 1. apply
+npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangler.toml \
+  --file migrations/0023_viewer_role.sql
+# 2. record it, or the next `migrations apply` re-runs it
+npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangler.toml \
+  --command "INSERT INTO d1_migrations (name) VALUES ('0023_viewer_role.sql');"
+# 3. verify, THEN `npm run deploy`
+```
+
+⚠️ **`run_links` is the whole test — expect 46, unchanged.** If it comes back
+**0**, the stash-and-restore did not fire: do not deploy, and recover with
+`npx wrangler d1 time-travel restore board-game-catalog --timestamp <before>`.
+
+### Why the migration looks so paranoid — do not "simplify" it
+
+`app_user` is not empty and five columns in four tables point at it, so the
+implicit `DELETE` that `DROP TABLE` performs fires FK actions: `user_item.user_id`
+is **ON DELETE CASCADE** and takes *every rating row*, and `research_run.triggered_by`
+(46 prod rows), `play.logged_by_user_id`, `research_finding.reviewed_by` and
+`app_user.approved_by` are all nulled. **Migration 0018's `DROP`-and-recreate is
+not a precedent** — that table was empty in every environment, and its header
+says so.
+
+Measured on the local D1 with throwaway tables, not reasoned about. Both dodges
+lost the data: `PRAGMA defer_foreign_keys = ON` left **0 of 3** child links, and
+`PRAGMA legacy_alter_table = ON` left **0 of 3** links and **0 of 2** cascade
+rows (D1 does not honour it, so the RENAME repointed the children and the DROP
+cascaded through them). D1 does not support `foreign_keys = OFF` either. Hence
+stash-before, restore-after, which depends on no pragma and is checkable by
+counting both sides.
+
+The subtle one: `app_user_new.approved_by` references `app_user` **by name**,
+still the old table when `DROP` runs — so the new table's own column is nulled
+too, before the rename makes it self-referential.
+
+### What the two commits contain
+
+**`viewer`** reads and nothing else — `rater` was the only other read-capable
+role and it also carries `rate`. Verified through a real worker: `/api/me`
+returns `capabilities: ["read"]` alone, reads answer 200, and rating, item
+create/patch/delete, export, users, vision, scan-jobs, bgg import and cache
+clear all **403**.
+
+**The waiting badge** on the People link. Nothing previously told the owner that
+someone was stuck on the holding screen — no email, no push, and the link looked
+identical whether nobody or six people were waiting. Counted in `chores`, gated
+on `editCatalog` **or** `manageUsers`.
+
+⚠️ **`PeoplePage` no longer hardcodes its role list** — it derives from `ROLES`.
+The old hardcoded copy is exactly how `viewer` would have shipped assignable
+nowhere. A new role now needs `ROLES`, `CAPABILITY_MATRIX`, `ROLE_BLURB`, a
+badge tone, **and a CHECK migration**.
+
+### Still open
+
+- **Nobody is a `viewer` in production yet**, and nothing is pre-provisioned.
+- ⚠️ **The audiobook catalog cannot be migrated in — it stores no email addresses.**
+  Read live 2026-08-10: **8 profiles, 3 passphrase users, 0 email-like fields on
+  any of them.** `ensureProfile()` writes only `displayName`/`photoURL`, and the
+  Google email lives in `localStorage` as `ab_identity_email`, never in
+  Firestore. This app keys `app_user` on the Access JWT's email claim, so there
+  is no join key and name-matching would be a guess. The roster, for reference:
+  Amber Mitchell, Jamie Jeremiah Lievertz, Remy, Ronnie, Samantha Hardman,
+  Skylar, Sparkling Ember, *Tim Connell* (the owner asked to exclude Tim).
+  **The working route is the existing one:** they sign in, land as `pending`,
+  and the owner presses *Make viewer* — the badge now says when they are waiting.
+- ⚠️ **Port 8787 is squatted by another project's dev server** (its `/api/me`
+  answers with `trackReading`, `scan`, `reviewName`). `apps/web/vite.config.ts`
+  proxies there, so `npm run dev` can silently talk to the wrong app's API.
+  Check before trusting a local web session.
+
 ## ✅ SHIPPED — public hostname, 2026-08-10
 
 | | |
