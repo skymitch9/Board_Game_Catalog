@@ -2,36 +2,55 @@
 
 Everything needed to continue or finish this without Claude.
 
-## ⏳ COMMITTED, NOT PUSHED, NOT DEPLOYED — the `viewer` role, 2026-08-10
+## ✅ SHIPPED — the `viewer` role and the waiting badge, 2026-08-10
 
 | | |
 |---|---|
-| Commits | `0c3f4ef` (the role + migration), `a623064` (the waiting badge) |
-| Migration | **`0023_viewer_role.sql` — written and tested locally, NOT applied to production** |
-| Pushed | **no** — `main` is 2 ahead of `origin/main` |
-| Deployed | **no** — production is still on the pre-`viewer` worker |
-| Working tree | clean |
+| Live worker version | **`e9d844ed-ce07-46ed-8bb6-f030cc4e0b59`**, deployed 17:27 UTC |
+| Roll back to | `04a13312-57b4-43d9-beee-959c05bdf576` — the public-hostname deploy, before any of this |
+| Commits | `0c3f4ef` (role + migration), `a623064` (waiting badge), `63efc3d` (this doc) |
+| Migration | **`0023_viewer_role.sql` applied to production and recorded.** None pending |
+| Pushed | **yes** — `origin/main` level at `63efc3d` |
 
-🚨 **Apply 0023 to production BEFORE deploying.** New code against the old CHECK
-means every "Make viewer" click fails on `SQLITE_CONSTRAINT`. `migrations apply
---remote` 7403s on this account, so it is plain SQL plus the bookkeeping row:
+**Migration verified against production, before and after.** Every count
+identical across the rebuild, which is the whole point of how 0023 is written:
 
-```bash
-# 0. before-counts — step 3 is meaningless without them
-npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangler.toml \
-  --command "SELECT (SELECT COUNT(*) FROM app_user) AS users, (SELECT COUNT(triggered_by) FROM research_run) AS run_links, (SELECT COUNT(approved_by) FROM app_user) AS approved_links, (SELECT COUNT(*) FROM user_item) AS ratings;"
-# 1. apply
-npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangler.toml \
-  --file migrations/0023_viewer_role.sql
-# 2. record it, or the next `migrations apply` re-runs it
-npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangler.toml \
-  --command "INSERT INTO d1_migrations (name) VALUES ('0023_viewer_role.sql');"
-# 3. verify, THEN `npm run deploy`
-```
+| | Before | After |
+|---|---|---|
+| `app_user` | 2 | **2** — ids 1 and 2, both still `owner` |
+| `research_run.triggered_by` | 54 | **54** ← the one that mattered |
+| `app_user.approved_by` | 1 | **1** — user 2 → 1, self-reference intact |
+| `user_item` (ratings) | 0 | **0** |
+| stash / `app_user_new` leftovers | — | **0** |
 
-⚠️ **`run_links` is the whole test — expect 46, unchanged.** If it comes back
-**0**, the stash-and-restore did not fire: do not deploy, and recover with
-`npx wrangler d1 time-travel restore board-game-catalog --timestamp <before>`.
+Live schema now reads `CHECK (role IN ('owner', 'rater', 'viewer', 'pending'))`,
+read back from `sqlite_master` rather than assumed. `d1_migrations` latest is
+`0023_viewer_role.sql`.
+
+⚠️ **`run_links` was 54, not the 46 recorded elsewhere in this file** — it had
+grown since. That is the argument for capturing before-counts rather than
+trusting a documented number: the check is *before == after*, not *== 46*.
+
+⚠️ **`d1 execute --remote` threw 7403 once and a straight retry worked.** Same
+transient noted in the 08-08 section. Do not conclude the account has lost
+access on a single failure.
+
+🚨 **Rollback is not just the worker.** The version above restores the code, but
+0023 has already run. It is safe to leave applied — old code never writes
+`viewer` and the widened CHECK accepts everything the old one did — so roll the
+worker back alone. Only if the *data* were wrong would you need
+`npx wrangler d1 time-travel restore board-game-catalog --timestamp <before>`,
+and the table above says it is not.
+
+### ⏳ Not verified: nobody has loaded the deployed page
+
+Access intercepts every route at the edge, and this session could not reach the
+internet at all — `curl` returned `000` (connection failure, **not** a 302) for
+`/api/health` on both hostnames, so it proves nothing either way. The deploy
+reported success and the schema is confirmed through D1, but **no one has seen
+the badge or the "Make viewer" button render in production.** Ask for one signed-in
+page load; do not infer it from a clean deploy. This is the same gap the 08-09
+restyle had, and the owner confirming is what closed it.
 
 ### Why the migration looks so paranoid — do not "simplify" it
 
