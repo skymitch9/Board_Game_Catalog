@@ -4,6 +4,24 @@ compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+# The public hostname, one of three catalogues under heygabi.ai (the others are
+# audiobooks and library). `custom_domain = true` makes the deploy create the
+# hostname and its DNS record, which is why this line — not a dashboard click —
+# is what puts the site online.
+#
+# ⚠️ No CF_ACCESS_AUD change accompanies this, and that is deliberate rather
+# than forgotten. This hostname was added as a second *destination* on the
+# existing `board-game-catalog` Access application instead of as a new
+# application, so it inherits that app's audience — already the first entry in
+# CF_ACCESS_AUD below — and its Production policy. A new application would have
+# minted a third AUD that had to be appended here.
+#
+# The workers.dev URL is kept: it is the second AUD's destination and still the
+# fallback if this record is ever wrong.
+[[routes]]
+pattern = "boardgames.heygabi.ai"
+custom_domain = true
+
 # The built React PWA. Static files are served directly; anything that isn't a
 # file falls through to the Worker, which serves index.html for SPA routes.
 # Run `npm run build` at the repo root before `wrangler dev` or `deploy`.
