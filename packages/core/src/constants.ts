@@ -7,7 +7,17 @@
  * build enums out of them at module-init time.
  */
 
-export const ROLES = ['owner', 'rater', 'pending'] as const;
+/**
+ * ⚠️ Mirrored by a CHECK constraint on `app_user.role` — migration 0023 is the
+ * current definition. Adding a value here without a migration means the role is
+ * assignable in the UI, passes zod, and then fails at the write with a bare
+ * SQLITE_CONSTRAINT.
+ *
+ * `viewer` reads and nothing else. It exists because `rater` — the only other
+ * read-capable role — also carries `rate`, and the people being let in to look
+ * at the collection were never being asked to score it.
+ */
+export const ROLES = ['owner', 'rater', 'viewer', 'pending'] as const;
 export type Role = (typeof ROLES)[number];
 
 /**

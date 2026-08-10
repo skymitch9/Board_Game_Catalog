@@ -7,8 +7,14 @@ import type { Role } from './constants.js';
  */
 export const CAPABILITY_MATRIX = {
   /** See the collection at all. */
-  read: ['owner', 'rater'],
-  /** Rate an item and leave notes on it. */
+  read: ['owner', 'rater', 'viewer'],
+  /**
+   * Rate an item and leave notes on it.
+   *
+   * Deliberately excludes `viewer`: that is the whole difference between the two
+   * read-capable guest roles, and the reason `viewer` had to exist rather than
+   * everybody being made a `rater`.
+   */
   rate: ['owner', 'rater'],
   /** Add or change items, editions, copies. */
   editCatalog: ['owner'],

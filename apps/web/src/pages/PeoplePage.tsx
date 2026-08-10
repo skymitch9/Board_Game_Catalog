@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AppUser, MeResponse, Role } from '@bgc/core';
+import { ROLES, type AppUser, type MeResponse, type Role } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
@@ -7,6 +7,7 @@ import { Badge, ErrorBox, Spinner } from '../components/ui';
 const ROLE_BLURB: Record<Role, string> = {
   owner: 'Can add, edit and delete anything, and approve other people.',
   rater: 'Can browse the collection and leave ratings, but not change it.',
+  viewer: 'Can browse the collection. Cannot rate it or change anything.',
   pending: 'Signed in, but sees nothing until you let them in.',
 };
 
@@ -38,8 +39,10 @@ function RoleControls({
   return (
     <div className="person-actions">
       {error ? <ErrorBox error={error} what="Could not change this role" /> : null}
-      {(['owner', 'rater', 'pending'] as Role[])
-        .filter((r) => r !== user.role)
+      {/* Derived from ROLES rather than listed again, so a role added to the
+          matrix cannot end up assignable nowhere. The old hardcoded copy of
+          this list is exactly how `viewer` would have shipped invisible. */}
+      {ROLES.filter((r) => r !== user.role)
         .map((role) => (
           <button
             key={role}
@@ -105,8 +108,19 @@ export function PeoplePage({ me }: { me: MeResponse }) {
                 first seen {u.firstSeenAt.replace('T', ' ').slice(0, 16)}
               </span>
             </div>
+            {/* `viewer` gets its own tone rather than falling through to the
+                `pending` one — a guest who is in and a guest who is waiting are
+                the two states this page exists to tell apart. */}
             <Badge
-              tone={u.role === 'owner' ? 'owned' : u.role === 'rater' ? 'lent' : 'wanted'}
+              tone={
+                u.role === 'owner'
+                  ? 'owned'
+                  : u.role === 'rater'
+                    ? 'lent'
+                    : u.role === 'viewer'
+                      ? 'preordered'
+                      : 'wanted'
+              }
             >
               {u.role}
             </Badge>
