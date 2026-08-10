@@ -90,6 +90,13 @@ export const meResponseSchema = z.object({
     .object({
       relatedGames: z.number(),
       missingDetails: z.number(),
+      /**
+       * ⚠️ Optional because an older worker does not send it. `undefined` means
+       * "this deploy cannot tell you", which the nav must not render as a
+       * confident zero — the People link is drawn either way, so the only
+       * question is whether it carries a count.
+       */
+      pendingUsers: z.number().optional(),
     })
     .nullable()
     .optional(),

@@ -21,19 +21,36 @@
  *
  * ## Only for people who can act on them
  *
- * Both screens write to the catalog, so a reader is never offered either and
- * never pays for the count. `/api/me` asks for this only when the role holds
- * `editCatalog`.
+ * The first two screens write to the catalog, so a reader is never offered
+ * either and never pays for the count. `pendingUsers` answers to `manageUsers`
+ * instead, so `/api/me` asks for the set when the role holds **either**
+ * capability. Both are owner-only today and the union is the same thing; it is
+ * written as a union so that splitting the roles later cannot silently hide a
+ * count from someone who can act on it.
  */
 
 import { suggestRetags } from '@bgc/core';
-import { countItemsNeedingDetails, listRelationPairs, listTopLevelItems } from '@bgc/db';
+import {
+  countItemsNeedingDetails,
+  countPendingUsers,
+  listRelationPairs,
+  listTopLevelItems,
+} from '@bgc/db';
 
 export interface Chores {
   /** Top-level games whose name says they belong to another, not yet answered. */
   relatedGames: number;
   /** Games with blanks that nobody has paid to look up yet. */
   missingDetails: number;
+  /**
+   * People stuck on the holding screen waiting to be let in.
+   *
+   * Unlike the other two, nothing else in the app mentions these at all — there
+   * is no email and no push, and the People link looked identical whether
+   * nobody or six people were waiting. Somebody could sit on that screen
+   * indefinitely while the owner had no way of knowing.
+   */
+  pendingUsers: number;
 }
 
 /**
@@ -45,10 +62,11 @@ export interface Chores {
  * are linked, so a zero here genuinely means there is nothing to answer.
  */
 export async function outstandingChores(db: D1Database): Promise<Chores> {
-  const [items, pairs, missingDetails] = await Promise.all([
+  const [items, pairs, missingDetails, pendingUsers] = await Promise.all([
     listTopLevelItems(db),
     listRelationPairs(db),
     countItemsNeedingDetails(db),
+    countPendingUsers(db),
   ]);
-  return { relatedGames: suggestRetags(items, pairs).length, missingDetails };
+  return { relatedGames: suggestRetags(items, pairs).length, missingDetails, pendingUsers };
 }

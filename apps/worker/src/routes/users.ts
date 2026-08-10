@@ -17,9 +17,13 @@ export const userRoutes = new Hono<AppBindings>()
   .get('/me', async (c) => {
     const user = c.get('user');
     const capabilities = capabilitiesFor(user.role);
-    const chores = capabilities.includes('editCatalog')
-      ? await outstandingChores(c.env.DB).catch(() => null)
-      : null;
+    // Either capability earns the set: two of the three counts are catalog
+    // maintenance, the third is "somebody is waiting to be let in". See
+    // `lib/chores.ts` for why this is a union rather than `editCatalog` alone.
+    const chores =
+      capabilities.includes('editCatalog') || capabilities.includes('manageUsers')
+        ? await outstandingChores(c.env.DB).catch(() => null)
+        : null;
     return c.json({
       email: user.email,
       displayName: user.displayName,

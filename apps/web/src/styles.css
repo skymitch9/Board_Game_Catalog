@@ -333,6 +333,21 @@ a:hover { text-decoration: underline; }
   padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.8em;
 }
 
+/* The count of people stuck on the holding screen, on the People link.
+   Filled rather than tinted like .role-tag: that one labels a state you are
+   already looking at, this one is asking to be noticed from across the bar.
+   inline-flex with a min-width keeps a single digit round instead of an oval,
+   and lets it grow honestly at 10+ rather than clipping. */
+.nav-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.5em; height: 1.5em; margin-left: 0.35em; padding: 0 0.35em;
+  /* Both tokens flip with the theme, so this inverts correctly either way:
+     dark gold on cream in light mode, light gold on near-black in dark. */
+  background: var(--warn); color: var(--paper);
+  border-radius: 999px; font-size: 0.75em; font-weight: 700;
+  line-height: 1; vertical-align: middle;
+}
+
 .page-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 1rem; margin: 1rem 0;

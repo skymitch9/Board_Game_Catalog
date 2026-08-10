@@ -126,3 +126,17 @@ export async function countOwners(db: D1Database): Promise<number> {
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
+
+/**
+ * People who have signed in and are stuck on the holding screen.
+ *
+ * Nothing else in the app notices them: Access lets anyone authenticate, they
+ * land as `pending`, and the only trace is a row on a page nobody has a reason
+ * to open. Counted so the nav can say so.
+ */
+export async function countPendingUsers(db: D1Database): Promise<number> {
+  const row = await db
+    .prepare(`SELECT COUNT(*) AS n FROM app_user WHERE role = 'pending'`)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}

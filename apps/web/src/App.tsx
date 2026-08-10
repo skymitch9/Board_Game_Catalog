@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { MeResponse } from '@bgc/core';
 import { ApiError, api } from './api';
 import { useAsync } from './hooks';
@@ -17,7 +18,13 @@ import { CoverHealthBanner } from './components/CoverHealthBanner';
 import { ThemeToggle } from './components/ThemeToggle';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
-function Routes({ me }: { me: MeResponse }) {
+function Routes({
+  me,
+  onPendingChange,
+}: {
+  me: MeResponse;
+  onPendingChange: (n: number) => void;
+}) {
   const route = useRoute();
 
   switch (route.name) {
@@ -57,7 +64,7 @@ function Routes({ me }: { me: MeResponse }) {
       return me.capabilities.includes('editCatalog') ? <ExportPage /> : <NotFoundPage />;
     case 'people':
       return me.capabilities.includes('manageUsers') ? (
-        <PeoplePage me={me} />
+        <PeoplePage me={me} onPendingChange={onPendingChange} />
       ) : (
         <NotFoundPage />
       );
@@ -68,6 +75,9 @@ function Routes({ me }: { me: MeResponse }) {
 
 export default function App() {
   const [me] = useAsync(() => api.me(), []);
+  // Set by the People page while it is open; null means "nobody has told me
+  // anything better than the count that arrived with /api/me".
+  const [pendingOverride, setPendingOverride] = useState<number | null>(null);
 
   if (me.state === 'loading') return <Spinner label="Signing in…" />;
 
@@ -108,6 +118,20 @@ export default function App() {
   const chores = me.data.chores;
   const showRetag = canEdit && (chores == null || chores.relatedGames > 0);
   const showDetails = canEdit && (chores == null || chores.missingDetails > 0);
+  // The reverse of the rule above, deliberately. An unknown count hides the
+  // badge instead of showing it: those links guard against a screen you cannot
+  // reach, whereas this decorates a link that is always there, and a badge
+  // invented from `undefined` would claim somebody is waiting when nobody is.
+  // `?? 0` therefore covers both a failed count and an older worker.
+  //
+  // The override is what keeps it honest while you work. `chores` is fixed at
+  // the last full page load — fine for the two maintenance links, wrong here,
+  // because approving someone is done on the very page the badge points at, and
+  // a badge still saying 3 after you cleared the queue teaches you to ignore it.
+  // Re-fetching /api/me is not the fix: `useAsync` drops back to `loading`, so
+  // the whole app would blink through "Signing in…" on every role change. The
+  // People page already counts them for its own callout, so it just says so.
+  const waiting = pendingOverride ?? chores?.pendingUsers ?? 0;
 
   return (
     <main>
@@ -145,7 +169,25 @@ export default function App() {
               Missing details{chores ? ` (${chores.missingDetails})` : ''}
             </Link>
           )}
-          {me.data.capabilities.includes('manageUsers') && <Link to="/people">People</Link>}
+          {/* Unlike the two maintenance links above, People is always drawn —
+              it is the only way to change anyone's role, so it cannot hide when
+              it happens to be quiet. The badge is the opposite case to those
+              counts: a waiting person is the one piece of outstanding work
+              nothing else in the app mentions, so it is a filled badge rather
+              than "(N)" in the link text. Zero draws nothing. */}
+          {me.data.capabilities.includes('manageUsers') && (
+            <Link to="/people">
+              People
+              {waiting > 0 && (
+                <span
+                  className="nav-badge"
+                  title={`${waiting} ${waiting === 1 ? 'person is' : 'people are'} waiting to be let in`}
+                >
+                  {waiting}
+                </span>
+              )}
+            </Link>
+          )}
           {/* Taking the collection away with you is a place, not an action —
               two formats that are not interchangeable, so something has to
               offer the choice. It used to be two bare links in the collection
@@ -169,7 +211,7 @@ export default function App() {
       {/* Above the page rather than inside one: a dead cover is a fact about
           the catalog, not about whichever screen happens to be open. */}
       <CoverHealthBanner me={me.data} />
-      <Routes me={me.data} />
+      <Routes me={me.data} onPendingChange={setPendingOverride} />
     </main>
   );
 }

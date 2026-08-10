@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ROLES, type AppUser, type MeResponse, type Role } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
@@ -65,16 +65,34 @@ function RoleControls({
  * actually gets in, which is why it lives in the app rather than the Cloudflare
  * dashboard.
  */
-export function PeoplePage({ me }: { me: MeResponse }) {
+export function PeoplePage({
+  me,
+  onPendingChange,
+}: {
+  me: MeResponse;
+  onPendingChange?: (n: number) => void;
+}) {
   const [users, refresh] = useAsync(() => api.users(), []);
+
+  const list = users.state === 'ok' ? users.data.users : null;
+  const pendingCount = list?.filter((u) => u.role === 'pending').length ?? null;
+
+  // Tell the nav what this page can see. The badge it draws comes from
+  // `/api/me`, which is fetched once at startup and cannot notice an approval
+  // made here — and this is the one screen where that staleness is visible,
+  // because approving someone is what you came to do. Reported from the loaded
+  // list rather than from the click, so a change made in another tab and picked
+  // up by `refresh` corrects the badge too.
+  useEffect(() => {
+    if (pendingCount != null) onPendingChange?.(pendingCount);
+  }, [pendingCount, onPendingChange]);
 
   if (users.state === 'loading') return <Spinner />;
   if (users.state === 'error') {
     return <ErrorBox error={users.error} what="Could not load the people list" />;
   }
 
-  const list = users.data.users;
-  const pending = list.filter((u) => u.role === 'pending');
+  const pending = users.data.users.filter((u) => u.role === 'pending');
 
   return (
     <>
@@ -99,7 +117,7 @@ export function PeoplePage({ me }: { me: MeResponse }) {
       )}
 
       <ul className="person-list">
-        {list.map((u) => (
+        {users.data.users.map((u) => (
           <li key={u.id} className="card person">
             <div className="person-id">
               <span className="person-email">{u.displayName || u.email}</span>
