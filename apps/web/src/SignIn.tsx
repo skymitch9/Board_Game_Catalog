@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { signIn } from './lib/firebase';
+
 function GoogleMark() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -22,40 +25,82 @@ function GoogleMark() {
 }
 
 /**
- * Shown when the API says we have no verified identity.
+ * The front door, and since 2026-08-10 it is a real one.
  *
- * Cloudflare Access normally intercepts the page load and bounces to Google
- * before this ever renders — this is what you see when a session expires while
- * the tab is open, so a full navigation is exactly the right action: Access
- * catches it and runs the Google flow.
+ * Under Cloudflare Access this screen was nearly dead code: Access intercepted
+ * the page load and ran Google before React rendered, so the only way to see it
+ * was a cookie expiring with the tab open. Its button did
+ * `window.location.assign('/')` — a full navigation, so that Access would catch
+ * it — which was the correct action then and does nothing useful now.
+ *
+ * With the Worker verifying Firebase ID tokens, this page is what an
+ * unrecognised visitor actually meets, so the button runs the Google flow
+ * itself. Signing in does **not** grant access: it creates a `pending` account
+ * and lands on the waiting screen in `App.tsx`. That is the whole point of the
+ * change — a stranger can now ask, where before they could not reach the app to
+ * be asked about.
  */
-export function SignIn({ reason }: { reason: 'unauthenticated' | 'misconfigured'; }) {
+export function SignIn({ reason }: { reason: 'unauthenticated' | 'misconfigured' }) {
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
   if (reason === 'misconfigured') {
     return (
       <div className="signin">
         <h1>Almost there</h1>
         <p className="signin-lede">
-          The catalog is deployed but doesn&apos;t yet know which Cloudflare Access application to
-          trust, so it won&apos;t identify anyone.
+          The catalog is deployed but doesn&apos;t yet know which Firebase project to trust, so it
+          won&apos;t identify anyone.
         </p>
         <p className="note">
-          Set <code>CF_ACCESS_TEAM_DOMAIN</code> and <code>CF_ACCESS_AUD</code> in{' '}
-          <code>apps/worker/wrangler.toml</code> and redeploy — <code>docs/SETUP.md</code> step 7.
+          Set <code>FIREBASE_PROJECT_ID</code> in <code>apps/worker/wrangler.toml</code> and
+          redeploy — <code>docs/SETUP.md</code> step 7. It must match <code>projectId</code> in{' '}
+          <code>apps/web/src/lib/firebase.ts</code>.
         </p>
       </div>
     );
+  }
+
+  async function onSignIn() {
+    setError(null);
+    setBusy(true);
+    try {
+      await signIn();
+      // No navigation here on purpose. watchAuth fires, useAuthUser flips to
+      // 'in', and App re-renders — a reload would throw away the session
+      // Firebase has only just established.
+    } catch (err) {
+      // A closed popup is the overwhelmingly common case and is not a failure,
+      // so it must not render as a red error box.
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setBusy(false);
+        return;
+      }
+      // ⚠️ The one worth naming. This host has to be listed in Firebase →
+      // Authentication → Settings → Authorised domains, and that console is
+      // owner-only, so a session cannot fix it from here.
+      setError(
+        code === 'auth/unauthorized-domain'
+          ? `This site (${window.location.hostname}) is not an authorised domain on the Firebase project.`
+          : ((err as Error)?.message ?? 'Sign-in failed.'),
+      );
+      setBusy(false);
+    }
   }
 
   return (
     <div className="signin">
       <h1>Board Game Catalog</h1>
       <p className="signin-lede">Private collection. Sign in to continue.</p>
-      <button className="google-btn" onClick={() => window.location.assign('/')} type="button">
+      <button className="google-btn" onClick={() => void onSignIn()} type="button" disabled={busy}>
         <GoogleMark />
-        <span>Sign in with Google</span>
+        <span>{busy ? 'Signing in…' : 'Sign in with Google'}</span>
       </button>
+      {error && <p className="error-text">{error}</p>}
       <p className="note">
-        First time here? You&apos;ll be able to request access once you&apos;ve signed in.
+        First time here? Signing in doesn&apos;t let you in by itself — it puts you in the queue,
+        and an owner approves you.
       </p>
     </div>
   );

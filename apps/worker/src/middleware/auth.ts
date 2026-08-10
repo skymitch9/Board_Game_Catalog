@@ -5,11 +5,44 @@ import { upsertUserOnLogin } from '@bgc/db';
 import { parseOwnerEmails, type AppBindings, type Env } from '../env.js';
 
 /**
- * Cloudflare Access authenticates (Google SSO); this file authorizes.
+ * Firebase Auth (Google SSO) authenticates; this file authorizes.
  *
- * Access puts a signed JWT on every request that reaches the Worker. We verify
- * it against Cloudflare's rotating public keys, pull the verified email out,
- * and look that email up in app_user to decide what the person may do.
+ * ## ⚠️ Why this moved off Cloudflare Access — the thing to understand first
+ *
+ * Access authenticated at the **edge**, before any of this code ran. That was
+ * cheap and strong, and it had one fatal property: it was a second, unrelated
+ * allowlist. A person had to be named in a Cloudflare policy before the app
+ * could so much as tell them they were `pending`, which made the whole
+ * owner/rater/viewer/pending model unreachable for anyone not already let in.
+ * Letting somebody see the collection meant editing a Cloudflare policy — the
+ * exact job `app_user.role` exists to do.
+ *
+ * It was also a *different* Google SSO from the one the sibling catalogs use,
+ * so the same human signing into `boardgames.` and `library.` was two records
+ * with no way to tell they were one person. `catalog-platform/docs/PLATFORM.md`
+ * §4 chose Firebase ID tokens for both Workers for that reason.
+ *
+ * ⚠️ **The Worker is now the only gate.** Nothing stops an unauthenticated
+ * request before `requireAuth` does. That is why `index.ts` mounts it as a
+ * blanket `app.use('/api/*', …)` rather than per-route, and why every route
+ * beyond it still carries its own `requireCapability`.
+ *
+ * ## What is verified
+ *
+ * A Firebase ID token is an RS256 JWT signed by Google:
+ *
+ *     iss  https://securetoken.google.com/<projectId>
+ *     aud  <projectId>
+ *     sub  the Firebase uid
+ *     keys https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
+ *
+ * `jose` handles rotation, expiry and signature. What it cannot check is that
+ * the token came from the *right* project — any Firebase project's tokens are
+ * validly signed by Google. So `FIREBASE_PROJECT_ID` is asserted as both
+ * `issuer` and `audience`, and a token minted by any other project fails closed.
+ *
+ * ⚠️ Removing either assertion turns this into "any Google user of any Firebase
+ * app on the internet", which is not a smaller check — it is no check.
  */
 
 interface Identity {
@@ -17,71 +50,68 @@ interface Identity {
   name: string | null;
 }
 
-// The JWKS client caches keys in memory and refetches on rotation, so it is
-// built once per isolate rather than per request.
+// Cached per isolate: the JWKS client refetches on rotation by itself, and
+// building one per request would add a round trip to every call.
 let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null;
-let jwksCacheDomain = '';
 
-function getJwks(teamDomain: string) {
-  if (!jwksCache || jwksCacheDomain !== teamDomain) {
-    jwksCache = createRemoteJWKSet(new URL(`https://${teamDomain}/cdn-cgi/access/certs`));
-    jwksCacheDomain = teamDomain;
+function getJwks() {
+  if (!jwksCache) {
+    jwksCache = createRemoteJWKSet(
+      new URL(
+        'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com',
+      ),
+    );
   }
   return jwksCache;
 }
 
-/** Accepts "team.cloudflareaccess.com" or "https://team.cloudflareaccess.com/". */
-function normalizeTeamDomain(raw: string): string {
-  return raw.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-}
-
-function readAccessToken(req: Request): string | null {
-  const header = req.headers.get('Cf-Access-Jwt-Assertion');
-  if (header) return header;
-
-  const cookie = req.headers.get('Cookie');
-  if (!cookie) return null;
-  const match = /(?:^|;\s*)CF_Authorization=([^;]+)/.exec(cookie);
-  return match?.[1] ?? null;
+function readBearer(req: Request): string | null {
+  const header = req.headers.get('Authorization');
+  if (!header) return null;
+  const m = /^Bearer\s+(.+)$/i.exec(header.trim());
+  return m?.[1] ?? null;
 }
 
 async function resolveIdentity(req: Request, env: Env): Promise<Identity | null> {
-  // Local development bypass. Double-gated: the variable must be set AND the
-  // environment must not be production.
-  if (env.ENVIRONMENT !== 'production' && env.DEV_EMAIL) {
+  // Local development bypass. Triple-gated: the variable must be set, the
+  // environment must be exactly "development", and production sets ENVIRONMENT
+  // explicitly in wrangler.toml.
+  //
+  // ⚠️ This used to test `!== 'production'`, which meant any unrecognised value
+  // — a typo, a new named environment, an unset var in some future preview lane
+  // — silently enabled it. That was survivable while Access stood in front. It
+  // is not now: this is the only thing between DEV_EMAIL and a real session.
+  if (env.ENVIRONMENT === 'development' && env.DEV_EMAIL) {
     return { email: env.DEV_EMAIL, name: 'Local Dev' };
   }
 
-  const teamDomain = normalizeTeamDomain(env.CF_ACCESS_TEAM_DOMAIN ?? '');
-
-  // Cloudflare mints a separate Access application — and therefore a separate
-  // audience — for the production URL and for preview URLs. Accept a
-  // comma-separated list so a token from either is valid.
-  const audiences = (env.CF_ACCESS_AUD ?? '')
-    .split(',')
-    .map((a) => a.trim())
-    .filter(Boolean);
-
-  if (!teamDomain || audiences.length === 0) {
-    throw new Error(
-      'Access is not configured: set CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD (docs/SETUP.md step 7).',
-    );
+  const projectId = (env.FIREBASE_PROJECT_ID ?? '').trim();
+  if (!projectId) {
+    throw new Error('FIREBASE_PROJECT_ID is not set (docs/SETUP.md step 7).');
   }
 
-  const token = readAccessToken(req);
+  const token = readBearer(req);
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getJwks(teamDomain), {
-      issuer: `https://${teamDomain}`,
-      audience: audiences,
+    const { payload } = await jwtVerify(token, getJwks(), {
+      issuer: `https://securetoken.google.com/${projectId}`,
+      audience: projectId,
     });
+
     const email = typeof payload['email'] === 'string' ? payload['email'] : null;
     if (!email) return null;
+
+    // A Google account whose email is unverified is not an identity. Firebase
+    // will mint a token for one, and email is both our primary key in app_user
+    // and the join to the sibling catalogs — so refusing is the difference
+    // between "cannot sign in" and "signed in as somebody else".
+    if (payload['email_verified'] === false) return null;
+
     const name = typeof payload['name'] === 'string' ? payload['name'] : null;
     return { email, name };
   } catch {
-    // Expired, wrong audience, bad signature — all the same to us.
+    // Expired, wrong audience, bad signature, wrong project — all the same here.
     return null;
   }
 }

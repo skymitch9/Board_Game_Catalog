@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { User } from 'firebase/auth';
+import { watchAuth } from './lib/firebase';
 
 export type Async<T> =
   | { state: 'loading' }
@@ -28,6 +30,35 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []): [Async<
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
   return [result, refresh];
+}
+
+/**
+ * Firebase's answer to "is anyone signed in?", including the moment before it
+ * has one.
+ *
+ * ⚠️ `resolving` is a real state, not a loading spinner for politeness. On a
+ * cold load `onAuthStateChanged` fires asynchronously, and its first argument
+ * is `null` for a signed-in user until the persisted session is restored.
+ * Collapsing `resolving` into `out` shows the sign-in screen to someone who is
+ * already signed in, every load — which is the bug this type exists to make
+ * unrepresentable.
+ *
+ * `state: 'out'` is only ever reported after Firebase has actually decided.
+ */
+export type AuthState =
+  | { state: 'resolving' }
+  | { state: 'in'; user: User }
+  | { state: 'out' };
+
+export function useAuthUser(): AuthState {
+  const [auth, setAuth] = useState<AuthState>({ state: 'resolving' });
+
+  useEffect(() => {
+    // watchAuth returns its unsubscribe, so a remount cannot stack listeners.
+    return watchAuth((user) => setAuth(user ? { state: 'in', user } : { state: 'out' }));
+  }, []);
+
+  return auth;
 }
 
 /**

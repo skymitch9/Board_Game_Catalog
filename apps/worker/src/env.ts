@@ -1,8 +1,17 @@
 import type { AppUser } from '@bgc/core';
+import type { RateLimiter } from './middleware/rate-limit.js';
 
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+
+  /**
+   * Per-IP throttle on the unauthenticated surface — see middleware/rate-limit.ts.
+   *
+   * Optional so `wrangler dev` without the binding still starts. The middleware
+   * fails open and warns rather than refusing traffic.
+   */
+  RATE_LIMITER?: RateLimiter;
 
   APP_VERSION: string;
   ENVIRONMENT: string;
@@ -10,10 +19,29 @@ export interface Env {
   /** Comma-separated emails seeded as `owner` on first sign-in. */
   OWNER_EMAILS: string;
 
-  /** e.g. "yourteam.cloudflareaccess.com" */
-  CF_ACCESS_TEAM_DOMAIN: string;
-  /** The Access application's AUD tag. */
-  CF_ACCESS_AUD: string;
+  /**
+   * The Firebase project whose ID tokens this Worker accepts, asserted as both
+   * `iss` and `aud` in middleware/auth.ts.
+   *
+   * ⚠️ Must stay `audiobook-catalog` and must match the web app's
+   * `firebaseConfig.projectId`, or every request 401s. Sharing the project with
+   * the audiobook and library catalogs is the point: one Google account is one
+   * person across all three, which is why this replaced Cloudflare Access.
+   */
+  FIREBASE_PROJECT_ID: string;
+
+  /**
+   * @deprecated Cloudflare Access no longer authenticates this Worker —
+   * middleware/auth.ts verifies Firebase ID tokens instead.
+   *
+   * These stay declared, and stay set in wrangler.toml, only until the Access
+   * application is deleted. Access is still in front of the Worker during the
+   * cutover, and deleting the application is the last step, not the first. Once
+   * it is gone, remove these two fields and their `[vars]` entries together.
+   */
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  /** @deprecated See CF_ACCESS_TEAM_DOMAIN. */
+  CF_ACCESS_AUD?: string;
 
   /**
    * BoardGameGeek application token. BGG began requiring registration and
@@ -43,8 +71,14 @@ export interface Env {
   GAMEUPC_STAGE?: string;
 
   /**
-   * Local development only. Ignored unless ENVIRONMENT is "development", so a
-   * stray value in production vars can never bypass Access.
+   * Local development only. Ignored unless ENVIRONMENT is exactly
+   * "development", so a stray value in production vars cannot mint a session.
+   *
+   * ⚠️ That sentence was true of the comment but not of the code until
+   * 2026-08-10: `auth.ts` tested `ENVIRONMENT !== 'production'`, so **any**
+   * other value — a typo, an unset var, some future preview lane — enabled the
+   * bypass. Access covered for it. Nothing covers for it now, so the check is
+   * an equality test and this comment finally describes it.
    */
   DEV_EMAIL?: string;
 }

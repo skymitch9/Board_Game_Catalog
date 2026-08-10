@@ -29,6 +29,7 @@ import type {
   UpsertRatingInput,
   WishlistEntry,
 } from '@bgc/core';
+import { getIdToken } from './lib/firebase';
 
 export class ApiError extends Error {
   constructor(
@@ -54,15 +55,33 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Every call carries a Firebase ID token.
+ *
+ * Until 2026-08-10 this sent no credentials at all: Cloudflare Access attached
+ * a cookie before the request ever reached the Worker, so the browser
+ * authenticated without the app's help. The Worker verifies a bearer token now,
+ * which makes this the one place that knows how a request is authenticated.
+ *
+ * ⚠️ On a 401 the token is refreshed **once** and the request retried **once**.
+ * A token expiring mid-session is ordinary and making somebody sign in again
+ * for it would be the worst possible response — but retrying twice is a loop,
+ * so a second 401 surfaces as an error and `App.tsx` shows the sign-in screen.
+ */
+async function req<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
+  const token = await getIdToken(retried);
   const res = await fetch(path, {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
+
+  if (res.status === 401 && !retried) return req<T>(path, init, true);
+
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, body);
   return body as T;

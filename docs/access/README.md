@@ -10,7 +10,8 @@ current state and work in flight live in [`../HANDOFF.md`](../HANDOFF.md).
 | File | Covers |
 |---|---|
 | [`external-apis.md`](external-apis.md) | Every third-party service: endpoints, key names, quotas, what breaks without them |
-| [`login.md`](login.md) | How sign-in works, swapping one-time PIN for Google SSO (free), skipping the login chooser, rollback without locking yourself out |
+| [`firebase-auth.md`](firebase-auth.md) | 🔶 **The auth model as of 2026-08-10** — Firebase ID tokens, the cutover off Cloudflare Access and why its order is a safety property, what edge protection is given up. **Read before `login.md`** |
+| [`login.md`](login.md) | Cloudflare Access: how sign-in works **today**, until the cutover's step 4. Being replaced |
 
 Cloudflare, D1 and Access details are in [`../SETUP.md`](../SETUP.md); commands
 and deploy levers are in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.
@@ -19,7 +20,8 @@ and deploy levers are in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.
 
 | Name | Required? | Without it |
 |---|---|---|
-| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | yes | No auth; every request rejected |
+| `FIREBASE_PROJECT_ID` | yes | `/api/*` answers 500 `misconfigured`. Must equal `projectId` in `apps/web/src/lib/firebase.ts` |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | 🔶 no longer read | Nothing. Kept set until the Access application is deleted — [`firebase-auth.md`](firebase-auth.md) §3 step 6 |
 | `OWNER_EMAILS` | yes | Nobody is seeded as owner |
 | `ANTHROPIC_API_KEY` | for research | `/api/barcode/identify` and phase 3 return 503 |
 | `BGG_API_TOKEN` | for BGG | `/api/bgg/*` returns 502; barcode lookups still work, unhydrated |

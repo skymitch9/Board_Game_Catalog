@@ -1,5 +1,15 @@
 # Login & Identity — Access Reference
 
+> 🔶 **BEING REPLACED — read [`firebase-auth.md`](firebase-auth.md) first.**
+> As of 2026-08-10 the code in `main` verifies **Firebase ID tokens**, not
+> Cloudflare Access JWTs. This file still describes what is **live** — Access is
+> deployed and is what lets you in right now — and stays accurate until step 4
+> of that document's cutover. After that it is history.
+>
+> ⚠️ The one thing here not to act on: "Optional: swap one-time PIN for Google
+> SSO" configures *Access* to use Google. Don't — it is work on the gate that is
+> being removed.
+
 > **Audience:** Claude sessions. **Status:** TRACKED. Last verified: **2026-08-08**.
 
 How this app authenticates people, and how to swap the annoying email one-time

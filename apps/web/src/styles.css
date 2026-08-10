@@ -1252,6 +1252,16 @@ textarea { resize: vertical; }
 }
 .google-btn:hover { background: #f8f9fa; box-shadow: 0 1px 3px rgb(60 64 67 / 0.24); }
 .google-btn:focus-visible { outline: 2px solid #4285f4; outline-offset: 2px; }
+/* The button runs the Google popup itself now rather than navigating away, so
+   it has an in-flight state lasting as long as somebody takes to pick an
+   account. */
+.google-btn:disabled { cursor: default; opacity: 0.6; box-shadow: none; }
+/* Sign-in failures are one line under the button rather than an .errorbox: this
+   column is 22rem wide and the failures are short — a wrong account, an
+   unauthorised domain. A closed popup is not a failure and never lands here. */
+.signin .error-text {
+  margin: 0.85rem 0 0; color: var(--bad); font-size: 0.9rem; text-align: left;
+}
 .note {
   margin: 0.75rem 0 0; padding: 0.75rem;
   background: var(--bg); border-radius: 8px;

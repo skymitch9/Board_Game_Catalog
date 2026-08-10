@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { MeResponse } from '@bgc/core';
 import { ApiError, api } from './api';
-import { useAsync } from './hooks';
+import { useAsync, useAuthUser } from './hooks';
+import { signOutNow } from './lib/firebase';
 import { Link, collectionPath, useRoute } from './router';
 import { SignIn } from './SignIn';
 import { NewItemPage } from './components/ItemForm';
@@ -73,7 +74,32 @@ function Routes({
   }
 }
 
+/**
+ * The auth gate. Everything below it can assume Firebase has a session.
+ *
+ * ⚠️ This wrapper exists because of an ordering trap, not for tidiness.
+ * `onAuthStateChanged` does not answer synchronously: on a cold load Firebase
+ * has to restore a persisted session first, and until it does, `currentUser` is
+ * `null`. Calling `/api/me` in that window sends no token, gets a 401, and
+ * shows the sign-in screen to somebody who is already signed in — on every
+ * single page load. So the token has to exist before the first request, not
+ * merely before the second.
+ *
+ * Access made this a non-problem: its cookie was on the very first request the
+ * browser made. Nothing is, now.
+ *
+ * It is a separate component rather than an early return so that `SignedInApp`
+ * still calls its hooks unconditionally.
+ */
 export default function App() {
+  const auth = useAuthUser();
+
+  if (auth.state === 'resolving') return <Spinner label="Restoring your session…" />;
+  if (auth.state === 'out') return <SignIn reason="unauthenticated" />;
+  return <SignedInApp />;
+}
+
+function SignedInApp() {
   const [me] = useAsync(() => api.me(), []);
   // Set by the People page while it is open; null means "nobody has told me
   // anything better than the count that arrived with /api/me".
@@ -103,6 +129,17 @@ export default function App() {
           <p className="muted">
             You&apos;re signed in as <strong>{me.data.email}</strong>, but an owner needs to let you
             in before you can see the collection.
+          </p>
+          {/* This screen is now reachable by strangers, which it never was
+              under Cloudflare Access — Access turned away anyone not already on
+              its allowlist, so nobody could get far enough to wait. Somebody
+              who lands here having signed in with the wrong Google account
+              needs a way back out that isn't clearing site data. */}
+          <p className="muted">
+            <button className="linklike" onClick={() => void signOutNow()} type="button">
+              Sign out
+            </button>{' '}
+            to try a different account.
           </p>
         </EmptyState>
       </main>
@@ -206,6 +243,14 @@ export default function App() {
             {me.data.displayName || me.data.email}
             {me.data.role !== 'owner' && <span className="role-tag"> {me.data.role}</span>}
           </span>
+          {/* New with Firebase sign-in. Under Cloudflare Access there was
+              nothing useful to put here — signing out meant clearing an Access
+              cookie this app did not own — so the name was the end of the bar.
+              Now the session belongs to the app, and a session you cannot end
+              is a bug on a shared or borrowed device. */}
+          <button className="linklike" onClick={() => void signOutNow()} type="button">
+            Sign out
+          </button>
         </span>
       </nav>
       {/* Above the page rather than inside one: a dead cover is a fact about

@@ -11,6 +11,7 @@ import type { AppBindings, Env } from './env.js';
 import { COMPONENT_REFRESH_CRON, runComponentBackfill } from './lib/component-backfill.js';
 import { runCoverCheck } from './lib/cover-check.js';
 import { requireAuth } from './middleware/auth.js';
+import { rateLimit } from './middleware/rate-limit.js';
 import { aliasRoutes } from './routes/aliases.js';
 import { barcodeRoutes } from './routes/barcode.js';
 import { bggRoutes } from './routes/bgg.js';
@@ -29,10 +30,20 @@ import { visionRoutes } from './routes/vision.js';
 
 const app = new Hono<AppBindings>();
 
-// Public — no Access token needed, so it can be curled to verify a deploy.
+// ⚠️ The order of these three is the whole shape of the gate.
+//
+// Cloudflare Access used to turn away unauthenticated traffic before any of
+// this ran. It no longer does (see middleware/auth.ts), so the rate limit goes
+// first — ahead of health, and ahead of the signature check that every /api/*
+// request pays for even when it ends in a 401.
+app.use('/api/*', rateLimit());
+
+// Public — no token needed, so a deploy can still be curled to verify it. Rate
+// limited by the line above, unlike before.
 app.route('/api/health', healthRoutes);
 
-// Everything else behind identity.
+// Everything else behind identity. Blanket rather than per-route on purpose: a
+// route added later should inherit the gate rather than escape it.
 app.use('/api/*', requireAuth());
 app.route('/api', userRoutes);
 app.route('/api', catalogRoutes);

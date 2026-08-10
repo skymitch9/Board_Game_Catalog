@@ -29,6 +29,25 @@ custom_domain = true
 directory = "../web/dist"
 binding = "ASSETS"
 
+# Per-IP throttle on the unauthenticated surface — see middleware/rate-limit.ts.
+#
+# Required by PLATFORM.md §4.1 before Cloudflare Access came off: with Access in
+# front, only allowlisted people could reach the Worker at all. Now anyone can,
+# and a request that fails token verification still costs the CPU of trying.
+#
+# 300 per 60s is an anti-abuse floor, not a quota. The collection page fans out
+# roughly a dozen calls, and both household members can share one IP, so the
+# ceiling is set well above anything ordinary use produces.
+#
+# ⚠️ `period` accepts only 10 or 60 — any other value is rejected at deploy.
+# ⚠️ `namespace_id` is an arbitrary string, but changing it silently resets
+# every counter, so leave it alone.
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 300, period = 60 }
+
 [[d1_databases]]
 binding = "DB"
 database_name = "board-game-catalog"
@@ -79,9 +98,22 @@ ENVIRONMENT = "production"
 # yourself out, put an email here and redeploy to force it back to `owner`.
 OWNER_EMAILS = ""
 
-# Cloudflare Access. Both values come from the "This Worker URL requires Access
-# sign-in" dialog shown when you set a Worker URL to Restricted.
+# The Firebase project whose ID tokens middleware/auth.ts accepts, pinned as
+# both `iss` and `aud`.
 #
+# ⚠️ Must match `projectId` in apps/web/src/lib/firebase.ts or every request
+# 401s. It is deliberately the SAME project as the audiobook and library
+# catalogs: one Google account is one person across all three, which is the
+# reason this catalog moved off Cloudflare Access.
+FIREBASE_PROJECT_ID = "audiobook-catalog"
+
+# ⚠️ DEPRECATED — Access no longer authenticates this Worker; auth.ts verifies
+# Firebase ID tokens. These two stay ONLY until the Access application is
+# deleted, which is the last step of the cutover rather than the first: Access
+# stays in front while the token path is proved on the live host. Delete these
+# two lines and the matching fields in src/env.ts together, once it is gone.
+#
+# Both values came from the "This Worker URL requires Access sign-in" dialog.
 # CF_ACCESS_AUD is a comma-separated list because Cloudflare mints a separate
 # Access application per URL: the first audience below is the production URL,
 # the second is the preview (*-board-game-catalog) URL.

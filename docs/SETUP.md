@@ -3,6 +3,13 @@
 **Phase 0 is deployed and live.** This document records what was configured and
 what's left.
 
+> 🔶 **The auth half of this document is being replaced.** As of 2026-08-10 the
+> code verifies **Firebase ID tokens**; Cloudflare Access is still deployed and
+> is still what lets you in, until step 4 of
+> [`access/firebase-auth.md`](access/firebase-auth.md) §3. Everything below
+> about Access describes the live system and remains accurate until then —
+> except the Google SSO swap, which is now work on a gate that is going away.
+
 ## Live
 
 | | |
@@ -148,8 +155,10 @@ Start over locally: delete `apps/worker/.wrangler/state/v3/d1`, then
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `/api/me` → 401 after signing in | Token audience doesn't match | Confirm the AUD in `wrangler.toml` matches the app's *Application Audience (AUD) Tag* |
-| `/api/me` → 500 `misconfigured` | Access vars empty | They're set — check the deploy actually shipped them (`npm run deploy` prints the bindings) |
+| `/api/me` → 401 after signing in | **Post-2026-08-10:** `FIREBASE_PROJECT_ID` doesn't match `projectId` in `apps/web/src/lib/firebase.ts`, or the token is from another project | Make the two agree; both must be `audiobook-catalog` |
+| Sign-in popup fails `auth/unauthorized-domain` | The host isn't listed in Firebase → Authentication → Settings → Authorised domains | 🔴 Owner-only console. `boardgames.heygabi.ai` was added 2026-08-10 |
+| `/api/me` → 500 `misconfigured` | `FIREBASE_PROJECT_ID` unset (pre-cutover: Access vars empty) | Check the deploy shipped it — `npm run deploy` prints the bindings |
+| `/api/*` → 429 `rate_limited` | Per-IP limit, 300/60s | Wait a minute. If it fires in ordinary use the ceiling is wrong, not the caller — `middleware/rate-limit.ts` |
 | `/api/health` → `database: down` | Migration missing remotely | `npm run db:migrate` |
 | You land as `pending` | Someone already claimed owner | `GET /api/users`; use the `OWNER_EMAILS` recovery hatch |
 | Access blocks you entirely | Policy doesn't include your email | Zero Trust → Access controls → Applications → Policies |
