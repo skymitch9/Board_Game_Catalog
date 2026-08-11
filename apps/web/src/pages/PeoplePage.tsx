@@ -5,7 +5,9 @@ import { useAsync } from '../hooks';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
 
 const ROLE_BLURB: Record<Role, string> = {
-  owner: 'Can add, edit and delete anything, and approve other people.',
+  owner: 'Everything a manager can do, plus deciding who is on this page.',
+  manager:
+    'Can add, edit and delete anything in the catalog, including research runs. Cannot change anyone’s role.',
   rater: 'Can browse the collection and leave ratings, but not change it.',
   viewer: 'Can browse the collection. Cannot rate it or change anything.',
   pending: 'Signed in, but sees nothing until you let them in.',
@@ -128,10 +130,15 @@ export function PeoplePage({
             </div>
             {/* `viewer` gets its own tone rather than falling through to the
                 `pending` one — a guest who is in and a guest who is waiting are
-                the two states this page exists to tell apart. */}
+                the two states this page exists to tell apart.
+
+                `manager` shares the owner tone deliberately. It is not a
+                stronger guest, it is the catalog role: the two of them differ
+                only in whether they can change this page, and every other
+                distinction on this screen is about the catalog. */}
             <Badge
               tone={
-                u.role === 'owner'
+                u.role === 'owner' || u.role === 'manager'
                   ? 'owned'
                   : u.role === 'rater'
                     ? 'lent'

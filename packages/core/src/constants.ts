@@ -8,7 +8,7 @@
  */
 
 /**
- * ⚠️ Mirrored by a CHECK constraint on `app_user.role` — migration 0023 is the
+ * ⚠️ Mirrored by a CHECK constraint on `app_user.role` — migration 0024 is the
  * current definition. Adding a value here without a migration means the role is
  * assignable in the UI, passes zod, and then fails at the write with a bare
  * SQLITE_CONSTRAINT.
@@ -16,8 +16,14 @@
  * `viewer` reads and nothing else. It exists because `rater` — the only other
  * read-capable role — also carries `rate`, and the people being let in to look
  * at the collection were never being asked to score it.
+ *
+ * `manager` is everything an owner can do **except decide who is in**. It exists
+ * because ownership had been doing two unrelated jobs: keeping the catalog, and
+ * controlling the guest list. Two people were `owner` purely so both could add
+ * games, which made "who can let someone in" a question with two answers. Now
+ * there is one owner, and helping with the catalog does not require it.
  */
-export const ROLES = ['owner', 'rater', 'viewer', 'pending'] as const;
+export const ROLES = ['owner', 'manager', 'rater', 'viewer', 'pending'] as const;
 export type Role = (typeof ROLES)[number];
 
 /**
