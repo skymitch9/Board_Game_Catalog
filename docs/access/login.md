@@ -1,14 +1,17 @@
 # Login & Identity — Access Reference
 
-> 🔶 **BEING REPLACED — read [`firebase-auth.md`](firebase-auth.md) first.**
-> As of 2026-08-10 the code in `main` verifies **Firebase ID tokens**, not
-> Cloudflare Access JWTs. This file still describes what is **live** — Access is
-> deployed and is what lets you in right now — and stays accurate until step 4
-> of that document's cutover. After that it is history.
+> 🛑 **HISTORY — this is no longer how anyone signs in.** The Cloudflare Access
+> application protecting this app was **deleted on 2026-08-10**; sign-in is
+> Firebase ID tokens, described in [`firebase-auth.md`](firebase-auth.md).
 >
-> ⚠️ The one thing here not to act on: "Optional: swap one-time PIN for Google
-> SSO" configures *Access* to use Google. Don't — it is work on the gate that is
-> being removed.
+> Kept because it records how the Access setup was built and what its audiences
+> were, which is what you would need to put it back. **Do not follow any
+> procedure in this file** — in particular "Optional: swap one-time PIN for
+> Google SSO" configures a gate that no longer exists.
+>
+> One thing here is still live: the Access application covering
+> `*-board-game-catalog.bgc-worker.workers.dev` (preview URLs) was deliberately
+> not deleted — `firebase-auth.md` §3.1.
 
 > **Audience:** Claude sessions. **Status:** TRACKED. Last verified: **2026-08-08**.
 

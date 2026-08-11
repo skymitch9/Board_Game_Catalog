@@ -1,11 +1,25 @@
 # Firebase Auth — Access Reference
 
-> **Audience:** Claude sessions and the owner. **Status:** TRACKED. Code is
-> **written and typechecking, NOT deployed**. Cloudflare Access is still live
-> and still the thing letting you in. Last verified: **2026-08-10**.
+> **Audience:** Claude sessions and the owner. **Status:** ✅ **LIVE. The
+> cutover is complete** — deployed, and the Cloudflare Access application was
+> deleted on **2026-08-10**. Firebase ID tokens are the only thing standing
+> between the internet and this Worker. Last verified: **2026-08-10**, by
+> fetching the live host.
 >
-> Supersedes [`login.md`](login.md) once §3 is complete. Until then both are
-> true: Access authenticates today, this describes what replaces it.
+> **Supersedes [`login.md`](login.md)**, which is now history — Access no longer
+> authenticates anything here.
+>
+> Measured immediately after deletion:
+>
+> | Request | Before | After |
+> |---|---|---|
+> | `GET /api/me`, no token | `302` to the Access login | **`401`** |
+> | `GET /api/health` | `302` | **`200`**, `database: up` |
+> | `GET /` as a stranger | `302` | **`200`** — the app's own sign-in screen |
+>
+> Owner sign-in was verified end to end in a browser **before** the deletion,
+> with Access still in front, and again after: the collection loads (168 games,
+> 258 expansions, 116 entries) and covers render.
 
 This app is moving from **Cloudflare Access** to **Firebase ID tokens**, so one
 Google sign-in covers all three catalogs under `heygabi.ai`.
@@ -60,17 +74,29 @@ Firebase app on the internet.
 
 🔴 = owner only. **The order is the safety property, not a preference.**
 
+All of steps 1–5 were done on **2026-08-10**, in this order. Kept as the record
+of what happened, and as the shape to reuse if the library catalog ever moves.
+
 | # | Step | Why here |
 |---|---|---|
-| 1 | ✅ **Done 2026-08-10** — add `boardgames.heygabi.ai` to Firebase → Authentication → Settings → Authorised domains, project `audiobook-catalog` | Harmless while Access is up. Do it *before* anything else or sign-in fails `auth/unauthorized-domain` |
-| 2 | `npm run deploy` **with Access still in front** | The deploy is reversible; deleting the Access application is the part that is not. Both gates run at once, which is fine — Access lets you through, then the app verifies your token |
-| 3 | Sign in at `boardgames.heygabi.ai` and confirm the collection loads | You are proving the token path works *while still protected*. If it fails, roll back and nothing was ever exposed |
-| 4 | 🔴 **Only then** delete the Access application (Zero Trust → Access controls → Applications → `board-game-catalog`) | This is the irreversible-feeling one and the moment the Worker becomes the only gate |
-| 5 | Remove the "Owner only" pill from the card in `catalog-platform/sites/heygabi-home/public/index.html` | The front door should not advertise open access before step 4 |
-| 6 | Delete `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` from `wrangler.toml` and `env.ts`, and this section's rows from `login.md` | Cleanup only. Deliberately last: while they are set, step 4 is trivially reversible |
+| 1 | ✅ Add `boardgames.heygabi.ai` to Firebase → Authentication → Settings → Authorised domains, project `audiobook-catalog` | Harmless while Access is up. *Before* anything else, or sign-in fails `auth/unauthorized-domain` |
+| 2 | ✅ `npm run deploy` **with Access still in front** | The deploy is reversible; deleting the Access application is the part that is not. Both gates ran at once, which is fine — Access lets you through, then the app verifies your token |
+| 3 | ✅ Sign in at `boardgames.heygabi.ai`, confirm the collection loads | Proving the token path *while still protected*. Had it failed, the rollback was a redeploy and nothing was ever exposed |
+| 4 | ✅ Delete the Access application — Zero Trust → **Access controls → Applications** (⚠️ *not* `/access/apps`; that URL 404s now) → `board-game-catalog - Cloudflare Workers`, the one whose destinations are `board-game-catalog.bgc-worker.workers.dev` **and** `boardgames.heygabi.ai` | The moment the Worker became the only gate |
+| 5 | ✅ Remove the "Owner only" pill from `catalog-platform/sites/heygabi-home/public/index.html` | The front door must not advertise open access *before* step 4, and must not claim "owner only" after it |
+| 6 | ⬜ **Not done, deliberately.** Delete `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` from `wrangler.toml` and `env.ts` | Pure cleanup. While they are set, recreating the application is the only rollback step needed. Leave them a while |
 
-⚠️ **Do not do step 4 before step 3.** Access removed while the token path is
+⚠️ **The order was the safety property.** Access removed while the token path is
 broken leaves a gate nobody — including you — can pass, on a public host.
+
+### 3.1 What was NOT deleted
+
+A **second** Access application still exists, covering
+`*-board-game-catalog.bgc-worker.workers.dev` under the "Cloudflare Workers
+Preview URLs" policy. Left in place on purpose: the Worker ignores Access
+entirely now, so it costs nothing, and it keeps an extra layer on ephemeral
+preview deployments. It is the second entry in `CF_ACCESS_AUD` and is why that
+variable is a comma-separated list.
 
 ### 3.1 Verifying
 
