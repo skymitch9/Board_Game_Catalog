@@ -93,10 +93,19 @@ crons = ["*/30 * * * *", "41 5 * * 1"]
 APP_VERSION = "0.1.0"
 ENVIRONMENT = "production"
 
-# Leave this empty. Ownership is claimed by whoever signs in first, which is you
-# right after deploying. This is only a recovery hatch: if you ever lock
-# yourself out, put an email here and redeploy to force it back to `owner`.
-OWNER_EMAILS = ""
+# The recovery hatch. Any email listed here is forced to `owner` when it signs
+# in, regardless of what its app_user row says.
+#
+# It was deliberately empty while Cloudflare Access stood in front, because
+# Access was itself the way back in: locked out of the app, you were still on
+# the allowlist and could edit the database. ⚠️ Access was deleted 2026-08-10,
+# so that fallback is gone and this is now the only route back to `owner`
+# without hand-editing D1.
+#
+# There are two owners (`nbaslamking@gmail.com` and `asprint200@gmail.com`);
+# only the first is listed, per the owner's instruction. Add the second as a
+# comma-separated value if you want either to be able to self-recover.
+OWNER_EMAILS = "nbaslamking@gmail.com"
 
 # The Firebase project whose ID tokens middleware/auth.ts accepts, pinned as
 # both `iss` and `aud`.
