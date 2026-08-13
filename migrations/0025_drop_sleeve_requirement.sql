@@ -1,0 +1,29 @@
+-- Drop `sleeve_requirement`. Owner's decision, 2026-08-13.
+--
+-- Measured before deciding: **0 rows against 836 items**, for the entire life of
+-- the catalog. No code path ever wrote it, and `export.ts` was its only reader,
+-- so the JSON backup shipped a permanently empty array that read as a feature.
+--
+-- ⚠️ WHY THIS LOSES NOTHING, and the trap that makes it look otherwise. A grep
+-- for "sleeve_requirement" still hits `packages/research/src/research.ts` — but
+-- that is a **research FINDING FIELD**, not this table. Sleeve sizes ARE
+-- collected; they arrive as prose findings against the item, cross-checked
+-- across publisher, BGG and sleeve vendors exactly as 0001's comment wanted.
+-- The concept outlived its table. Read carelessly, that name collision says
+-- either "this is load-bearing, do not touch" or "the feature is going away" —
+-- and both readings are wrong.
+--
+-- ⚠️ ORDER MATTERS AND IT IS THE REVERSE OF THE USUAL RULE. This repo's normal
+-- order is migrate-then-deploy, so new code never meets an old schema. A DROP
+-- inverts it: the live Worker was still running `SELECT * FROM
+-- sleeve_requirement`, so dropping first would have broken the export endpoint
+-- until the deploy caught up. The reader was removed and deployed FIRST, then
+-- this ran. For destructive changes the safe order is deploy-then-migrate.
+--
+-- `play` is deliberately NOT dropped. Also empty, also unwritten — but it is
+-- **unbuilt rather than superseded**: a sound design for logging game nights,
+-- kept as a standing intention. An empty table costs nothing at runtime, and
+-- the reason it kept resurfacing as a to-do was that nobody had written down
+-- the decision to keep it. Now somebody has.
+
+DROP TABLE sleeve_requirement;

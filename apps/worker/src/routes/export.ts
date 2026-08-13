@@ -14,7 +14,21 @@ export const exportRoutes = new Hono<AppBindings>()
   .use('*', requireCapability('editCatalog'))
 
   .get('/export.json', async (c) => {
-    const [items, editions, copies, ratings, sleeves] = await c.env.DB.batch([
+    // ⚠️ `sleeve_requirement` is NOT read here any more, and the table is dropped
+    // by 0025. It held 0 rows against 836 items for the life of the catalog: no
+    // code ever wrote it, and this export was its only reader, so the backup
+    // shipped an always-empty array that looked like a feature.
+    //
+    // The CONCEPT is alive and moved, which is why dropping the table loses
+    // nothing: `sleeve_requirement` is a research FINDING FIELD in
+    // `packages/research/src/research.ts`, so sleeve sizes are gathered as prose
+    // findings against the item. That name collision is the trap here — a grep
+    // for "sleeve_requirement" still hits, and reads like a live dependency.
+    //
+    // `play` was deliberately NOT dropped: also empty, but unbuilt rather than
+    // superseded — it is a reasonable design for logging game nights, kept as a
+    // standing intention.
+    const [items, editions, copies, ratings] = await c.env.DB.batch([
       c.env.DB.prepare('SELECT * FROM item ORDER BY id'),
       c.env.DB.prepare('SELECT * FROM edition ORDER BY id'),
       c.env.DB.prepare('SELECT * FROM copy ORDER BY id'),
@@ -22,7 +36,6 @@ export const exportRoutes = new Hono<AppBindings>()
         `SELECT ui.*, u.email FROM user_item ui
            JOIN app_user u ON u.id = ui.user_id ORDER BY ui.id`,
       ),
-      c.env.DB.prepare('SELECT * FROM sleeve_requirement ORDER BY id'),
     ]);
 
     const payload = {
@@ -33,13 +46,11 @@ export const exportRoutes = new Hono<AppBindings>()
         editions: editions?.results.length ?? 0,
         copies: copies?.results.length ?? 0,
         ratings: ratings?.results.length ?? 0,
-        sleeveRequirements: sleeves?.results.length ?? 0,
       },
       items: items?.results ?? [],
       editions: editions?.results ?? [],
       copies: copies?.results ?? [],
       ratings: ratings?.results ?? [],
-      sleeveRequirements: sleeves?.results ?? [],
     };
 
     const stamp = new Date().toISOString().slice(0, 10);
