@@ -127,6 +127,18 @@ export function PeoplePage({
               <span className="muted small">
                 first seen {u.firstSeenAt.replace('T', ' ').slice(0, 16)}
               </span>
+              {/* Entry point only, never a control: estate-wide grants live
+                  solely on heygabi.ai/admin, which is its own gate. This page
+                  is already behind manageUsers (App.tsx), so exactly the
+                  people who could act on what they see get the link. */}
+              <a
+                className="muted small"
+                href={`https://heygabi.ai/admin#member=${encodeURIComponent(u.email)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Estate admin →
+              </a>
             </div>
             {/* `viewer` gets its own tone rather than falling through to the
                 `pending` one — a guest who is in and a guest who is waiting are
