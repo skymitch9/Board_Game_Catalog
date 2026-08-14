@@ -1573,7 +1573,7 @@ code {
 .photo-uploader { padding: 0.5rem 0; }
 .upload-area {
   display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-  padding: 2rem 1rem; border: 2px dashed var(--border); border-radius: 0.75rem;
+  padding: 2rem 1rem; border: 2px dashed var(--line); border-radius: 0.75rem;
   cursor: pointer; text-align: center;
   transition: border-color 0.15s;
 }
@@ -1585,7 +1585,7 @@ code {
 .job-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.75rem; padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--line);
 }
 .job-row:last-child { border-bottom: none; }
 .job-row__info { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -1701,7 +1701,7 @@ code {
   flex: none; font-size: 0.74rem; padding: 0.25rem 0.3rem;
   color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
 }
-.completeness__bundled:hover:not(:disabled) { color: var(--fg); }
+.completeness__bundled:hover:not(:disabled) { color: var(--text); }
 
 /* The toggle is a card-width row elsewhere; inside a card it needs its own
    margins to reach the edges rather than floating in the padding. */
