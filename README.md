@@ -38,6 +38,20 @@ Entry points stay thin — `apps/worker/src/index.ts` mounts routes, the CLI (ph
 4) parses argv, and both delegate to `packages/`. There is exactly one
 implementation of anything that makes a decision.
 
+## ⚠️ Build dependency: catalog-platform (new 2026-08-13)
+
+This repo now materialises the canonical **estate-auth** module from a sibling
+`catalog-platform` checkout at build time — `scripts/sync-estate-auth.mjs` runs
+as `predev` / `pretypecheck` / `predeploy`, writes the gitignored copy to
+`apps/worker/src/estate-auth/`, and **fails the build loudly** if the checkout
+is missing (set `CATALOG_PLATFORM_DIR` if yours is not a sibling). The module
+is the one implementation of Firebase token verification and estate membership
+for every heygabi.ai Worker; this repo's old `middleware/auth.ts` verifier was
+its ancestor and was replaced by it, so the swap changed no behaviour. Design:
+`catalog-platform/docs/info/estate-auth-design.md` (§8.1 the mechanism, §14.5
+this adoption). The estate check itself ships **off** — see `ESTATE_CHECK` in
+`apps/worker/wrangler.toml` for the off → shadow → enforce ladder.
+
 ## Commands
 
 | Command | Does |

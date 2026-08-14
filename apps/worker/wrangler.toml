@@ -117,6 +117,24 @@ INDEX_URL = "https://index.heygabi.ai"
 # comma-separated value if you want either to be able to self-recover.
 OWNER_EMAILS = "nbaslamking@gmail.com"
 
+# Estate auth (catalog-platform/docs/info/estate-auth-design.md, adopted per
+# §14.5 — shadow-first).
+#
+# ⚠️ ESTATE_CHECK is deliberately "off" in the committed file: the deploy that
+# carries the estate wiring must be inert until the owner flips it — first to
+# "shadow" (the full check runs and LOGS the §3.1 would-verdict, changes no
+# response; `npm run tail --workspace @bgc/worker` and grep for WOULD-DENY,
+# expect zero for household members), and only after days of clean shadow logs
+# to "enforce". Any other value behaves as "off" and complains in the log.
+#
+# The check also needs its bearer:
+#   npm run secret ESTATE_APP_TOKEN_GAMES
+# (the same value the auth Worker already holds under that name). URL and flag
+# live here; the token never does — this file is committed. With the secret or
+# URL absent, shadow/enforce log `config unset` per request and skip the check.
+ESTATE_CHECK = "off"
+ESTATE_AUTH_URL = "https://auth.heygabi.ai"
+
 # The Firebase project whose ID tokens middleware/auth.ts accepts, pinned as
 # both `iss` and `aud`.
 #

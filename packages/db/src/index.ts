@@ -1,4 +1,5 @@
 export * from './users.js';
+export * from './estate.js';
 export * from './health.js';
 export * from './items.js';
 export * from './copies.js';

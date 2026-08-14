@@ -9,18 +9,22 @@
     "apps/*"
   ],
   "scripts": {
+    "predev": "node scripts/sync-estate-auth.mjs",
     "dev": "concurrently -n worker,web -c blue,green \"npm:dev:worker\" \"npm:dev:web\"",
+    "predev:worker": "node scripts/sync-estate-auth.mjs",
     "dev:worker": "npm run dev --workspace @bgc/worker",
     "dev:web": "npm run dev --workspace @bgc/web",
     "build": "npm run build --workspace @bgc/web",
-    "predeploy": "node scripts/check-clean.mjs",
+    "predeploy": "node scripts/sync-estate-auth.mjs && node scripts/check-clean.mjs",
     "deploy": "npm run build && npm run deploy --workspace @bgc/worker",
     "secret": "wrangler secret put --config apps/worker/wrangler.toml",
     "secret:list": "wrangler secret list --config apps/worker/wrangler.toml",
     "db:create": "wrangler d1 create board-game-catalog",
     "db:migrate:local": "npm run db:migrate:local --workspace @bgc/worker",
     "db:migrate": "npm run db:migrate --workspace @bgc/worker",
+    "pretypecheck": "node scripts/sync-estate-auth.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "estate:sync": "node scripts/sync-estate-auth.mjs",
     "secrets:push": "node scripts/push-secrets.mjs"
   },
   "devDependencies": {

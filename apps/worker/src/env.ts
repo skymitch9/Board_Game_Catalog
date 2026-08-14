@@ -86,6 +86,31 @@ export interface Env {
   INDEX_PUSH_TOKEN?: string;
 
   /**
+   * Estate auth (catalog-platform/docs/info/estate-auth-design.md, adopted
+   * per §14.5): `off` | `shadow` | `enforce`.
+   *
+   * `off` (the default, and what any unrecognised value falls to): the estate
+   * check does not run at all — no /seen call, no logs, no cache writes; the
+   * deploy carrying this code is inert. `shadow`: the full check runs and logs
+   * the §3.1 would-verdict (grep the tail for `WOULD-DENY`) but no response
+   * changes. `enforce`: revocations 403, estate-wide approvals default-grant
+   * `viewer`. Flip off→shadow→enforce deliberately, days apart, per §9 step 6.
+   */
+  ESTATE_CHECK?: string;
+
+  /** The estate directory, e.g. https://auth.heygabi.ai — [vars], committed. */
+  ESTATE_AUTH_URL?: string;
+
+  /**
+   * This app's own bearer for POST /api/estate/seen — the same value the auth
+   * Worker holds as its ESTATE_APP_TOKEN_GAMES secret. Set with
+   * `npm run secret ESTATE_APP_TOKEN_GAMES`, never in wrangler.toml. Absent
+   * (with ESTATE_CHECK=shadow/enforce) the check logs `config unset` and
+   * skips — behaving as `off`, visibly.
+   */
+  ESTATE_APP_TOKEN_GAMES?: string;
+
+  /**
    * Local development only. Ignored unless ENVIRONMENT is exactly
    * "development", so a stray value in production vars cannot mint a session.
    *

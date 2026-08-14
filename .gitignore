@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .wrangler/
+# Materialised copy of catalog-platform/packages/estate-auth (the canonical
+# auth module). A build artifact of scripts/sync-estate-auth.mjs — never
+# committed, because two copies of an auth file drift (estate-auth-design §1.1).
+apps/worker/src/estate-auth/
 *.local
 .env
 .env.*

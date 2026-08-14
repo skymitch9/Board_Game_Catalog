@@ -1,8 +1,9 @@
 import type { MiddlewareHandler } from 'hono';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { can, type Capability } from '@bgc/core';
 import { upsertUserOnLogin } from '@bgc/db';
-import { parseOwnerEmails, type AppBindings, type Env } from '../env.js';
+import { resolveIdentity, type Identity } from '../estate-auth/index.js';
+import { estateGate } from './estate.js';
+import { parseOwnerEmails, type AppBindings } from '../env.js';
 
 /**
  * Firebase Auth (Google SSO) authenticates; this file authorizes.
@@ -27,94 +28,27 @@ import { parseOwnerEmails, type AppBindings, type Env } from '../env.js';
  * blanket `app.use('/api/*', …)` rather than per-route, and why every route
  * beyond it still carries its own `requireCapability`.
  *
- * ## What is verified
+ * ## Where the verifier went (2026-08-13)
  *
- * A Firebase ID token is an RS256 JWT signed by Google:
+ * Token verification itself — JWKS, iss+aud pinned to FIREBASE_PROJECT_ID,
+ * unverified-email refusal, the hardened `ENVIRONMENT === 'development'` dev
+ * bypass — moved to the canonical `estate-auth` module
+ * (catalog-platform/packages/estate-auth, materialised into ../estate-auth/ by
+ * scripts/sync-estate-auth.mjs). ⚠️ The canonical implementation IS this
+ * file's old code: the hardened bypass shape was written here first
+ * (estate-auth-design.md §1.1 tells the drift story that made one copy the
+ * rule), so the swap changes behaviour not at all — it changes where a future
+ * fix lands. Do not reintroduce a local verifier beside it.
  *
- *     iss  https://securetoken.google.com/<projectId>
- *     aud  <projectId>
- *     sub  the Firebase uid
- *     keys https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
+ * ## The estate check (2026-08-13, design §14.5)
  *
- * `jose` handles rotation, expiry and signature. What it cannot check is that
- * the token came from the *right* project — any Firebase project's tokens are
- * validly signed by Google. So `FIREBASE_PROJECT_ID` is asserted as both
- * `issuer` and `audience`, and a token minted by any other project fails closed.
- *
- * ⚠️ Removing either assertion turns this into "any Google user of any Firebase
- * app on the internet", which is not a smaller check — it is no check.
+ * After local identity and the local app_user row resolve, `estateGate` runs
+ * the membership protocol at the strength `ESTATE_CHECK` allows — `off`
+ * (default, inert), `shadow` (log the §3.1 would-verdict, change nothing), or
+ * `enforce`. See middleware/estate.ts for the whole story, including what it
+ * deliberately does not touch: the OWNER_EMAILS recovery hatch below runs
+ * before it, and the rate limiter runs in front of everything.
  */
-
-interface Identity {
-  email: string;
-  name: string | null;
-}
-
-// Cached per isolate: the JWKS client refetches on rotation by itself, and
-// building one per request would add a round trip to every call.
-let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null;
-
-function getJwks() {
-  if (!jwksCache) {
-    jwksCache = createRemoteJWKSet(
-      new URL(
-        'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com',
-      ),
-    );
-  }
-  return jwksCache;
-}
-
-function readBearer(req: Request): string | null {
-  const header = req.headers.get('Authorization');
-  if (!header) return null;
-  const m = /^Bearer\s+(.+)$/i.exec(header.trim());
-  return m?.[1] ?? null;
-}
-
-async function resolveIdentity(req: Request, env: Env): Promise<Identity | null> {
-  // Local development bypass. Triple-gated: the variable must be set, the
-  // environment must be exactly "development", and production sets ENVIRONMENT
-  // explicitly in wrangler.toml.
-  //
-  // ⚠️ This used to test `!== 'production'`, which meant any unrecognised value
-  // — a typo, a new named environment, an unset var in some future preview lane
-  // — silently enabled it. That was survivable while Access stood in front. It
-  // is not now: this is the only thing between DEV_EMAIL and a real session.
-  if (env.ENVIRONMENT === 'development' && env.DEV_EMAIL) {
-    return { email: env.DEV_EMAIL, name: 'Local Dev' };
-  }
-
-  const projectId = (env.FIREBASE_PROJECT_ID ?? '').trim();
-  if (!projectId) {
-    throw new Error('FIREBASE_PROJECT_ID is not set (docs/SETUP.md step 7).');
-  }
-
-  const token = readBearer(req);
-  if (!token) return null;
-
-  try {
-    const { payload } = await jwtVerify(token, getJwks(), {
-      issuer: `https://securetoken.google.com/${projectId}`,
-      audience: projectId,
-    });
-
-    const email = typeof payload['email'] === 'string' ? payload['email'] : null;
-    if (!email) return null;
-
-    // A Google account whose email is unverified is not an identity. Firebase
-    // will mint a token for one, and email is both our primary key in app_user
-    // and the join to the sibling catalogs — so refusing is the difference
-    // between "cannot sign in" and "signed in as somebody else".
-    if (payload['email_verified'] === false) return null;
-
-    const name = typeof payload['name'] === 'string' ? payload['name'] : null;
-    return { email, name };
-  } catch {
-    // Expired, wrong audience, bad signature, wrong project — all the same here.
-    return null;
-  }
-}
 
 /** Verifies identity and attaches the catalog user to the request context. */
 export function requireAuth(): MiddlewareHandler<AppBindings> {
@@ -130,11 +64,19 @@ export function requireAuth(): MiddlewareHandler<AppBindings> {
       return c.json({ error: 'unauthenticated' }, 401);
     }
 
+    // Local authorization first, untouched — including the OWNER_EMAILS
+    // recovery hatch inside upsertUserOnLogin. The estate never runs before
+    // the way back in.
     const user = await upsertUserOnLogin(c.env.DB, {
       email: identity.email,
       displayName: identity.name,
       ownerEmails: parseOwnerEmails(c.env.OWNER_EMAILS),
     });
+
+    // Estate membership (design §3.1/§5.2). In `off` this is a no-op; in
+    // `shadow` it logs and never returns a Response; only `enforce` can refuse.
+    const refused = await estateGate(c, identity, user);
+    if (refused) return refused;
 
     c.set('user', user);
     await next();
