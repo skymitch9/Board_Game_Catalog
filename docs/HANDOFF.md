@@ -2,6 +2,22 @@
 
 Everything needed to continue or finish this without Claude.
 
+## 🔶 BUILT, NOT DEPLOYED — estate auth adopted in shadow mode, 2026-08-13
+
+Commit `0077a7a`, pushed. Design:
+`catalog-platform/docs/info/estate-auth-design.md` §3.1/§5/§14.5.
+
+| | |
+|---|---|
+| What | Estate membership check wired into `requireAuth`, gated by `ESTATE_CHECK` (`off` \| `shadow` \| `enforce`) — **committed as `off`, so deploying this is inert** |
+| New build dependency | ⚠️ This repo now materialises the canonical `estate-auth` module from the sibling `catalog-platform` checkout — `scripts/sync-estate-auth.mjs` runs as `predev`/`pretypecheck`/`predeploy` and **fails loudly** if the checkout is missing. The old local verifier in `middleware/auth.ts` was replaced by it (behaviour-identical: the hardened bypass came FROM here) |
+| Migration | `0026_estate_cache.sql` — two nullable `app_user` columns, plain ADD COLUMN. **Applied LOCAL only; remote apply is a pending owner/dispatcher step**, before the deploy that carries this code |
+| Secret | `npm run secret ESTATE_APP_TOKEN_GAMES` (same value the auth Worker holds under that name) — without it, shadow logs `config unset` per request and skips |
+| Reading shadow | `npm run tail --workspace @bgc/worker`, grep `estate shadow:`; the lines that matter carry **`WOULD-DENY`** — expect zero for household members before anyone flips `enforce` |
+| Default-grant | `viewer` (the smaller guest role, on purpose — rating stays a local upgrade, preserving 0023/0024). Written only in `enforce`; shadow logs the would-grant |
+| Untouched | `OWNER_EMAILS` recovery hatch (runs before the estate check), the rate limiter, every route and capability gate |
+| Verified | typecheck (⚠️ no test script in this repo) + 11 `wrangler dev` probes against local D1 with a mock `/seen`: off inert; shadow logs revoked as WOULD-DENY while answering 200, rides a stale cache through an outage, would-grants without writing; enforce grants/403s/503s correctly and serves the standing owner through an outage |
+
 ## ✅ SHIPPED — the `viewer` role and the waiting badge, 2026-08-10
 
 | | |
