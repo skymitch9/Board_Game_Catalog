@@ -10,7 +10,7 @@ import { sweepOrphanAdoptions } from '@bgc/db';
 import type { AppBindings, Env } from './env.js';
 import { COMPONENT_REFRESH_CRON, runComponentBackfill } from './lib/component-backfill.js';
 import { runCoverCheck } from './lib/cover-check.js';
-import { indexPushAfterMutation, pushIndexIfStale } from './lib/index-push.js';
+import { indexBackstopOnRequest, indexPushAfterMutation } from './lib/index-push.js';
 import { requireAuth } from './middleware/auth.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { aliasRoutes } from './routes/aliases.js';
@@ -38,6 +38,15 @@ const app = new Hono<AppBindings>();
 // first — ahead of health, and ahead of the signature check that every /api/*
 // request pays for even when it ends in a 401.
 app.use('/api/*', rateLimit());
+
+// The shared-index staleness backstop rides request traffic — one logged
+// decision per /api/* request, at most one health check per isolate-hour, a
+// re-push only when the index's game source is empty or a day stale. Mounted
+// BEFORE the health route and the auth gate on purpose: an unauthenticated
+// `curl /api/health` + `wrangler tail` is the whole proof that it runs, which
+// is the property the cron-riding backstop turned out not to have (it failed
+// three consecutive ticks in silence — see lib/index-push.ts).
+app.use('/api/*', indexBackstopOnRequest());
 
 // Public — no token needed, so a deploy can still be curled to verify it. Rate
 // limited by the line above, unlike before.
@@ -158,16 +167,13 @@ export default {
       ),
     );
 
-    // The shared-index staleness backstop rides the same proven trigger as the
-    // orphan sweep, for the same reason (see that ⚠️ above: a fresh cron
-    // registration is a bet, this expression has rows to its name). One health
-    // GET when the index is fresh; a full snapshot push only when it is empty
-    // or a day stale. No-op until INDEX_URL/INDEX_PUSH_TOKEN are set.
-    ctx.waitUntil(
-      pushIndexIfStale(env).then(
-        (run) => console.log('index backstop', JSON.stringify(run)),
-        (err) => console.error('index backstop failed', err),
-      ),
-    );
+    // The shared-index staleness backstop no longer rides this cron: it rode
+    // here first, and on 2026-08-13 it silently failed to push on three
+    // consecutive ticks while a manual push with the same token succeeded —
+    // a scheduled run's logs are effectively unwatchable (three tail attempts
+    // died trying). It now rides request traffic instead, where one request
+    // + `wrangler tail` proves the decision (see lib/index-push.ts and the
+    // indexBackstopOnRequest mount above). The cover check, orphan sweep and
+    // component refresh stay exactly as they were.
   },
 } satisfies ExportedHandler<Env>;

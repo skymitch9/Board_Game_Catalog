@@ -11,22 +11,38 @@
  *  1. AFTER MUTATIONS (`indexPushAfterMutation`) — a successful write under a
  *     catalog-shaped route schedules a push via `waitUntil`, so the index is
  *     fresh within seconds of the shelf changing.
- *  2. A STALENESS BACKSTOP riding the PROVEN half-hourly cron
- *     (`pushIndexIfStale`) — asks the index's /api/health and pushes only if
- *     the game source is empty or its snapshot is older than a day. This is
- *     deliberately NOT a third cron expression: `wrangler deploy` has claimed
- *     to register triggers here that Cloudflare never fired, and the rule
- *     this repo came away with is that a cron is not working until something
- *     it writes has rows. The half-hourly slice has that proof; the backstop
- *     inherits it, exactly like the orphan sweep does. Cost when fresh: one
- *     unauthenticated GET, no D1 writes.
+ *  2. A STALENESS BACKSTOP RIDING REQUEST TRAFFIC (`indexBackstopOnRequest`)
+ *     — at most once per BACKSTOP_CHECK_INTERVAL_MS per isolate, an /api/*
+ *     request schedules (on `waitUntil`, after responding) one
+ *     unauthenticated GET of the index's /api/health, and re-pushes only if
+ *     the game source is empty or its snapshot is older than a day.
+ *
+ *     ⚠️ This REPLACES the backstop that rode the half-hourly cron, and the
+ *     reason is observability, not cost. On 2026-08-13 the cron-riding
+ *     backstop silently failed to push on three consecutive ticks — no
+ *     `index backstop` line, no error, nothing — while a manual push with
+ *     the SAME token succeeded from outside the Worker; three `wrangler
+ *     tail` attempts died before catching a scheduled run in the act. A
+ *     backstop nobody can watch fail is not a backstop. The request-riding
+ *     shape (ported from the library: bookbuddy/library_catalog
+ *     apps/worker/src/lib/index-push.ts, which built it precisely because it
+ *     has no cron) is provable in seconds: `wrangler tail` + one request to
+ *     /api/health shows the decision, because EVERY pass through the
+ *     middleware logs one — throttled, unconfigured, fresh, pushed, or
+ *     failed. The cron keeps its other duties (cover check, orphan sweep,
+ *     component refresh) untouched.
+ *
+ *     What the shape trades, stated: an untouched app pushes nothing — but
+ *     an untouched app's catalog is not changing either, since every write
+ *     path is an API route. The residual gap is a backfill script writing D1
+ *     directly; that heals within the design's ≤24h tolerance the next time
+ *     anyone opens the app.
  *
  * So a missed trigger costs at most a day of freshness (the design's stated
  * tolerance), and the ordinary path costs nothing measurable.
  *
  * ⚠️ Fails SOFT everywhere, on purpose: the index must never be able to stall
- * this catalog. `INDEX_URL` unset (true in production until the owner deploys
- * the index Worker and answers its read-auth question) means every trigger
+ * this catalog. `INDEX_URL` / `INDEX_PUSH_TOKEN` unset means every trigger
  * logs one line and does nothing. No throw from here ever reaches a route.
  */
 
@@ -73,7 +89,7 @@ export async function pushIndexSnapshot(env: Env): Promise<{ pushed: number } | 
   return { pushed: rows.length };
 }
 
-/** The half-hourly backstop: one health GET; push only when missing or stale. */
+/** The backstop body: one health GET; push only when missing or stale. */
 export async function pushIndexIfStale(env: Env): Promise<{ pushed: number } | { skipped: string }> {
   if (!env.INDEX_URL || !env.INDEX_PUSH_TOKEN) {
     return { skipped: 'INDEX_URL / INDEX_PUSH_TOKEN not configured' };
@@ -115,6 +131,52 @@ export function indexPushAfterMutation(): MiddlewareHandler<AppBindings> {
       pushIndexSnapshot(c.env).then(
         (r) => console.log('index push (mutation)', JSON.stringify(r)),
         (err) => console.error('index push (mutation) failed', err),
+      ),
+    );
+  };
+}
+
+/** Last time THIS isolate ran the backstop check. Module state, reset on
+ *  isolate recycle — which costs at worst one extra unauthenticated GET. */
+let lastBackstopCheckAt = 0;
+
+/** How often one isolate will even LOOK at the index's health. Only has to be
+ *  roughly right: the check is one unauthenticated GET. */
+const BACKSTOP_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * The request-riding staleness backstop — see the module header for why the
+ * cron no longer carries this. Runs after the response on `waitUntil`.
+ *
+ * ⚠️ Every pass logs its decision, deliberately: the cron backstop failed
+ * SILENTLY, and the fix for silence is a log line per decision, not hope.
+ * One request + `wrangler tail` is the whole proof procedure.
+ */
+export function indexBackstopOnRequest(): MiddlewareHandler<AppBindings> {
+  return async (c, next) => {
+    await next();
+
+    if (!c.env.INDEX_URL || !c.env.INDEX_PUSH_TOKEN) {
+      console.log('index backstop: skipped (INDEX_URL / INDEX_PUSH_TOKEN not configured)');
+      return;
+    }
+    const now = Date.now();
+    const sinceMs = now - lastBackstopCheckAt;
+    if (sinceMs < BACKSTOP_CHECK_INTERVAL_MS) {
+      console.log(
+        `index backstop: throttled (checked ${Math.round(sinceMs / 60000)}m ago, next in ${Math.round(
+          (BACKSTOP_CHECK_INTERVAL_MS - sinceMs) / 60000,
+        )}m)`,
+      );
+      return;
+    }
+    lastBackstopCheckAt = now;
+    console.log('index backstop: due — checking index health');
+
+    c.executionCtx.waitUntil(
+      pushIndexIfStale(c.env).then(
+        (r) => console.log('index backstop', JSON.stringify(r)),
+        (err) => console.error('index backstop failed', err),
       ),
     );
   };
