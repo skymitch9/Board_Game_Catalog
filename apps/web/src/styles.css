@@ -248,36 +248,50 @@ a:hover { text-decoration: underline; }
 */
 .theme-menu {
   position: absolute; top: calc(100% + 0.5rem); right: 0; z-index: 20;
-  min-width: 12rem;
+  min-width: 13rem;
   display: flex; flex-direction: column;
   background: var(--card);
   border: var(--ink) solid var(--ink-color); border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow);
-  padding: 0.3rem;
+  padding: 0.7rem;
 }
-.theme-menu__opt {
-  display: flex; align-items: flex-start; gap: 0.5rem;
-  padding: 0.5rem 0.55rem; border-radius: 6px;
-  background: none; border: none; cursor: pointer;
-  font: inherit; font-size: 0.9rem; color: var(--text); text-align: left;
+/* v2 structure, matching the library cog: a Theme select over a Mode button
+   row, then the per-page affordances — same bones, this app's clothes. */
+.theme-menu__row { display: flex; flex-direction: column; gap: 0.3rem; }
+.theme-menu__row + .theme-menu__row {
+  margin-top: 0.6rem; padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
 }
-.theme-menu__opt:hover { background: var(--paper-deep); }
-.theme-menu__opt--on { background: var(--et-btn-bg); color: var(--et-btn-fg); }
-.theme-menu__opt--on .muted { color: var(--et-btn-fg); opacity: 0.75; }
-/* Fixed width so the rows do not shift sideways as the tick moves. */
-.theme-menu__tick { width: 1em; flex: none; font-weight: 700; }
-.theme-menu__label { display: flex; flex-direction: column; line-height: 1.25; }
-/* The menu now answers two questions — which theme, which mode — so each
-   group gets the quiet section label the estate cog uses. */
 .theme-menu__head {
-  margin: 0.3rem 0.55rem 0.15rem;
   color: var(--muted);
   font-size: 0.68rem; font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
 }
-.theme-menu__head + .theme-menu__head,
-.theme-menu__opt + .theme-menu__head {
-  margin-top: 0.5rem; padding-top: 0.5rem;
+.theme-menu__select { font-size: 0.9rem; }
+.theme-menu__modes { display: flex; gap: 0.35rem; }
+.theme-menu__modes button {
+  flex: 1; min-height: 32px; padding: 0.25em 0.5em;
+  background: var(--paper-deep); color: var(--muted);
+  border: var(--ink) solid var(--et-panel-border); border-radius: var(--et-radius);
+  font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.theme-menu__modes button[aria-pressed='true'] {
+  background: var(--et-btn-bg); color: var(--et-btn-fg);
+  border-color: var(--ink-color);
+}
+/* The quiet lever: plain underlined text, never competing with the select. */
+.theme-menu__applyall {
+  align-self: flex-start;
+  margin: 0; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font: inherit; font-size: 0.78rem; font-weight: 600;
+  color: var(--muted);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.theme-menu__applyall:hover { color: var(--accent); }
+.theme-menu__scope { margin: 0; font-style: italic; }
+.theme-menu__note {
+  margin: 0.6rem 0 0; padding-top: 0.6rem;
   border-top: 1px solid var(--line);
 }
 

@@ -12,8 +12,10 @@
     <meta name="theme-color" content="#f2e8d5" />
     <!--
       The estate theme system (catalog-platform docs/info/estate-themes.md):
-      three themes × light/dark, styled through --et-* tokens, switched by
+      four themes × light/dark, styled through --et-* tokens, switched by
       /assets/theme.js stamping <html data-theme data-mode> BEFORE first paint.
+      v2: themes resolve per PAGE (hg_theme_page override, then hg_theme, then
+      the default below) — see the doc's §2a.
       This app's own comic-print look IS the `retro` theme — extracted verbatim
       into estate-theme.css — and stays the default via data-default-theme
       above (defaults are identity; only this site's user changes it, in the

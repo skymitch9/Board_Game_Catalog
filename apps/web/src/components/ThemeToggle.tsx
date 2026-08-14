@@ -1,45 +1,50 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ESTATE_MODES,
+  ESTATE_THEMES,
   getThemeState,
   onThemeChange,
   setMode,
+  setSiteTheme,
   setTheme,
   type EstateMode,
   type EstateTheme,
 } from '../lib/theme';
 
 /**
- * The cog in the top bar — now the estate settings cog: which THEME, and
- * light, dark, or match the device.
+ * The cog in the top bar — the estate settings cog: which THEME, and light,
+ * dark, or match the device.
  *
- * *"give me a 3 way system swap thing put a cog in the top of the page or
- * something to control it"* — the owner, for the original mode control; the
- * theme dropdown joined it per the estate ask ("put that selector in the same
- * settings cog as darkmode"). Two labelled groups in one menu rather than a
- * second control: the cog was already where appearance decisions live.
+ * v2, aligned to the LIBRARY cog's presentation (owner: the two menus should
+ * be a "semi consistent view"): a Theme dropdown over a Mode button row, in
+ * that order, with the same labels — while wearing this app's own ink-and-
+ * paper clothes. Structure is shared; skin is identity.
  *
- * A menu rather than a cycling button, same reasoning as before: a control
- * that rotates through states never shows which one is current.
+ * Per-page themes (estate-themes.md §2a): picking a theme applies to THE
+ * PAGE YOU ARE ON — that is the owner's expressed default — and the quiet
+ * "Apply to all pages" lever writes the site default, clearing every page
+ * override. Mode has no scope; it is always site-wide.
  *
  * ⚠️ **Theme and mode are already applied before this mounts**, by
  * /assets/theme.js in index.html's <head>. This component neither applies nor
  * stores anything itself — it calls window.estateTheme (via lib/theme) and
- * re-renders on `hg-themechange`, so the tick always reflects the one source
+ * re-renders on `hg-themechange`, so the panel always reflects the one source
  * of truth. Defaults are identity: retro is stamped via data-default-theme,
  * and only a choice made here changes it.
  */
 
-const THEME_OPTIONS: { id: EstateTheme; label: string; hint: string }[] = [
-  { id: 'retro', label: 'Retro', hint: 'Aged paper & ink — the house look' },
-  { id: 'apple', label: 'Apple', hint: 'Quiet monochrome' },
-  { id: 'cyberpunk', label: 'Cyberpunk', hint: 'Neon on black' },
-];
+const THEME_LABELS: Record<EstateTheme, string> = {
+  classic: 'Classic',
+  apple: 'Apple',
+  cyberpunk: 'Cyberpunk',
+  retro: 'Retro',
+};
 
-const MODE_OPTIONS: { id: EstateMode; label: string; hint: string }[] = [
-  { id: 'auto', label: 'Match system', hint: 'Follow the device' },
-  { id: 'light', label: 'Light', hint: 'Daytime' },
-  { id: 'dark', label: 'Dark', hint: 'Evening' },
-];
+const MODE_LABELS: Record<EstateMode, string> = {
+  auto: 'Auto',
+  light: 'Light',
+  dark: 'Dark',
+};
 
 export function ThemeToggle() {
   const [state, setState] = useState(() => getThemeState());
@@ -69,15 +74,15 @@ export function ThemeToggle() {
     };
   }, [open]);
 
-  const themeLabel = THEME_OPTIONS.find((o) => o.id === state.theme)?.label;
-  const modeLabel = MODE_OPTIONS.find((o) => o.id === state.mode)?.label;
+  const themeLabel = THEME_LABELS[state.theme] ?? state.theme;
+  const modeLabel = MODE_LABELS[state.mode] ?? state.mode;
 
   return (
     <div className="theme-toggle" ref={wrapRef}>
       <button
         type="button"
         className="theme-toggle__cog"
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={open}
         // The icon is decorative, so the button needs words of its own —
         // otherwise this is an unlabelled control to anything not looking at it.
@@ -89,62 +94,63 @@ export function ThemeToggle() {
       </button>
 
       {open && (
-        <div className="theme-menu" role="menu">
-          <div className="theme-menu__head" aria-hidden="true">
-            Theme
+        <div className="theme-menu" role="group" aria-label="Appearance">
+          <div className="theme-menu__row">
+            <label className="theme-menu__head" htmlFor="bgc-theme-select">
+              Theme
+            </label>
+            {/* A select, matching the library cog. Picking a theme applies to
+                this page and keeps the menu open on purpose — the whole page
+                just changed clothes and the natural next gesture is comparing. */}
+            <select
+              id="bgc-theme-select"
+              className="theme-menu__select"
+              value={state.theme}
+              onChange={(e) => setTheme(e.currentTarget.value as EstateTheme)}
+            >
+              {ESTATE_THEMES.map((t) => (
+                <option key={t} value={t}>
+                  {THEME_LABELS[t]}
+                </option>
+              ))}
+            </select>
+            {state.scope === 'page' && (
+              <p className="theme-menu__scope muted small">This page keeps its own theme.</p>
+            )}
+            <button
+              type="button"
+              className="theme-menu__applyall"
+              onClick={() => setSiteTheme(state.theme)}
+            >
+              Apply to all pages
+            </button>
           </div>
-          {THEME_OPTIONS.map((option) => (
-            <MenuRow
-              key={option.id}
-              label={option.label}
-              hint={option.hint}
-              checked={state.theme === option.id}
-              onPick={() => setTheme(option.id)}
-            />
-          ))}
-          <div className="theme-menu__head" aria-hidden="true">
-            Mode
+          <div className="theme-menu__row">
+            <span className="theme-menu__head" id="bgc-mode-label">
+              Mode
+            </span>
+            <div className="theme-menu__modes" role="group" aria-labelledby="bgc-mode-label">
+              {ESTATE_MODES.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={state.mode === m}
+                  onClick={() => {
+                    setMode(m);
+                    setOpen(false);
+                  }}
+                >
+                  {MODE_LABELS[m]}
+                </button>
+              ))}
+            </div>
           </div>
-          {MODE_OPTIONS.map((option) => (
-            <MenuRow
-              key={option.id}
-              label={option.label}
-              hint={option.hint}
-              checked={state.mode === option.id}
-              onPick={() => {
-                setMode(option.id);
-                setOpen(false);
-              }}
-            />
-          ))}
+          <p className="theme-menu__note muted small">
+            Themes apply to this page; mode applies everywhere. Remembered on this site only.
+          </p>
         </div>
       )}
     </div>
-  );
-}
-
-/** One row of the menu. Picking a THEME keeps the menu open on purpose — the
- *  whole page just changed clothes and the natural next gesture is comparing;
- *  picking a mode closes it, as the old control did. */
-function MenuRow(props: { label: string; hint: string; checked: boolean; onPick: () => void }) {
-  return (
-    <button
-      type="button"
-      role="menuitemradio"
-      aria-checked={props.checked}
-      className={props.checked ? 'theme-menu__opt theme-menu__opt--on' : 'theme-menu__opt'}
-      onClick={props.onPick}
-    >
-      {/* Always rendered, visible only when chosen — so the rows do not
-          shift sideways as the tick moves between them. */}
-      <span className="theme-menu__tick" aria-hidden="true">
-        {props.checked ? '✓' : ''}
-      </span>
-      <span className="theme-menu__label">
-        {props.label}
-        <span className="muted small">{props.hint}</span>
-      </span>
-    </button>
   );
 }
 
