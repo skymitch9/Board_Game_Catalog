@@ -17,3 +17,13 @@
 # for a year, and `immutable` stops the browser revalidating on every load.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# ⚠️ The estate theme assets are copied in verbatim (not content-hashed), so
+# they must NOT inherit the year-long immutable rule above — a phone would pin
+# the first theme css it ever saw across every future re-theme. Later rules
+# override earlier ones for the same header. The fonts stay immutable: a face
+# never changes bytes without changing name.
+/assets/estate-theme.css
+  Cache-Control: no-cache
+/assets/theme.js
+  Cache-Control: no-cache

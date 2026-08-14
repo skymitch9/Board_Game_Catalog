@@ -1,106 +1,74 @@
 /**
- * Light, dark, or whatever the device says.
+ * The React side of the estate theme contract.
  *
- * ## Three, not two
+ * The heavy lifting moved to /assets/theme.js (the estate switcher, loaded
+ * synchronously in index.html's <head> so the persisted theme and mode land
+ * on <html> BEFORE first paint — the same no-flash guarantee the old inline
+ * script gave, now covering theme as well as mode). That script owns:
  *
- * A two-state toggle cannot express *"follow my phone"*, which is what most
- * people want and what this app did before the control existed — and it is the
- * right default for a tool used in a shop in the evening. So the stored value
- * is a **choice** of three, and what lands on `<html>` is the **resolved** two.
- * Those are different things and conflating them is what makes a toggle forget
- * the user's intent the first time the OS flips at sunset.
+ *  - localStorage `hg_theme` ('apple'|'cyberpunk'|'retro') and `hg_mode`
+ *    ('auto'|'light'|'dark') — the estate-wide keys. The legacy `bgc-theme`
+ *    key is migrated once by an inline script in index.html and never
+ *    written again;
+ *  - stamping <html data-theme data-mode> (data-mode always RESOLVED;
+ *    'auto' follows the OS live);
+ *  - the `hg-themechange` event on document, fired on every change;
+ *  - the theme-color meta, synced to the active theme's --et-bg by another
+ *    inline script in index.html.
  *
- * ## The contract with `index.html`
- *
- * ⚠️ The key and the three values are duplicated in the inline script at the
- * top of `apps/web/index.html`, and they have to stay in step. That script is
- * inline and blocking on purpose: run this after React mounts and every load in
- * dark mode flashes cream for a frame. There is no way to share a constant with
- * it without shipping a module before first paint, which is the cost the flash
- * exists to avoid — so it is written twice and said so in both places.
+ * This module is only the typed doorway React components use — read state,
+ * write a choice, subscribe. It deliberately holds no state of its own:
+ * window.estateTheme is the single source of truth, so an update from
+ * anywhere (another tab's storage event does not travel, but a future second
+ * control would) is one subscription away.
  */
 
-export const THEME_CHOICES = ['system', 'light', 'dark'] as const;
-export type ThemeChoice = (typeof THEME_CHOICES)[number];
+export const ESTATE_THEMES = ['retro', 'apple', 'cyberpunk'] as const;
+export type EstateTheme = (typeof ESTATE_THEMES)[number];
 
-/** What actually gets painted. `system` is never this. */
-export type ResolvedTheme = 'light' | 'dark';
+export const ESTATE_MODES = ['auto', 'light', 'dark'] as const;
+export type EstateMode = (typeof ESTATE_MODES)[number];
 
-const STORAGE_KEY = 'bgc-theme';
+export interface EstateThemeState {
+  theme: EstateTheme;
+  mode: EstateMode;
+  resolvedMode: 'light' | 'dark';
+}
 
-/** The page background per theme, for the browser-chrome colour on a phone. */
-const THEME_COLOR: Record<ResolvedTheme, string> = {
-  light: '#f2e8d5',
-  dark: '#1b1814',
-};
+interface EstateThemeApi {
+  themes: string[];
+  modes: string[];
+  get(): EstateThemeState;
+  setTheme(theme: string): void;
+  setMode(mode: string): void;
+}
 
-/**
- * Reads the stored choice. Anything unrecognised — absent, corrupted, or from a
- * future version — falls back to `system` rather than to a fixed theme, so a
- * bad value degrades to the sensible default instead of overriding the device.
- */
-export function readChoice(): ThemeChoice {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return (THEME_CHOICES as readonly string[]).includes(raw ?? '')
-      ? (raw as ThemeChoice)
-      : 'system';
-  } catch {
-    // Safari in private mode throws on localStorage rather than returning null.
-    return 'system';
+declare global {
+  interface Window {
+    /** Installed by /assets/theme.js before any module runs. Optional only
+     *  so a unit-test DOM without the script cannot crash the app. */
+    estateTheme?: EstateThemeApi;
   }
 }
 
-export function systemPrefersDark(): boolean {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+/** What the app believes with no switcher present: its own identity. */
+const FALLBACK: EstateThemeState = { theme: 'retro', mode: 'auto', resolvedMode: 'light' };
+
+export function getThemeState(): EstateThemeState {
+  return window.estateTheme ? window.estateTheme.get() : FALLBACK;
 }
 
-export function resolve(choice: ThemeChoice): ResolvedTheme {
-  if (choice === 'light' || choice === 'dark') return choice;
-  return systemPrefersDark() ? 'dark' : 'light';
+export function setTheme(theme: EstateTheme): void {
+  window.estateTheme?.setTheme(theme);
 }
 
-/**
- * Paint it. Sets three things, and all three matter:
- *
- * - `data-theme`, which every colour in `styles.css` hangs off;
- * - `color-scheme`, without which the *browser's* own furniture — form
- *   controls, scrollbars, the caret — stays in the other theme and the page
- *   ends up half-converted;
- * - the `theme-color` meta, which on a phone is a visible band of colour above
- *   the page. A `media` attribute cannot see `data-theme`, so it is set here.
- */
-export function apply(choice: ThemeChoice): ResolvedTheme {
-  const resolved = resolve(choice);
-  const root = document.documentElement;
-  root.dataset.theme = resolved;
-  root.style.colorScheme = resolved;
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', THEME_COLOR[resolved]);
-  return resolved;
+export function setMode(mode: EstateMode): void {
+  window.estateTheme?.setMode(mode);
 }
 
-export function store(choice: ThemeChoice): void {
-  try {
-    // `system` is stored rather than cleared, so it survives as a deliberate
-    // answer. A missing key and a chosen "follow the device" resolve the same
-    // way today, and would stop doing so the moment the default changed.
-    localStorage.setItem(STORAGE_KEY, choice);
-  } catch {
-    // Nothing to do. The choice still applies for this session.
-  }
-}
-
-/**
- * Follow the device while — and only while — the choice is `system`.
- *
- * Without this, picking "Match system" and then having the phone flip to dark
- * at sunset leaves the app in whatever it was, which reads as the setting not
- * working. Returns its own unsubscribe.
- */
-export function watchSystem(onChange: () => void): () => void {
-  const query = window.matchMedia('(prefers-color-scheme: dark)');
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
+/** Subscribe to any theme/mode change (user, other control, OS flip while on
+ *  'auto'). Returns its own unsubscribe. */
+export function onThemeChange(listener: () => void): () => void {
+  document.addEventListener('hg-themechange', listener);
+  return () => document.removeEventListener('hg-themechange', listener);
 }

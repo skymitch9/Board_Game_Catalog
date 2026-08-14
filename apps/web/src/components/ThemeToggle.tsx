@@ -1,45 +1,54 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  apply,
-  readChoice,
-  store,
-  watchSystem,
-  type ThemeChoice,
+  getThemeState,
+  onThemeChange,
+  setMode,
+  setTheme,
+  type EstateMode,
+  type EstateTheme,
 } from '../lib/theme';
 
 /**
- * The cog in the top bar: light, dark, or match the device.
+ * The cog in the top bar — now the estate settings cog: which THEME, and
+ * light, dark, or match the device.
  *
  * *"give me a 3 way system swap thing put a cog in the top of the page or
- * something to control it"* — the owner.
+ * something to control it"* — the owner, for the original mode control; the
+ * theme dropdown joined it per the estate ask ("put that selector in the same
+ * settings cog as darkmode"). Two labelled groups in one menu rather than a
+ * second control: the cog was already where appearance decisions live.
  *
- * A menu rather than a cycling button. A single control that rotates through
- * three states makes you press it up to twice to find out what it does and
- * never shows which one is current — fine for two states, poor for three.
+ * A menu rather than a cycling button, same reasoning as before: a control
+ * that rotates through states never shows which one is current.
  *
- * ⚠️ **The theme is already applied before this mounts**, by the inline script
- * in `index.html`. This component does not set the initial theme; it reads back
- * the same stored choice so the menu can show a tick beside it. If it applied
- * on mount instead, the first paint would be unthemed and every dark-mode load
- * would flash cream.
+ * ⚠️ **Theme and mode are already applied before this mounts**, by
+ * /assets/theme.js in index.html's <head>. This component neither applies nor
+ * stores anything itself — it calls window.estateTheme (via lib/theme) and
+ * re-renders on `hg-themechange`, so the tick always reflects the one source
+ * of truth. Defaults are identity: retro is stamped via data-default-theme,
+ * and only a choice made here changes it.
  */
 
-const OPTIONS: { id: ThemeChoice; label: string; hint: string }[] = [
-  { id: 'system', label: 'Match system', hint: 'Follow the device' },
-  { id: 'light', label: 'Light', hint: 'Aged paper' },
-  { id: 'dark', label: 'Dark', hint: 'Ink on board' },
+const THEME_OPTIONS: { id: EstateTheme; label: string; hint: string }[] = [
+  { id: 'retro', label: 'Retro', hint: 'Aged paper & ink — the house look' },
+  { id: 'apple', label: 'Apple', hint: 'Quiet monochrome' },
+  { id: 'cyberpunk', label: 'Cyberpunk', hint: 'Neon on black' },
+];
+
+const MODE_OPTIONS: { id: EstateMode; label: string; hint: string }[] = [
+  { id: 'auto', label: 'Match system', hint: 'Follow the device' },
+  { id: 'light', label: 'Light', hint: 'Daytime' },
+  { id: 'dark', label: 'Dark', hint: 'Evening' },
 ];
 
 export function ThemeToggle() {
-  const [choice, setChoice] = useState<ThemeChoice>(() => readChoice());
+  const [state, setState] = useState(() => getThemeState());
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  // Follow the device, but only while that is what was asked for.
-  useEffect(() => {
-    if (choice !== 'system') return;
-    return watchSystem(() => apply('system'));
-  }, [choice]);
+  // The switcher is the source of truth; mirror every change it announces
+  // (including OS flips while the mode is 'auto').
+  useEffect(() => onThemeChange(() => setState(getThemeState())), []);
 
   // Close on an outside press or on Escape. `mousedown`, not `click`: a press
   // that starts outside and releases inside should still close it, and waiting
@@ -60,12 +69,8 @@ export function ThemeToggle() {
     };
   }, [open]);
 
-  function pick(next: ThemeChoice) {
-    setChoice(next);
-    store(next);
-    apply(next);
-    setOpen(false);
-  }
+  const themeLabel = THEME_OPTIONS.find((o) => o.id === state.theme)?.label;
+  const modeLabel = MODE_OPTIONS.find((o) => o.id === state.mode)?.label;
 
   return (
     <div className="theme-toggle" ref={wrapRef}>
@@ -76,8 +81,8 @@ export function ThemeToggle() {
         aria-expanded={open}
         // The icon is decorative, so the button needs words of its own —
         // otherwise this is an unlabelled control to anything not looking at it.
-        aria-label={`Theme: ${OPTIONS.find((o) => o.id === choice)?.label}`}
-        title="Theme"
+        aria-label={`Appearance: ${themeLabel}, ${modeLabel}`}
+        title="Appearance"
         onClick={() => setOpen((o) => !o)}
       >
         <CogIcon />
@@ -85,31 +90,61 @@ export function ThemeToggle() {
 
       {open && (
         <div className="theme-menu" role="menu">
-          {OPTIONS.map((option) => (
-            <button
+          <div className="theme-menu__head" aria-hidden="true">
+            Theme
+          </div>
+          {THEME_OPTIONS.map((option) => (
+            <MenuRow
               key={option.id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={choice === option.id}
-              className={
-                choice === option.id ? 'theme-menu__opt theme-menu__opt--on' : 'theme-menu__opt'
-              }
-              onClick={() => pick(option.id)}
-            >
-              {/* Always rendered, visible only when chosen — so the rows do not
-                  shift sideways as the tick moves between them. */}
-              <span className="theme-menu__tick" aria-hidden="true">
-                {choice === option.id ? '✓' : ''}
-              </span>
-              <span className="theme-menu__label">
-                {option.label}
-                <span className="muted small">{option.hint}</span>
-              </span>
-            </button>
+              label={option.label}
+              hint={option.hint}
+              checked={state.theme === option.id}
+              onPick={() => setTheme(option.id)}
+            />
+          ))}
+          <div className="theme-menu__head" aria-hidden="true">
+            Mode
+          </div>
+          {MODE_OPTIONS.map((option) => (
+            <MenuRow
+              key={option.id}
+              label={option.label}
+              hint={option.hint}
+              checked={state.mode === option.id}
+              onPick={() => {
+                setMode(option.id);
+                setOpen(false);
+              }}
+            />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/** One row of the menu. Picking a THEME keeps the menu open on purpose — the
+ *  whole page just changed clothes and the natural next gesture is comparing;
+ *  picking a mode closes it, as the old control did. */
+function MenuRow(props: { label: string; hint: string; checked: boolean; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={props.checked}
+      className={props.checked ? 'theme-menu__opt theme-menu__opt--on' : 'theme-menu__opt'}
+      onClick={props.onPick}
+    >
+      {/* Always rendered, visible only when chosen — so the rows do not
+          shift sideways as the tick moves between them. */}
+      <span className="theme-menu__tick" aria-hidden="true">
+        {props.checked ? '✓' : ''}
+      </span>
+      <span className="theme-menu__label">
+        {props.label}
+        <span className="muted small">{props.hint}</span>
+      </span>
+    </button>
   );
 }
 

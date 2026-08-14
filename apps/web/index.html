@@ -1,47 +1,64 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-default-theme="retro">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <!-- The browser chrome above the page, which on a phone is a visible band
-         of colour touching the design. Set from JS below rather than by a
-         media query, because the user's own choice has to win over the OS —
-         and a `media` attribute here cannot see `data-theme`. Keep the values
-         in step with `--paper` in styles.css; they cannot read a CSS variable. -->
+         of colour touching the design. Synced to the active theme's --et-bg by
+         the inline script below — a `media` attribute here cannot see
+         data-theme/data-mode. The static value is retro light's paper, for the
+         instant before the script runs. -->
     <meta name="theme-color" content="#f2e8d5" />
     <!--
-      Theme, resolved before the first paint.
-
-      ⚠️ This is inline and blocking on purpose. Left to React it would run
-      after the first paint, and every load in dark mode would flash cream for
-      a frame — which is worse than having no toggle at all, and is the single
-      most common way a theme switcher is got wrong.
-
-      It always writes an explicit `light` or `dark` onto <html>, resolving
-      "system" here rather than in CSS. That is what lets styles.css define the
-      dark palette exactly once, under `:root[data-theme="dark"]`, instead of
-      duplicating it for the media-query case. A no-JS fallback would be
-      pointless: this app renders nothing without JS.
-
-      Kept in sync with `apps/web/src/lib/theme.ts` — the key and the values are
-      the contract between the two.
+      The estate theme system (catalog-platform docs/info/estate-themes.md):
+      three themes × light/dark, styled through --et-* tokens, switched by
+      /assets/theme.js stamping <html data-theme data-mode> BEFORE first paint.
+      This app's own comic-print look IS the `retro` theme — extracted verbatim
+      into estate-theme.css — and stays the default via data-default-theme
+      above (defaults are identity; only this site's user changes it, in the
+      cog). The stylesheet is linked ahead of the scripts so the theme-color
+      script below can read the resolved --et-bg synchronously.
     -->
+    <link rel="stylesheet" href="/assets/estate-theme.css" />
     <script>
+      // Migrate-once from the app's legacy mode key (estate-themes.md §4):
+      // bgc-theme ('system'|'light'|'dark') maps 1:1 onto hg_mode
+      // ('auto'|'light'|'dark'). Read the old key only while hg_mode is
+      // unset; never write bgc-theme again. Runs before theme.js so the
+      // migrated value is what gets stamped.
       (function () {
         try {
-          var stored = localStorage.getItem('bgc-theme');
-          var choice = stored === 'light' || stored === 'dark' ? stored : 'system';
-          var dark =
-            choice === 'dark' ||
-            (choice === 'system' &&
-              window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+          if (localStorage.getItem('hg_mode') === null) {
+            var legacy = localStorage.getItem('bgc-theme');
+            if (legacy === 'light' || legacy === 'dark') localStorage.setItem('hg_mode', legacy);
+            else if (legacy === 'system') localStorage.setItem('hg_mode', 'auto');
+          }
         } catch (e) {
-          /* Private mode can throw on localStorage. Light is the default. */
-          document.documentElement.dataset.theme = 'light';
+          /* Private mode can throw on localStorage; theme.js has its own guard. */
         }
+      })();
+    </script>
+    <!--
+      ⚠️ Inline-adjacent and blocking on purpose (same reason as the old inline
+      script this replaces): left to React, every dark-mode load would flash
+      cream for a frame. theme.js stamps data-theme + resolved data-mode and
+      exposes window.estateTheme — the API src/lib/theme.ts adapts for React.
+    -->
+    <script src="/assets/theme.js"></script>
+    <script>
+      // theme-color follows the active theme's --et-bg — set now (pre-paint,
+      // the stylesheet above has already parsed) and again on every change.
+      (function () {
+        var meta = document.querySelector('meta[name="theme-color"]');
+        function sync() {
+          try {
+            var bg = getComputedStyle(document.documentElement).getPropertyValue('--et-bg').trim();
+            if (bg && meta) meta.setAttribute('content', bg);
+          } catch (e) { /* leave the static fallback */ }
+        }
+        document.addEventListener('hg-themechange', sync);
+        sync();
       })();
     </script>
     <title>Board Game Catalog</title>

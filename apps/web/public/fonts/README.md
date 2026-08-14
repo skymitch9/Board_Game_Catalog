@@ -1,7 +1,17 @@
 # Display fonts — self-hosted on purpose
 
 > **Audience:** Claude sessions. **Status:** TRACKED.
-> Last verified: **2026-08-09**.
+> Last verified: **2026-08-13**.
+
+> ⚠️ **2026-08-13, estate themes:** the faces the app actually loads now live
+> in `public/assets/fonts/` — declared by `public/assets/estate-theme.css`,
+> the estate theme contract — which adds Rajdhani ×3 + Share Tech Mono for
+> the cyberpunk theme, each pair with its OFL file. Bangers/Luckiest Guy are
+> duplicated there because the estate asset is copied VERBATIM from
+> `catalog-platform/sites/heygabi-home/public/assets/` and references
+> `/assets/fonts/…`; do not "deduplicate" by editing the copied css. This
+> directory stays as the provenance record, and the licence story below is
+> still why nothing is ever linked from a CDN — the estate adopted that rule.
 
 | File | Font | Used for |
 |---|---|---|
@@ -34,8 +44,10 @@ curl -sL -A "$UA" "https://fonts.googleapis.com/css2?family=Bangers&display=swap
 # take the `src: url(...)` under the `/* latin */` block, then curl that .woff2 here
 ```
 
-The `@font-face` declarations live at the top of `apps/web/src/styles.css`, and
-both use `font-display: swap` so text is readable before the file lands.
+The `@font-face` declarations live at the top of
+`apps/web/public/assets/estate-theme.css` (since the estate-theme adoption;
+`styles.css` no longer declares any), and all use `font-display: swap` so text
+is readable before the file lands.
 
 ⚠️ **`/fonts/` is served by the Worker's asset handler**, which serves
 `index.html` for any non-`/api` path that is not a real file — so a typo in a

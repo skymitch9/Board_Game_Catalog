@@ -20,167 +20,94 @@
    have already eaten a name three times when disturbed.
    --------------------------------------------------------------------------- */
 
-/* Latin subsets, served from our own assets. See public/fonts/README.md for
-   why these are committed rather than linked — this app makes no third-party
-   requests and decoration was not the thing to break that for. */
-@font-face {
-  font-family: 'Bangers';
-  src: url('/fonts/bangers.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Luckiest Guy';
-  src: url('/fonts/luckiest-guy.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+/* Fonts now live in /assets/fonts and are declared by estate-theme.css —
+   still latin subsets served from our own origin (see public/fonts/README.md
+   for why self-hosting is non-negotiable here); the estate kept the rule. */
 
+/*
+  The palette is now the ESTATE THEME CONTRACT (public/assets/estate-theme.css;
+  guide: catalog-platform docs/info/estate-themes.md). Every value this app's
+  printed palette used to define was extracted VERBATIM into that file's
+  `retro` theme — light and dark — so with the default theme these aliases
+  resolve to exactly the colours that were here before. What changed is that
+  the user can now pick `apple` or `cyberpunk` in the cog, and the whole
+  vocabulary swaps at the token layer.
+
+  ⚠️ Rules below style against these aliases (or --et-* directly) and NEVER
+  against a theme: a `[data-theme=…]` selector in this file means a token is
+  missing from the contract — ask the contract (canonical copy in
+  catalog-platform sites/heygabi-home/public/assets/), don't fork.
+*/
 :root {
-  /* --- the printed palette ------------------------------------------------
-     Mustard, dusty blue, brick, coral and charcoal on aged paper. Every one is
-     desaturated: the brief rules out neon, pure white and saturated primaries,
-     and those are exactly what a naive comic palette reaches for. */
-  --paper: #f2e8d5;
-  --paper-deep: #e8dbc3;
-  --charcoal: #2b2622;
-  --mustard: #d99a2b;
-  --dusty-blue: #4a7c9b;
-  --brick: #a8443a;
-  --coral: #d9705f;
+  --paper: var(--et-bg);
+  --paper-deep: var(--et-field-bg);
+  /* Of the old named pigments only mustard survives as an alias — it is the
+     theme's second voice (--et-accent-2). Charcoal, dusty-blue, brick and
+     coral's remaining uses all resolved to contract roles directly. */
+  --mustard: var(--et-accent-2);
 
-  --bg: var(--paper);
-  /* Cards are a shade lighter than the page so a panel lifts off it without
-     going white — white is explicitly out, and it is what makes comic pastiche
-     look like a template. */
-  --card: #fbf5e9;
-  --text: var(--charcoal);
-  --muted: #7a6e60;
-  --line: #cdbb9c;
-  --accent: var(--dusty-blue);
+  --bg: var(--et-bg);
+  --card: var(--et-surface);
+  --text: var(--et-fg);
+  --muted: var(--et-muted);
+  --line: var(--et-hairline);
+  --accent: var(--et-accent);
 
-  /* The status hues keep their *meanings* and change their clothes. Green is
-     still owned, amber still wanted, and the set stays mutually
-     distinguishable — this is the one part of the palette that carries
-     information rather than mood, so it is tuned for separation first and
-     period feel second. */
-  --good: #4e7a44;
-  --good-bg: #dfe4c8;
-  --warn: #9a6a12;
-  --warn-bg: #f2e2b8;
-  --bad: var(--brick);
-  --bad-bg: #f0d6cf;
-  --info: #3f6480;
-  --info-bg: #d8e2e9;
-  /* Paid for, not here yet. Still the one hue nothing else claims — a faded
-     teal now rather than cyan, because cyan is the neon the brief rules out. */
-  --transit: #2f7d84;
-  --transit-bg: #d2e5e2;
+  /* The status hues keep their *meanings* and change their clothes — now per
+     theme. Retro's set is the original, verbatim, in the contract. */
+  --good: var(--et-ok);
+  --good-bg: var(--et-ok-bg);
+  --warn: var(--et-warn);
+  --warn-bg: var(--et-warn-bg);
+  --bad: var(--et-danger);
+  --bad-bg: var(--et-danger-bg);
+  --info: var(--et-info);
+  --info-bg: var(--et-info-bg);
+  --transit: var(--et-transit);
+  --transit-bg: var(--et-transit-bg);
 
-  /* --- the comic layer ---------------------------------------------------- */
-  /* Thick charcoal outline and a hard offset shadow: the two marks that make a
-     box read as a printed panel. Kept as tokens so the weight can be tuned in
-     one place rather than in forty rules. */
-  --ink: 2px;
-  --ink-color: var(--charcoal);
-  --panel-shadow: 3px 3px 0 rgba(43, 38, 34, 0.18);
-  --panel-radius: 10px;
-  /* Halftone. Two offset dot grids at 6px, at ~4% — visible as tone, not as
-     dots, until you put your face against the screen. */
-  --halftone:
-    radial-gradient(circle at 1px 1px, rgba(43, 38, 34, 0.055) 1px, transparent 0),
-    radial-gradient(circle at 4px 4px, rgba(43, 38, 34, 0.035) 1px, transparent 0);
-  --halftone-size: 6px 6px;
+  /* The comic layer, generalised: ink width/colour, panel shadow and radius
+     are the theme's border-w/ink/shadow-lift/radius-lg. Under retro they are
+     the 2px charcoal + hard offset they always were; under apple the "ink"
+     is a hairline and the shadow goes soft; under cyberpunk the border is a
+     1px neon hairline. The grammar gives way with the theme — that is the
+     point. */
+  --ink: var(--et-border-w);
+  --ink-color: var(--et-ink);
+  --panel-shadow: var(--et-shadow-lift);
+  --panel-radius: var(--et-radius-lg);
+  --halftone: var(--et-bg-texture);
+  --halftone-size: var(--et-bg-texture-size);
 
-  --font-display: 'Bangers', 'Luckiest Guy', 'Trebuchet MS', system-ui, sans-serif;
-  --font-label: 'Luckiest Guy', 'Bangers', 'Trebuchet MS', system-ui, sans-serif;
-  --font-body: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: var(--et-font-display);
+  --font-label: var(--et-font-label);
+  --font-body: var(--et-font);
 
-  color-scheme: light dark;
+  /* color-scheme is stamped per resolved mode by estate-theme.css
+     (:root[data-mode]), so it is no longer declared here. */
 }
 
 /*
-  Dark mode is kept, and it is *not* a pop-art poster at night.
-
-  The brief is built on aged paper, and there is no such thing as dark aged
-  paper — so this is the same ink on a dark board rather than an inversion of
-  the cream. The five accents are lifted just enough to hold their meaning
-  against it, and the halftone is switched to a light dot: a dark dot on a dark
-  ground is invisible, which would silently drop the texture for anyone whose
-  phone is in dark mode, which is most of them in the evening.
-
-  Deleting dark mode would have been the easier read of "aged paper background"
-  and the wrong one — this app is used in a shop at 6pm.
+  Dark mode is kept — and it now lives in the contract, once, as retro's dark
+  block (extracted verbatim: same ink on a dark board, the widened card gap,
+  the light halftone dot; the reasoning travelled with the values as comments
+  in estate-theme.css). The stamp is `data-mode` on <html> — theme.js resolves
+  the three-way choice ('auto'|'light'|'dark') exactly as the old inline
+  script resolved bgc-theme, still before first paint. See src/lib/theme.ts
+  for the React side of the contract.
 */
-/*
-  ⚠️ An attribute, not `@media (prefers-color-scheme: dark)`.
-
-  The OS preference is still what decides by default — it is simply resolved in
-  the inline script in `index.html` rather than here, which is what lets this
-  palette be written **once**. Under a media query the app could not honour a
-  user who picks light while their phone is dark, and expressing both would mean
-  maintaining thirty tokens in two places where any miss is silent.
-
-  So: the script always stamps an explicit `light` or `dark`, and this is the
-  only rule that paints dark. See `src/lib/theme.ts` for the three-way choice.
-*/
-:root[data-theme='dark'] {
-    --paper: #1b1814;
-    --paper-deep: #141109;
-    --charcoal: #0b0907;
-    --bg: var(--paper);
-    /*
-      ⚠️ The card has to sit clearly *above* the page here, and at #262119
-      against #1e1b18 it did not — an eight-point lightness gap that carries a
-      panel on cream is nothing on a dark ground, so every card read as a
-      hairline groove rather than as a sheet lying on the board. The ink border
-      cannot rescue it either, because ink is darker than both.
-
-      Widened to about twice the gap, and the drop shadow deepened with it. This
-      is the half of the theme most people actually see: a phone in a shop in
-      the evening is in dark mode.
-    */
-    --card: #302a20;
-    --text: #ece0cb;
-    --muted: #a39683;
-    --line: #453c2f;
-    --accent: #7fb0cd;
-
-    --mustard: #e5b45c;
-    --dusty-blue: #7fb0cd;
-    --brick: #d4776b;
-    --coral: #e08e7d;
-
-    --good: #8fbb7e;
-    --good-bg: #2b3720;
-    --warn: #d9a441;
-    --warn-bg: #3d3016;
-    --bad: #d4776b;
-    --bad-bg: #3d221e;
-    --info: #93b4c9;
-    --info-bg: #24333d;
-    --transit: #6fb3b3;
-    --transit-bg: #1d3634;
-
-    --ink-color: #0b0907;
-    --panel-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
-    --halftone:
-      radial-gradient(circle at 1px 1px, rgba(236, 224, 203, 0.05) 1px, transparent 0),
-      radial-gradient(circle at 4px 4px, rgba(236, 224, 203, 0.03) 1px, transparent 0);
-}
 
 /*
-  Everything above is decoration, and decoration must not win an argument with
-  a person's own settings. Reduced motion is respected elsewhere; here the
-  texture itself is dropped for anyone who has asked for less.
+  Decoration must not win an argument with a person's own settings. The
+  texture drop is estate-wide (estate-theme.css kills --et-bg-texture under
+  prefers-contrast: more — the rule this app invented, adopted); the muted
+  and hairline strengthening stays here, expressed relatively so it holds
+  under every theme.
 */
 @media (prefers-contrast: more) {
   :root {
-    --halftone: none;
-    --muted: #4a423a;
-    --line: var(--charcoal);
+    --muted: color-mix(in srgb, var(--et-fg) 80%, var(--et-bg));
+    --line: var(--et-fg);
   }
 }
 
@@ -227,17 +154,27 @@ main {
   title on the site.
 */
 h1 {
-  font: 400 2rem/1.15 var(--font-display);
-  letter-spacing: 0.02em;
+  font: var(--et-heading-weight) 2rem/1.15 var(--font-display);
+  letter-spacing: var(--et-title-spacing);
+  text-transform: var(--et-title-case);
   margin: 0.2rem 0;
-  color: var(--text);
+  color: var(--et-heading-color);
+  text-shadow: var(--et-glow-title);
 }
 h2 {
-  font: 400 1.3rem/1.2 var(--font-display);
-  letter-spacing: 0.03em;
+  font: var(--et-heading-weight) 1.3rem/1.2 var(--font-display);
+  letter-spacing: var(--et-title-spacing);
+  text-transform: var(--et-title-case);
+  color: var(--et-heading-color);
   margin: 0 0 0.75rem;
 }
-h3 { font: 400 1.2rem/1.2 var(--font-display); letter-spacing: 0.03em; margin: 0 0 0.5rem; }
+h3 {
+  font: var(--et-heading-weight) 1.2rem/1.2 var(--font-display);
+  letter-spacing: var(--et-title-spacing);
+  text-transform: var(--et-title-case);
+  color: var(--et-heading-color);
+  margin: 0 0 0.5rem;
+}
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
@@ -274,12 +211,16 @@ a:hover { text-decoration: underline; }
   counters fill in. `-webkit-text-stroke` alone centres the stroke on the path.
 */
 .brand {
-  font: 400 1.4rem/1 var(--font-display);
-  letter-spacing: 0.03em;
-  color: var(--card);
-  -webkit-text-stroke: 3px var(--ink-color);
+  font: var(--et-heading-weight) 1.4rem/1 var(--font-display);
+  letter-spacing: var(--et-title-spacing);
+  text-transform: var(--et-title-case);
+  /* The logo treatment is a token trio: under retro this is the original
+     cream-with-ink-outline over a brick offset; other themes drop the stroke
+     and wear their heading colour (cyberpunk adds its title glow). */
+  color: var(--et-brand-fill);
+  -webkit-text-stroke: var(--et-brand-stroke);
   paint-order: stroke fill;
-  text-shadow: 2px 2px 0 var(--brick);
+  text-shadow: var(--et-brand-shadow);
 }
 .brand:hover { text-decoration: none; color: var(--mustard); }
 /* --- the theme cog ------------------------------------------------------- */
@@ -291,12 +232,12 @@ a:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; padding: 0;
   color: var(--text); background: var(--card);
-  border: var(--ink) solid var(--ink-color); border-radius: 7px;
-  box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.22);
+  border: var(--ink) solid var(--et-panel-border); border-radius: var(--et-radius);
+  box-shadow: var(--et-btn-shadow);
   cursor: pointer;
 }
 .theme-toggle__cog:hover { color: var(--accent); }
-.theme-toggle__cog:active { transform: translate(2px, 2px); box-shadow: none; }
+.theme-toggle__cog:active { transform: var(--et-press); box-shadow: none; }
 
 /*
   The menu. Right-aligned to the cog because the cog is the last thing in the
@@ -321,11 +262,24 @@ a:hover { text-decoration: underline; }
   font: inherit; font-size: 0.9rem; color: var(--text); text-align: left;
 }
 .theme-menu__opt:hover { background: var(--paper-deep); }
-.theme-menu__opt--on { background: var(--mustard); color: var(--charcoal); }
-.theme-menu__opt--on .muted { color: var(--charcoal); opacity: 0.75; }
+.theme-menu__opt--on { background: var(--et-btn-bg); color: var(--et-btn-fg); }
+.theme-menu__opt--on .muted { color: var(--et-btn-fg); opacity: 0.75; }
 /* Fixed width so the rows do not shift sideways as the tick moves. */
 .theme-menu__tick { width: 1em; flex: none; font-weight: 700; }
 .theme-menu__label { display: flex; flex-direction: column; line-height: 1.25; }
+/* The menu now answers two questions — which theme, which mode — so each
+   group gets the quiet section label the estate cog uses. */
+.theme-menu__head {
+  margin: 0.3rem 0.55rem 0.15rem;
+  color: var(--muted);
+  font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.theme-menu__head + .theme-menu__head,
+.theme-menu__opt + .theme-menu__head {
+  margin-top: 0.5rem; padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
 
 .who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role-tag {
@@ -501,26 +455,29 @@ a:hover { text-decoration: underline; }
   display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
   padding: 0.45rem 0.85rem;
   font: inherit; font-size: 0.9rem; font-weight: 600;
-  border-radius: 7px; border: var(--ink) solid var(--ink-color);
+  /* Panel-border, not ink: retro outlines its buttons, apple leaves them as
+     flat surfaces (its panel border is transparent), cyberpunk hairlines
+     them. The press is each theme's own — retro sinks into its shadow,
+     apple and cyberpunk scale. */
+  border-radius: var(--et-radius); border: var(--ink) solid var(--et-panel-border);
   background: var(--card); color: var(--text);
-  box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.22);
+  box-shadow: var(--et-btn-shadow);
   cursor: pointer; white-space: nowrap;
   transition: transform 0.04s ease-out, box-shadow 0.04s ease-out;
 }
 .btn:hover { color: var(--accent); text-decoration: none; }
-.btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
+.btn:active:not(:disabled) { transform: var(--et-press); box-shadow: none; }
 /* Honour the setting: this is decoration and somebody has said they do not
    want it. The button still changes on press, it simply does not move. */
 @media (prefers-reduced-motion: reduce) {
   .btn { transition: none; }
-  .btn:active:not(:disabled) { transform: none; box-shadow: 1px 1px 0 rgba(43, 38, 34, 0.22); }
+  .btn:active:not(:disabled) { transform: none; box-shadow: var(--et-btn-shadow); }
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
-/* Mustard, not the blue accent. The primary action is the warmest thing on the
-   page and the ink stays charcoal on it — a coloured button with a coloured
-   border is where period palettes turn into bootstrap. */
-.btn-primary { background: var(--mustard); color: var(--charcoal); }
-.btn-primary:hover { color: var(--charcoal); filter: brightness(1.06); }
+/* The theme's primary-action fill: retro's mustard with charcoal ink on it
+   (measured — not the blue accent), apple's accent fill, cyberpunk's cyan. */
+.btn-primary { background: var(--et-btn-bg); color: var(--et-btn-fg); }
+.btn-primary:hover { color: var(--et-btn-fg); filter: brightness(1.06); }
 .btn-quiet { background: transparent; box-shadow: none; border-color: var(--line); }
 .btn-quiet:hover { border-color: var(--ink-color); }
 .btn-danger { background: var(--bad-bg); color: var(--bad); }
@@ -542,9 +499,11 @@ input, select, textarea {
   width: 100%;
   padding: 0.5rem 0.6rem;
   font: inherit; font-size: 0.92rem;
-  color: var(--text); background: var(--paper-deep);
-  border: var(--ink) solid var(--ink-color); border-radius: 7px;
-  box-shadow: inset 2px 2px 0 rgba(43, 38, 34, 0.07);
+  color: var(--text); background: var(--et-field-bg);
+  border: var(--ink) solid var(--et-field-border); border-radius: var(--et-radius);
+  /* Retro's "hole in the paper" inset travels as a token; the other themes
+     keep their fields flat. */
+  box-shadow: var(--et-field-shadow);
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 textarea { resize: vertical; }
@@ -715,8 +674,12 @@ textarea { resize: vertical; }
 */
 .thumb {
   width: 44px; height: 44px; border-radius: 4px; object-fit: cover; flex-shrink: 0;
+  /* The ink edge that pastes a photo onto the panel; under apple it is the
+     hairline, under cyberpunk the neon hairline. The hard offset now rides
+     the theme's button shadow (2px where it used to be 1.5px in retro — the
+     half-pixel was not worth a token). */
   background: var(--paper-deep); border: 1.5px solid var(--ink-color);
-  box-shadow: 1.5px 1.5px 0 rgba(43, 38, 34, 0.2);
+  box-shadow: var(--et-btn-shadow);
 }
 .thumb-blank {
   background: var(--paper-deep);
@@ -1031,7 +994,7 @@ textarea { resize: vertical; }
   font: inherit; font-size: 0.85rem; cursor: pointer;
 }
 .pip:hover { border-color: var(--accent); color: var(--accent); }
-.pip-on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.pip-on { background: var(--accent); border-color: var(--accent); color: var(--et-accent-fg); font-weight: 700; }
 .rating-note { font-size: 0.9rem; }
 .rating-list { margin-top: 1rem; border-top: 1px solid var(--line); }
 .rating-list li {
@@ -1269,7 +1232,7 @@ textarea { resize: vertical; }
 }
 
 code {
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-family: var(--et-font-mono);
   font-size: 0.85em; background: var(--bg);
   padding: 0.1em 0.35em; border-radius: 4px;
 }
@@ -1340,17 +1303,19 @@ code {
   display: flex; flex-direction: column; gap: 0.15rem;
   padding: 0.6rem 0.5rem; text-align: left;
   background: var(--card);
-  border: var(--ink) solid var(--ink-color); border-radius: 8px;
-  box-shadow: 2px 2px 0 rgba(43, 38, 34, 0.18);
+  border: var(--ink) solid var(--et-panel-border); border-radius: var(--et-radius);
+  box-shadow: var(--et-btn-shadow);
   cursor: pointer; font: inherit; color: inherit;
 }
 .scan-mode strong { font-family: var(--font-label); font-weight: 400; letter-spacing: 0.02em; }
 .scan-mode span { font-size: 0.75rem; line-height: 1.25; }
+/* The selected tab wears the theme's primary fill and sits in its pressed
+   state — retro sinks into the shadow, the others scale. */
 .scan-mode--on {
-  background: var(--mustard); color: var(--charcoal);
-  box-shadow: none; transform: translate(2px, 2px);
+  background: var(--et-btn-bg); color: var(--et-btn-fg);
+  box-shadow: none; transform: var(--et-press);
 }
-.scan-mode--on .muted { color: var(--charcoal); opacity: 0.75; }
+.scan-mode--on .muted { color: var(--et-btn-fg); opacity: 0.75; }
 
 /*
   The viewfinder gets an ink frame — a panel with a photograph in it — but the
@@ -1400,9 +1365,12 @@ code {
    the camera happens to be pointing at. */
 .camera-stage__actions button {
   padding: 0.8rem 1.5rem; font-size: 1rem; border-radius: 999px;
-  background: var(--mustard); color: var(--charcoal);
-  border: var(--ink) solid var(--ink-color);
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  background: var(--et-btn-bg); color: var(--et-btn-fg);
+  border: var(--ink) solid var(--et-panel-border);
+  /* On the live feed the shadow stays a hard black offset in retro and
+     disappears with the other themes' button shadows — the pill shape is
+     kept everywhere: it is a camera control, not a panel. */
+  box-shadow: var(--et-btn-shadow);
   font-family: var(--font-label); font-weight: 400; letter-spacing: 0.02em;
   cursor: pointer;
 }
