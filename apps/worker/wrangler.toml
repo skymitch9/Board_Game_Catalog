@@ -98,8 +98,10 @@ ENVIRONMENT = "production"
 # question (index-worker-design.md §9 Q3); until then every push trigger in
 # lib/index-push.ts logs one line and does nothing, by design. When it goes
 # live, set the URL here and the token as a secret:
-#   INDEX_URL = "https://<the index hostname>"
 #   npx wrangler secret put INDEX_PUSH_TOKEN   (= the index's INDEX_PUSH_TOKEN_GAME)
+# Went live 2026-08-13 (reads members-only, so the gate that held this is
+# answered); the token was set the same day.
+INDEX_URL = "https://index.heygabi.ai"
 
 # The recovery hatch. Any email listed here is forced to `owner` when it signs
 # in, regardless of what its app_user row says.
