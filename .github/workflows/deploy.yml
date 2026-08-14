@@ -1,0 +1,116 @@
+name: Deploy Worker (manual)
+
+# ⚠️ MANUAL DISPATCH ONLY — decided by the owner 2026-08-14 (catalog-platform
+# docs/TODO.md §1). This Worker has NO dev lane: a deploy goes straight to the
+# live custom domain, so the trigger stays a deliberate human button-press.
+# Do not add push triggers or schedules. This is deliberately NOT a copy of
+# audiobook_catalog's deploy.yml — its two-lane main→/dev/ + promote machinery
+# exists for a generated static site and has no equivalent here (TODO.md §1.2).
+#
+# Same shape as library_catalog's workflow (TODO.md §1.1 — the two repos are
+# structurally identical); differences here: no deploy-guard/deploys.log
+# machinery, and the only sibling sync is estate-auth.
+#
+# What this preserves from the manual path (TODO.md §1.3):
+#   - check-clean.mjs still runs inside `npm run deploy` (predeploy). A CI
+#     checkout is clean by construction so it passes trivially, but it is NOT
+#     disabled: the deployed artifact must be a commit, which CI guarantees.
+#   - Migrate BEFORE deploy, so new code never meets an old schema.
+#   - No `|| true` anywhere: the Windows wrangler exit-255 quirk does not
+#     exist on Linux runners, so a non-zero exit is a real failure.
+#
+# Cross-repo dependency: predeploy runs sync-estate-auth.mjs, which fetches the
+# canonical estate-auth module from catalog-platform and FAILS LOUDLY without
+# that checkout. So this workflow checks out BOTH repos side-by-side and points
+# CATALOG_PLATFORM_DIR at the sibling.
+# ⚠️ skymitch9/catalog-platform is PRIVATE while THIS repo is PUBLIC (verified
+# 2026-08-14) — the default GITHUB_TOKEN cannot reach it, so the checkout needs
+# a PAT in the CATALOG_PLATFORM_TOKEN secret. That is safe in a public repo:
+# secrets are never exposed to forks, and workflow_dispatch requires write
+# access. The guard below fails early with instructions if it is absent.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a second dispatch queues rather than overlapping.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Not a secret — the account id also appears in wrangler output. The repo
+      # Actions variable is set; the literal is a fallback so a variable wipe
+      # cannot silently break auth.
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '113be82b840c956b8378a187047ab3ea' }}
+      # Explicit rather than relying on the ../catalog-platform sibling lookup,
+      # so a layout change here fails with platform-repo.mjs's loud message.
+      CATALOG_PLATFORM_DIR: ${{ github.workspace }}/catalog-platform
+    defaults:
+      run:
+        working-directory: Board_Game_Catalog
+
+    steps:
+      # ---- Fail early and clearly on missing secrets, before any checkout ----
+      - name: Guard — CLOUDFLARE_API_TOKEN must exist
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Set CLOUDFLARE_API_TOKEN: repo Settings → Secrets → Actions (or: gh secret set CLOUDFLARE_API_TOKEN --repo skymitch9/Board_Game_Catalog). Create the token at dash.cloudflare.com/profile/api-tokens with the 'Edit Cloudflare Workers' template (needs Workers + D1 + R2 on account 113be82b840c956b8378a187047ab3ea)."
+            exit 1
+          fi
+          echo "CLOUDFLARE_API_TOKEN present."
+
+      - name: Guard — CATALOG_PLATFORM_TOKEN must exist (private sibling checkout)
+        working-directory: ${{ github.workspace }}
+        env:
+          HAVE_PAT: ${{ secrets.CATALOG_PLATFORM_TOKEN != '' }}
+        run: |
+          if [ "$HAVE_PAT" != "true" ]; then
+            echo "::error::Set CATALOG_PLATFORM_TOKEN: skymitch9/catalog-platform is PRIVATE and the build cannot proceed without it (predeploy syncs the estate-auth module from it). Create a fine-grained PAT at github.com/settings/personal-access-tokens with Contents: Read on skymitch9/catalog-platform, then: gh secret set CATALOG_PLATFORM_TOKEN --repo skymitch9/Board_Game_Catalog"
+            exit 1
+          fi
+          echo "CATALOG_PLATFORM_TOKEN present."
+
+      # ---- Side-by-side checkouts: this repo + the platform repo ----
+      - name: Checkout Board_Game_Catalog
+        uses: actions/checkout@v5
+        with:
+          path: Board_Game_Catalog
+
+      - name: Checkout catalog-platform (build-time dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: skymitch9/catalog-platform
+          token: ${{ secrets.CATALOG_PLATFORM_TOKEN }}
+          path: catalog-platform
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # engines says >=20; 22 is the active LTS.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Board_Game_Catalog/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Migrate BEFORE deploy (TODO.md §1.3 point 2). `d1 migrations apply` is
+      # incremental — it only applies migrations the remote DB has not seen.
+      - name: Apply D1 migrations (remote)
+        run: npm run db:migrate
+
+      # Runs the full npm lifecycle: predeploy (sync-estate-auth + check-clean)
+      # → build → wrangler deploy for @bgc/worker.
+      - name: Deploy
+        run: npm run deploy
+
+      - name: Summary
+        run: echo "::notice::Deployed ${GITHUB_SHA} to the board-game-catalog Worker (live custom domain — no dev lane)."
