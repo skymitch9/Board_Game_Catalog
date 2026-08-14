@@ -10,6 +10,7 @@ import { sweepOrphanAdoptions } from '@bgc/db';
 import type { AppBindings, Env } from './env.js';
 import { COMPONENT_REFRESH_CRON, runComponentBackfill } from './lib/component-backfill.js';
 import { runCoverCheck } from './lib/cover-check.js';
+import { indexPushAfterMutation, pushIndexIfStale } from './lib/index-push.js';
 import { requireAuth } from './middleware/auth.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { aliasRoutes } from './routes/aliases.js';
@@ -45,6 +46,13 @@ app.route('/api/health', healthRoutes);
 // Everything else behind identity. Blanket rather than per-route on purpose: a
 // route added later should inherit the gate rather than escape it.
 app.use('/api/*', requireAuth());
+
+// After any successful item-touching mutation, refresh the shared index (a
+// waitUntil snapshot push — the response never waits, failures land in the
+// log, and it is a no-op until INDEX_URL/INDEX_PUSH_TOKEN are configured).
+// Behind requireAuth on purpose: only an authenticated write can change the
+// catalog, so nothing earlier can need it.
+app.use('/api/*', indexPushAfterMutation());
 app.route('/api', userRoutes);
 app.route('/api', catalogRoutes);
 app.route('/api/aliases', aliasRoutes);
@@ -147,6 +155,18 @@ export default {
       sweepOrphanAdoptions(env.DB).then(
         (run) => console.log('orphan sweep', JSON.stringify(run)),
         (err) => console.error('orphan sweep failed', err),
+      ),
+    );
+
+    // The shared-index staleness backstop rides the same proven trigger as the
+    // orphan sweep, for the same reason (see that ⚠️ above: a fresh cron
+    // registration is a bet, this expression has rows to its name). One health
+    // GET when the index is fresh; a full snapshot push only when it is empty
+    // or a day stale. No-op until INDEX_URL/INDEX_PUSH_TOKEN are set.
+    ctx.waitUntil(
+      pushIndexIfStale(env).then(
+        (run) => console.log('index backstop', JSON.stringify(run)),
+        (err) => console.error('index backstop failed', err),
       ),
     );
   },

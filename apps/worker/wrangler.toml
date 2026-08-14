@@ -93,6 +93,14 @@ crons = ["*/30 * * * *", "41 5 * * 1"]
 APP_VERSION = "0.1.0"
 ENVIRONMENT = "production"
 
+# The shared index Worker (catalog-platform/apps/index-worker) — deliberately
+# NOT set yet. That Worker is undeployed until the owner answers its read-auth
+# question (index-worker-design.md §9 Q3); until then every push trigger in
+# lib/index-push.ts logs one line and does nothing, by design. When it goes
+# live, set the URL here and the token as a secret:
+#   INDEX_URL = "https://<the index hostname>"
+#   npx wrangler secret put INDEX_PUSH_TOKEN   (= the index's INDEX_PUSH_TOKEN_GAME)
+
 # The recovery hatch. Any email listed here is forced to `owner` when it signs
 # in, regardless of what its app_user row says.
 #

@@ -13,3 +13,4 @@ export * from './editions.js';
 export * from './relations.js';
 export * from './scan-jobs.js';
 export * from './research.js';
+export * from './index-projection.js';

@@ -71,6 +71,21 @@ export interface Env {
   GAMEUPC_STAGE?: string;
 
   /**
+   * The shared index Worker (catalog-platform/apps/index-worker) — where this
+   * catalog pushes its projection. See lib/index-push.ts.
+   *
+   * ⚠️ Both optional, and unset in production ON PURPOSE until the owner
+   * deploys the index Worker (its open read-auth question, index-worker-design
+   * §9 Q3, gates that deploy). Unset means every push trigger logs one line
+   * and does nothing — the index must never be able to stall this catalog.
+   * When the index goes live: set INDEX_URL in wrangler.toml [vars] and
+   * `wrangler secret put INDEX_PUSH_TOKEN` (the same value the index holds as
+   * its INDEX_PUSH_TOKEN_GAME secret).
+   */
+  INDEX_URL?: string;
+  INDEX_PUSH_TOKEN?: string;
+
+  /**
    * Local development only. Ignored unless ENVIRONMENT is exactly
    * "development", so a stray value in production vars cannot mint a session.
    *
