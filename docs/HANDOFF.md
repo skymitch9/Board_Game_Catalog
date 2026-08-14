@@ -2,6 +2,20 @@
 
 Everything needed to continue or finish this without Claude.
 
+## 🔶 BUILT, NOT DEPLOYED — estate themes adopted + index backstop off the cron, 2026-08-13
+
+Commits `4dcf9b7` (backstop) + `c1880c6` (themes), pushed. Contract additions
+landed in canonical `catalog-platform` as `e95a32d`. Deploying is the owner's
+step (`npm run deploy`); nothing here is live.
+
+| | |
+|---|---|
+| Themes | The app styles against the estate `--et-*` contract (guide: `catalog-platform/docs/info/estate-themes.md`). **Retro — this app's own look, extracted verbatim — stays the default** (`data-default-theme="retro"`); apple/cyberpunk selectable in the cog's new Theme group. Storage moved to `hg_theme`/`hg_mode` with a migrate-once from `bgc-theme` in index.html; `bgc-theme` is never written again |
+| Vendored assets | `apps/web/public/assets/` — estate-theme.css + theme.js from catalog-platform `cba0397` **plus the games-adoption tokens** (same patch as canonical `e95a32d`); Rajdhani ×3 + Share Tech Mono woff2 + OFL join the committed fonts. ⚠️ Re-vendoring from canonical ≥`e95a32d` is safe and also brings the `classic` theme; the games cog offers three themes either way until someone adds it |
+| ⚠️ Cache | `_headers` gives estate-theme.css/theme.js `no-cache` — they are NOT content-hashed; without that rule the `/assets/*` immutable line would pin the first theme css a phone ever saw for a year |
+| Index backstop | No longer rides the half-hourly cron (it silently failed 3 consecutive ticks 2026-08-13 while a manual push with the same token succeeded; tails died before catching it). Now rides request traffic: at most one health GET per isolate-hour, **every /api/\* request logs its backstop decision** — proof is `wrangler tail` + one unauthenticated `curl /api/health`. After-mutation pushes and the cron's other duties untouched |
+| Verified | typecheck all workspaces + vite build (⚠️ no test script in this repo); local `wrangler dev` showed `due → skipped (fresh, 836 rows)` then `throttled (next in 60m)`. **Not verified: an attended look at the three themes** — token plumbing is checked (no undefined `var()` anywhere), pixels are not |
+
 ## 🔶 BUILT, NOT DEPLOYED — estate auth adopted in shadow mode, 2026-08-13
 
 Commit `0077a7a`, pushed. Design:
