@@ -255,8 +255,8 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--panel-shadow);
   padding: 0.7rem;
 }
-/* v2 structure, matching the library cog: a Theme select over a Mode button
-   row, then the per-page affordances — same bones, this app's clothes. */
+/* Structure matches the library cog: a Theme select over a Mode button
+   row — same bones, this app's clothes. */
 .theme-menu__row { display: flex; flex-direction: column; gap: 0.3rem; }
 .theme-menu__row + .theme-menu__row {
   margin-top: 0.6rem; padding-top: 0.6rem;
@@ -279,17 +279,6 @@ a:hover { text-decoration: underline; }
   background: var(--et-btn-bg); color: var(--et-btn-fg);
   border-color: var(--ink-color);
 }
-/* The quiet lever: plain underlined text, never competing with the select. */
-.theme-menu__applyall {
-  align-self: flex-start;
-  margin: 0; padding: 0;
-  background: none; border: none; cursor: pointer;
-  font: inherit; font-size: 0.78rem; font-weight: 600;
-  color: var(--muted);
-  text-decoration: underline; text-underline-offset: 2px;
-}
-.theme-menu__applyall:hover { color: var(--accent); }
-.theme-menu__scope { margin: 0; font-style: italic; }
 .theme-menu__note {
   margin: 0.6rem 0 0; padding-top: 0.6rem;
   border-top: 1px solid var(--line);

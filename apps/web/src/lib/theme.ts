@@ -6,11 +6,11 @@
  * on <html> BEFORE first paint — the same no-flash guarantee the old inline
  * script gave, now covering theme as well as mode). That script owns:
  *
- *  - localStorage `hg_theme` (site default: 'classic'|'apple'|'cyberpunk'|
- *    'retro'), `hg_theme_page` (v2: per-page overrides, JSON keyed by
- *    normalised pathname) and `hg_mode` ('auto'|'light'|'dark') — the
- *    estate-wide keys. The legacy `bgc-theme` key is migrated once by an
- *    inline script in index.html and never written again;
+ *  - localStorage `hg_theme` (the site's ONE theme, owner 2026-08-14:
+ *    'classic'|'apple'|'cyberpunk'|'retro') and `hg_mode`
+ *    ('auto'|'light'|'dark') — the estate-wide keys. The legacy `bgc-theme`
+ *    key is migrated once by an inline script in index.html and never
+ *    written again;
  *  - stamping <html data-theme data-mode> (data-mode always RESOLVED;
  *    'auto' follows the OS live);
  *  - the `hg-themechange` event on document, fired on every change;
@@ -33,16 +33,10 @@ export type EstateTheme = (typeof ESTATE_THEMES)[number];
 export const ESTATE_MODES = ['auto', 'light', 'dark'] as const;
 export type EstateMode = (typeof ESTATE_MODES)[number];
 
-/** v2: where the current theme comes from — 'page' when this page carries its
- *  own override, 'site' otherwise. Mode has no scope; it is always site-wide. */
-export type EstateScope = 'page' | 'site';
-
 export interface EstateThemeState {
   theme: EstateTheme;
   mode: EstateMode;
   resolvedMode: 'light' | 'dark';
-  scope: EstateScope;
-  siteTheme: EstateTheme;
 }
 
 interface EstateThemeApi {
@@ -50,7 +44,6 @@ interface EstateThemeApi {
   modes: string[];
   get(): EstateThemeState;
   setTheme(theme: string): void;
-  setSiteTheme(theme: string): void;
   setMode(mode: string): void;
 }
 
@@ -63,27 +56,15 @@ declare global {
 }
 
 /** What the app believes with no switcher present: its own identity. */
-const FALLBACK: EstateThemeState = {
-  theme: 'retro',
-  mode: 'auto',
-  resolvedMode: 'light',
-  scope: 'site',
-  siteTheme: 'retro',
-};
+const FALLBACK: EstateThemeState = { theme: 'retro', mode: 'auto', resolvedMode: 'light' };
 
 export function getThemeState(): EstateThemeState {
   return window.estateTheme ? window.estateTheme.get() : FALLBACK;
 }
 
-/** Theme for THIS PAGE (v2 default — writes the per-path override). */
+/** Theme for the whole site — one look per site (owner, 2026-08-14). */
 export function setTheme(theme: EstateTheme): void {
   window.estateTheme?.setTheme(theme);
-}
-
-/** Theme for ALL pages — writes the site default and clears every page
- *  override. "All pages" means all pages (estate-themes.md §2a). */
-export function setSiteTheme(theme: EstateTheme): void {
-  window.estateTheme?.setSiteTheme(theme);
 }
 
 export function setMode(mode: EstateMode): void {

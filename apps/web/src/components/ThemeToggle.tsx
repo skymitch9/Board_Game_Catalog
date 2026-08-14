@@ -5,7 +5,6 @@ import {
   getThemeState,
   onThemeChange,
   setMode,
-  setSiteTheme,
   setTheme,
   type EstateMode,
   type EstateTheme,
@@ -20,10 +19,8 @@ import {
  * that order, with the same labels — while wearing this app's own ink-and-
  * paper clothes. Structure is shared; skin is identity.
  *
- * Per-page themes (estate-themes.md §2a): picking a theme applies to THE
- * PAGE YOU ARE ON — that is the owner's expressed default — and the quiet
- * "Apply to all pages" lever writes the site default, clearing every page
- * override. Mode has no scope; it is always site-wide.
+ * Theme choice is SITE-WIDE — one look per site (owner clarification,
+ * 2026-08-14; a per-page variant was built and reverted the same day).
  *
  * ⚠️ **Theme and mode are already applied before this mounts**, by
  * /assets/theme.js in index.html's <head>. This component neither applies nor
@@ -99,9 +96,9 @@ export function ThemeToggle() {
             <label className="theme-menu__head" htmlFor="bgc-theme-select">
               Theme
             </label>
-            {/* A select, matching the library cog. Picking a theme applies to
-                this page and keeps the menu open on purpose — the whole page
-                just changed clothes and the natural next gesture is comparing. */}
+            {/* A select, matching the library cog. Picking a theme keeps the
+                menu open on purpose — the whole site just changed clothes and
+                the natural next gesture is comparing. */}
             <select
               id="bgc-theme-select"
               className="theme-menu__select"
@@ -114,16 +111,6 @@ export function ThemeToggle() {
                 </option>
               ))}
             </select>
-            {state.scope === 'page' && (
-              <p className="theme-menu__scope muted small">This page keeps its own theme.</p>
-            )}
-            <button
-              type="button"
-              className="theme-menu__applyall"
-              onClick={() => setSiteTheme(state.theme)}
-            >
-              Apply to all pages
-            </button>
           </div>
           <div className="theme-menu__row">
             <span className="theme-menu__head" id="bgc-mode-label">
@@ -145,9 +132,7 @@ export function ThemeToggle() {
               ))}
             </div>
           </div>
-          <p className="theme-menu__note muted small">
-            Themes apply to this page; mode applies everywhere. Remembered on this site only.
-          </p>
+          <p className="theme-menu__note muted small">Remembered on this site only.</p>
         </div>
       )}
     </div>
