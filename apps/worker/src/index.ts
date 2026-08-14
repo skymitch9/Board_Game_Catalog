@@ -13,6 +13,7 @@ import { runCoverCheck } from './lib/cover-check.js';
 import { indexBackstopOnRequest, indexPushAfterMutation } from './lib/index-push.js';
 import { requireAuth } from './middleware/auth.js';
 import { rateLimit } from './middleware/rate-limit.js';
+import { adminCors, adminRoutes } from './routes/admin.js';
 import { aliasRoutes } from './routes/aliases.js';
 import { barcodeRoutes } from './routes/barcode.js';
 import { bggRoutes } from './routes/bgg.js';
@@ -52,6 +53,13 @@ app.use('/api/*', indexBackstopOnRequest());
 // limited by the line above, unlike before.
 app.route('/api/health', healthRoutes);
 
+// CORS for the estate's federated admin page (exactly https://heygabi.ai —
+// see routes/admin.ts). ⚠️ Before requireAuth on purpose: a preflight OPTIONS
+// carries no bearer, so the blanket would 401 it. Only the preflight is
+// answered here; the admin routes themselves mount AFTER the blanket below
+// and stay behind it — and behind the rate limiter above, like everything.
+app.use('/api/admin/*', adminCors());
+
 // Everything else behind identity. Blanket rather than per-route on purpose: a
 // route added later should inherit the gate rather than escape it.
 app.use('/api/*', requireAuth());
@@ -62,6 +70,9 @@ app.use('/api/*', requireAuth());
 // Behind requireAuth on purpose: only an authenticated write can change the
 // catalog, so nothing earlier can need it.
 app.use('/api/*', indexPushAfterMutation());
+// The federated-admin surface (cross-origin twin of the People page's user
+// routes — same gate, same write path, CORS-scoped mount).
+app.route('/api/admin', adminRoutes);
 app.route('/api', userRoutes);
 app.route('/api', catalogRoutes);
 app.route('/api/aliases', aliasRoutes);
