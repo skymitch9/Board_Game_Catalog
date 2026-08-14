@@ -132,7 +132,7 @@ OWNER_EMAILS = "nbaslamking@gmail.com"
 # (the same value the auth Worker already holds under that name). URL and flag
 # live here; the token never does — this file is committed. With the secret or
 # URL absent, shadow/enforce log `config unset` per request and skip the check.
-ESTATE_CHECK = "shadow"
+ESTATE_CHECK = "enforce"
 ESTATE_AUTH_URL = "https://auth.heygabi.ai"
 
 # The Firebase project whose ID tokens middleware/auth.ts accepts, pinned as
