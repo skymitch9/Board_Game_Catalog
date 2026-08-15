@@ -6,6 +6,7 @@
  */
 
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { sweepOrphanAdoptions } from '@bgc/db';
 import type { AppBindings, Env } from './env.js';
 import { COMPONENT_REFRESH_CRON, runComponentBackfill } from './lib/component-backfill.js';
@@ -32,6 +33,15 @@ import { visionRoutes } from './routes/vision.js';
 
 const app = new Hono<AppBindings>();
 
+/** The estate status page — apex only, GET-only, no Authorization needed. */
+function healthCors() {
+  return cors({
+    origin: 'https://heygabi.ai',
+    allowMethods: ['GET', 'OPTIONS'],
+    maxAge: 600,
+  });
+}
+
 // ⚠️ The order of these three is the whole shape of the gate.
 //
 // Cloudflare Access used to turn away unauthenticated traffic before any of
@@ -49,6 +59,10 @@ app.use('/api/*', rateLimit());
 // three consecutive ticks in silence — see lib/index-push.ts).
 app.use('/api/*', indexBackstopOnRequest());
 
+// CORS for the estate status page (heygabi.ai/status) — apex only, GET-only.
+// The route is already open by design; this only lets a BROWSER read it.
+// Mounted before the route, same preflight reasoning as adminCors below.
+app.use('/api/health', healthCors());
 // Public — no token needed, so a deploy can still be curled to verify it. Rate
 // limited by the line above, unlike before.
 app.route('/api/health', healthRoutes);
