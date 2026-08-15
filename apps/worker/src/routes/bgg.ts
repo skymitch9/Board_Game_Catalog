@@ -5,6 +5,7 @@ import { BggError, kindForBggType, search, thing, things } from '@bgc/bgg';
 import { getItem, importItem, knownBggIds, updateItem } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
+import { makeCoverHoster } from '../lib/cover-storage.js';
 
 /**
  * BoardGameGeek resolution.
@@ -156,7 +157,9 @@ export const bggRoutes = new Hono<AppBindings>()
       if (blank(item.playtimeMin) && found.playtimeMin) patch['playtimeMin'] = found.playtimeMin;
 
       const updated =
-        Object.keys(patch).length > 0 ? await updateItem(c.env.DB, id, patch) : item;
+        Object.keys(patch).length > 0
+          ? await updateItem(c.env.DB, id, patch, makeCoverHoster(c.env))
+          : item;
 
       return c.json({
         item: updated,

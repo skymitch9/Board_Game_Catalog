@@ -6,6 +6,18 @@ export interface Env {
   ASSETS: Fetcher;
 
   /**
+   * `game-covers` — rehosted covers, ported from library_catalog's
+   * `library-covers` pattern. See packages/core/src/covers.ts for the
+   * verify/hash/key rules and lib/cover-storage.ts for the upload path.
+   *
+   * "Both, or neither" with COVERS_BASE_URL below: a route that reads one
+   * without the other is a misconfiguration, not a fallback to a hotlink.
+   */
+  COVERS?: R2Bucket;
+  /** The bucket's public custom domain — https://gamecovers.heygabi.ai. */
+  COVERS_BASE_URL?: string;
+
+  /**
    * Per-IP throttle on the unauthenticated surface — see middleware/rate-limit.ts.
    *
    * Optional so `wrangler dev` without the binding still starts. The middleware

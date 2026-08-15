@@ -72,3 +72,146 @@ export function inheritCover(
   if (!source) return null;
   return { value: source.thumbnailUrl as string, fromItemId: source.id, fromName: source.name };
 }
+
+// ---------------------------------------------------------------------------
+// Rehosting: is this really an image, and where does a hosted copy live?
+//
+// Ported verbatim from `library_catalog/packages/core/src/covers.ts` (the
+// same functions library used for its own third-party rehost, 2026-08-13),
+// per `catalog-platform/docs/info/covers-consolidation-plan.md` §2.3. Games
+// has no `work_key`, so `coverObjectKey`'s first argument is seeded with
+// `${item.id}-${item.name}` (or an edition's name) by the caller — the
+// function only uses it for a human-readable prefix in the bucket listing,
+// never as an identity key. The hash is the identity.
+// ---------------------------------------------------------------------------
+
+export type CoverImageType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'image/avif';
+
+const COVER_IMAGE_TYPE_LIST: readonly CoverImageType[] = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+];
+
+/**
+ * The size floor, shared by the migration script and the intake hook.
+ *
+ * Exists because a hotlinked host can answer HTTP 200 with a tiny placeholder
+ * (Open Library's 43-byte 1x1 is the documented case in the sibling catalogs;
+ * nothing in the 78-URL sample taken for this plan looked like one, but the
+ * defence costs nothing to keep).
+ */
+export const MIN_COVER_BYTES = 1000;
+
+/** The ceiling — rejects a raw photo upload, not a real cover. */
+export const MAX_COVER_BYTES = 6 * 1024 * 1024;
+
+function hexHead(bytes: Uint8Array, length: number): string {
+  let out = '';
+  for (let i = 0; i < length && i < bytes.length; i++) {
+    out += bytes[i]!.toString(16).padStart(2, '0');
+  }
+  return out;
+}
+
+function ascii(bytes: Uint8Array, from: number, to: number): string {
+  let out = '';
+  for (let i = from; i < to && i < bytes.length; i++) out += String.fromCharCode(bytes[i]!);
+  return out;
+}
+
+/**
+ * What this file actually is, read from its own first bytes — never the
+ * declared `Content-Type`, which is a claim and not evidence. Returns null
+ * for anything not in the accepted set, including SVG (a document that can
+ * carry script, not a cover type this app serves).
+ */
+export function sniffImageType(bytes: Uint8Array): CoverImageType | null {
+  if (hexHead(bytes, 3) === 'ffd8ff') return 'image/jpeg';
+  if (hexHead(bytes, 8) === '89504e470d0a1a0a') return 'image/png';
+  if (ascii(bytes, 0, 6) === 'GIF87a' || ascii(bytes, 0, 6) === 'GIF89a') return 'image/gif';
+  if (ascii(bytes, 0, 4) === 'RIFF' && ascii(bytes, 8, 12) === 'WEBP') return 'image/webp';
+  if (ascii(bytes, 4, 8) === 'ftyp') {
+    const brand = ascii(bytes, 8, 12);
+    if (brand === 'avif' || brand === 'avis') return 'image/avif';
+  }
+  return null;
+}
+
+/** The file extension an object of this type is stored under. */
+export function extensionFor(type: CoverImageType): string {
+  return type === 'image/jpeg' ? 'jpg' : type.slice('image/'.length);
+}
+
+export interface UploadCheck {
+  ok: boolean;
+  contentType: CoverImageType | null;
+  bytes: number;
+  reason?: string;
+}
+
+/** Decide whether these bytes may be stored as a cover — sniffed type, then the floor/ceiling. */
+export function checkCoverUpload(bytes: Uint8Array, declaredType?: string | null): UploadCheck {
+  const size = bytes.byteLength;
+
+  if (size === 0) {
+    return { ok: false, contentType: null, bytes: 0, reason: 'That file is empty.' };
+  }
+  if (size > MAX_COVER_BYTES) {
+    const mb = (size / (1024 * 1024)).toFixed(1);
+    return {
+      ok: false,
+      contentType: null,
+      bytes: size,
+      reason: `${mb}MB is larger than the ${MAX_COVER_BYTES / (1024 * 1024)}MB limit.`,
+    };
+  }
+
+  const contentType = sniffImageType(bytes);
+  if (!contentType) {
+    const said = declaredType && declaredType.trim() !== '' ? ` It claimed to be ${declaredType}.` : '';
+    return {
+      ok: false,
+      contentType: null,
+      bytes: size,
+      reason: `That is not an image this app can serve — the file's own bytes are not ${COVER_IMAGE_TYPE_LIST.map((t) => t.slice(6).toUpperCase()).join(', ')}.${said}`,
+    };
+  }
+
+  if (size < MIN_COVER_BYTES) {
+    return {
+      ok: false,
+      contentType,
+      bytes: size,
+      reason: `${size} bytes is a placeholder, not a cover.`,
+    };
+  }
+
+  return { ok: true, contentType, bytes: size };
+}
+
+/**
+ * Where a rehosted or uploaded cover is stored — content-addressed, so a
+ * replaced cover is a new URL and a cached copy can never go stale.
+ */
+export function coverObjectKey(workKey: string, digestHex: string, type: CoverImageType): string {
+  const slug =
+    workKey
+      .replace(/\|/g, '-')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase()
+      .slice(0, 80) || 'cover';
+  return `covers/${slug}-${digestHex.slice(0, 16)}.${extensionFor(type)}`;
+}
+
+/**
+ * A hook `updateItem`/`createItem` may call before writing `thumbnail_url`,
+ * so a hand-typed or scan-matched hotlink can become a `gamecovers.
+ * heygabi.ai` URL before the row is ever written — the "stops growing" half
+ * of the consolidation plan. Returns the URL to actually store; must never
+ * throw (a hosting hiccup must not block a save).
+ */
+export type CoverHoster = (url: string) => Promise<string>;

@@ -14,6 +14,7 @@ import type {
   PreorderArrival,
   Rating,
   CoverLender,
+  CoverHoster,
   InheritedDetail,
   UpdateItemInput,
   WishlistEntry,
@@ -1000,7 +1001,34 @@ export async function getItemDetail(db: D1Database, id: number): Promise<ItemDet
   };
 }
 
-export async function createItem(db: D1Database, input: CreateItemInput): Promise<Item> {
+/**
+ * Rehost `thumbnailUrl` before it is written, when a hoster is supplied.
+ *
+ * Shared by `createItem` and `updateItem` — see `CoverHoster` in
+ * `@bgc/core` for why this is a hook rather than a hard dependency: `packages/db`
+ * takes no fetch or R2 binding of its own, so the Worker wires the real
+ * implementation (`apps/worker/src/lib/cover-storage.ts`) and every other
+ * caller (tests, scripts) passes nothing and gets the URL back unchanged.
+ * Never throws — a hosting hiccup must not block a save.
+ */
+async function hostedThumbnailUrl(
+  url: string | null | undefined,
+  hostCover: CoverHoster | undefined,
+): Promise<string | null | undefined> {
+  if (!hostCover || !url || !url.trim()) return url;
+  try {
+    return await hostCover(url.trim());
+  } catch (err) {
+    console.error('cover rehost failed, keeping original URL', err);
+    return url;
+  }
+}
+
+export async function createItem(
+  db: D1Database,
+  input: CreateItemInput,
+  hostCover?: CoverHoster,
+): Promise<Item> {
   let rootGameId: number | null = null;
 
   // A non-base item without a parent is allowed, and is the whole point of
@@ -1029,6 +1057,8 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
       throw new ItemError(`"${existing.name}" is already in the collection.`, 409);
     }
   }
+
+  const hostedThumbnail = await hostedThumbnailUrl(input.thumbnailUrl, hostCover);
 
   const res = await db
     .prepare(
@@ -1060,7 +1090,7 @@ export async function createItem(db: D1Database, input: CreateItemInput): Promis
       input.maxPlayers ?? null,
       input.playtimeMin ?? null,
       input.weight ?? null,
-      input.thumbnailUrl || null,
+      hostedThumbnail || null,
       input.description || null,
     )
     .run();
@@ -1253,6 +1283,7 @@ export async function updateItem(
   db: D1Database,
   id: number,
   input: UpdateItemInput,
+  hostCover?: CoverHoster,
 ): Promise<Item | null> {
   const existing = await getItem(db, id);
   if (!existing) return null;
@@ -1262,7 +1293,13 @@ export async function updateItem(
 
   for (const [key, column] of Object.entries(UPDATABLE) as [keyof UpdateItemInput, string][]) {
     if (!(key in input)) continue;
-    const value = input[key];
+    let value: unknown = input[key];
+    // The cover swap choke point — see `hostedThumbnailUrl`. Runs here rather
+    // than on the raw `input` up front so it only fires for a value this
+    // update is actually about to write.
+    if (key === 'thumbnailUrl' && typeof value === 'string') {
+      value = await hostedThumbnailUrl(value, hostCover);
+    }
     sets.push(`${column} = ?`);
     params.push(value === '' ? null : (value ?? null));
     if (key === 'name' && typeof value === 'string') {

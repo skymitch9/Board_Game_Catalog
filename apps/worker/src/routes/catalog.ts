@@ -41,6 +41,7 @@ import {
 } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
+import { makeCoverHoster } from '../lib/cover-storage.js';
 
 /** Parse a positive integer route param, or null if it isn't one. */
 function idParam(raw: string | undefined): number | null {
@@ -218,7 +219,7 @@ export const catalogRoutes = new Hono<AppBindings>()
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
     try {
-      const item = await createItem(c.env.DB, parsed.data);
+      const item = await createItem(c.env.DB, parsed.data, makeCoverHoster(c.env));
       // A game arriving can complete something that has been waiting months for
       // it. Reported back so the screen can say so rather than leaving the user
       // to notice their orphan quietly moved.
@@ -259,7 +260,7 @@ export const catalogRoutes = new Hono<AppBindings>()
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
     try {
-      const item = await updateItem(c.env.DB, id, parsed.data);
+      const item = await updateItem(c.env.DB, id, parsed.data, makeCoverHoster(c.env));
       if (!item) return c.json({ error: 'not_found' }, 404);
       return c.json({ item });
     } catch (err) {

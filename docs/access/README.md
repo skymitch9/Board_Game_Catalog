@@ -12,6 +12,7 @@ current state and work in flight live in [`../HANDOFF.md`](../HANDOFF.md).
 | [`external-apis.md`](external-apis.md) | Every third-party service: endpoints, key names, quotas, what breaks without them |
 | [`firebase-auth.md`](firebase-auth.md) | 🔶 **The auth model as of 2026-08-10** — Firebase ID tokens, the cutover off Cloudflare Access and why its order is a safety property, what edge protection is given up. **Read before `login.md`** |
 | [`login.md`](login.md) | Cloudflare Access: how sign-in works **today**, until the cutover's step 4. Being replaced |
+| [`covers-r2.md`](covers-r2.md) | The `game-covers` R2 bucket, `gamecovers.heygabi.ai`, the migration script and its gotchas |
 
 Cloudflare, D1 and Access details are in [`../SETUP.md`](../SETUP.md); commands
 and deploy levers are in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.

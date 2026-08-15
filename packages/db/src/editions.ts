@@ -20,14 +20,55 @@ import { DEAD_AFTER, UNREACHABLE_AFTER } from './covers.js';
  * back; no fetching happens in this package.
  */
 
-/** Every BoardGameGeek cover is served from this CDN, and nothing else is. */
+/** Every BoardGameGeek cover USED TO BE served from this CDN, and nothing else was. */
 const BGG_IMAGE_HOST = 'geekdo-images.com';
 
-/** SQL form of the same fact. Kept next to the constant so they cannot drift. */
-const NOT_BGG_IMAGE = `thumbnail_url NOT LIKE '%${BGG_IMAGE_HOST}%'`;
+/**
+ * ⚠️ Host-sniffing alone stopped being sufficient 2026-08-15, when the games
+ * covers consolidation (catalog-platform/docs/info/
+ * covers-consolidation-plan.md) rehosted every `item.thumbnail_url` and
+ * `edition.image_url` onto `gamecovers.heygabi.ai` — a BGG cover and a
+ * Kickstarter cover now sit on the exact same host, so "is this a BGG image"
+ * can no longer be answered from the URL string alone for anything migrated
+ * or written after that date.
+ *
+ * The fix reaches for the fact that survives the rehost: content-addressing.
+ * `addBggEditions` already writes an `edition` row with `source = 'bgg'`
+ * carrying that printing's `image_url`; the rehost script maps one source
+ * URL to one hosted URL, so a BGG-sourced `edition.image_url` and the
+ * `item.thumbnail_url` it was chosen from land on the identical hosted URL
+ * after migration, same as they were the identical raw URL before it. So
+ * "is this item's current thumbnail a BGG image" becomes "does a `source =
+ * 'bgg'` edition of this item carry this exact URL" — true whether that URL
+ * is still a raw `geekdo-images.com` hotlink (not yet migrated, or a fresh
+ * BGG match that predates the intake hook) or already rehosted.
+ *
+ * Both checks are kept, ORed: the host check for anything never touched by
+ * an edition row (imports that predate the edition feature, or a BGG image a
+ * person pasted by hand with no matching edition), and the edition check for
+ * everything the rehost or the intake hook have since renamed.
+ */
+const NOT_BGG_IMAGE = (itemIdExpr: string, urlExpr: string) =>
+  `${urlExpr} NOT LIKE '%${BGG_IMAGE_HOST}%'
+     AND NOT EXISTS (SELECT 1 FROM edition e WHERE e.item_id = ${itemIdExpr}
+                       AND e.image_url = ${urlExpr} AND e.source = 'bgg')`;
 
 export function isBggImageUrl(url: string | null | undefined): boolean {
   return !!url && url.includes(BGG_IMAGE_HOST);
+}
+
+/**
+ * The rehost-aware successor to `isBggImageUrl` — see the long note on
+ * `NOT_BGG_IMAGE` above for why a DB check joined to `edition.source='bgg'`
+ * is now required alongside the host string check.
+ */
+async function isBggSourcedCover(db: D1Database, itemId: number, url: string): Promise<boolean> {
+  if (isBggImageUrl(url)) return true;
+  const row = await db
+    .prepare(`SELECT 1 AS hit FROM edition WHERE item_id = ? AND image_url = ? AND source = 'bgg' LIMIT 1`)
+    .bind(itemId, url)
+    .first<{ hit: number }>();
+  return row != null;
 }
 
 /** The shape both the BGG client and the importer already speak. */
@@ -237,7 +278,7 @@ export async function recordCampaignCovers(
       `SELECT id, thumbnail_url, source_url, year_published, publisher
          FROM item
         WHERE thumbnail_url IS NOT NULL AND thumbnail_url != ''
-          AND ${NOT_BGG_IMAGE}
+          AND ${NOT_BGG_IMAGE('item.id', 'thumbnail_url')}
         ORDER BY id
         LIMIT ?`,
     )
@@ -303,7 +344,7 @@ export async function preserveDisplacedCover(
   // A displaced BoardGameGeek image is recorded as an untagged printing rather
   // than as `bgg`, because we do not know which version id it belonged to and
   // guessing would make the backfill think this item had been asked about.
-  const isCampaign = !isBggImageUrl(url);
+  const isCampaign = !(await isBggSourcedCover(db, itemId, url));
 
   const res = await db
     .prepare(

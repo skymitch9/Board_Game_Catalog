@@ -4,6 +4,7 @@ import { coverHealth } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
 import { COVER_BATCH, runCoverCheck } from '../lib/cover-check.js';
+import { coverStorageStatus } from '../lib/cover-storage.js';
 
 /**
  * Cover-image health.
@@ -29,6 +30,13 @@ export const coverRoutes = new Hono<AppBindings>()
   .get('/health', async (c) => {
     return c.json({ health: await coverHealth(c.env.DB) });
   })
+
+  /**
+   * Is the `game-covers` R2 bucket wired up? A property of the deployment,
+   * not of the collection, so `read` rather than `editCatalog` — mirrors
+   * library's `GET /api/cover-storage`.
+   */
+  .get('/storage', (c) => c.json(coverStorageStatus(c.env)))
 
   /** Force a slice now, rather than waiting for the cron. Also how it is tested. */
   .post('/check', requireCapability('editCatalog'), async (c) => {

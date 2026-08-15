@@ -56,11 +56,16 @@ database_id = "7dd22702-f0e2-4fc7-b201-d16d60176efa"
 # Migrations live at the repo root so the CLI can reach them too.
 migrations_dir = "../../migrations"
 
-# No R2 binding. Scan photos are never stored — they go from the upload request
-# straight into the vision call and are gone. The bucket that used to be here
-# was write-only: nothing ever read an object back, so its entire purpose was
-# to be deleted later, and one code path forgetting to delete was all it took
-# to keep photos indefinitely.
+# Scan photos are still never stored — they go from the upload request straight
+# into the vision call and are gone. This bucket is a SEPARATE thing: rehosted
+# game covers, ported from library_catalog's `library-covers` pattern
+# (docs/access/cloudflare.md §7.1) and named on the same `<word>covers.
+# heygabi.ai` precedent as `covers.heygabi.ai` (audiobook) and
+# `bookcovers.heygabi.ai` (library). One bucket per catalog, not shared — see
+# catalog-platform/docs/info/covers-consolidation-plan.md §2.1 for why.
+[[r2_buckets]]
+binding = "COVERS"
+bucket_name = "game-covers"
 
 # Cover-image health, checked in slices.
 #
@@ -92,6 +97,13 @@ crons = ["*/30 * * * *", "41 5 * * 1"]
 [vars]
 APP_VERSION = "0.1.0"
 ENVIRONMENT = "production"
+
+# Where a rehosted cover object resolves — the `game-covers` R2 bucket's custom
+# domain (see the [[r2_buckets]] binding above), on the same
+# `<word>covers.heygabi.ai` precedent as the two sibling catalogs.
+# "both, or neither": a route reading COVERS without this set is a
+# misconfiguration, not a fallback to a hotlink.
+COVERS_BASE_URL = "https://gamecovers.heygabi.ai"
 
 # The shared index Worker (catalog-platform/apps/index-worker) — deliberately
 # NOT set yet. That Worker is undeployed until the owner answers its read-auth
