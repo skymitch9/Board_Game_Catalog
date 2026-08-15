@@ -1310,7 +1310,8 @@ code {
   box-shadow: var(--et-btn-shadow);
   cursor: pointer; font: inherit; color: inherit;
 }
-.scan-mode strong { font-family: var(--font-label); font-weight: 400; letter-spacing: 0.02em; }
+.scan-mode strong { font-family: var(--font-label); font-weight: 400; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.4rem; }
+.scan-mode strong svg { flex: none; }
 .scan-mode span { font-size: 0.75rem; line-height: 1.25; }
 /* The selected tab wears the theme's primary fill and sits in its pressed
    state — retro sinks into the shadow, the others scale. */

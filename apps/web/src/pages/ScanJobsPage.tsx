@@ -232,11 +232,38 @@ const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'k
  * queue would ask a person to confirm what they had just typed. The queue below
  * exists to hold readings that need a judgement — this tab has none to hold.
  */
-const ADD_MODES: { id: AddMode; label: string; blurb: string }[] = [
-  { id: 'barcode', label: 'Barcode', blurb: 'Exact, free, and keeps scanning. Best when the box has one.' },
-  { id: 'shelf', label: 'Shelf photo', blurb: 'Reads every spine at once. Best for bulk.' },
-  { id: 'single', label: 'One box', blurb: 'Reads the title off a single cover.' },
-  { id: 'manual', label: 'Type a name', blurb: 'No code, no box to hand. Looks the rest up as you type.' },
+/**
+ * Tab glyphs — same SVG paths as the estate's canonical `estate-search.js`
+ * ES_ICONS (owner order 2026-08-15: barcode modes show a BARCODE, photo modes
+ * show a CAMERA, estate-wide — the apex once had the camera emoji on the
+ * barcode scanner, which read exactly backwards). If the canonical set
+ * changes, change these to match.
+ */
+const MODE_GLYPHS = {
+  barcode: (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+      <path d="M2 5h2v14H2zM5.5 5h1v14h-1zM8 5h2v14H8zM11.5 5h1v14h-1zM14 5h3v14h-3zM18.5 5h1v14h-1zM21 5h1v14h-1z" />
+    </svg>
+  ),
+  photo: (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  ),
+  type: (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  ),
+} as const;
+
+const ADD_MODES: { id: AddMode; label: string; blurb: string; glyph: keyof typeof MODE_GLYPHS }[] = [
+  { id: 'barcode', label: 'Barcode', glyph: 'barcode', blurb: 'Exact, free, and keeps scanning. Best when the box has one.' },
+  { id: 'shelf', label: 'Shelf photo', glyph: 'photo', blurb: 'Reads every spine at once. Best for bulk.' },
+  { id: 'single', label: 'One box', glyph: 'photo', blurb: 'Reads the title off a single cover.' },
+  { id: 'manual', label: 'Type a name', glyph: 'type', blurb: 'No code, no box to hand. Looks the rest up as you type.' },
 ];
 
 export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null }) {
@@ -353,7 +380,7 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
               className={mode === m.id ? 'scan-mode scan-mode--on' : 'scan-mode'}
               onClick={() => setMode(m.id)}
             >
-              <strong>{m.label}</strong>
+              <strong>{MODE_GLYPHS[m.glyph]}{m.label}</strong>
               <span className="muted">{m.blurb}</span>
             </button>
           ))}
