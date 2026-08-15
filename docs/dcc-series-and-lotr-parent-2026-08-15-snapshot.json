@@ -1,0 +1,291 @@
+{
+  "_what": "Before-snapshot for the owner-approved games-side writes of the estate orphan sweep. THIS FILE IS THE ROLLBACK MATERIAL — this repo has no change_log table, the same reason docs/covers-migration-2026-08-15-*-snapshot.json exist (docs/access/covers-r2.md §0).",
+  "_when": "2026-08-15, against production board-game-catalog D1 (--remote).",
+  "_why": {
+    "dccSeries": "Owner-approved. 29 rows (ids 570-598) carried series = NULL while every one of their names begins 'Dungeon Crawler Carl'. Setting the series gives the DCC product line the same grouping 'Dice Throne', 'Catan' and 'Ascension' already have — and it is what lets catalog-platform's new 'Dungeon Crawler Carl' universe reach them with ONE series claim instead of 29 title overrides. Board-game rows join the rest of the estate only at the universe tier (work_fold is null for games by design), so without this the 29 owned DCC products could never appear beside the 14 DCC books.",
+    "lotrParent": "Owner-approved. Item 665 'The Lord of the Rings Roleplaying' was filed as an EXPANSION of item 621 (Dungeon Master's Guide, 2014). It is a standalone licensed Free League RPG that happens to be 5e-compatible, not a supplement to the D&D core book — the same conflation that makes 'D&D' a rules system rather than a continuity, now recorded as a refusal in catalog-platform data/universes.json _refused. Un-parented to a base item that roots itself. Its series stays 'D&D' (that IS its system), and Middle-earth claims it by exact title override."
+  },
+  "_rollback": "UPDATE item SET series = NULL, updated_at = datetime('now') WHERE id IN (570..598); and UPDATE item SET kind='expansion', parent_item_id=621, root_game_id=621, updated_at = datetime('now') WHERE id=665; The `before` array below is the authoritative prior state for every column touched.",
+  "before": [
+    {
+      "id": 570,
+      "name": "Dungeon Crawler Carl Roleplaying Game Core Book",
+      "series": null,
+      "kind": "base",
+      "parent_item_id": null,
+      "root_game_id": 570,
+      "publisher": "Renegade Game Studios"
+    },
+    {
+      "id": 571,
+      "name": "Dungeon Crawler Carl Roleplaying Game Starter Set",
+      "series": null,
+      "kind": "base",
+      "parent_item_id": null,
+      "root_game_id": 571,
+      "publisher": "Renegade Game Studios"
+    },
+    {
+      "id": 572,
+      "name": "Dungeon Crawler Carl RPG: GM Screen and Tokens",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 573,
+      "name": "Dungeon Crawler Carl RPG: Carl's Enchanted Big Boi Boxers Dice Set",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 574,
+      "name": "Dungeon Crawler Carl RPG: Princess Donut's Enchanted Crown of the Sepsis Whore Dice Set",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 575,
+      "name": "Dungeon Crawler Carl RPG: Smush Dice Set",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 576,
+      "name": "Dungeon Crawler Carl RPG: Club Vanquisher D2",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 577,
+      "name": "Dungeon Crawler Carl RPG: Princess Donut Dice Bag",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 578,
+      "name": "Dungeon Crawler Carl RPG: Boxers > Briefs Dice Bag",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 579,
+      "name": "Dungeon Crawler Carl RPG: AAAAHHHH Dice Bag",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 580,
+      "name": "Dungeon Crawler Carl RPG: Crawler Sheet Journal",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 581,
+      "name": "Dungeon Crawler Carl RPG: I Will Kill Your Mother Dice Tray",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 582,
+      "name": "Dungeon Crawler Carl RPG: The Royal Court Miniatures Box",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 583,
+      "name": "Dungeon Crawler Carl RPG: Allies and Enemies Miniatures Box",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 584,
+      "name": "Dungeon Crawler Carl RPG: Mobs of Mordecai Miniatures Box",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 585,
+      "name": "Dungeon Crawler Carl RPG: Fillable Loot Cards",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 586,
+      "name": "Dungeon Crawler Carl RPG: Fillable Achievement Cards",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 587,
+      "name": "Dungeon Crawler Carl RPG: Slime Mordecai Mini",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 588,
+      "name": "Dungeon Crawler Carl RPG: Floor 10 Mystery Mordecai Mini",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 589,
+      "name": "Dungeon Crawler Carl: Art Print #1",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 590,
+      "name": "Dungeon Crawler Carl: Art Print #2",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 591,
+      "name": "Dungeon Crawler Carl: Art Print #3",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 592,
+      "name": "Dungeon Crawler Carl: Art Print #4",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 593,
+      "name": "Dungeon Crawler Carl: Art Print #5",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 570,
+      "root_game_id": 570,
+      "publisher": null
+    },
+    {
+      "id": 594,
+      "name": "Dungeon Crawler Carl: Unstoppable",
+      "series": null,
+      "kind": "base",
+      "parent_item_id": null,
+      "root_game_id": 594,
+      "publisher": "Renegade Game Studios"
+    },
+    {
+      "id": 595,
+      "name": "Dungeon Crawler Carl: Unstoppable - Playmat",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 594,
+      "root_game_id": 594,
+      "publisher": null
+    },
+    {
+      "id": 596,
+      "name": "Dungeon Crawler Carl: Unstoppable - Co-Op Playmat",
+      "series": null,
+      "kind": "accessory",
+      "parent_item_id": 594,
+      "root_game_id": 594,
+      "publisher": "Renegade Game Studios"
+    },
+    {
+      "id": 597,
+      "name": "Dungeon Crawler Carl: Unstoppable - Crawler Chaos Expansion",
+      "series": null,
+      "kind": "expansion",
+      "parent_item_id": 594,
+      "root_game_id": 594,
+      "publisher": "Renegade Game Studios"
+    },
+    {
+      "id": 598,
+      "name": "Dungeon Crawler Carl: Unstoppable - Iron Tangle Expansion",
+      "series": null,
+      "kind": "expansion",
+      "parent_item_id": 594,
+      "root_game_id": 594,
+      "publisher": "Renegade Game Studios"
+    },
+    {
+      "id": 621,
+      "name": "Dungeon Master’s Guide (2014)",
+      "series": "D&D",
+      "kind": "base",
+      "parent_item_id": null,
+      "root_game_id": 621,
+      "publisher": "Wizards of the Coast"
+    },
+    {
+      "id": 665,
+      "name": "The Lord of the Rings Roleplaying",
+      "series": "D&D",
+      "kind": "expansion",
+      "parent_item_id": 621,
+      "root_game_id": 621,
+      "publisher": "Free League Publishing"
+    }
+  ],
+  "childrenOf665AtWriteTime": []
+}
