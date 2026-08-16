@@ -2,6 +2,26 @@
 
 Everything needed to continue or finish this without Claude.
 
+## ✅ SHIPPED — role ladder redesign (six rungs, wishlist/scan splits, admin escalation limit), 2026-08-16
+
+Owner-approved role matrix implemented verbatim ("Role matrix approved").
+Commits `4220703` (constants+capabilities), `e5a57bc` (migration 0027),
+`0e77d9d` (routes/frontend/tests), pushed to `main`.
+
+| | |
+|---|---|
+| Ladder | `guest < member < contributor < moderator < admin < owner` (`ROLE_LADDER`, `packages/core/src/constants.ts`). `pending` stays a status, excluded from the ladder |
+| Renames | `viewer`->`guest`, `rater`->`member`, `manager`->`moderator` — same rungs, new names. Verified in `apps/worker/src/lib/capabilities.test.ts` that `moderator`'s capability set is a superset of the old `manager`'s: nobody in production lost anything |
+| New roles | `contributor` (editCatalog + manageWishlist + scanBarcode, nobody migrates in automatically) and `admin` (+manageUsers, grantable only by `owner`) |
+| Wishlist split | `suggestWishlist` (member+, "I want this") vs `manageWishlist` (contributor+, curate/remove). Wired into `catalog.ts`'s copy routes by the copy's `status`, not just the route — see the file's own comment |
+| Scan split | `scanBarcode` (free, contributor+) vs `scanPhoto` (bills the Anthropic vision API, moderator+). `scan-jobs.ts`'s old blanket `editCatalog` gate is now per-route; `vision.ts`'s two routes moved from `runResearch` to `scanPhoto` |
+| Admin escalation limit | New pure helper `canGrantRole` (`packages/core/src/capabilities.ts`) — an `admin` may grant any role strictly beneath itself on the ladder, never `admin` or `owner`; only `owner` is unrestricted. Enforced in both `routes/users.ts` and `routes/admin.ts` (the federated surface), and mirrored client-side in `PeoplePage.tsx` so an `admin` is never offered a button that would 403 |
+| ⚠️ Stored role string outside the DB | `apps/worker/src/middleware/estate.ts`'s `AUTH_POSTURE.defaultRole` was `'viewer'` — the estate default-grant role, written when `ESTATE_CHECK=enforce` (which production runs). Renamed to `'guest'`; missing this would have made every estate default-grant fail the new CHECK constraint |
+| Migration | `0027_role_ladder.sql` — same `app_user` rebuild shape as 0023/0024, now also carrying the 0026 estate columns. Applied local and remote. **Remote role counts, before -> after:** `manager=1, owner=2, rater=1` (4 total) -> `moderator=1, owner=2, member=1` (4 total). Row count preserved; CHECK constraint and `approved_by` self-references confirmed live via `sqlite_master` |
+| Tests | `apps/worker/src/lib/role-grant.test.ts` (the three required escalation cases + owner sanity checks) and `capabilities.test.ts` (new roles, both splits, the manager-subset-of-moderator invariant). `npm test`: **32/32** (baseline 10 unaffected) |
+| Verified | `npm run typecheck` clean all workspaces. Deployed — `boardgames.heygabi.ai/api/health` 200. **Live-viewed `/people`** (authenticated as owner in an existing browser session): all four real users show the new vocabulary (`owner` ×2, `moderator`, `member`) and the grant-button list per row matches `canGrantRole` exactly for an `owner` granter (every other role offered, current role excluded) |
+| ⚠️ NOT verified | `GET /api/admin/users` (the CORS-gated, `heygabi.ai`-only cross-origin surface) directly with a bearer token — extracting the token from the authenticated browser session to call it from `curl` was blocked by the coding agent's own safety classifier, and the block was respected rather than worked around. Same data source and same `ROLES` vocabulary as `/api/users` (verified live above), so it is very likely correct, but "very likely" is not "verified" — worth a manual check from `heygabi.ai/admin` when convenient |
+
 ## ✅ SHIPPED — index-push staleness made data-aware, 2026-08-16
 
 Closes the class behind the 2026-08-15 incident: a backfill script writes

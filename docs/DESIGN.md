@@ -161,6 +161,15 @@ account through — it only proves *who someone is*. What they can actually do i
 decided by the Worker against the `user` table, so the guest list lives in your
 app on a settings page rather than in the Cloudflare dashboard.
 
+> ⚠️ **This section predates the Firebase Auth cutover (2026-08-10) and the
+> table below predates the role-ladder redesign too — it stops at the original
+> two roles.** The current, correct picture (six-rung ladder, capability
+> matrix, the `canGrantRole` escalation limit) lives in
+> `packages/core/src/capabilities.ts` and `packages/core/src/constants.ts`; the
+> current auth mechanism is `docs/access/firebase-auth.md`. Left as historical
+> context for *why* a role table exists at all rather than rewritten, per
+> `docs/HANDOFF.md`'s 2026-08-16 entry.
+
 | Role | Can | Assigned to |
 |---|---|---|
 | `owner` | Everything — add/edit items and copies, run research, accept findings, log plays, approve people | You and your wife |
