@@ -2,6 +2,26 @@
 
 Everything needed to continue or finish this without Claude.
 
+## ✅ SHIPPED — index-push staleness made data-aware, 2026-08-16
+
+Closes the class behind the 2026-08-15 incident: a backfill script writes
+`item` directly via `wrangler d1 execute`, bypassing every mutation route —
+`indexPushAfterMutation` never fires, and the request-riding backstop
+(2026-08-13 entry below) only asked "is the last push >24h old?", which
+cannot see a bypassed write at all. Bit the games universe rows that day,
+fixed by hand with an unrelated mutation. Full context:
+`catalog-platform/docs/TODO.md`'s "Index-push staleness — the real fix" note
+(queued there, closed here and in the library catalog — the two
+`index-push.ts` files stay deliberately mirrored).
+
+| | |
+|---|---|
+| Design | `pushIndexIfStale` now ALSO compares `MAX(item.updated_at)` (new `getLatestSourceUpdateAt` in `packages/db/src/index-projection.ts`, UTC-safe parsed — same fix as `scan-jobs.ts`'s `toIso`) against the index's own `pushed_at`. A pure `decidePushForStaleness` gate in `apps/worker/src/lib/index-push.ts` makes the call: push if the index is empty, `pushed_at` is missing/unparseable, the push is >24h old, OR the data moved after the last push — that last branch is the fix, and it fires regardless of how young the push is |
+| Manual force | `POST /api/admin/index-push` (`routes/admin.ts`), gated exactly like the rest of that surface — `requireCapability('manageUsers')` |
+| Backfill fix | `scripts/rehost-covers.mjs` was writing `item.thumbnail_url` without bumping `updated_at` — invisible to the new check by construction; fixed |
+| ⚠️ Test script | **This repo now HAS one** — `tsx --test apps/worker/src/lib/*.test.ts` (`npm test`), mirroring library_catalog. Supersedes the "no test script in this repo" parentheticals in the entries below; those were accurate when written |
+| Verified | `npm test` 10/10 new, `npm run typecheck` clean (all workspaces). Deployed — `boardgames.heygabi.ai/api/health` 200. **Live-captured via `wrangler tail`**: the deployed backstop ran the new `getLatestSourceUpdateAt` + `decidePushForStaleness` path against real traffic and logged `index backstop {"skipped":"index is fresh (837 rows, pushed 2026-08-16T03:53:53.256Z)"}` — the exact reason string only the new code produces, proving the new D1 query + comparison executes clean in production. Did **not** live-trigger the data-moved-since-push branch itself (would need an out-of-band write against production) — that branch is unit-test-verified only |
+
 ## 🔶 BUILT, NOT DEPLOYED — estate themes adopted + index backstop off the cron, 2026-08-13
 
 Commits `4dcf9b7` (backstop) + `c1880c6` (themes), pushed. Contract additions
