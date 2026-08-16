@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ITEM_KINDS, type Item, type ItemKind } from '@bgc/core';
+import { ITEM_KINDS, type Item, type ItemKind, type MeResponse } from '@bgc/core';
 import { api } from '../api';
 import { copyDefaults } from '../lib/catalog-add';
 import { ErrorBox, Field } from './ui';
@@ -64,13 +64,29 @@ import { WishlistScan } from './WishlistScan';
  * apart.
  */
 export function WishlistAddForm({
+  me,
   onAdded,
   onClose,
 }: {
+  /**
+   * Whose capabilities decide which doors are open. This form is only ever
+   * mounted behind `suggestWishlist` (`WishlistPage`), so "wanting an
+   * existing item" always works — what varies by role is the rest: creating a
+   * brand-new catalog row is `editCatalog` (contributor+, one rung above
+   * plain `suggestWishlist`), the barcode tab is `scanBarcode`
+   * (contributor+), and the photo tab is `scanPhoto` (moderator+, it bills
+   * the vision API). A `member` sees only "Type it" against the existing
+   * catalog — which is exactly what `suggestWishlist` alone was designed to
+   * grant.
+   */
+  me: MeResponse;
   /** The list just went stale. */
   onAdded: (message: string) => void;
   onClose: () => void;
 }) {
+  const canCreateItems = me.capabilities.includes('editCatalog');
+  const canScanBarcode = me.capabilities.includes('scanBarcode');
+  const canScanPhoto = me.capabilities.includes('scanPhoto');
   /**
    * Which door. Typing is the default and the fallback for both others.
    *
@@ -225,14 +241,17 @@ export function WishlistAddForm({
 
       {/* Three doors on one question. Typing first because it is the only one
           that needs no light, no barcode and no camera permission — and because
-          it is the screen this page has always had. */}
+          it is the screen this page has always had. The other two are filtered
+          by capability rather than always offered and left to 403 on submit:
+          barcode needs `scanBarcode`, photo needs `scanPhoto` (it bills the
+          vision API) — see the note on `me` above. */}
       <div className="wishlist-add__modes" role="tablist">
         {(
           [
-            ['type', 'Type it'],
-            ['barcode', 'Barcode'],
-            ['photo', 'Photo'],
-          ] as const
+            ['type', 'Type it'] as const,
+            ...(canScanBarcode ? [['barcode', 'Barcode'] as const] : []),
+            ...(canScanPhoto ? [['photo', 'Photo'] as const] : []),
+          ]
         ).map(([id, label]) => (
           <button
             key={id}
@@ -295,7 +314,7 @@ export function WishlistAddForm({
           emptyHint={
             creating ? (
               'Adding this as a new record.'
-            ) : (
+            ) : canCreateItems ? (
               <>
                 Not in the catalog.{' '}
                 <button
@@ -306,6 +325,13 @@ export function WishlistAddForm({
                   Add “{typed}” as new
                 </button>
               </>
+            ) : (
+              // `suggestWishlist` alone (a `member`) can want an existing row
+              // but not create a new catalog item — that is `editCatalog`,
+              // contributor+. Said plainly rather than hidden: a member typing
+              // a game with no match should learn why nothing happened, not
+              // wonder if the search is broken.
+              'Not in the catalog. Ask an editor to add it first.'
             )
           }
         />

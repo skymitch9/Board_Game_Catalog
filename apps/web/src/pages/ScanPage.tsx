@@ -75,6 +75,10 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
   const [autoCapture, setAutoCapture] = useState(true);
   const canResearch = me.capabilities.includes('runResearch');
   const canEdit = me.capabilities.includes('editCatalog');
+  // `scanPhoto` (moderator+): the photo and shelf tabs both bill the vision
+  // API, split out of `runResearch` by the 2026-08-16 role redesign so a
+  // contributor keeps free barcode scanning without the paid rungs.
+  const canScanPhoto = me.capabilities.includes('scanPhoto');
 
   const reset = useCallback(() => {
     setLookup(null);
@@ -285,8 +289,14 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
 
       <div className="scan-modes" role="tablist">
         {/* Typing a game in needs write access, and so does the name lookup
-            behind it; offering the tab to a reader would only lead to a 403. */}
-        {MODES.filter((m) => m.id !== 'manual' || canEdit).map((m) => (
+            behind it; offering the tab to a reader would only lead to a 403.
+            Photo and shelf both need `scanPhoto` (moderator+) — a contributor
+            has `editCatalog` and free barcode scanning but not the paid
+            vision rungs, so those tabs are filtered rather than left to 403
+            on the first shot. */}
+        {MODES.filter((m) => m.id !== 'manual' || canEdit)
+          .filter((m) => (m.id !== 'photo' && m.id !== 'shelf') || canScanPhoto)
+          .map((m) => (
           <button
             key={m.id}
             role="tab"

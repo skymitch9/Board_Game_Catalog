@@ -130,9 +130,21 @@ const acceptSchema = z.object({
   candidate: z.number().int().min(0).max(20).default(0),
 });
 
+/**
+ * Two costs, two capabilities, one queue.
+ *
+ * This used to be `.use('*', requireCapability('editCatalog'))` — one gate for
+ * the whole file. The 2026-08-16 role redesign split scanning by cost
+ * (*"lets let contributors scan barcodes only since those are free"* — the
+ * owner), so the two routes that actually consume a scan now carry their own,
+ * narrower gate instead of the blanket: `POST /` (a photo, which bills the
+ * Anthropic vision API) needs `scanPhoto`; `POST /barcode` (free — the local
+ * table, then GameUPC/UPCitemdb) needs only `scanBarcode`. Every other route
+ * here manages an existing job rather than spending anything, and stays on
+ * `editCatalog` — today that is exactly the same set of roles `scanBarcode`
+ * is (both contributor+), so nothing about who can review a queue changed.
+ */
 export const scanJobRoutes = new Hono<AppBindings>()
-  .use('*', requireCapability('editCatalog'))
-
   /**
    * --- List all jobs -------------------------------------------------------
    *
@@ -142,7 +154,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
    * job the last of whose titles was settled from another photo closes itself,
    * because nothing else is ever going to write to it.
    */
-  .get('/', async (c) => {
+  .get('/', requireCapability('editCatalog'), async (c) => {
     // Validate rather than cast: an unrecognised ?status= should list
     // everything, not silently match no rows.
     const raw = c.req.query('status');
@@ -166,7 +178,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
   // No auto-close here, deliberately: this is the review screen's own fetch,
   // and a page that marks itself finished as you open it is disconcerting even
   // when it is right. The queue does it a moment later, once you go back.
-  .get('/:id', async (c) => {
+  .get('/:id', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     if (!id || !Number.isInteger(id)) return c.json({ error: 'bad_request' }, 400);
     const job = await getScanJob(c.env.DB, id);
@@ -174,8 +186,12 @@ export const scanJobRoutes = new Hono<AppBindings>()
     return c.json({ job: withFreshView(job, await ownershipContext(c.env.DB)) });
   })
 
-  // --- Upload a photo and start processing ---------------------------------
-  .post('/', async (c) => {
+  // --- Upload a photo and start processing ----------------------------------
+  //
+  // `scanPhoto`, not `editCatalog`: this is the cost-gated half of the scan
+  // split — every upload here calls the Anthropic vision API. See the header
+  // comment on `scanJobRoutes` above.
+  .post('/', requireCapability('scanPhoto'), async (c) => {
     const parsed = uploadSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
@@ -212,8 +228,11 @@ export const scanJobRoutes = new Hono<AppBindings>()
    * be called "barcode". Nothing here is deferred to `waitUntil`: the whole
    * ladder is fast and free, and the person scanning wants the name back before
    * they put the box down.
+   *
+   * `scanBarcode`, not `editCatalog`: the free half of the scan split — see the
+   * header comment on `scanJobRoutes`.
    */
-  .post('/barcode', async (c) => {
+  .post('/barcode', requireCapability('scanBarcode'), async (c) => {
     const parsed = barcodeScanSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
@@ -287,7 +306,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
    * left alone and a run that was killed is not — without that check, a retry
    * would race a live invocation and enrich the same titles twice.
    */
-  .post('/:id/enrich', async (c) => {
+  .post('/:id/enrich', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request' }, 400);
 
@@ -320,7 +339,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
    * already been paid for. This marks it finished instead: it leaves the active
    * queue, and every title it found is still on the row.
    */
-  .post('/:id/cancel', async (c) => {
+  .post('/:id/cancel', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request' }, 400);
 
@@ -347,7 +366,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
    * the item it became), `dismissed` (deliberately not wanted), or neither —
    * and neither is the state worth coming back to.
    */
-  .post('/:id/titles', async (c) => {
+  .post('/:id/titles', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request' }, 400);
 
@@ -409,7 +428,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
    * skips the cache, because the person pressing it has seen the answer and
    * judged it wrong — better evidence than a week-old entry.
    */
-  .post('/:id/titles/:index/relookup', async (c) => {
+  .post('/:id/titles/:index/relookup', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     const index = Number(c.req.param('index'));
     if (!id || !Number.isInteger(index) || index < 0) {
@@ -489,7 +508,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
    * The catalog is not touched here: this settles what the row *claims*, and
    * adding it is still the ordinary `POST /api/items` the review screen makes.
    */
-  .post('/:id/titles/:index/accept', async (c) => {
+  .post('/:id/titles/:index/accept', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     const index = Number(c.req.param('index'));
     if (!id || !Number.isInteger(index) || index < 0) {
@@ -570,7 +589,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
   })
 
   // --- Mark a job as done (user reviewed) -----------------------------------
-  .post('/:id/done', async (c) => {
+  .post('/:id/done', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request' }, 400);
 
@@ -582,7 +601,7 @@ export const scanJobRoutes = new Hono<AppBindings>()
   })
 
   // --- Delete a job ---------------------------------------------------------
-  .delete('/:id', async (c) => {
+  .delete('/:id', requireCapability('editCatalog'), async (c) => {
     const id = Number(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request' }, 400);
 

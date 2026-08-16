@@ -114,7 +114,12 @@ export function WishlistPage({ me }: { me: MeResponse }) {
   /** The add form, which is shut until asked for — see `WishlistAdd`. */
   const [adding, setAdding] = useState(false);
 
-  const canEdit = me.capabilities.includes('editCatalog');
+  // The wishlist split (2026-08-16 role redesign): `suggestWishlist`
+  // (member+) is "I want this" — the Add door; `manageWishlist`
+  // (contributor+) is curate/remove — marking a row bought or taking it off
+  // the list. See capabilities.ts for the full split.
+  const canSuggest = me.capabilities.includes('suggestWishlist');
+  const canManage = me.capabilities.includes('manageWishlist');
   const entries = state.state === 'ok' ? state.data.entries : [];
   const groups = useMemo(() => groupByGame(entries), [entries]);
 
@@ -190,7 +195,7 @@ export function WishlistPage({ me }: { me: MeResponse }) {
           {/* First in the row, and the only primary button on the screen. The
               owner came here, could not find a way to add something, and had to
               ask — so this is not a control to tuck away behind a menu. */}
-          {canEdit && !adding && (
+          {canSuggest && !adding && (
             <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
               + Add
             </button>
@@ -206,8 +211,9 @@ export function WishlistPage({ me }: { me: MeResponse }) {
         </div>
       </header>
 
-      {canEdit && adding && (
+      {canSuggest && adding && (
         <WishlistAddForm
+          me={me}
           onAdded={(message) => {
             setNotice(message);
             refresh();
@@ -234,7 +240,7 @@ export function WishlistPage({ me }: { me: MeResponse }) {
           {/* The page's own door, not a link to `/scan`. Sending somebody to
               the scanner to record something they do not have yet was always
               the wrong direction — that page is for boxes in your hand. */}
-          {canEdit && !adding && (
+          {canSuggest && !adding && (
             <p className="muted">
               <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
                 + Add something
@@ -312,7 +318,7 @@ export function WishlistPage({ me }: { me: MeResponse }) {
                         <WishlistRow
                           key={entry.copyId}
                           entry={entry}
-                          canEdit={canEdit}
+                          canManage={canManage}
                           busy={busy === entry.copyId}
                           onBought={() => void markBought(entry)}
                           onRemoved={() => void removeWanted(entry)}
@@ -331,13 +337,14 @@ export function WishlistPage({ me }: { me: MeResponse }) {
 
 function WishlistRow({
   entry,
-  canEdit,
+  canManage,
   busy,
   onBought,
   onRemoved,
 }: {
   entry: WishlistEntry;
-  canEdit: boolean;
+  /** Curate/remove — `manageWishlist` (contributor+), not `suggestWishlist`. */
+  canManage: boolean;
   busy: boolean;
   onBought: () => void;
   /** Take it off the list — see `removeWanted` for what that does and does not delete. */
@@ -383,7 +390,7 @@ function WishlistRow({
         {entry.notes && <span className="candidate__note">{entry.notes}</span>}
       </div>
 
-      {canEdit && (
+      {canManage && (
         <span className="wishlist-row__actions">
           <button type="button" className="btn btn-primary" disabled={busy} onClick={onBought}>
             {busy ? 'Saving…' : 'Mark as bought'}

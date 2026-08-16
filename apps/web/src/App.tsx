@@ -59,8 +59,8 @@ function Routes({
     case 'wishlist':
       return <WishlistPage me={me} />;
     // Gated the same way the link is, and for the same reason the People route
-    // is: the API behind it requires `editCatalog`, so a rater reaching the URL
-    // would otherwise get a page whose every button 403s.
+    // is: the API behind it requires `editCatalog`, so a member reaching the
+    // URL would otherwise get a page whose every button 403s.
     case 'export':
       return me.capabilities.includes('editCatalog') ? <ExportPage /> : <NotFoundPage />;
     case 'people':

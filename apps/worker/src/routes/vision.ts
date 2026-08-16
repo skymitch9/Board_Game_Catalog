@@ -27,6 +27,16 @@ import { requireCapability } from '../middleware/auth.js';
  * **Photos are transient.** They arrive, get read, and are dropped. Nothing is
  * written to D1 or R2, and the client captures from a live camera frame rather
  * than the photo library so nothing lands in the user's camera roll either.
+ *
+ * ⚠️ Gated on `scanPhoto`, not `runResearch`, since the 2026-08-16 role
+ * redesign split scanning by cost — see `capabilities.ts`'s comment on
+ * `scanPhoto`. Both routes here call the Anthropic vision API on every
+ * request, which is exactly the cost that capability exists to gate; the
+ * *other* paid rung, `POST /api/barcode/identify` (Claude plus a web search on
+ * a barcode number), stays on `runResearch` because it is a research action
+ * about a number rather than a photo. `scanPhoto` and `runResearch` happen to
+ * name the same roles today (moderator+) — that is the matrix as approved,
+ * not a reason to merge the two gates.
  */
 
 const photoSchema = z.object({
@@ -89,7 +99,7 @@ function upstream(err: unknown) {
 
 export const visionRoutes = new Hono<AppBindings>()
   /** One box, read carefully. Returns candidates in the shared shape. */
-  .post('/identify', requireCapability('runResearch'), async (c) => {
+  .post('/identify', requireCapability('scanPhoto'), async (c) => {
     const parsed = photoSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
@@ -147,7 +157,7 @@ export const visionRoutes = new Hono<AppBindings>()
    * instant: the local catalog is one query, and GameUPC's search costs nothing.
    * Asking the model to resolve twelve titles via web search would take minutes.
    */
-  .post('/shelf', requireCapability('runResearch'), async (c) => {
+  .post('/shelf', requireCapability('scanPhoto'), async (c) => {
     const parsed = photoSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);

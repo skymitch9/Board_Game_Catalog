@@ -349,6 +349,11 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
   const finished = (shown ?? []).filter((j) => j.status === 'done');
 
   const canEdit = me.capabilities.includes('editCatalog');
+  // `scanPhoto` (moderator+): shelf and single-box uploads both bill the
+  // vision API — split out of `editCatalog` by the 2026-08-16 role redesign.
+  // See the header note on `scanJobRoutes` (apps/worker/src/routes/
+  // scan-jobs.ts) for the matching backend gate.
+  const canScanPhoto = me.capabilities.includes('scanPhoto');
   if (!canEdit) {
     return <p className="muted">Only editors can use scan jobs.</p>;
   }
@@ -372,7 +377,9 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
 
       <section className="card">
         <div className="scan-modes" role="tablist">
-          {ADD_MODES.map((m) => (
+          {/* Shelf and single-box both need `scanPhoto` — filtered rather
+              than left to 403 on the first upload; see the note above. */}
+          {ADD_MODES.filter((m) => (m.id !== 'shelf' && m.id !== 'single') || canScanPhoto).map((m) => (
             <button
               key={m.id}
               role="tab"

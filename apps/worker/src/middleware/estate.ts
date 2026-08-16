@@ -23,7 +23,7 @@
  *            Run this for days; zero WOULD-DENY lines for household members is
  *            the evidence that makes flipping to enforce boring (§9 step 5/6).
  *   enforce  The §3.1 verdicts act: revoked → 403 always; unreachable with no
- *            local standing → named 503; default-grant assigns `viewer`.
+ *            local standing → named 503; default-grant assigns `guest`.
  *
  * ## What this deliberately does NOT touch (§14.5's own warnings)
  *
@@ -59,16 +59,21 @@ import type { AppBindings } from '../env.js';
 
 /**
  * The per-surface posture declaration (owner decision #1): this surface is
- * gated, on the record. `defaultRole: 'viewer'` is owner decision #2 — the
+ * gated, on the record. `defaultRole: 'guest'` is owner decision #2 — the
  * SMALLER of this app's two guest roles, deliberately, so rating rights stay a
  * local per-person upgrade and the distinction migrations 0023/0024 built
  * survives estate-wide approval. In shadow this role is never written; it
  * appears only in would-grant log lines.
+ *
+ * ⚠️ Renamed from `'viewer'` by the 2026-08-16 role-ladder redesign (migration
+ * 0027): `viewer` -> `guest`, same rung, same reasoning, new name. Nothing
+ * about *which* rung is granted changed — this is still deliberately the
+ * smaller of the two read-capable roles, not `member`.
  */
 export const AUTH_POSTURE = declareAuthPosture({
   public: false,
   app: 'games',
-  defaultRole: 'viewer',
+  defaultRole: 'guest',
 });
 
 export type EstateMode = 'off' | 'shadow' | 'enforce';

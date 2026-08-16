@@ -6,17 +6,21 @@
  * ## Federation, not centralization
  *
  * ⚠️ Roles are THIS app's. The endpoint exposes the vocabulary verbatim
- * (`owner | manager | rater | viewer | pending` — the rater/viewer split is
- * the whole difference between the two read-capable guest roles, built by
- * migrations 0023/0024 on purpose) and validates writes against it; nothing
- * here lets the estate redefine a games role or grant one the games catalog
- * would not. The gate is this app's own `manageUsers` capability —
- * owner-only — evaluated by the same `requireAuth` + `requireCapability`
- * chain as the in-app People page, on the caller's own Firebase bearer. The
- * admin page holds no credential of its own: if the signed-in person could
- * not change roles here, they cannot change them from there either. The rate
- * limiter and the OWNER_EMAILS recovery hatch stay in front, untouched —
- * this mounts behind both.
+ * (`owner | admin | moderator | contributor | member | guest | pending` —
+ * the six-rung ladder from the 2026-08-16 role redesign, member/guest being
+ * the rater/viewer split built by migrations 0023/0024 under their old names)
+ * and validates writes against it; nothing here lets the estate redefine a
+ * games role or grant one the games catalog would not. The gate is this
+ * app's own `manageUsers` capability — `owner` and `admin` since the
+ * redesign, no longer owner-only — evaluated by the same `requireAuth` +
+ * `requireCapability` chain as the in-app People page, on the caller's own
+ * Firebase bearer, **plus** `canGrantRole` (packages/core/src/
+ * capabilities.ts) so an `admin` calling this surface still cannot mint
+ * another `admin` or an `owner` — only `owner` can. The admin page holds no
+ * credential of its own: if the signed-in person could not change roles
+ * here, they cannot change them from there either. The rate limiter and the
+ * OWNER_EMAILS recovery hatch stay in front, untouched — this mounts behind
+ * both.
  *
  * ## Why a second mount beside /api/users
  *
@@ -33,7 +37,7 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { ROLES, updateRoleSchema } from '@bgc/core';
+import { ROLES, canGrantRole, updateRoleSchema } from '@bgc/core';
 import { countOwners, listUsers, setUserRole } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { pushIndexSnapshot } from '../lib/index-push.js';
@@ -98,6 +102,20 @@ export const adminRoutes = new Hono<AppBindings>()
     const parsed = updateRoleSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+    }
+
+    // Same escalation limit as routes/users.ts's twin route — see
+    // canGrantRole's own comment. This surface is federated, not a second
+    // policy: an admin reaching role changes through heygabi.ai is bound by
+    // exactly the same rule as one using the in-app People page.
+    if (!canGrantRole(actor.role, parsed.data.role)) {
+      return c.json(
+        {
+          error: 'forbidden',
+          detail: `Your role (${actor.role}) may not grant '${parsed.data.role}'.`,
+        },
+        403,
+      );
     }
 
     // Don't let the last owner demote themselves and lock everyone out.

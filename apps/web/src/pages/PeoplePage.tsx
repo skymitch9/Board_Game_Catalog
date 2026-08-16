@@ -1,25 +1,36 @@
 import { useEffect, useState } from 'react';
-import { ROLES, type AppUser, type MeResponse, type Role } from '@bgc/core';
+import { ROLES, canGrantRole, type AppUser, type MeResponse, type Role } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
 
+/**
+ * Six rungs since the 2026-08-16 role redesign, `pending` a status rather than
+ * a rung — see `ROLE_LADDER` in `packages/core/src/constants.ts`.
+ */
 const ROLE_BLURB: Record<Role, string> = {
-  owner: 'Everything a manager can do, plus deciding who is on this page.',
-  manager:
-    'Can add, edit and delete anything in the catalog, including research runs. Cannot change anyone’s role.',
-  rater: 'Can browse the collection and leave ratings, but not change it.',
-  viewer: 'Can browse the collection. Cannot rate it or change anything.',
+  owner: 'Everything an admin can do, plus granting the admin role itself.',
+  admin:
+    'Everything a moderator can do, plus approving people and changing roles — but never up to admin or owner.',
+  moderator:
+    'Can add, edit and delete anything in the catalog, including research runs and photo scans. Cannot change anyone’s role.',
+  contributor:
+    'Can add, edit and delete catalog items and curate the wishlist, and can scan barcodes (free). Cannot photo-scan, run research, or change roles.',
+  member: 'Can browse the collection, leave ratings, and suggest things for the wishlist.',
+  guest: 'Can browse the collection. Cannot rate it, suggest to the wishlist, or change anything.',
   pending: 'Signed in, but sees nothing until you let them in.',
 };
 
 function RoleControls({
   user,
   isMe,
+  granterRole,
   onChanged,
 }: {
   user: AppUser;
   isMe: boolean;
+  /** The signed-in person's own role — what `canGrantRole` checks against. */
+  granterRole: Role;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -43,8 +54,12 @@ function RoleControls({
       {error ? <ErrorBox error={error} what="Could not change this role" /> : null}
       {/* Derived from ROLES rather than listed again, so a role added to the
           matrix cannot end up assignable nowhere. The old hardcoded copy of
-          this list is exactly how `viewer` would have shipped invisible. */}
-      {ROLES.filter((r) => r !== user.role)
+          this list is exactly how `viewer` would have shipped invisible.
+          Filtered through `canGrantRole` on top of that: an `admin` viewing
+          this page (manageUsers is admin+ since the redesign) must not be
+          offered a button that only 403s — "Make admin" and "Make owner" are
+          simply not drawn for them, the same rule the server enforces. */}
+      {ROLES.filter((r) => r !== user.role && canGrantRole(granterRole, r))
         .map((role) => (
           <button
             key={role}
@@ -140,28 +155,38 @@ export function PeoplePage({
                 Estate admin →
               </a>
             </div>
-            {/* `viewer` gets its own tone rather than falling through to the
-                `pending` one — a guest who is in and a guest who is waiting are
-                the two states this page exists to tell apart.
+            {/* `guest` (née `viewer`) gets its own tone rather than falling
+                through to the `pending` one — a guest who is in and a guest
+                who is waiting are the two states this page exists to tell
+                apart.
 
-                `manager` shares the owner tone deliberately. It is not a
-                stronger guest, it is the catalog role: the two of them differ
-                only in whether they can change this page, and every other
-                distinction on this screen is about the catalog. */}
+                `owner`, `admin`, `moderator` and `contributor` share the
+                "owned" tone deliberately: all four can touch the catalog
+                (`editCatalog` is contributor+), and the finer distinctions
+                between them — who can manage users, who can photo-scan — are
+                spelled out in `ROLE_BLURB` rather than in a fifth colour. */}
             <Badge
               tone={
-                u.role === 'owner' || u.role === 'manager'
+                u.role === 'owner' ||
+                u.role === 'admin' ||
+                u.role === 'moderator' ||
+                u.role === 'contributor'
                   ? 'owned'
-                  : u.role === 'rater'
+                  : u.role === 'member'
                     ? 'lent'
-                    : u.role === 'viewer'
+                    : u.role === 'guest'
                       ? 'preordered'
                       : 'wanted'
               }
             >
               {u.role}
             </Badge>
-            <RoleControls user={u} isMe={u.email === me.email} onChanged={refresh} />
+            <RoleControls
+              user={u}
+              isMe={u.email === me.email}
+              granterRole={me.role}
+              onChanged={refresh}
+            />
           </li>
         ))}
       </ul>

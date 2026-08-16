@@ -1,5 +1,6 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import {
+  can,
   createCopySchema,
   createItemSchema,
   createRelationSchema,
@@ -8,6 +9,7 @@ import {
   updateCopySchema,
   updateItemSchema,
   upsertRatingSchema,
+  type Capability,
 } from '@bgc/core';
 import {
   ItemError,
@@ -21,6 +23,7 @@ import {
   deleteItem,
   deleteRating,
   deleteRelation,
+  getCopy,
   getGameCompleteness,
   getItem,
   getItemDetail,
@@ -51,6 +54,29 @@ function idParam(raw: string | undefined): number | null {
 
 async function body(c: { req: { json: () => Promise<unknown> } }): Promise<unknown> {
   return c.req.json().catch(() => null);
+}
+
+/**
+ * Same 403 shape `requireCapability` returns, for the two copy routes below
+ * that cannot decide their capability until they have read the request (and,
+ * for PATCH/DELETE, the existing row) — the wishlist split means "which
+ * capability applies" depends on a `status` value, not just on which route
+ * was hit, so a static middleware cannot gate it alone.
+ */
+function forbidden(c: Context<AppBindings>, capability: Capability) {
+  const role = c.get('user').role;
+  return c.json(
+    {
+      error: 'forbidden',
+      capability,
+      role,
+      detail:
+        role === 'pending'
+          ? 'Your account is awaiting approval by an owner.'
+          : 'Your role does not permit this action.',
+    },
+    403,
+  );
 }
 
 export const catalogRoutes = new Hono<AppBindings>()
@@ -280,8 +306,16 @@ export const catalogRoutes = new Hono<AppBindings>()
   })
 
   // ---- copies ------------------------------------------------------------
+  //
+  // The wishlist split (2026-08-16 role redesign — see capabilities.ts):
+  // wanting something is `suggestWishlist` (member+, "I want this"), and
+  // editing or removing a copy that is — or was — `wanted` is `manageWishlist`
+  // (contributor+, curate/remove/prioritise). Every other copy write stays on
+  // `editCatalog`. The two are the same set of roles today, but kept as
+  // separate checks so the split is real rather than folded back into one
+  // capability — see the note on `manageWishlist` in capabilities.ts.
 
-  .post('/items/:id/copies', requireCapability('editCatalog'), async (c) => {
+  .post('/items/:id/copies', async (c) => {
     const id = idParam(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
 
@@ -292,12 +326,27 @@ export const catalogRoutes = new Hono<AppBindings>()
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
+
+    const capability: Capability = parsed.data.status === 'wanted' ? 'suggestWishlist' : 'editCatalog';
+    if (!can(c.get('user').role, capability)) return forbidden(c, capability);
+
     return c.json({ copy: await createCopy(c.env.DB, id, parsed.data) }, 201);
   })
 
-  .patch('/copies/:id', requireCapability('editCatalog'), async (c) => {
+  .patch('/copies/:id', async (c) => {
     const id = idParam(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const existing = await getCopy(c.env.DB, id);
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+
+    // Curating an existing wishlist row — editing it or taking it off `wanted`
+    // — needs `manageWishlist`; changing any other copy is ordinary
+    // `editCatalog`. Read from the row as it stands now, not from what the
+    // request is trying to change it to: un-wanting a row is exactly the
+    // curation this capability exists to gate.
+    const capability: Capability = existing.status === 'wanted' ? 'manageWishlist' : 'editCatalog';
+    if (!can(c.get('user').role, capability)) return forbidden(c, capability);
 
     const parsed = updateCopySchema.safeParse(await body(c));
     if (!parsed.success) {
@@ -308,9 +357,16 @@ export const catalogRoutes = new Hono<AppBindings>()
     return c.json({ copy });
   })
 
-  .delete('/copies/:id', requireCapability('editCatalog'), async (c) => {
+  .delete('/copies/:id', async (c) => {
     const id = idParam(c.req.param('id'));
     if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const existing = await getCopy(c.env.DB, id);
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+
+    const capability: Capability = existing.status === 'wanted' ? 'manageWishlist' : 'editCatalog';
+    if (!can(c.get('user').role, capability)) return forbidden(c, capability);
+
     const deleted = await deleteCopy(c.env.DB, id);
     if (!deleted) return c.json({ error: 'not_found' }, 404);
     return c.json({ deleted: true });

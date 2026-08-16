@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { capabilitiesFor, updateRoleSchema } from '@bgc/core';
+import { canGrantRole, capabilitiesFor, updateRoleSchema } from '@bgc/core';
 import { countOwners, listUsers, setUserRole } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { outstandingChores } from '../lib/chores.js';
@@ -48,6 +48,21 @@ export const userRoutes = new Hono<AppBindings>()
     const parsed = updateRoleSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+    }
+
+    // The escalation limit: `manageUsers` alone would let an `admin` mint
+    // another `admin` or an `owner`. `canGrantRole` refuses that — only
+    // `owner` may grant `admin` or `owner` — while leaving every ordinary
+    // approval and demotion untouched. See its own comment in
+    // packages/core/src/capabilities.ts for the full rule.
+    if (!canGrantRole(actor.role, parsed.data.role)) {
+      return c.json(
+        {
+          error: 'forbidden',
+          detail: `Your role (${actor.role}) may not grant '${parsed.data.role}'.`,
+        },
+        403,
+      );
     }
 
     // Don't let the last owner demote themselves and lock everyone out.
