@@ -15,6 +15,7 @@ import { DetailsQueuePage } from './pages/DetailsQueuePage';
 import { ExportPage } from './pages/ExportPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { CoverHealthBanner } from './components/CoverHealthBanner';
+import { EstateSearch } from './components/EstateSearch';
 import { ThemeToggle } from './components/ThemeToggle';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
@@ -238,6 +239,19 @@ function SignedInApp() {
           </button>
         </span>
       </nav>
+      {/* "Do we own this on ANY shelf?" — the shared <estate-search> element,
+          asking the cross-catalog index at index.heygabi.ai (see
+          components/EstateSearch.tsx). Chrome, not a page: it is about the
+          whole estate rather than about whichever screen is open, which is why
+          it sits here beside the nav and not inside the collection.
+
+          ⚠️ It does NOT replace the collection search. CollectionPage's own box
+          searches THIS catalog server-side with facets and paging; this one
+          reaches the audiobooks and the library, which that box cannot show.
+          Folded shut by default for exactly that reason — two search boxes
+          side by side is one question too many on a screen whose job is the
+          collection. */}
+      <EstateSearch />
       {/* Above the page rather than inside one: a dead cover is a fact about
           the catalog, not about whichever screen happens to be open. */}
       <CoverHealthBanner me={me.data} />

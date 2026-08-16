@@ -223,6 +223,33 @@ a:hover { text-decoration: underline; }
   text-shadow: var(--et-brand-shadow);
 }
 .brand:hover { text-decoration: none; color: var(--mustard); }
+/* --- the estate search fold ---------------------------------------------- */
+
+/*
+  The shared <estate-search> element's lid (components/EstateSearch.tsx).
+
+  ⚠️ Closed by default, and that is the design rather than shyness. The
+  collection page has its own search box two inches below this one and they ask
+  different questions — this one reaches the audiobooks and the library, which
+  the collection cannot show. Two open boxes stacked would be a guessing game
+  about which one to type in, so this one announces itself in one line and stays
+  out of the way until it is wanted.
+
+  Everything BELOW the summary is the component's own shadow DOM, styled by the
+  same --et-* tokens the rest of the site wears — so it re-skins with every
+  theme and there is nothing here to keep in step with it.
+*/
+.estate-search { margin: 0 0 0.75rem; }
+.estate-search > summary {
+  cursor: pointer; padding: 0.35rem 0;
+  font-size: 0.85rem; font-weight: 600; color: var(--accent);
+  /* A thumb-sized row on a phone without a border to draw a box nobody asked
+     for; the marker triangle is the affordance. */
+  list-style-position: inside;
+}
+.estate-search > summary:hover { color: var(--text); }
+.estate-search__body { padding-top: 0.5rem; }
+
 /* --- the theme cog ------------------------------------------------------- */
 
 .theme-toggle { position: relative; display: flex; align-items: center; }
