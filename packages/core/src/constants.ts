@@ -8,23 +8,86 @@
  */
 
 /**
- * ⚠️ Mirrored by a CHECK constraint on `app_user.role` — migration 0024 is the
+ * ⚠️ Mirrored by a CHECK constraint on `app_user.role` — migration 0027 is the
  * current definition. Adding a value here without a migration means the role is
  * assignable in the UI, passes zod, and then fails at the write with a bare
  * SQLITE_CONSTRAINT.
  *
- * `viewer` reads and nothing else. It exists because `rater` — the only other
- * read-capable role — also carries `rate`, and the people being let in to look
- * at the collection were never being asked to score it.
+ * ## The ladder (owner-approved 2026-08-16, "Role matrix approved")
  *
- * `manager` is everything an owner can do **except decide who is in**. It exists
- * because ownership had been doing two unrelated jobs: keeping the catalog, and
- * controlling the guest list. Two people were `owner` purely so both could add
- * games, which made "who can let someone in" a question with two answers. Now
- * there is one owner, and helping with the catalog does not require it.
+ * `guest < member < contributor < moderator < admin < owner` — cumulative: each
+ * rung has everything the one below it has, plus more. See `ROLE_LADDER` below
+ * for the ordering itself; this array stays in the original most-privileged-
+ * first order because `ROLES` is what the federated admin surface
+ * (`routes/admin.ts`) hands the People-page dropdown verbatim, and that
+ * ordering is a UI convention older than the ladder.
+ *
+ * Migration 0027 renamed three existing roles and added two new rungs that
+ * nobody is migrated into automatically:
+ *
+ *   `viewer`  -> `guest`        same rung, new name. Reads and nothing else —
+ *                                it exists because `member` (nÃ©e `rater`), the
+ *                                only other read-capable role, also carries
+ *                                `rate`, and the people let in to look at the
+ *                                collection were never being asked to score it.
+ *   `rater`   -> `member`       same rung, new name. Read + rate + suggest the
+ *                                wishlist ("I want this") — still cannot touch
+ *                                the catalog.
+ *   `manager` -> `moderator`    same rung, new name, same capability set as the
+ *                                old `manager` plus the two new cost-gated scan
+ *                                capabilities. Verified: old `manager`'s
+ *                                CAPABILITY_MATRIX row is a strict subset of the
+ *                                new `moderator` row — nobody who could do
+ *                                something yesterday lost it today.
+ *   (new)     `contributor`     nobody starts here; granted by hand. Can edit
+ *                                the catalog and curate the wishlist, and can
+ *                                scan barcodes (free) — but not photos (costs
+ *                                money) and not `runResearch`.
+ *   (new)     `admin`           nobody starts here; granted by hand, and only
+ *                                by `owner` (see `canGrantRole` in
+ *                                `capabilities.ts`). Everything `moderator` has,
+ *                                plus `manageUsers` — but an `admin` may never
+ *                                grant `admin` or `owner`, so there is exactly
+ *                                one rung from which the guest list can be
+ *                                widened at the top. `owner` is otherwise no
+ *                                longer the sole `manageUsers` holder, which is
+ *                                the one respect in which this supersedes the
+ *                                0024 comment calling `manageUsers`
+ *                                owner-exclusive — see capabilities.ts.
+ *
+ * `pending` is a **status**, not a rung — a fresh sign-in with nobody's
+ * decision on them yet. It stays out of `ROLE_LADDER` and out of every
+ * cumulative comparison; `canGrantRole` refuses it as a grant target for the
+ * same reason `updateRoleSchema` is the only place it may still be assigned
+ * (approving someone out of it, or revoking them back into it).
  */
-export const ROLES = ['owner', 'manager', 'rater', 'viewer', 'pending'] as const;
+export const ROLES = [
+  'owner',
+  'admin',
+  'moderator',
+  'contributor',
+  'member',
+  'guest',
+  'pending',
+] as const;
 export type Role = (typeof ROLES)[number];
+
+/**
+ * The ladder itself, ascending, least to most privileged — `pending` excluded
+ * on purpose (see the note on `ROLES` above). This is the ordering
+ * `canGrantRole` and any other cumulative comparison must use; `ROLES` is a
+ * *display* order and must never be pressed into service for rank comparisons
+ * — it is owner-first and pending-last, which is not a ladder.
+ */
+export const ROLE_LADDER = [
+  'guest',
+  'member',
+  'contributor',
+  'moderator',
+  'admin',
+  'owner',
+] as const;
+export type LadderRole = (typeof ROLE_LADDER)[number];
 
 /**
  * Every catalog row is one of these. A base game is the root of a tree; every
