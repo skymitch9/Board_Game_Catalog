@@ -110,6 +110,77 @@ export async function listScanJobs(
   return results.map(mapRow);
 }
 
+/**
+ * One page of the scan history — every job ever, newest first.
+ *
+ * The queue (`listScanJobs`) is a *working* view and caps at 50 because a queue
+ * longer than that has stopped being a queue. History is the opposite claim:
+ * a finished job is marked `done` and never deleted, precisely so that "which
+ * photo produced this game?" stays answerable — so this walks the whole table,
+ * paged, with no status filter. Auto-deleting finished jobs was considered and
+ * rejected; the row is the only record, and this query is what the row is for.
+ */
+export const SCAN_HISTORY_PAGE_SIZE = 20;
+
+export interface ScanJobHistoryPage {
+  jobs: ScanJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}
+
+/**
+ * Where a requested page actually lands, given how many rows exist.
+ *
+ * The same forgiveness the collection pager has (see `listItemTrees`): asking
+ * for page 9 of 5 gets the last page, not an empty one — a stale link should
+ * land somewhere. Pure and exported so the arithmetic is testable without a
+ * database.
+ */
+export function historyPagePosition(
+  requested: number | undefined,
+  total: number,
+  pageSize: number = SCAN_HISTORY_PAGE_SIZE,
+): { page: number; pageCount: number; offset: number } {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(requested ?? 1, 1), pageCount);
+  return { page, pageCount, offset: (page - 1) * pageSize };
+}
+
+export async function listScanJobHistory(
+  db: D1Database,
+  query?: { page?: number },
+): Promise<ScanJobHistoryPage> {
+  const pageSize = SCAN_HISTORY_PAGE_SIZE;
+
+  const counted = await db
+    .prepare('SELECT COUNT(*) AS total FROM scan_job')
+    .first<{ total: number }>();
+  const total = counted?.total ?? 0;
+
+  const { page, pageCount, offset } = historyPagePosition(query?.page, total, pageSize);
+
+  if (total === 0) {
+    return { jobs: [], total: 0, page: 1, pageSize, pageCount: 1 };
+  }
+
+  // `id DESC` is not decoration: `created_at` is second-resolution, and a
+  // multi-photo upload creates several jobs inside one second. Without the
+  // tiebreak their order is undefined per query, and a row could show on two
+  // pages — or neither — as the reader pages through.
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM scan_job
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?1 OFFSET ?2`,
+    )
+    .bind(pageSize, offset)
+    .all<ScanJobRow>();
+
+  return { jobs: results.map(mapRow), total, page, pageSize, pageCount };
+}
+
 /** Jobs waiting for vision processing or enrichment. */
 export async function listPendingJobs(db: D1Database): Promise<ScanJob[]> {
   const { results } = await db

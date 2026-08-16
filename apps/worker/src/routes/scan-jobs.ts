@@ -30,6 +30,7 @@ import {
   getScanJob,
   listItemAliases,
   listItemNames,
+  listScanJobHistory,
   listScanJobs,
   toIso,
   updateScanJobStatus,
@@ -171,6 +172,30 @@ export const scanJobRoutes = new Hono<AppBindings>()
       jobs.push(withFreshView(settled ? { ...job, status: 'done' as const } : job, ctx));
     }
     return c.json({ jobs });
+  })
+
+  /**
+   * --- Scan history: every job ever, one page at a time ---------------------
+   *
+   * The record behind "which photo produced which items". A finished job is
+   * marked `done` and never deleted so that this question stays answerable,
+   * and this is the read that answers it — the whole table, newest first,
+   * paged (`listScanJobs` above caps at 50 and is the *queue*, not the record).
+   *
+   * Registered as a literal **before** `/:id`, like `/barcode` above — behind
+   * that route a job could never be called "history".
+   *
+   * Deliberately no `ownershipContext` / `withFreshView` here: history reports
+   * what was *decided* — `addedItemId` and `dismissed`, both stored — not what
+   * the catalog holds now. That also keeps a fifty-photo page to two D1 reads
+   * instead of re-resolving ownership across every blob.
+   */
+  .get('/history', requireCapability('editCatalog'), async (c) => {
+    // `positiveInt`-style forgiveness: `?page=abc` is page 1, and a page past
+    // the end lands on the last page (clamped in the query itself).
+    const raw = Number(c.req.query('page'));
+    const page = Number.isInteger(raw) && raw > 0 ? raw : 1;
+    return c.json(await listScanJobHistory(c.env.DB, { page }));
   })
 
   // --- Get a single job ----------------------------------------------------
