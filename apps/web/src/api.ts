@@ -398,6 +398,16 @@ export const api = {
 
   scanJob: (id: number) => req<{ job: ScanJob }>(`/api/scan-jobs/${id}`),
 
+  /**
+   * One page of the full scan record — every job ever taken in, newest first.
+   * Unlike `scanJobs` this is not capped at 50; it is the answer to "which
+   * photo produced which items", however long ago the photo was.
+   */
+  scanJobHistory: (page?: number) =>
+    req<ScanJobHistoryPage>(
+      `/api/scan-jobs/history${page && page > 1 ? `?page=${page}` : ''}`,
+    ),
+
   createScanJob: (data: { data: string; mediaType: string; mode: 'shelf' | 'single' }) =>
     post('/api/scan-jobs', data) as Promise<{ job: ScanJob }>,
 
@@ -504,6 +514,15 @@ export interface ScanJob {
   createdAt: string;
   processedAt: string | null;
   reviewedAt: string | null;
+}
+
+/** One page of the scan record, shaped exactly like the worker's response. */
+export interface ScanJobHistoryPage {
+  jobs: ScanJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
 }
 
 export interface EnrichedTitle {

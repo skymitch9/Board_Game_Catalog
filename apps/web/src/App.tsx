@@ -10,6 +10,7 @@ import { ItemPage, NotFoundPage } from './pages/ItemPage';
 import { PeoplePage } from './pages/PeoplePage';
 import { ScanPage } from './pages/ScanPage';
 import { ScanJobsPage, ScanJobReviewPage } from './pages/ScanJobsPage';
+import { ScanHistoryPage } from './pages/ScanHistoryPage';
 import { RetagPage } from './pages/RetagPage';
 import { DetailsQueuePage } from './pages/DetailsQueuePage';
 import { ExportPage } from './pages/ExportPage';
@@ -44,6 +45,10 @@ function Routes({ me }: { me: MeResponse }) {
       return <ScanPage me={me} initialMode={route.mode} />;
     case 'scanJobs':
       return <ScanJobsPage me={me} add={route.add} />;
+    // Keyed by page so moving between pages remounts and refetches — the page
+    // seeds its fetch from the URL, the same contract the collection has.
+    case 'scanHistory':
+      return <ScanHistoryPage key={route.page} me={me} page={route.page} />;
     case 'scanJobReview':
       return <ScanJobReviewPage id={route.id} me={me} />;
     case 'retag':

@@ -19,13 +19,15 @@ import { KIND_LABEL } from '../components/ItemTree';
 import { Badge, ConfirmButton, ErrorBox, Spinner } from '../components/ui';
 import { Link, type AddMode } from '../router';
 
-const MODE_LABEL: Record<ScanJob['mode'], string> = {
+// Exported for ScanHistoryPage, which shows the same jobs in their afterlife —
+// one vocabulary for a job's mode and status, not a copy that drifts.
+export const MODE_LABEL: Record<ScanJob['mode'], string> = {
   shelf: 'Shelf photo',
   single: 'Single box',
   barcode: 'Barcodes',
 };
 
-const STATUS_LABEL: Record<ScanJob['status'], string> = {
+export const STATUS_LABEL: Record<ScanJob['status'], string> = {
   uploaded: 'Uploading',
   reading: 'Reading photo',
   read: 'Read',
@@ -201,7 +203,7 @@ function OwnershipNote({ o, jobMode }: { o: TitleOwnership; jobMode: ScanJob['mo
   );
 }
 
-const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
+export const STATUS_TONE: Record<ScanJob['status'], 'neutral' | 'owned' | 'wanted' | 'kind'> = {
   uploaded: 'neutral',
   reading: 'neutral',
   read: 'neutral',
@@ -417,6 +419,11 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
           <h2>Jobs</h2>
           <div className="section-head__actions">
             {inFlight && <span className="muted small">Working&hellip;</span>}
+            {/* The record this queue feeds: every job ever, paged past the
+                50-row cap this list lives under, with what each one produced. */}
+            <Link to="/scan-jobs/history" className="btn btn-quiet">
+              History
+            </Link>
             <button type="button" className="btn btn-quiet" onClick={reload}>
               Refresh
             </button>
@@ -443,9 +450,9 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
 
         {/*
           Finished jobs leave the active queue but are not deleted. Deleting
-          would take the titles with it, and with no history view yet that is
-          the only record of which photo produced which items — keep the row and
-          hide it, rather than losing what it knew.
+          would take the titles with it — the row is the record of which photo
+          produced which items. The last 50 fold up here for a quick glance;
+          the full, paged record is the History page above.
         */}
         {finished.length > 0 && (
           <details className="job-archive">

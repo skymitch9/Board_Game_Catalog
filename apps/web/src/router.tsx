@@ -50,6 +50,10 @@ export type Route =
   // fall back to the page's own default, so an unrecognised value is harmless.
   | { name: 'scan'; mode: ScanMode | null }
   | { name: 'scanJobs'; add: AddMode | null }
+  // The full record of what every photo and barcode session produced. `page`
+  // lives in the URL for the same reason the collection's does: Back from an
+  // item you opened off page 3 must return you to page 3.
+  | { name: 'scanHistory'; page: number }
   | { name: 'scanJobReview'; id: number }
   | { name: 'retag' }
   | { name: 'detailsQueue' }
@@ -143,6 +147,11 @@ function parse(pathname: string, search: string): Route {
   if (parts[0] === 'scan-jobs') {
     if (parts.length === 1) {
       return { name: 'scanJobs', add: pick(search, 'add', ADD_MODES) };
+    }
+    // Checked before the id, mirroring the worker's route order — a job can
+    // never be called "history", so the word is free to be a page.
+    if (parts[1] === 'history' && parts.length === 2) {
+      return { name: 'scanHistory', page: positiveInt(search, 'page') };
     }
     const id = Number(parts[1]);
     if (Number.isInteger(id) && id > 0) return { name: 'scanJobReview', id };
