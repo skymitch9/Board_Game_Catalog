@@ -330,8 +330,13 @@ async function main() {
   for (const r of itemSnap) {
     const p = progress[r.thumbnail_url];
     if (p?.status === 'done' && p.hostedUrl) {
+      // updated_at bump: without it this write is invisible to the
+      // shared-index staleness backstop's data-aware check
+      // (apps/worker/src/lib/index-push.ts, getLatestSourceUpdateAt) — the
+      // same class of gap the 2026-08-15 fix closed for every OTHER writer
+      // of `item`.
       itemStatements.push(
-        `UPDATE item SET thumbnail_url = '${esc(p.hostedUrl)}' WHERE id = ${r.id} AND thumbnail_url = '${esc(r.thumbnail_url)}';`,
+        `UPDATE item SET thumbnail_url = '${esc(p.hostedUrl)}', updated_at = datetime('now') WHERE id = ${r.id} AND thumbnail_url = '${esc(r.thumbnail_url)}';`,
       );
     }
   }

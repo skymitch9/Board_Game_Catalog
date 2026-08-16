@@ -84,3 +84,42 @@ export async function buildIndexProjection(db: D1Database): Promise<IndexProject
     detail_url: `${SITE_ORIGIN}/items/${row.id}`,
   }));
 }
+
+interface LatestUpdateRow {
+  latest: string | null;
+}
+
+/**
+ * Epoch ms of the most recently touched `item` row — a cheap fingerprint the
+ * staleness backstop (`apps/worker/src/lib/index-push.ts`) compares against
+ * the index's own `pushed_at` to catch writes that bypass every mutation
+ * route. Built for the 2026-08-15 incident: a backfill script wrote `item`
+ * directly via `wrangler d1 execute`, so no route ever ran and the 24h-age
+ * backstop had no way to see that anything had changed — the index kept
+ * serving a stale row until someone did an unrelated mutation by hand to
+ * trigger a push.
+ *
+ * Not a new invariant, only a new reader of one: every path that can move a
+ * projected column already bumps `item.updated_at`
+ * (`packages/db/src/items.ts`). A script that skips the bump is invisible to
+ * this check exactly as it is invisible to everything else that reads
+ * `updated_at` — see `scripts/rehost-covers.mjs`, fixed alongside this to
+ * stop being that gap.
+ */
+export async function getLatestSourceUpdateAt(db: D1Database): Promise<number | null> {
+  const row = await db.prepare(`SELECT MAX(updated_at) AS latest FROM item`).first<LatestUpdateRow>();
+  return sqliteTimeToMs(row?.latest ?? null);
+}
+
+/**
+ * D1's `datetime('now')` writes `YYYY-MM-DD HH:MM:SS` — UTC, no zone marker.
+ * Naive `Date.parse` reads that shape as *local* time (first documented at
+ * `apps/worker/src/routes/scan-jobs.ts`'s `toIso`/`isStale`, same fix, same
+ * reason — also `packages/db/src/copies.ts`'s `toIso`); say UTC explicitly
+ * rather than let the Worker's runtime zone decide silently.
+ */
+function sqliteTimeToMs(value: string | null): number | null {
+  if (!value) return null;
+  const ms = Date.parse(`${value.replace(' ', 'T')}Z`);
+  return Number.isNaN(ms) ? null : ms;
+}

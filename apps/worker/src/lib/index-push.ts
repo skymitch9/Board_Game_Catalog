@@ -6,16 +6,25 @@
  * source's rows wholesale, so there is no incremental state to fall behind
  * and a failed push simply leaves the previous snapshot standing.
  *
- * Two triggers, and the split is the design's:
+ * Three triggers, and the split is the design's:
  *
  *  1. AFTER MUTATIONS (`indexPushAfterMutation`) — a successful write under a
  *     catalog-shaped route schedules a push via `waitUntil`, so the index is
  *     fresh within seconds of the shelf changing.
- *  2. A STALENESS BACKSTOP RIDING REQUEST TRAFFIC (`indexBackstopOnRequest`)
- *     — at most once per BACKSTOP_CHECK_INTERVAL_MS per isolate, an /api/*
- *     request schedules (on `waitUntil`, after responding) one
- *     unauthenticated GET of the index's /api/health, and re-pushes only if
- *     the game source is empty or its snapshot is older than a day.
+ *  2. A DATA-AWARE STALENESS BACKSTOP RIDING REQUEST TRAFFIC
+ *     (`indexBackstopOnRequest`) — at most once per BACKSTOP_CHECK_INTERVAL_MS
+ *     per isolate, an /api/* request schedules (on `waitUntil`, after
+ *     responding) one unauthenticated GET of the index's /api/health, and
+ *     re-pushes if EITHER the game source is empty/older than a day OR
+ *     `item.updated_at`'s high-water mark has moved past the index's last
+ *     `pushed_at` (`pushIndexIfStale`, comparing against
+ *     `getLatestSourceUpdateAt` — see index-projection.ts). That second
+ *     condition is the 2026-08-15 fix: a clock-only staleness check cannot
+ *     tell that a backfill script wrote D1 directly (bypassing every route,
+ *     so no mutation push fired) — it just waited out the same 24h either
+ *     way. Comparing data against data closes that class: ANY out-of-band
+ *     write becomes pushable within one backstop tick of normal traffic,
+ *     with no human trick required.
  *
  *     ⚠️ This REPLACES the backstop that rode the half-hourly cron, and the
  *     reason is observability, not cost. On 2026-08-13 the cron-riding
@@ -31,12 +40,15 @@
  *     middleware logs one — throttled, unconfigured, fresh, pushed, or
  *     failed. The cron keeps its other duties (cover check, orphan sweep,
  *     component refresh) untouched.
+ *  3. A MANUAL FORCE (`POST /api/admin/index-push`, routes/admin.ts) — gated
+ *     exactly like the rest of that surface (`requireCapability('manageUsers')`
+ *     + the federated-admin CORS mount), for the case a person wants the push
+ *     to happen now rather than on the next backstop tick.
  *
- *     What the shape trades, stated: an untouched app pushes nothing — but
- *     an untouched app's catalog is not changing either, since every write
- *     path is an API route. The residual gap is a backfill script writing D1
- *     directly; that heals within the design's ≤24h tolerance the next time
- *     anyone opens the app.
+ *     What the request-riding shape trades, stated: an untouched app pushes
+ *     nothing — but an untouched app's catalog is not changing either, since
+ *     every write path but one is an API route or a script that bumps
+ *     `updated_at` (now covered by trigger 2).
  *
  * So a missed trigger costs at most a day of freshness (the design's stated
  * tolerance), and the ordinary path costs nothing measurable.
@@ -47,7 +59,7 @@
  */
 
 import type { MiddlewareHandler } from 'hono';
-import { buildIndexProjection } from '@bgc/db';
+import { buildIndexProjection, getLatestSourceUpdateAt } from '@bgc/db';
 import type { AppBindings, Env } from '../env.js';
 
 /** How stale the backstop tolerates the index being before re-pushing. */
@@ -89,7 +101,69 @@ export async function pushIndexSnapshot(env: Env): Promise<{ pushed: number } | 
   return { pushed: rows.length };
 }
 
-/** The backstop body: one health GET; push only when missing or stale. */
+/** What `pushIndexIfStale` needs to decide, stripped of D1/fetch so the
+ *  decision itself is a pure function — see `decidePushForStaleness`. */
+export interface StalenessCheckInput {
+  /** Row count the index reports for this source, from /api/health. */
+  rows: number | null | undefined;
+  /** `pushed_at` the index reports for this source, from /api/health. */
+  pushedAtIso: string | null | undefined;
+  /** `getLatestSourceUpdateAt(env.DB)` — epoch ms, or null if `item` is empty. */
+  latestSourceUpdateMs: number | null;
+  nowMs: number;
+  maxAgeMs: number;
+}
+
+export type StalenessDecision = { push: boolean; reason: string };
+
+/**
+ * The gate itself, pulled out of `pushIndexIfStale` so it can be unit tested
+ * without a live index or a D1 binding. Four ways to decide "push":
+ *
+ *  1. the index has no rows for this source (first push / wiped),
+ *  2. the index's `pushed_at` is missing or unparseable,
+ *  3. the last push is older than `maxAgeMs` (the original clock check), or
+ *  4. ⚠️ THE FIX: `item`'s own last-modified fact is newer than the index's
+ *     `pushed_at` — i.e. something changed the catalog after the index last
+ *     heard from it, regardless of how young that push is. This is what
+ *     catches a backfill script that wrote D1 directly ten minutes ago: the
+ *     age check alone would call a five-minute-old push "fresh" and skip,
+ *     exactly the bug this exists to close.
+ *
+ * Anything else is genuinely fresh: the index has rows, it heard from us
+ * recently, and nothing has moved since.
+ */
+export function decidePushForStaleness(input: StalenessCheckInput): StalenessDecision {
+  const { rows, pushedAtIso, latestSourceUpdateMs, nowMs, maxAgeMs } = input;
+
+  if (!rows || rows <= 0) {
+    return { push: true, reason: 'index reports zero rows for this source' };
+  }
+
+  const pushedAtMs = pushedAtIso ? Date.parse(pushedAtIso) : Number.NaN;
+  if (!Number.isFinite(pushedAtMs)) {
+    return { push: true, reason: 'index reported no valid pushed_at' };
+  }
+
+  const ageMs = nowMs - pushedAtMs;
+  if (ageMs >= maxAgeMs) {
+    return { push: true, reason: `last push is ${Math.round(ageMs / 3_600_000)}h old (>${maxAgeMs / 3_600_000}h)` };
+  }
+
+  if (latestSourceUpdateMs !== null && latestSourceUpdateMs > pushedAtMs) {
+    return {
+      push: true,
+      reason: `source data changed at ${new Date(latestSourceUpdateMs).toISOString()}, after the last push`,
+    };
+  }
+
+  return { push: false, reason: `index is fresh (${rows} rows, pushed ${pushedAtIso})` };
+}
+
+/**
+ * The backstop body: one health GET, one cheap MAX(updated_at) read, push
+ * only when `decidePushForStaleness` says to.
+ */
 export async function pushIndexIfStale(env: Env): Promise<{ pushed: number } | { skipped: string }> {
   if (!env.INDEX_URL || !env.INDEX_PUSH_TOKEN) {
     return { skipped: 'INDEX_URL / INDEX_PUSH_TOKEN not configured' };
@@ -102,12 +176,19 @@ export async function pushIndexIfStale(env: Env): Promise<{ pushed: number } | {
   const health = (await res.json()) as {
     sources?: { game?: { rows?: number; pushed_at?: string | null } };
   };
-
   const game = health.sources?.game;
-  const pushedAt = game?.pushed_at ? Date.parse(game.pushed_at) : Number.NaN;
-  const fresh = (game?.rows ?? 0) > 0 && Number.isFinite(pushedAt) && Date.now() - pushedAt < BACKSTOP_MAX_AGE_MS;
-  if (fresh) {
-    return { skipped: `index is fresh (${game?.rows} rows, pushed ${game?.pushed_at})` };
+
+  const latestSourceUpdateMs = await getLatestSourceUpdateAt(env.DB);
+  const decision = decidePushForStaleness({
+    rows: game?.rows,
+    pushedAtIso: game?.pushed_at,
+    latestSourceUpdateMs,
+    nowMs: Date.now(),
+    maxAgeMs: BACKSTOP_MAX_AGE_MS,
+  });
+
+  if (!decision.push) {
+    return { skipped: decision.reason };
   }
   return pushIndexSnapshot(env);
 }

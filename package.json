@@ -25,10 +25,12 @@
     "pretypecheck": "node scripts/sync-estate-auth.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "estate:sync": "node scripts/sync-estate-auth.mjs",
-    "secrets:push": "node scripts/push-secrets.mjs"
+    "secrets:push": "node scripts/push-secrets.mjs",
+    "test": "tsx --test apps/worker/src/lib/*.test.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
+    "tsx": "^4.23.11",
     "typescript": "^5.7.2",
     "wrangler": "^4.0.0"
   },
