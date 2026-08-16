@@ -3816,3 +3816,43 @@ three values side by side.
 - Phase 4 bulk CLI, phase 5 barcode scanning, phase 6 offline PWA
 - `sleeve_requirement` has a table and no UI
 - No automated tests — everything so far verified by exercising the running app
+
+---
+
+## 📌 2026-08-16 — two things went live (Opus → Fable handoff)
+
+Deployed `bcf265c9`. 42 tests, typecheck clean across 7 workspaces.
+
+1. **Hourly missing-details sweep** — cron `7 * * * *`, its own schedule rather
+   than riding the existing 30-minute tick (these lookups cost ~1.4¢ each and
+   sharing would have doubled the ceiling for nothing). Cap **8 rows/tick** ≈
+   11¢/hour worst case, and only while a backlog exists.
+   ⚠️ **It shipped broken and was fixed the same day.** The first version used
+   `ctx.waitUntil()` alone and returned immediately — but this repo had ALREADY
+   written down, about the request path (`routes/research.ts`), that "a
+   waitUntil task gets about thirty seconds after the response is returned",
+   while one enrichment takes **20–70 seconds**. It would have completed roughly
+   ONE of eight and been killed mid-flight, leaving a run stuck at `running`.
+   `scheduled()` now RETURNS the promise. **The lesson had been learned on the
+   request path and did not travel to the scheduled path — any new background
+   work here inherits the same trap.**
+   Why it converges on its own: `listItemsNeedingDetails()` excludes per FIELD,
+   never re-asks unless an input changed, and a lookup that cannot identify a
+   game finishes `done` with a sentence rather than `error`.
+
+2. **`<estate-search>`** — an additive "search the whole estate" fold under the
+   top bar, shut by default. `CollectionPage.tsx` is untouched.
+   ⚠️ `estate-auth.js` is deliberately NOT synced: it calls `initializeApp()`
+   itself, which would stand up a **second Firebase app** on a page that already
+   has one. An `authAdapter` over the app's existing `firebase.ts` is supplied
+   instead.
+   ⚠️ The element is built with `createElement` and NOT as JSX, so the adapter
+   is attached before `connectedCallback`. Do not "simplify" it.
+   It was CORS-blocked until `READ_ORIGINS` was set on the index Worker
+   (catalog-platform, `befcce25`).
+
+**Not verified:** nobody has typed in the search box on the deployed site.
+
+**Still open here:** the scan-history view, shelf-photo splitting (correctly
+gated on measuring first), and two thresholds worth re-measuring — all in
+[`TODO.md`](TODO.md), which remains short and accurate.
