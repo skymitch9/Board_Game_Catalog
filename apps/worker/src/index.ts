@@ -10,6 +10,7 @@ import { cors } from 'hono/cors';
 import { sweepOrphanAdoptions } from '@bgc/db';
 import type { AppBindings, Env } from './env.js';
 import { COMPONENT_REFRESH_CRON, runComponentBackfill } from './lib/component-backfill.js';
+import { DETAILS_SWEEP_CRON, runDetailsSweep } from './lib/details-sweep.js';
 import { runCoverCheck } from './lib/cover-check.js';
 import { indexBackstopOnRequest, indexPushAfterMutation } from './lib/index-push.js';
 import { requireAuth } from './middleware/auth.js';
@@ -163,6 +164,22 @@ export default {
    * cover check down with it.
    */
   scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    // Hourly: fill in missing details without being asked (owner ask
+    // 2026-08-16). Its own cron so it cannot ride the 30-minute tick — these
+    // lookups cost money, and "every 30 minutes" would double the ceiling for
+    // no benefit. Returns early: the cover check and orphan sweep below are
+    // for the other schedules, and running them four times as often on this
+    // one would be a silent side effect of adding a feature.
+    if (event.cron === DETAILS_SWEEP_CRON) {
+      ctx.waitUntil(
+        runDetailsSweep(env).then(
+          (run) => console.log('details sweep', JSON.stringify(run)),
+          (err) => console.error('details sweep failed', err),
+        ),
+      );
+      return;
+    }
+
     if (event.cron === COMPONENT_REFRESH_CRON) {
       const token = env.BGG_API_TOKEN ?? '';
       if (!token) {

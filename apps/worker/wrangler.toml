@@ -92,7 +92,10 @@ bucket_name = "game-covers"
 # so **this string must match COMPONENT_REFRESH_CRON in
 # src/lib/component-backfill.ts character for character.**
 [triggers]
-crons = ["*/30 * * * *", "41 5 * * 1"]
+# "7 * * * *" — the hourly missing-details sweep (owner ask 2026-08-16).
+# ⚠️ This string is matched in scheduled() via DETAILS_SWEEP_CRON; change
+# both or the sweep silently stops firing and nothing reports it.
+crons = ["*/30 * * * *", "41 5 * * 1", "7 * * * *"]
 
 [vars]
 APP_VERSION = "0.1.0"
