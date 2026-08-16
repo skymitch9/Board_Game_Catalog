@@ -30,6 +30,7 @@ import type {
   WishlistEntry,
 } from '@bgc/core';
 import { getIdToken } from './lib/firebase';
+import { describeApiError } from './lib/errors';
 
 export class ApiError extends Error {
   constructor(
@@ -39,20 +40,32 @@ export class ApiError extends Error {
     super(`API ${status}`);
   }
 
-  /** Zod issues come back as an array; flatten them for display. */
+  /**
+   * The sentence `ErrorBox` (and the handful of call sites that read this
+   * directly) show a person. Was: zod issues flattened, else the server's raw
+   * error code, else a bare `Request failed (403)` — exactly the "bare HTTP
+   * status" `docs/info/ROLES.md` §1e (audiobook_catalog) says nobody may see.
+   * `describeApiError` (lib/errors.ts) is now the one place that decides.
+   */
   get detail(): string {
-    const b = this.body as { detail?: unknown; error?: string } | null;
-    if (!b) return `Request failed (${this.status})`;
-    if (typeof b.detail === 'string') return b.detail;
-    if (Array.isArray(b.detail)) {
-      return b.detail
-        .map((i: { path?: (string | number)[]; message?: string }) =>
-          i.path?.length ? `${i.path.join('.')}: ${i.message}` : (i.message ?? ''),
-        )
-        .join('; ');
-    }
-    return b.error ?? `Request failed (${this.status})`;
+    return describeApiError(this.status, this.body);
   }
+}
+
+/**
+ * The human sentence for anything a `catch` block might see — an `ApiError`,
+ * a `TypeError` from `fetch` itself (offline, a dropped connection, CORS —
+ * never a permission failure, `docs/info/ROLES.md` §1e is explicit on that),
+ * or an ordinary `Error`. `ErrorBox` (`components/ui.tsx`) is built on this;
+ * the few call sites that show an error outside `ErrorBox` should be too,
+ * rather than re-deriving the same ternary.
+ */
+export function describeError(err: unknown): string {
+  if (err instanceof ApiError) return err.detail;
+  if (err instanceof TypeError) {
+    return "Couldn't reach the server. Check your connection and try again.";
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ApiError } from '../api';
+import { describeError } from '../api';
 import { Link } from '../router';
 
 export function Spinner({ label = 'Loading…' }: { label?: string }) {
@@ -7,12 +7,7 @@ export function Spinner({ label = 'Loading…' }: { label?: string }) {
 }
 
 export function ErrorBox({ error, what }: { error: unknown; what?: string }) {
-  const message =
-    error instanceof ApiError
-      ? error.detail
-      : error instanceof Error
-        ? error.message
-        : String(error);
+  const message = describeError(error);
   return (
     <div className="errorbox">
       <strong>{what ?? 'Something went wrong'}</strong>

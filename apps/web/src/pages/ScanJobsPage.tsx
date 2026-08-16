@@ -9,7 +9,7 @@ import {
   type ItemKind,
   type MeResponse,
 } from '@bgc/core';
-import { api, ApiError, type EnrichedTitle, type ScanJob, type TitleOwnership } from '../api';
+import { api, describeError, type EnrichedTitle, type ScanJob, type TitleOwnership } from '../api';
 import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
 import { formatDateTime } from '../lib/dates';
@@ -915,11 +915,11 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
         setResults((r) => ({ ...r, [i]: { itemId: item.id } }));
         added.push({ index: freshEntries[i]!.originalIndex, addedItemId: item.id });
       } catch (err) {
-        // `detail`, not `message`. An ApiError's message is "API 409", which is
-        // what this row said when the catalog refused a duplicate — the useful
-        // sentence ("Ticket to Ride is already in the collection.") was in the
-        // body all along and never reached the screen.
-        const msg = err instanceof ApiError ? err.detail : String(err);
+        // `describeError`, not `err.message`. An ApiError's message is "API
+        // 409", which is what this row said when the catalog refused a
+        // duplicate — the useful sentence ("Ticket to Ride is already in the
+        // collection.") was in the body all along and never reached the screen.
+        const msg = describeError(err);
         setResults((r) => ({ ...r, [i]: { error: msg } }));
       }
     }

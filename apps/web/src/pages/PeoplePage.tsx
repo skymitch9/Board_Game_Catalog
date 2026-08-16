@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ROLES, canGrantRole, type AppUser, type MeResponse, type Role } from '@bgc/core';
+import type { MeResponse, Role } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { Badge, ErrorBox, Spinner } from '../components/ui';
 
 /**
  * Six rungs since the 2026-08-16 role redesign, `pending` a status rather than
- * a rung — see `ROLE_LADDER` in `packages/core/src/constants.ts`.
+ * a rung — see `ROLE_LADDER` in `packages/core/src/constants.ts`. Kept as the
+ * role badge's tooltip — informational, not a control, so it survived the
+ * read-only rewrite below.
  */
 const ROLE_BLURB: Record<Role, string> = {
   owner: 'Everything an admin can do, plus granting the admin role itself.',
@@ -21,66 +23,33 @@ const ROLE_BLURB: Record<Role, string> = {
   pending: 'Signed in, but sees nothing until you let them in.',
 };
 
-function RoleControls({
-  user,
-  isMe,
-  granterRole,
-  onChanged,
-}: {
-  user: AppUser;
-  isMe: boolean;
-  /** The signed-in person's own role — what `canGrantRole` checks against. */
-  granterRole: Role;
-  onChanged: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  async function set(role: Role) {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.setRole(user.id, role);
-      onChanged();
-    } catch (err) {
-      setError(err);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="person-actions">
-      {error ? <ErrorBox error={error} what="Could not change this role" /> : null}
-      {/* Derived from ROLES rather than listed again, so a role added to the
-          matrix cannot end up assignable nowhere. The old hardcoded copy of
-          this list is exactly how `viewer` would have shipped invisible.
-          Filtered through `canGrantRole` on top of that: an `admin` viewing
-          this page (manageUsers is admin+ since the redesign) must not be
-          offered a button that only 403s — "Make admin" and "Make owner" are
-          simply not drawn for them, the same rule the server enforces. */}
-      {ROLES.filter((r) => r !== user.role && canGrantRole(granterRole, r))
-        .map((role) => (
-          <button
-            key={role}
-            type="button"
-            className={role === 'pending' ? 'btn btn-quiet' : 'btn'}
-            disabled={busy}
-            onClick={() => set(role)}
-            title={ROLE_BLURB[role]}
-          >
-            {role === 'pending' ? 'Revoke' : `Make ${role}`}
-          </button>
-        ))}
-      {isMe && <span className="muted small">that&apos;s you</span>}
-    </div>
-  );
-}
-
 /**
- * The guest list. Cloudflare Access lets anyone authenticate; this decides who
- * actually gets in, which is why it lives in the app rather than the Cloudflare
- * dashboard.
+ * The guest list — READ-ONLY. Cloudflare Access lets anyone authenticate;
+ * this used to be where somebody decided who actually gets in.
+ *
+ * ⚠️ **Made read-only 2026-08-16.** Owner: *"remove all people stuff from the
+ * individual sites and have it all redirect back to the admin page on
+ * heygabi,"* refined to **read-only rather than a hard redirect** — heygabi.ai
+ * /admin is itself gated on being an *estate approver*, and an app `admin`
+ * (this repo's own delegated `manageUsers` role) is not guaranteed to be one.
+ * A redirect would bounce exactly the person `admin` was created to delegate
+ * to. Read-only keeps this screen useful for everyone who could always see
+ * it, while mutation lives in exactly one place now.
+ *
+ * Removed entirely: `RoleControls` (every `Make <role>` / `Revoke` button)
+ * and `api.setRole`'s only caller. `canGrantRole` and `ROLES` are no longer
+ * imported here for the same reason — nothing left derives a button list
+ * from them.
+ *
+ * ⚠️ **The server-side routes are unchanged and still load-bearing.**
+ * `GET /api/users` (still called, for the read) and `PATCH /api/users/:id/role`
+ * (no longer called from here, but still gated by `requireCapability
+ * ('manageUsers')` in `apps/worker/src/routes/users.ts`) are exactly how
+ * heygabi.ai/admin's federation edits this app's roles — removing or
+ * weakening either would break the estate admin page, not just this one.
+ *
+ * The cache panel below is unrelated and untouched: it clears lookup caches,
+ * never a person, so it was never in scope for this change.
  */
 export function PeoplePage({
   me,
@@ -89,17 +58,15 @@ export function PeoplePage({
   me: MeResponse;
   onPendingChange?: (n: number) => void;
 }) {
-  const [users, refresh] = useAsync(() => api.users(), []);
+  const [users] = useAsync(() => api.users(), []);
 
   const list = users.state === 'ok' ? users.data.users : null;
   const pendingCount = list?.filter((u) => u.role === 'pending').length ?? null;
 
   // Tell the nav what this page can see. The badge it draws comes from
   // `/api/me`, which is fetched once at startup and cannot notice an approval
-  // made here — and this is the one screen where that staleness is visible,
-  // because approving someone is what you came to do. Reported from the loaded
-  // list rather than from the click, so a change made in another tab and picked
-  // up by `refresh` corrects the badge too.
+  // made elsewhere (heygabi.ai/admin, now the only place one happens) — this
+  // is the one screen with a fresher count, from its own read of the roster.
   useEffect(() => {
     if (pendingCount != null) onPendingChange?.(pendingCount);
   }, [pendingCount, onPendingChange]);
@@ -121,6 +88,21 @@ export function PeoplePage({
           </p>
         </div>
       </header>
+
+      {/* The one write path left. Prominent on purpose: this used to be a page
+          full of buttons, and it is now a page with none — the reason has to
+          be right where the buttons used to be, not buried below the list. */}
+      <div className="card pending-callout">
+        <strong>
+          <a href="https://heygabi.ai/admin" target="_blank" rel="noreferrer">
+            Manage roles at heygabi.ai/admin →
+          </a>
+        </strong>
+        <span className="muted">
+          This page is read-only. Approving people, changing a role, or revoking one all happen
+          there now.
+        </span>
+      </div>
 
       {pending.length > 0 && (
         <div className="card pending-callout">
@@ -165,28 +147,25 @@ export function PeoplePage({
                 (`editCatalog` is contributor+), and the finer distinctions
                 between them — who can manage users, who can photo-scan — are
                 spelled out in `ROLE_BLURB` rather than in a fifth colour. */}
-            <Badge
-              tone={
-                u.role === 'owner' ||
-                u.role === 'admin' ||
-                u.role === 'moderator' ||
-                u.role === 'contributor'
-                  ? 'owned'
-                  : u.role === 'member'
-                    ? 'lent'
-                    : u.role === 'guest'
-                      ? 'preordered'
-                      : 'wanted'
-              }
-            >
-              {u.role}
-            </Badge>
-            <RoleControls
-              user={u}
-              isMe={u.email === me.email}
-              granterRole={me.role}
-              onChanged={refresh}
-            />
+            <span title={ROLE_BLURB[u.role]}>
+              <Badge
+                tone={
+                  u.role === 'owner' ||
+                  u.role === 'admin' ||
+                  u.role === 'moderator' ||
+                  u.role === 'contributor'
+                    ? 'owned'
+                    : u.role === 'member'
+                      ? 'lent'
+                      : u.role === 'guest'
+                        ? 'preordered'
+                        : 'wanted'
+                }
+              >
+                {u.role}
+              </Badge>
+            </span>
+            {u.email === me.email && <span className="muted small">that&apos;s you</span>}
           </li>
         ))}
       </ul>

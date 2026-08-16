@@ -10,7 +10,7 @@ import {
   type MeResponse,
   type ShelfMatch,
 } from '@bgc/core';
-import { api, ApiError, type BarcodeLookup } from '../api';
+import { api, ApiError, describeError, type BarcodeLookup } from '../api';
 import { captureFrame, fileToPhoto, onceSteady } from '../lib/camera';
 import { copyDefaults, createItemFromCandidate } from '../lib/catalog-add';
 import { preloadDecoder, startScanLoop } from '../lib/scanner';
@@ -741,7 +741,7 @@ function ShelfResult({
       } catch (err) {
         setResults((r) => ({
           ...r,
-          [i]: { error: err instanceof ApiError ? err.detail : String(err) },
+          [i]: { error: describeError(err) },
         }));
       }
     }

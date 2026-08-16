@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { api, ApiError, type EnrichedTitle, type ScanJob } from '../api';
+import { api, describeError, type EnrichedTitle, type ScanJob } from '../api';
 import { fileToImageSource } from '../lib/camera';
 import { decodeStill, preloadDecoder, startScanLoop } from '../lib/scanner';
 import { CameraStage } from './CameraStage';
@@ -189,7 +189,7 @@ export function BarcodeQueue({
       } catch (err) {
         // A failed request must not stop the camera; it is one line, reported
         // on its own row, and the next box is already coming.
-        const detail = err instanceof ApiError ? err.detail : String(err);
+        const detail = describeError(err);
         setRows((prev) =>
           prev.map((r) =>
             r.code === code && r.state === 'pending' ? { ...r, state: 'error', detail } : r,
