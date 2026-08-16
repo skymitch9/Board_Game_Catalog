@@ -27,3 +27,14 @@
   Cache-Control: no-cache
 /assets/theme.js
   Cache-Control: no-cache
+
+# ⚠️ Same rule, same reason, for the materialised <estate-search> component
+# (scripts/sync-estate-search.mjs writes apps/web/public/estate/). It is copied
+# in verbatim from catalog-platform and is NOT content-hashed, so it must
+# revalidate — the whole point of the shared component is that an improvement
+# made upstream reaches this site, and a year-long cache would defeat that for
+# every browser that ever loaded the old one. It sits outside /assets/ so it
+# does not inherit the immutable rule in the first place; this line is the
+# belt to that braces.
+/estate/*
+  Cache-Control: no-cache

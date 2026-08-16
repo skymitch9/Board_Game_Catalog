@@ -5,6 +5,11 @@ dist/
 # auth module). A build artifact of scripts/sync-estate-auth.mjs — never
 # committed, because two copies of an auth file drift (estate-auth-design §1.1).
 apps/worker/src/estate-auth/
+# Materialised copy of catalog-platform's <estate-search> custom element (the
+# canonical cross-catalog search box). A build artifact of
+# scripts/sync-estate-search.mjs — never committed, so a search improvement made
+# upstream reaches every site instead of dying in a per-repo fork.
+apps/web/public/estate/
 *.local
 .env
 .env.*

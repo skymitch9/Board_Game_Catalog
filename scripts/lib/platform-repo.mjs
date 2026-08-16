@@ -79,5 +79,9 @@ export function platformPaths(dir) {
   return {
     dir,
     estateAuthSrc: join(dir, 'packages', 'estate-auth', 'src'),
+    // The browser-native shared assets the apex both owns and serves. The
+    // canonical <estate-search> custom element lives here (docs/TODO.md §0.1);
+    // scripts/sync-estate-search.mjs materialises it into apps/web/public/.
+    estateAssets: join(dir, 'sites', 'heygabi-home', 'public', 'assets'),
   };
 }
