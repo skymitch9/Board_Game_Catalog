@@ -28,12 +28,22 @@
  * breaking writes — is handled by refreshing on a 401 (see `api.ts`) rather
  * than by throwing the session away.
  *
- * ⚠️ Consequence worth knowing before anyone debugs a mystery sign-out: all
- * three catalogs share one Firebase Auth session on the `audiobook-catalog`
- * project. Loading the audiobook site signs you out of Firebase, and therefore
- * out of this app too, because that site detaches on every page load. That is
- * why `catalog-platform/docs/HEYGABI_LAYOUT.md` §1.3 forbids adding more auth
- * origins, and why the apex landing page has no sign-in at all.
+ * ⚠️ Updated 2026-08-16 — the paragraph this replaces was stale. Firebase web
+ * auth sessions are **origin-scoped** (separate IndexedDB per origin), not
+ * shared across the estate, so loading the audiobook site does NOT sign you
+ * out of this app. That was true when this comment was first written (the
+ * audiobook site used to `signOut()` on every load to protect its
+ * presentation-only identity), but `audiobook_catalog/site/identity.js` v2
+ * (2026-08-14) removed that detach, and it never crossed origins to begin
+ * with even when it existed. `catalog-platform/docs/HEYGABI_LAYOUT.md` §1.3's
+ * "no more auth origins" rule still stands, but its real remaining cost is
+ * authorised-domain/console surface (see
+ * `catalog-platform/docs/info/sso-design.md` §2), not a cross-app sign-out
+ * hazard. As of this same date `authDomain` below points at
+ * `auth.heygabi.ai` (a same-site reverse proxy to the Firebase auth ceremony,
+ * `sso-design.md` §4.1) purely to make sign-in reliable on mobile — it still
+ * does not share a session with the other surfaces (§4.1: "does NOT give
+ * session sharing").
  */
 
 import { initializeApp, type FirebaseApp } from 'firebase/app';
@@ -60,7 +70,7 @@ import {
  */
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'AIzaSyDgAblkxzVxl7nFbd7jXOo6PpuNPsJw11Y',
-  authDomain: 'audiobook-catalog.firebaseapp.com',
+  authDomain: 'auth.heygabi.ai',
   projectId: 'audiobook-catalog',
 };
 
