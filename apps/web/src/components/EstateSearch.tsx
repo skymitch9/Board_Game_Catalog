@@ -171,6 +171,13 @@ export function EstateSearch() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
+  /**
+   * The component is ~73KB and most visits never open this fold, so it is
+   * fetched on the first open and never again (`loadEstateSearch` memoises the
+   * import, and this flag never goes back to false — closing the fold hides the
+   * box, it does not throw it away and re-boot its auth).
+   */
+  const [armed, setArmed] = useState(false);
 
   // `setOpen` is stable, so this listener is installed once at mount and never
   // needs replacing — which is what keeps the effect below from tearing the
@@ -186,7 +193,7 @@ export function EstateSearch() {
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!armed || !host) return;
     let live = true;
 
     void loadEstateSearch().then(
@@ -219,10 +226,18 @@ export function EstateSearch() {
       live = false;
       host.replaceChildren();
     };
-  }, [onSelect]);
+  }, [armed, onSelect]);
 
   return (
-    <details className="estate-search" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+    <details
+      className="estate-search"
+      open={open}
+      onToggle={(e) => {
+        const isOpen = e.currentTarget.open;
+        setOpen(isOpen);
+        if (isOpen) setArmed(true);
+      }}
+    >
       <summary>Search the whole estate</summary>
       <div className="estate-search__body">
         {failed && (
