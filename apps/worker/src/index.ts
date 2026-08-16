@@ -171,13 +171,30 @@ export default {
     // for the other schedules, and running them four times as often on this
     // one would be a silent side effect of adding a feature.
     if (event.cron === DETAILS_SWEEP_CRON) {
-      ctx.waitUntil(
-        runDetailsSweep(env).then(
-          (run) => console.log('details sweep', JSON.stringify(run)),
-          (err) => console.error('details sweep failed', err),
-        ),
+      // ⚠️ RETURNED, not just waitUntil'd — and this is load-bearing.
+      //
+      // Shipped 2026-08-16 with `ctx.waitUntil(...)` alone, which was wrong for
+      // the same reason this repo already wrote down about the REQUEST path
+      // (routes/research.ts): "a waitUntil task gets about thirty seconds after
+      // the response is returned", while one enrichment takes **20 to 70
+      // seconds**. A sweep of up to 8 of them would have finished roughly ONE
+      // and been killed mid-flight, leaving a run stuck at `running` forever —
+      // the exact shape of failure that makes a stalled shelf indistinguishable
+      // from a working one.
+      //
+      // Returning the promise is what extends a scheduled invocation's
+      // lifetime. waitUntil is kept alongside it as belt and braces; the two
+      // are not alternatives and cost nothing together.
+      //
+      // The lesson generalises: this repo learned the waitUntil-is-too-short
+      // rule on the request path and it did not travel to the scheduled path.
+      // Any NEW background work here inherits the same trap.
+      const sweeping = runDetailsSweep(env).then(
+        (run) => console.log('details sweep', JSON.stringify(run)),
+        (err) => console.error('details sweep failed', err),
       );
-      return;
+      ctx.waitUntil(sweeping);
+      return sweeping;
     }
 
     if (event.cron === COMPONENT_REFRESH_CRON) {
