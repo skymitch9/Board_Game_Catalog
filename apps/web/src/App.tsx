@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { MeResponse } from '@bgc/core';
 import { ApiError, api } from './api';
 import { useAsync, useAuthUser } from './hooks';
@@ -19,13 +18,7 @@ import { CoverHealthBanner } from './components/CoverHealthBanner';
 import { ThemeToggle } from './components/ThemeToggle';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
-function Routes({
-  me,
-  onPendingChange,
-}: {
-  me: MeResponse;
-  onPendingChange: (n: number) => void;
-}) {
+function Routes({ me }: { me: MeResponse }) {
   const route = useRoute();
 
   switch (route.name) {
@@ -65,7 +58,7 @@ function Routes({
       return me.capabilities.includes('editCatalog') ? <ExportPage /> : <NotFoundPage />;
     case 'people':
       return me.capabilities.includes('manageUsers') ? (
-        <PeoplePage me={me} onPendingChange={onPendingChange} />
+        <PeoplePage me={me} />
       ) : (
         <NotFoundPage />
       );
@@ -101,10 +94,6 @@ export default function App() {
 
 function SignedInApp() {
   const [me] = useAsync(() => api.me(), []);
-  // Set by the People page while it is open; null means "nobody has told me
-  // anything better than the count that arrived with /api/me".
-  const [pendingOverride, setPendingOverride] = useState<number | null>(null);
-
   if (me.state === 'loading') return <Spinner label="Signing in…" />;
 
   if (me.state === 'error') {
@@ -155,20 +144,9 @@ function SignedInApp() {
   const chores = me.data.chores;
   const showRetag = canEdit && (chores == null || chores.relatedGames > 0);
   const showDetails = canEdit && (chores == null || chores.missingDetails > 0);
-  // The reverse of the rule above, deliberately. An unknown count hides the
-  // badge instead of showing it: those links guard against a screen you cannot
-  // reach, whereas this decorates a link that is always there, and a badge
-  // invented from `undefined` would claim somebody is waiting when nobody is.
-  // `?? 0` therefore covers both a failed count and an older worker.
-  //
-  // The override is what keeps it honest while you work. `chores` is fixed at
-  // the last full page load — fine for the two maintenance links, wrong here,
-  // because approving someone is done on the very page the badge points at, and
-  // a badge still saying 3 after you cleared the queue teaches you to ignore it.
-  // Re-fetching /api/me is not the fix: `useAsync` drops back to `loading`, so
-  // the whole app would blink through "Signing in…" on every role change. The
-  // People page already counts them for its own callout, so it just says so.
-  const waiting = pendingOverride ?? chores?.pendingUsers ?? 0;
+  // (The People nav badge that used to live here went with the People link on
+  // 2026-08-16 — see the note in the nav below for why, and for what would
+  // have to come back with it.)
 
   return (
     <main>
@@ -206,25 +184,32 @@ function SignedInApp() {
               Missing details{chores ? ` (${chores.missingDetails})` : ''}
             </Link>
           )}
-          {/* Unlike the two maintenance links above, People is always drawn —
-              it is the only way to change anyone's role, so it cannot hide when
-              it happens to be quiet. The badge is the opposite case to those
-              counts: a waiting person is the one piece of outstanding work
-              nothing else in the app mentions, so it is a filled badge rather
-              than "(N)" in the link text. Zero draws nothing. */}
-          {me.data.capabilities.includes('manageUsers') && (
-            <Link to="/people">
-              People
-              {waiting > 0 && (
-                <span
-                  className="nav-badge"
-                  title={`${waiting} ${waiting === 1 ? 'person is' : 'people are'} waiting to be let in`}
-                >
-                  {waiting}
-                </span>
-              )}
-            </Link>
-          )}
+          {/* ⚠️ NO "People" LINK HERE — removed from the nav 2026-08-16 at the
+              owner's request ("remove /people from the nav on library and
+              games; keep the page just hide it from nav"). The route and the
+              page are UNTOUCHED: /people still resolves and still renders,
+              and `manageUsers` still gates it. This hides the door; it was
+              never the lock.
+
+              This link used to carry a filled badge counting people waiting
+              to be let in, and the argument for it was that People "cannot
+              hide when it happens to be quiet" because it was the only way to
+              change a role. That stopped being true — roles are granted on
+              heygabi.ai/admin now, which is what made this page read-only.
+              With no action left here, an always-drawn link advertising a
+              count you cannot act on is worse than no link.
+
+              The badge's whole support structure went with it (see the
+              deleted `pendingOverride` state): it existed ONLY to keep this
+              number honest while the People page was open, since `chores` is
+              fixed at the last full page load and a badge still reading 3
+              after you cleared the queue teaches you to ignore badges.
+              PeoplePage's `onPendingChange` prop is optional and now simply
+              goes uncalled — left in place so the page needs no edit at all.
+
+              ⚠️ Do not "restore the missing link" — its absence is the
+              feature, and restoring it means restoring the override plumbing
+              too, or the badge silently lies. Needs the owner's word. */}
           {/* Taking the collection away with you is a place, not an action —
               two formats that are not interchangeable, so something has to
               offer the choice. It used to be two bare links in the collection
@@ -256,7 +241,7 @@ function SignedInApp() {
       {/* Above the page rather than inside one: a dead cover is a fact about
           the catalog, not about whichever screen happens to be open. */}
       <CoverHealthBanner me={me.data} />
-      <Routes me={me.data} onPendingChange={setPendingOverride} />
+      <Routes me={me.data} />
     </main>
   );
 }
