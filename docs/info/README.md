@@ -16,6 +16,7 @@ flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
 | [`copy-status-history.md`](copy-status-history.md) | ⏳ **PLANNED, not built.** Marking a copy sold/given away and keeping its history — why the statuses that already exist have never been used, and the one question the owner has to answer first |
 | [`future-plans.md`](future-plans.md) | Deferred ideas, and the measurements that killed the ones already tried |
 | [`cost-reduction.md`](cost-reduction.md) | Measured cost of every lookup path, and the one change that would move the needle |
+| [`matcher-thresholds.md`](matcher-thresholds.md) | Measured sweep of `matchExistingTitle`'s containment floor (the real knob — not the 0.34 lookup floor), the BOSS MONSTER reproduction, and the evidence for 0.68. Measurement only; the threshold is unchanged |
 
 The overall architecture and phase plan are in [`../DESIGN.md`](../DESIGN.md);
 the repo map is in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.
