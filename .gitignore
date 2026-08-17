@@ -27,3 +27,8 @@ apps/web/public/assets/
 *.log
 .vscode/
 !.vscode/extensions.json
+
+# credentials-catalog F-3 (2026-08-17): cover .dev.vars variants + .env; repo is PUBLIC.
+.env
+.env.*
+.dev.vars.*
