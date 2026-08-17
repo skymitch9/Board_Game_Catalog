@@ -20,6 +20,11 @@ import { EstateSearch } from './components/EstateSearch';
 import { ThemeToggle } from './components/ThemeToggle';
 import { EmptyState, ErrorBox, Spinner } from './components/ui';
 
+// The estate-wide search bar's visibility switch — see the comment at its
+// render site. false = hidden on owner order 2026-08-17 ("might want later");
+// flip to true to bring it back, nothing else needs touching.
+const SHOW_ESTATE_SEARCH = false;
+
 function Routes({ me }: { me: MeResponse }) {
   const route = useRoute();
 
@@ -255,8 +260,15 @@ function SignedInApp() {
           reaches the audiobooks and the library, which that box cannot show.
           Folded shut by default for exactly that reason — two search boxes
           side by side is one question too many on a screen whose job is the
-          collection. */}
-      <EstateSearch />
+          collection.
+
+          ⚠️ HIDDEN on owner order 2026-08-17 ("Cool but not needed currently.
+          Don't delete tho just hide it. Might want later"): rendered false
+          via the constant below its imports, component + sync script + the
+          _headers index.heygabi.ai allowances all kept intact so re-enabling
+          is flipping one constant. Do NOT delete EstateSearch.tsx,
+          sync-estate-search.mjs, or the CSP entries while this is false. */}
+      {SHOW_ESTATE_SEARCH && <EstateSearch />}
       {/* Above the page rather than inside one: a dead cover is a fact about
           the catalog, not about whichever screen happens to be open. */}
       <CoverHealthBanner me={me.data} />
