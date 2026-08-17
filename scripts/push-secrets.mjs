@@ -34,11 +34,51 @@ const CONFIG = join(root, 'apps', 'worker', 'wrangler.toml');
  */
 const PRODUCTION_SECRETS = ['ANTHROPIC_API_KEY', 'BGG_API_TOKEN', 'GAMEUPC_API_KEY'];
 
-/** Local-only by design. Listed so the script can say *why* it skipped them. */
+/**
+ * Local-only by design. Listed so the script can say *why* it skipped them.
+ *
+ * ⚠️ The last five entries were added 2026-08-17 for the estate credentials
+ * catalog's **F-4**, and they are the reason to read this list before touching
+ * the one above it. F-4 observed that `ESTATE_APP_TOKEN_GAMES` and
+ * `INDEX_PUSH_TOKEN` are live production secrets, sit in `.dev.vars`, and
+ * appear in NEITHER list — so `secrets:push` reports them "not in the
+ * allowlist" and skips them, and a session rotating them here would believe it
+ * had rotated production. All true. But the obvious repair — moving them into
+ * `PRODUCTION_SECRETS` — is **wrong and destructive**, which is why they are
+ * here instead.
+ *
+ * Measured 2026-08-17, before deciding: this repo's `.dev.vars` holds the
+ * **LOCAL DEV** values for both, not the production ones. `INDEX_URL` there is
+ * `http://127.0.0.1:8788`, `ESTATE_AUTH_URL` is `http://127.0.0.1:8798` and
+ * `ESTATE_CHECK` is `off` — a local mock block — and the local
+ * `INDEX_PUSH_TOKEN` was confirmed **byte-equal** to the index Worker's own
+ * `.dev.vars` `INDEX_PUSH_TOKEN_GAME` (compared as a boolean; no value read,
+ * none printed). Allowlisting them would push a **localhost dev token over the
+ * live credential** on the next unrelated rotation: the games catalog's estate
+ * check would begin answering `estate_unreachable` and its index push would
+ * begin 401ing — both silent, both caused by a "cleanup".
+ *
+ * So the correction is the opposite of the obvious one. The script now KNOWS
+ * about these names and says out loud that `.dev.vars` is not their source of
+ * truth: `wrangler secret put` is, on both sides, in one sitting.
+ */
 const LOCAL_ONLY = {
   ENVIRONMENT: 'set in wrangler.toml for production',
   DEV_EMAIL: 'local auth bypass — must never exist in production',
   GAMEUPC_STAGE: 'defaults correctly from whether a key is set',
+  // ⚠️ PAIRED in production with catalog-platform's auth Worker, SAME NAME on
+  // both sides. Rotate here AND there in one sitting; a one-sided rotation is
+  // a 403 that reads exactly like a code bug.
+  ESTATE_APP_TOKEN_GAMES:
+    'LOCAL DEV value (the 127.0.0.1:8798 mock). Production is set BY HAND — `npx wrangler secret put ESTATE_APP_TOKEN_GAMES`, and the SAME value on catalog-platform auth-worker. Editing it here rotates nothing, and pushing it would overwrite production with a dev token',
+  // ⚠️ PAIRED with the index Worker under a DIFFERENT NAME there:
+  // `INDEX_PUSH_TOKEN_GAME` (singular _GAME). The value here is that Worker's
+  // LOCAL value — verified equal 2026-08-17.
+  INDEX_PUSH_TOKEN:
+    'LOCAL DEV value (equals index-worker .dev.vars INDEX_PUSH_TOKEN_GAME, for 127.0.0.1:8788). Production is set BY HAND — `npx wrangler secret put INDEX_PUSH_TOKEN`, matching the index Worker’s INDEX_PUSH_TOKEN_GAME. Same warning: pushing this would overwrite production with a dev token',
+  INDEX_URL: 'set in wrangler.toml for production; the value here points at local dev',
+  ESTATE_AUTH_URL: 'set in wrangler.toml for production; the value here points at a local mock',
+  ESTATE_CHECK: 'set in wrangler.toml for production (`off` locally keeps dev quiet)',
 };
 
 function parseDevVars(text) {
