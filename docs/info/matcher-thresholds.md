@@ -8,6 +8,14 @@ Evidence for the standing TODO item "Two thresholds worth re-measuring one
 day". **Measurement only — nothing in production code was changed.** The
 threshold decision belongs to the owner; this file is the evidence for it.
 
+> ⚠️ **That sentence is now HISTORY — corrected 2026-08-17 by the docs hygiene
+> sweep.** The owner approved the recommendation and it SHIPPED:
+> `packages/core/src/vision.ts:310` reads `return shorter / longer >= 0.68`
+> (commit `1b7763e`), and the confirm-first UX for the sequel class shipped
+> alongside it (`5e6a8a7`). The TODO item this file was evidence for is
+> finished and now lives in [`../DONE.md`](../DONE.md). Everything below stays
+> exactly as measured — it is the evidence, not the status.
+
 Reproduce everything here with:
 
 ```
