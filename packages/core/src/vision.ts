@@ -236,11 +236,28 @@ export function matchIndexedTitle<T extends { id: number; name: string }>(
         if (e.key.length < 3) return false;
         const contains = e.key.includes(target) || target.includes(e.key);
         if (!contains) return false;
-        // Require the shorter string to be at least 60% of the longer one.
+        // Require the shorter string to be at least 68% of the longer one.
         // This prevents "Scythe" matching "Scythe: Invaders from Afar".
+        //
+        // 0.60 -> 0.68, owner-approved 2026-08-16 on MEASURED evidence
+        // (docs/info/matcher-thresholds.md; harness scripts/measure-matcher.ts):
+        // "boss monster" vs "super boss monster 2" is 12/20 = 0.600 - exactly
+        // on the old gate - and was auto-filed under the sequel on a real scan.
+        // Replaying all 255 real production shelf reads, every containment
+        // match that 0.68 rejects was WRONG at 0.60 (Dice Throne -> Marvel
+        // Dice Throne, Deep Rock Galactic -> a promo mini, the Boss Monster
+        // incident); zero correct real answers are lost. Exact and alias
+        // matches never reach this gate and are untouched.
+        //
+        // What this deliberately does NOT fix: the sequel class ("X 2",
+        // "Super X") has length ratios near 1.0 and survives ANY floor - and
+        // " 2" is invisible to titleWords (1-char tokens dropped). That needs
+        // confirm-first UX, recorded in the measurement doc as a design item.
+        // Do not chase it by raising this number further; 0.95 still admits
+        // 16% of synthetic sequels while rejecting 73% of legitimate reads.
         const shorter = Math.min(e.key.length, target.length);
         const longer = Math.max(e.key.length, target.length);
-        return shorter / longer >= 0.6;
+        return shorter / longer >= 0.68;
       })
       .sort((a, b) => b.key.length - a.key.length)[0]?.item ?? null
   );
