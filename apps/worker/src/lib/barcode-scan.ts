@@ -16,9 +16,11 @@ import {
   classifyShelfResults,
   isPlausibleBarcode,
   matchExistingTitle,
+  matchExistingTitleDetailed,
   normaliseBarcode,
   type BarcodeCandidate,
   type ItemKind,
+  type TitleMatchKind,
 } from '@bgc/core';
 import { gameUpcConfig, resolveBarcode } from '@bgc/barcode';
 import { countOwnedCopies, findByBarcode, listItemAliases, listItemNames } from '@bgc/db';
@@ -71,6 +73,38 @@ export interface ScannedTitle {
    * second job used to keep offering a game the first had already added.
    */
   ownership?: ResolvedOwnership | null;
+
+  /**
+   * *How* the enrichment-time name match behind `existingItemId` was made.
+   *
+   * Persisted precisely because the three kinds do not deserve the same trust:
+   * `exact` and `alias` are identity and stay automatic, but `containment` is a
+   * guess the sequel class defeats at any floor ("Boss Monster 2" read against
+   * an owned "Boss Monster" — see docs/info/matcher-thresholds.md). A
+   * containment claim reaches the review screen as a *question*, and this field
+   * is how the read path knows to ask it.
+   *
+   * Absent on legacy rows and on rows whose claim is not a name match at all
+   * (an exact barcode hit) — both are treated as trusted, which is exactly the
+   * old behaviour.
+   */
+  matchKind?: TitleMatchKind | null;
+  /**
+   * A person answered the containment question with "yes, same game".
+   *
+   * Set only by an explicit action on the review screen, like `acceptedMatch`.
+   * Once set, the row settles as already-owned instead of asking again.
+   */
+  ownershipConfirmed?: boolean;
+  /**
+   * A person answered the containment question with "no, different game".
+   *
+   * The row then becomes an ordinary add-candidate: the read path stops
+   * honouring containment matches for it (exact and alias still count, because
+   * those are identity — e.g. the game gets added properly later and a rescan
+   * really is it).
+   */
+  ownershipRejected?: boolean;
 
   /**
    * The runners-up, best first, including the one currently on the row.
@@ -319,22 +353,30 @@ export async function resolveScannedBarcode(
   // to collide with something owned would file a genuinely new game under
   // "already yours", which loses it — much worse than a duplicate.
   const [existing, aliases] = await Promise.all([listItemNames(env.DB), listItemAliases(env.DB)]);
-  const owned = needsConfirmation ? null : matchExistingTitle(best.name, existing, aliases);
+  const owned = needsConfirmation ? null : matchExistingTitleDetailed(best.name, existing, aliases);
   if (owned) {
+    // `matchKind` travels with the claim. Exact and alias matches settle the
+    // row as before; a containment match is a guess ("Boss Monster 2" contains
+    // "Boss Monster") and the review screen turns it into a question instead of
+    // filing a possibly-new game under "already yours" — which would lose it.
+    const guess = owned.matchKind === 'containment';
     return {
       ...base,
       title: best.name,
       alreadyOwned: true,
-      existingItemId: owned.id,
-      existingName: owned.name,
+      existingItemId: owned.item.id,
+      existingName: owned.item.name,
+      matchKind: owned.matchKind,
       bggId: best.bggId,
       resolvedName: best.name,
       thumbnailUrl: best.thumbnailUrl,
       publisher: best.publisher,
       yearPublished: best.yearPublished,
-      ownedQuantity: await countOwnedCopies(env.DB, owned.id),
+      ownedQuantity: await countOwnedCopies(env.DB, owned.item.id),
       updateUrl: resolved.updateUrls?.[best.bggId ?? -1] ?? null,
-      reason: 'A different barcode, but this game is already in the collection.',
+      reason: guess
+        ? `"${best.name}" looks like "${owned.item.name}", which is already in the collection — but only the names are close. Say at review whether it is the same game.`
+        : 'A different barcode, but this game is already in the collection.',
     };
   }
 

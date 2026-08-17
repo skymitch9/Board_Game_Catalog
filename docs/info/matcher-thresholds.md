@@ -173,6 +173,23 @@ Worth knowing before deciding:
   matters, it needs a different guard (e.g. trailing-number mismatch veto) or
   a confirm-first UX for containment matches — a design change, not a
   threshold.
+  **→ BUILT 2026-08-16 (confirm-first).** The matcher now says *how* it
+  matched — `matchIndexedTitleDetailed` / `matchExistingTitleDetailed` in
+  `packages/core/src/vision.ts` return `matchKind:
+  'exact' | 'alias' | 'containment'`; the plain functions are unchanged
+  wrappers. Enrichment persists the kind on the queue row
+  (`ScannedTitle.matchKind`, `apps/worker/src/lib/barcode-scan.ts`; set in
+  `enrichOne` and the barcode name-match), and `resolveOwnership`
+  (`apps/worker/src/lib/scan-ownership.ts`) marks any unanswered containment
+  match `pendingConfirmation`. The review screen (`ScanJobsPage.tsx`) renders
+  those rows as **"Looks like {existing} — same game?"** with confirm/reject:
+  confirm settles the row as already-owned (persisted as
+  `ownershipConfirmed`), reject (`ownershipRejected`) turns it into an
+  ordinary add-candidate and stops containment matches being honoured for
+  that row. Exact/alias passes and the 0.68 floor are untouched; rows
+  enriched before the field existed carry no `matchKind` and keep the old
+  auto-file behaviour. Tests:
+  `apps/worker/src/lib/ownership-confirm.test.ts`.
 - Two real reads ("Deep Rock Galactic" at 0.545, "Tic Tac K.O." at 0.35) show
   the *owned correct row sitting under the gate* while a wrong row passed it.
   Containment + longest-wins can prefer a promo over the base game; a floor

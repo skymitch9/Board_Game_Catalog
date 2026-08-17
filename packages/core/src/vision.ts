@@ -116,6 +116,21 @@ export function matchExistingTitle<T extends { id: number; name: string }>(
 }
 
 /**
+ * `matchExistingTitle`, saying how it matched — see `matchIndexedTitleDetailed`.
+ *
+ * The enrichment paths use this so a containment guess can be *persisted as a
+ * guess* (`matchKind` on the queue row) and reach the review screen as a
+ * question rather than a fact.
+ */
+export function matchExistingTitleDetailed<T extends { id: number; name: string }>(
+  title: string,
+  existing: readonly T[],
+  aliases: readonly ItemAliasRef[] = [],
+): TitleMatch<T> | null {
+  return matchIndexedTitleDetailed(buildTitleIndex(existing, aliases), title);
+}
+
+/**
  * One known other name for one item — see `migrations/0021_item_alias.sql`.
  *
  * Structural rather than the db package's row type, so `packages/core` stays a
@@ -198,6 +213,26 @@ export function buildTitleIndex<T extends { id: number; name: string }>(
 }
 
 /**
+ * How a title matched, in falling order of how much the match claims.
+ *
+ * `exact` and `alias` are *identity*: the same string, or a string the catalog
+ * has been explicitly told is the same game. `containment` is a *guess* gated
+ * only by a length ratio — and the measurement in
+ * `docs/info/matcher-thresholds.md` proved the sequel class ("Boss Monster 2"
+ * read against an owned "Boss Monster") sails over that gate at any floor.
+ * Anything acting on a containment match should therefore ask the person
+ * rather than tell them: filing a genuinely new sequel under its base game
+ * LOSES the game, because nobody re-checks "already owned".
+ */
+export type TitleMatchKind = 'exact' | 'alias' | 'containment';
+
+/** A match plus how it was made — the input to any confirm-first decision. */
+export interface TitleMatch<T> {
+  item: T;
+  matchKind: TitleMatchKind;
+}
+
+/**
  * `matchExistingTitle`, against a pre-folded catalog. Identical rules.
  *
  * **Aliases answer the exact question only, and that is the whole design.** A
@@ -207,7 +242,7 @@ export function buildTitleIndex<T extends { id: number; name: string }>(
  * |---|---|
  * | exact, real name | the same game, said the same way |
  * | exact, alias | the same game, said another way — asserted, not inferred |
- * | containment, real name only | a guess, gated at 60% of the longer string |
+ * | containment, real name only | a guess, gated at 68% of the longer string |
  *
  * An alias is an *identity claim* about one specific string, so it needs no
  * similarity score and gets no similarity credit. Letting aliases into the
@@ -221,17 +256,32 @@ export function matchIndexedTitle<T extends { id: number; name: string }>(
   index: TitleIndex<T>,
   title: string,
 ): T | null {
+  return matchIndexedTitleDetailed(index, title)?.item ?? null;
+}
+
+/**
+ * `matchIndexedTitle`, saying *how* it matched. Same rules, same answer.
+ *
+ * The kind exists because the three passes do not deserve the same trust —
+ * see `TitleMatchKind`. Callers that act automatically on a match should do so
+ * only for `exact`/`alias`; a `containment` match is the review screen's cue to
+ * ask "same game?" instead of asserting "already owned". `matchIndexedTitle`
+ * stays as the plain wrapper so existing callers are untouched.
+ */
+export function matchIndexedTitleDetailed<T extends { id: number; name: string }>(
+  index: TitleIndex<T>,
+  title: string,
+): TitleMatch<T> | null {
   const target = normaliseTitle(title);
   if (target.length < 2) return null;
 
   const exact = index.entries.find((e) => e.key === target);
-  if (exact) return exact.item;
+  if (exact) return { item: exact.item, matchKind: 'exact' };
 
   const aliased = index.aliasKeys.get(target);
-  if (aliased) return aliased;
+  if (aliased) return { item: aliased, matchKind: 'alias' };
 
-  return (
-    index.entries
+  const contained = index.entries
       .filter((e) => {
         if (e.key.length < 3) return false;
         const contains = e.key.includes(target) || target.includes(e.key);
@@ -259,8 +309,9 @@ export function matchIndexedTitle<T extends { id: number; name: string }>(
         const longer = Math.max(e.key.length, target.length);
         return shorter / longer >= 0.68;
       })
-      .sort((a, b) => b.key.length - a.key.length)[0]?.item ?? null
-  );
+      .sort((a, b) => b.key.length - a.key.length)[0]?.item;
+
+  return contained ? { item: contained, matchKind: 'containment' } : null;
 }
 
 /**

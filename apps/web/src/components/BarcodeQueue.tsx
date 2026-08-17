@@ -67,7 +67,11 @@ const STATE_TONE: Record<RowState, 'neutral' | 'owned' | 'wanted' | 'kind'> = {
  *   and the person holding the box is the one who can settle it.
  */
 function stateOf(title: EnrichedTitle): RowState {
-  if (title.alreadyOwned) return 'owned';
+  // A containment-kind ownership claim is a GUESS ("Boss Monster 2" contains
+  // "Boss Monster") and the review screen will ask "same game?" rather than
+  // file it. Announcing "Already yours" here — with the lower you-have-it beep
+  // — would have the person shelve a box the queue is still asking about.
+  if (title.alreadyOwned) return title.matchKind === 'containment' ? 'check' : 'owned';
   if (title.lookupFailed) return 'unreachable';
   if (!title.resolvedName) return 'unknown';
   return title.needsConfirmation ? 'check' : 'queued';

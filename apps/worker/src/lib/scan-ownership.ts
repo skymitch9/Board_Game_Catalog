@@ -41,9 +41,10 @@
 import {
   buildTitleIndex,
   isConfidentMatch,
-  matchIndexedTitle,
+  matchIndexedTitleDetailed,
   type ItemAliasRef,
   type TitleIndex,
+  type TitleMatchKind,
 } from '@bgc/core';
 import {
   listAddedItemSources,
@@ -91,6 +92,28 @@ export interface ResolvedOwnership {
   via: OwnershipVia;
   /** How the *other* job took it in, so the copy can say "photo" or "scan". */
   jobMode: ScanJobMode | null;
+  /**
+   * How the name matched: `exact`/`alias` are identity, `containment` is a
+   * guess. Null when the row's claim is not a name match at all — an exact
+   * barcode hit, or a legacy row enriched before the kind was recorded — and
+   * both of those stay trusted, which is the old behaviour.
+   */
+  matchKind: TitleMatchKind | null;
+  /**
+   * The confirm-first flag: a containment guess nobody has answered yet.
+   *
+   * True means the review screen renders this as "Looks like X — same game?"
+   * with confirm/reject, and the row still counts as outstanding — a job must
+   * not close itself on an unanswered question. False for identity matches,
+   * for legacy claims, and once the person has confirmed.
+   *
+   * This exists because the measurement (docs/info/matcher-thresholds.md)
+   * proved the sequel class unfixable by any containment floor: "X 2" has a
+   * length ratio near 1.0 and " 2" is invisible to word-level similarity. A
+   * misfiled sequel is a LOST game — nobody re-checks "already owned" — so the
+   * guess class reaches a person as a question, never as a fact.
+   */
+  pendingConfirmation: boolean;
 }
 
 /**
@@ -174,16 +197,35 @@ export function resolveOwnership(
 ): ResolvedOwnership | null {
   if (t.addedItemId || t.dismissed) return null;
 
+  // "No, different game" suppresses the guess class and only the guess class.
+  // Exact and alias matches still count — they are identity, and the honest
+  // case is the game genuinely entering the catalog later under its own name.
+  const rejected = !!t.ownershipRejected;
+
+  let item: { id: number; name: string } | null = null;
+  let matchKind: TitleMatchKind | null = null;
+
   // What the row already claims, when that item is still there. This is what
   // keeps a *barcode* match exact: rung 0 matched a code against `edition`, not
   // a name, and re-deriving it from the name would be a weaker question than
-  // the one already answered.
-  let item = t.existingItemId ? (ctx.byId.get(t.existingItemId) ?? null) : null;
+  // the one already answered. `t.matchKind` says how the claim was made; a
+  // legacy row carries none, and none is treated as trusted (old behaviour).
+  const claimed = t.existingItemId ? (ctx.byId.get(t.existingItemId) ?? null) : null;
+  if (claimed && !(rejected && t.matchKind === 'containment')) {
+    item = claimed;
+    matchKind = t.matchKind ?? null;
+  }
 
   if (!item) {
     for (const name of claimedNames(t)) {
-      item = matchIndexedTitle(ctx.index, name);
-      if (item) break;
+      const m = matchIndexedTitleDetailed(ctx.index, name);
+      if (!m) continue;
+      // A rejected containment guess must not resurrect under another of the
+      // row's names — skip the guess, keep looking for an identity match.
+      if (rejected && m.matchKind === 'containment') continue;
+      item = m.item;
+      matchKind = m.matchKind;
+      break;
     }
   }
   if (!item) return null;
@@ -194,6 +236,8 @@ export function resolveOwnership(
     name: item.name,
     via: !source ? 'catalog' : source.jobId === jobId ? 'this-job' : 'other-job',
     jobMode: source?.mode ?? null,
+    matchKind,
+    pendingConfirmation: matchKind === 'containment' && !t.ownershipConfirmed,
   };
 }
 
@@ -203,14 +247,21 @@ export function resolveOwnership(
  * True by construction now: a title is outstanding when it has no decision of
  * its own *and* the catalog does not already hold it. The old version asked the
  * stored `alreadyOwned` flag, which is exactly the stale answer.
+ *
+ * An unanswered containment question is outstanding too — "looks like X, same
+ * game?" is precisely a decision still wanted, and a job must not auto-close
+ * around one.
  */
 export function countOutstanding(
   titles: ScannedTitle[],
   jobId: number,
   ctx: OwnershipContext,
 ): number {
-  return titles.filter((t) => !t.addedItemId && !t.dismissed && !resolveOwnership(t, jobId, ctx))
-    .length;
+  return titles.filter((t) => {
+    if (t.addedItemId || t.dismissed) return false;
+    const o = resolveOwnership(t, jobId, ctx);
+    return !o || o.pendingConfirmation;
+  }).length;
 }
 
 /** Parse a job's titles, tolerating a blob that is not what we expect. */
@@ -251,7 +302,16 @@ export function withFreshView<T extends ScanJob>(job: T, ctx: OwnershipContext):
   return {
     ...job,
     enriched: JSON.stringify(
-      classifyTitles(resolved, ctx.items, (t) => t.ownership !== null, ctx.aliases),
+      // A row whose ownership is still a question participates in
+      // classification: it is undecided, and if the answer is "different game"
+      // it becomes an add-candidate that needs its kind and parent proposals
+      // already in place.
+      classifyTitles(
+        resolved,
+        ctx.items,
+        (t) => t.ownership !== null && !t.ownership.pendingConfirmation,
+        ctx.aliases,
+      ),
     ),
   };
 }

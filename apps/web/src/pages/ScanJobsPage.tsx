@@ -38,18 +38,39 @@ export const STATUS_LABEL: Record<ScanJob['status'], string> = {
 };
 
 /**
+ * Ownership that may be acted on without asking: an identity match, a legacy
+ * claim, or a containment guess the person has confirmed.
+ *
+ * The split exists because the sequel class ("Boss Monster 2" read against an
+ * owned "Boss Monster") defeats the containment floor at any value — measured
+ * in docs/info/matcher-thresholds.md — and misfiling a new sequel under its
+ * base game LOSES it, since nobody re-checks "already owned". So a containment
+ * match is a question, not a fact, until somebody answers it.
+ */
+const settledOwnership = (t: EnrichedTitle): TitleOwnership | null =>
+  t.ownership && !t.ownership.pendingConfirmation ? t.ownership : null;
+
+/** The unanswered question: "looks like X — same game?" */
+const ownershipQuestion = (t: EnrichedTitle): TitleOwnership | null =>
+  t.ownership?.pendingConfirmation ? t.ownership : null;
+
+/**
  * Titles still wanting a decision. Drives "4 still to sort" on a job row.
  *
  * `ownership` rather than `alreadyOwned`: the first is what the catalog says
  * now, the second is what it said when the photo was read. Two photographs of
  * one shelf share boxes, and this number used to keep counting a game the owner
  * had already dealt with on the other photo.
+ *
+ * Settled ownership only: an unanswered "same game?" question is precisely a
+ * decision still wanted, and it must keep the photo asking for you. Mirrors
+ * the server's `countOutstanding`.
  */
 function outstandingOf(job: ScanJob): number | null {
   if (!job.enriched) return null;
   try {
     const titles = JSON.parse(job.enriched) as EnrichedTitle[];
-    return titles.filter((t) => !t.ownership && !t.addedItemId && !t.dismissed).length;
+    return titles.filter((t) => !settledOwnership(t) && !t.addedItemId && !t.dismissed).length;
   } catch {
     return null;
   }
@@ -726,11 +747,21 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   //
   // Rows that became owned *after* enrichment stay in the list below instead,
   // ticked off and saying why — see `isSettled`.
+  //
+  // A row whose "already owned" claim is a containment GUESS never joins the
+  // owned list, whatever its current answer: it renders in the main list as a
+  // question, and it *stays* there once answered — confirmed rows tick
+  // themselves in place, rejected rows become add-candidates. Keeping the
+  // split keyed on the persisted `matchKind` (stable) rather than on the
+  // freshly computed answer means answering never moves rows between lists,
+  // which would shift every index the selection set points at.
+  const inOwnedList = (t: EnrichedTitle): boolean =>
+    t.alreadyOwned && !!t.ownership && t.matchKind !== 'containment';
   const freshEntries = titles
     .map((t, originalIndex) => ({ t, originalIndex }))
-    .filter((e) => !(e.t.alreadyOwned && e.t.ownership));
+    .filter((e) => !inOwnedList(e.t));
   const fresh = freshEntries.map((e) => e.t);
-  const owned = titles.filter((t) => t.alreadyOwned && t.ownership);
+  const owned = titles.filter(inOwnedList);
 
   /** What already happened to this row, whether this visit or a previous one. */
   const outcomeOf = (i: number): { itemId: number } | { error: string } | null => {
@@ -754,9 +785,15 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
    * lost work where a row that ticks itself and says why reads as progress.
    */
   const isSettled = (i: number): boolean =>
-    outcomeOf(i) !== null || !!fresh[i]?.dismissed || !!fresh[i]?.ownership;
+    outcomeOf(i) !== null || !!fresh[i]?.dismissed || !!(fresh[i] && settledOwnership(fresh[i]!));
+  // An unanswered "same game?" question is neither settled nor addable: it
+  // wants its own two-button answer, not a tick. Kept out of every selection
+  // path below so "Select all" cannot quietly add a game the catalog may
+  // already hold — or file one it does not.
+  const isQuestion = (i: number): boolean => !!(fresh[i] && ownershipQuestion(fresh[i]!));
   const outstanding = fresh.filter((_, i) => !isSettled(i));
-  const resolvedElsewhere = fresh.filter((t) => t.ownership).length;
+  const resolvedElsewhere = fresh.filter((t) => settledOwnership(t)).length;
+  const questionCount = fresh.filter((t) => ownershipQuestion(t)).length;
 
   // Initialise selection on first render. Anything already dealt with stays
   // out of it, and doubtful matches start unticked — adding a wrong game is
@@ -766,7 +803,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       new Set(
         fresh
           .map((_, i) => i)
-          .filter((i) => !isSettled(i) && autoTicked(fresh[i]!)),
+          .filter((i) => !isSettled(i) && !isQuestion(i) && autoTicked(fresh[i]!)),
       ),
     );
     return <Spinner />;
@@ -821,7 +858,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
 
     // Base games first.
     const pending = [...selected!]
-      .filter((i) => !isSettled(i) && !isNameless(fresh[i]!))
+      .filter((i) => !isSettled(i) && !isQuestion(i) && !isNameless(fresh[i]!))
       .sort((a, b) => (getKind(a) === 'base' ? 0 : 1) - (getKind(b) === 'base' ? 0 : 1));
 
     const batchIds: Record<number, number> = {};
@@ -967,6 +1004,33 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   }
 
   /**
+   * The answer to "looks like X — same game?".
+   *
+   * `same` settles the row as already-owned, exactly as if the match had been
+   * exact — but recorded as *your* answer, which survives a reload. Not-same
+   * tells the server to stop honouring containment guesses for this row; the
+   * fresh view it returns has the row as an ordinary add-candidate, kind and
+   * parent proposals already in place, ready to tick.
+   */
+  async function answerOwnership(i: number, same: boolean) {
+    setBusyRow(i);
+    setError(null);
+    try {
+      const { job: saved } = await api.updateScanJobTitles(id, [
+        {
+          index: freshEntries[i]!.originalIndex,
+          ...(same ? { ownershipConfirmed: true } : { ownershipRejected: true }),
+        },
+      ]);
+      setLive(saved);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusyRow(null);
+    }
+  }
+
+  /**
    * "I have looked at the box. It is that one."
    *
    * Promotes a suggestion to the row's identity on the server, so the decision
@@ -1019,7 +1083,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   // 653341070005. Leaving them out keeps the button's count honest and keeps
   // the row fixable — it says on its face that it needs a name.
   const pendingCount = [...selected].filter(
-    (i) => !isSettled(i) && !isNameless(fresh[i]!),
+    (i) => !isSettled(i) && !isQuestion(i) && !isNameless(fresh[i]!),
   ).length;
 
   return (
@@ -1034,6 +1098,9 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
             {/* Said out loud, because it is the number that changed while the
                 owner was working on a different photo. */}
             {resolvedElsewhere > 0 && ` \u00b7 ${resolvedElsewhere} settled elsewhere`}
+            {/* The confirm-first rows: close names the matcher refuses to call
+                the same game on its own \u2014 see docs/info/matcher-thresholds.md. */}
+            {questionCount > 0 && ` \u00b7 ${questionCount} to confirm`}
           </p>
         </div>
         <Link to="/scan-jobs" className="btn btn-quiet">Back to queue</Link>
@@ -1081,7 +1148,9 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                 setSelected(
                   selected.size > 0
                     ? new Set()
-                    : new Set(fresh.map((_, i) => i).filter((i) => !isSettled(i))),
+                    : new Set(
+                        fresh.map((_, i) => i).filter((i) => !isSettled(i) && !isQuestion(i)),
+                      ),
                 )
               }
             >
@@ -1105,7 +1174,12 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
               // Dealt with somewhere else since this photo was read. Every
               // control below is suppressed for it: there is nothing left to
               // decide, and offering to add it again is the whole bug.
-              const settled = !result && !dismissed ? (t.ownership ?? null) : null;
+              const settled = !result && !dismissed ? settledOwnership(t) : null;
+              // The confirm-first case: the name is CLOSE to something owned,
+              // and close is exactly what a new sequel looks like ("Boss
+              // Monster 2" contains "Boss Monster"). Asked, never asserted \u2014
+              // a misfiled sequel is a lost game.
+              const question = !result && !dismissed ? ownershipQuestion(t) : null;
 
               return (
                 <li
@@ -1113,7 +1187,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                   className={
                     dismissed || settled
                       ? 'candidate candidate--dismissed'
-                      : doubtful || t.needsConfirmation
+                      : question || doubtful || t.needsConfirmation
                         ? 'candidate candidate--doubtful'
                         : 'candidate'
                   }
@@ -1124,6 +1198,8 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                     </span>
                   ) : dismissed ? (
                     <span className="shelf-outcome" aria-hidden="true">&ndash;</span>
+                  ) : question ? (
+                    <span className="shelf-outcome" aria-hidden="true">?</span>
                   ) : settled ? (
                     <span className="shelf-outcome" aria-hidden="true">&#10003;</span>
                   ) : (
@@ -1147,6 +1223,51 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                         "what am I looking at" — everything else on this row is
                         about a decision that no longer needs making. */}
                     {settled && <OwnershipNote o={settled} jobMode={job.mode} />}
+                    {/* Your answer, not the matcher's: worth saying, because a
+                        row that settled itself and one you settled are
+                        different evidence if the identity is ever questioned. */}
+                    {settled && t.ownershipConfirmed && (
+                      <span className="muted small">You confirmed it is the same game.</span>
+                    )}
+
+                    {/*
+                      The confirm-first question. The matcher found a name
+                      CLOSE to one already owned — but only close: sequels
+                      ("Boss Monster 2"), "Super X" editions and genuinely
+                      different boxes all look like this, and no threshold can
+                      tell them apart (measured — docs/info/
+                      matcher-thresholds.md). Filing a new game under
+                      "already owned" silently loses it, so the screen asks
+                      the one person who can tell.
+                    */}
+                    {question && (
+                      <div className="candidate__accept">
+                        <span className="candidate__doubt">
+                          Looks like{' '}
+                          <Link to={`/items/${question.itemId}`}>{question.name}</Link>
+                          {' '}&mdash; same game? The names are close, but a sequel or a
+                          different game in the same family looks exactly like this.
+                        </span>
+                        <div className="shelf-actions">
+                          <button
+                            type="button"
+                            className="btn btn-quiet btn-xs"
+                            disabled={adding || busyRow === i}
+                            onClick={() => void answerOwnership(i, true)}
+                          >
+                            {busyRow === i ? 'Saving…' : `Yes — I own it, it is ${question.name}`}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-quiet btn-xs"
+                            disabled={adding || busyRow === i}
+                            onClick={() => void answerOwnership(i, false)}
+                          >
+                            No &mdash; different game, add it separately
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {doubtful ? (
                       <span className="candidate__doubt">
                         Closest match was &quot;{t.resolvedName}&quot;, which is
@@ -1209,7 +1330,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       the wrong game) and none of them would have survived
                       being read out loud next to the box.
                     */}
-                    {!result && !dismissed && !settled && wantsHumanCall(t) && (
+                    {!result && !dismissed && !settled && !question && wantsHumanCall(t) && (
                       <div className="candidate__accept">
                         <span className="muted small">
                           {t.barcode
@@ -1253,7 +1374,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       </div>
                     )}
 
-                    {!result && !dismissed && !settled && needsRelookupToAccept(t) && (
+                    {!result && !dismissed && !settled && !question && needsRelookupToAccept(t) && (
                       <span className="muted small">
                         This one was looked up before suggestions were kept. Press
                         &ldquo;Look up again&rdquo; and you can accept a match rather than
@@ -1270,7 +1391,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                       Correcting the text and asking again fixes both the misread
                       spine and the lookup that simply had a bad day.
                     */}
-                    {!result && !dismissed && !settled && (
+                    {!result && !dismissed && !settled && !question && (
                       <div className="candidate__repair">
                         <input
                           type="text"
@@ -1312,7 +1433,7 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
 
                     {dismissed && <span className="muted small">Set aside.</span>}
 
-                    {!result && !dismissed && !settled && (
+                    {!result && !dismissed && !settled && !question && (
                       <div className="shelf-classify__controls">
                         <select
                           value={kind}

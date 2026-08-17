@@ -17,7 +17,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import {
   classifyShelfResults,
-  matchExistingTitle,
+  matchExistingTitleDetailed,
   titleSimilarity,
   type BarcodeCandidate,
   type ItemAliasRef,
@@ -85,6 +85,13 @@ const titleUpdatesSchema = z.object({
         index: z.number().int().min(0),
         addedItemId: z.number().int().positive().nullable().optional(),
         dismissed: z.boolean().optional(),
+        /**
+         * The two answers to the containment question "looks like X — same
+         * game?". Mutually exclusive by construction: setting either true
+         * clears the other, because they are one decision with two outcomes.
+         */
+        ownershipConfirmed: z.boolean().optional(),
+        ownershipRejected: z.boolean().optional(),
       }),
     )
     .min(1)
@@ -409,6 +416,16 @@ export const scanJobRoutes = new Hono<AppBindings>()
       if (!entry) continue;
       if (update.addedItemId !== undefined) entry.addedItemId = update.addedItemId;
       if (update.dismissed !== undefined) entry.dismissed = update.dismissed;
+      // One question, two answers: whichever arrives clears the other, so a
+      // changed mind never leaves a row both confirmed and rejected.
+      if (update.ownershipConfirmed !== undefined) {
+        entry.ownershipConfirmed = update.ownershipConfirmed;
+        if (update.ownershipConfirmed) entry.ownershipRejected = false;
+      }
+      if (update.ownershipRejected !== undefined) {
+        entry.ownershipRejected = update.ownershipRejected;
+        if (update.ownershipRejected) entry.ownershipConfirmed = false;
+      }
     }
 
     /*
@@ -763,13 +780,20 @@ async function enrichOne(
   // Catan already on the shelf, and paying a lookup to be told otherwise is the
   // duplicate this whole feature exists to stop. Cheap here too — the miss is
   // what costs a subrequest, so a hit saves one.
-  const owned = matchExistingTitle(title.text, existing, aliases);
+  //
+  // `matchKind` is persisted with the claim: exact and alias stay automatic,
+  // but a containment match is a guess the sequel class defeats at any floor
+  // ("BOSS MONSTER 2" read against an owned "Boss Monster"), so the review
+  // screen turns it into a "same game?" question rather than filing the row
+  // under already-owned — see `resolveOwnership` and matcher-thresholds.md.
+  const owned = matchExistingTitleDetailed(title.text, existing, aliases);
   if (owned) {
     return {
       ...base,
       alreadyOwned: true,
-      existingItemId: owned.id,
-      existingName: owned.name,
+      existingItemId: owned.item.id,
+      existingName: owned.item.name,
+      matchKind: owned.matchKind,
       bggId: null,
       resolvedName: null,
       thumbnailUrl: null,

@@ -445,10 +445,22 @@ export const api = {
   completeScanJob: (id: number) =>
     post(`/api/scan-jobs/${id}/done`, {}) as Promise<{ job: ScanJob }>,
 
-  /** Record per-title outcomes without finishing the job. */
+  /**
+   * Record per-title outcomes without finishing the job.
+   *
+   * `ownershipConfirmed` / `ownershipRejected` are the two answers to the
+   * containment question ("looks like X — same game?"); the server clears
+   * whichever one the other overrides.
+   */
   updateScanJobTitles: (
     id: number,
-    updates: { index: number; addedItemId?: number | null; dismissed?: boolean }[],
+    updates: {
+      index: number;
+      addedItemId?: number | null;
+      dismissed?: boolean;
+      ownershipConfirmed?: boolean;
+      ownershipRejected?: boolean;
+    }[],
   ) =>
     post(`/api/scan-jobs/${id}/titles`, { updates }) as Promise<{
       job: ScanJob;
@@ -558,6 +570,16 @@ export interface EnrichedTitle {
    * is the answer to ask.
    */
   ownership?: TitleOwnership | null;
+  /**
+   * How the enrichment-time name match was made. `containment` marks the row's
+   * "already owned" claim as a guess — the review screen asks instead of
+   * asserting. Absent on legacy rows and exact-barcode hits (both trusted).
+   */
+  matchKind?: 'exact' | 'alias' | 'containment' | null;
+  /** The person answered "yes, same game" to the containment question. */
+  ownershipConfirmed?: boolean;
+  /** The person answered "no, different game" — the row is an add-candidate. */
+  ownershipRejected?: boolean;
   /** Set when a retry searched with corrected text rather than what was read. */
   relookedUpAs?: string | null;
   /**
@@ -609,6 +631,15 @@ export interface TitleOwnership {
   via: 'catalog' | 'this-job' | 'other-job';
   /** How that other job took it in, so the note can say "photo" or "scan". */
   jobMode: 'shelf' | 'single' | 'barcode' | null;
+  /** How the name matched. `containment` is a guess; the rest are identity. */
+  matchKind?: 'exact' | 'alias' | 'containment' | null;
+  /**
+   * A containment guess nobody has answered. The row renders as "Looks like
+   * X — same game?" with confirm/reject, and still counts as unfinished.
+   * Optional so a response from an older worker (deploy skew) reads as the old
+   * behaviour — settled — rather than as a question it cannot answer.
+   */
+  pendingConfirmation?: boolean;
 }
 
 /**
