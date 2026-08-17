@@ -23,46 +23,29 @@
       script below can read the resolved --et-bg synchronously.
     -->
     <link rel="stylesheet" href="/assets/estate-theme.css" />
-    <script>
-      // Migrate-once from the app's legacy mode key (estate-themes.md §4):
-      // bgc-theme ('system'|'light'|'dark') maps 1:1 onto hg_mode
-      // ('auto'|'light'|'dark'). Read the old key only while hg_mode is
-      // unset; never write bgc-theme again. Runs before theme.js so the
-      // migrated value is what gets stamped.
-      (function () {
-        try {
-          if (localStorage.getItem('hg_mode') === null) {
-            var legacy = localStorage.getItem('bgc-theme');
-            if (legacy === 'light' || legacy === 'dark') localStorage.setItem('hg_mode', legacy);
-            else if (legacy === 'system') localStorage.setItem('hg_mode', 'auto');
-          }
-        } catch (e) {
-          /* Private mode can throw on localStorage; theme.js has its own guard. */
-        }
-      })();
-    </script>
     <!--
       ⚠️ Inline-adjacent and blocking on purpose (same reason as the old inline
       script this replaces): left to React, every dark-mode load would flash
       cream for a frame. theme.js stamps data-theme + resolved data-mode and
       exposes window.estateTheme — the API src/lib/theme.ts adapts for React.
+
+      TWO inline scripts used to sit either side of this one and are gone as of
+      2026-08-17, because theme.js now does both jobs for every estate site:
+
+        · the `bgc-theme` migrate-once. Safe to run everywhere and therefore
+          right to own centrally — localStorage is ORIGIN-SCOPED, so that key
+          can only exist on this host and canonical's table is inert elsewhere.
+        · the theme-color sync from --et-bg. It is integration step 5 of the
+          estate guide, and it was implemented here, in the audiobook site's
+          forked theme.js, and nowhere canonical — three copies of one
+          paragraph.
+
+      Do not reinstate them. Duplicating theme logic per site is precisely how
+      `hearts` shipped upstream and reached no cog for a day.
+      The static <meta name="theme-color"> above STAYS: it is the value for the
+      instant before any script runs, and theme.js updates that same element.
     -->
     <script src="/assets/theme.js"></script>
-    <script>
-      // theme-color follows the active theme's --et-bg — set now (pre-paint,
-      // the stylesheet above has already parsed) and again on every change.
-      (function () {
-        var meta = document.querySelector('meta[name="theme-color"]');
-        function sync() {
-          try {
-            var bg = getComputedStyle(document.documentElement).getPropertyValue('--et-bg').trim();
-            if (bg && meta) meta.setAttribute('content', bg);
-          } catch (e) { /* leave the static fallback */ }
-        }
-        document.addEventListener('hg-themechange', sync);
-        sync();
-      })();
-    </script>
     <title>Board Game Catalog</title>
   </head>
   <body>

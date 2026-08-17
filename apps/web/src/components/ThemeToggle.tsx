@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ESTATE_MODES,
-  ESTATE_THEMES,
+  estateThemeLabel,
+  estateThemes,
   getThemeState,
   onThemeChange,
   setMode,
   setTheme,
   type EstateMode,
-  type EstateTheme,
 } from '../lib/theme';
 
 /**
@@ -30,13 +30,15 @@ import {
  * and only a choice made here changes it.
  */
 
-const THEME_LABELS: Record<EstateTheme, string> = {
-  classic: 'Classic',
-  apple: 'Apple',
-  cyberpunk: 'Cyberpunk',
-  retro: 'Retro',
-};
-
+/**
+ * ⚠️ There is deliberately no THEME_LABELS map here any more. Both the list
+ * of themes and their names come from window.estateTheme (see lib/theme's
+ * `estateThemes` / `estateThemeLabel`), so a theme added to the canonical
+ * asset shows up in this cog on the next build with nothing to edit — owner
+ * order 2026-08-17: "when a theme is added all sites get it". The map that
+ * used to sit here is why `hearts` was missing from this menu for a day.
+ * MODE_LABELS stays, because MODES is a closed set of three that cannot grow.
+ */
 const MODE_LABELS: Record<EstateMode, string> = {
   auto: 'Auto',
   light: 'Light',
@@ -71,7 +73,11 @@ export function ThemeToggle() {
     };
   }, [open]);
 
-  const themeLabel = THEME_LABELS[state.theme] ?? state.theme;
+  // Read at render, not at module load: the switcher is installed by a
+  // <head> script, so it is always there by the time this runs, and reading
+  // late means an asset re-synced under us is still reflected.
+  const themes = estateThemes();
+  const themeLabel = estateThemeLabel(state.theme);
   const modeLabel = MODE_LABELS[state.mode] ?? state.mode;
 
   return (
@@ -103,11 +109,11 @@ export function ThemeToggle() {
               id="bgc-theme-select"
               className="theme-menu__select"
               value={state.theme}
-              onChange={(e) => setTheme(e.currentTarget.value as EstateTheme)}
+              onChange={(e) => setTheme(e.currentTarget.value)}
             >
-              {ESTATE_THEMES.map((t) => (
+              {themes.map((t) => (
                 <option key={t} value={t}>
-                  {THEME_LABELS[t]}
+                  {estateThemeLabel(t)}
                 </option>
               ))}
             </select>

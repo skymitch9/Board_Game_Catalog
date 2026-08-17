@@ -18,11 +18,14 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# ⚠️ The estate theme assets are copied in verbatim (not content-hashed), so
-# they must NOT inherit the year-long immutable rule above — a phone would pin
-# the first theme css it ever saw across every future re-theme. Later rules
-# override earlier ones for the same header. The fonts stay immutable: a face
-# never changes bytes without changing name.
+# ⚠️ The estate theme assets are MATERIALISED verbatim from catalog-platform by
+# scripts/sync-estate-theme.mjs (as of 2026-08-17 the whole of public/assets/ is
+# that script's gitignored output — it was a hand-maintained copy before). They
+# are not content-hashed, so they must NOT inherit the year-long immutable rule
+# above: a phone would pin the first theme css it ever saw across every future
+# re-theme, defeating the point of syncing them at all. Later rules override
+# earlier ones for the same header. The fonts stay immutable — a face never
+# changes bytes without changing name.
 /assets/estate-theme.css
   Cache-Control: no-cache
 /assets/theme.js

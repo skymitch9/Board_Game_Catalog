@@ -10,6 +10,14 @@ apps/worker/src/estate-auth/
 # scripts/sync-estate-search.mjs — never committed, so a search improvement made
 # upstream reaches every site instead of dying in a per-repo fork.
 apps/web/public/estate/
+# Materialised copy of catalog-platform's estate THEME asset (estate-theme.css,
+# theme.js, the self-hosted faces + their OFL text). A build artifact of
+# scripts/sync-estate-theme.mjs — never committed, because the manual copy this
+# replaces silently offered four themes for the whole day after `hearts`
+# shipped upstream (2026-08-16). The whole directory is estate output; nothing
+# hand-written has ever lived here. public/fonts/ is a DIFFERENT, older, still
+# hand-maintained directory — do not confuse them.
+apps/web/public/assets/
 *.local
 .env
 .env.*
