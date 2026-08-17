@@ -1,7 +1,7 @@
 # Information — Index
 
 > **Audience:** Claude sessions. **Status:** TRACKED.
-> Last verified: **2026-08-06**.
+> Last verified: **2026-08-17** (theme row added that day; the other rows were not re-checked).
 
 How and why things work. Stable design facts only — current state and work in
 flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
@@ -16,6 +16,7 @@ flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
 | [`copy-status-history.md`](copy-status-history.md) | ⏳ **PLANNED, not built.** Marking a copy sold/given away and keeping its history — why the statuses that already exist have never been used, and the one question the owner has to answer first |
 | [`future-plans.md`](future-plans.md) | Deferred ideas, and the measurements that killed the ones already tried |
 | [`cost-reduction.md`](cost-reduction.md) | Measured cost of every lookup path, and the one change that would move the needle |
+| [`estate-theme.md`](estate-theme.md) | How this app gets its skin: the theme system is CANONICAL in catalog-platform and materialised here at build time by `scripts/sync-estate-theme.mjs`. ⚠️ `apps/web/public/assets/` is gitignored build output; the cog holds no theme list of its own |
 | [`matcher-thresholds.md`](matcher-thresholds.md) | Measured sweep of `matchExistingTitle`'s containment floor (the real knob — not the 0.34 lookup floor), the BOSS MONSTER reproduction, and the evidence for 0.68. Measurement only; the threshold is unchanged |
 
 The overall architecture and phase plan are in [`../DESIGN.md`](../DESIGN.md);

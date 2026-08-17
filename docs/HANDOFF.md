@@ -2,6 +2,25 @@
 
 Everything needed to continue or finish this without Claude.
 
+## ✅ SHIPPED — the estate theme becomes a build artifact, and `hearts` arrives, 2026-08-17
+
+Owner order, verbatim: *"Add the pink theme as an option for every site, when a
+theme is added all sites get it some may just default right away."* Commit
+`0c84d6b`, deployed (Worker version `783aad0e`).
+
+| | |
+|---|---|
+| The bug | `hearts` shipped into catalog-platform on 2026-08-16 and this cog kept offering four themes, with nothing failing. There were THREE places to remember here: the hand-copied `apps/web/public/assets/`, `ESTATE_THEMES` in `src/lib/theme.ts`, and `THEME_LABELS` in `ThemeToggle.tsx`. All three are gone |
+| Sync | `scripts/sync-estate-theme.mjs` — twin of the two existing estate syncs, on `pretypecheck`/`pretest`/`prebuild`/`predev`/`predev:web`/`predeploy`. Fails the build when the sibling checkout is missing, rather than shipping an unstyled page |
+| Gitignore | `apps/web/public/assets/` left git entirely — the whole directory is that script's output. ⚠️ `apps/web/public/fonts/` is a different, still hand-written directory |
+| Cog | renders `estateThemes()` / `estateThemeLabel()`, both reading `window.estateTheme` at render time. `FALLBACK_THEMES` is only for a DOM with no switcher, and says so. `EstateTheme` is now `string` — a union over a local array is what made "offer whatever the switcher offers" untypeable |
+| Deleted | the two inline scripts in `index.html` (the `bgc-theme` migrate-once and the `theme-color` sync). Canonical `theme.js` does both for every estate site now; the migration is safe centrally because localStorage is origin-scoped. The static `theme-color` meta stays as the pre-script value |
+| Also | `fonts/OFL-rajdhani-sharetechmono.txt` was missing from CANONICAL (this repo had it), so every estate site had been serving Rajdhani and Share Tech Mono with no licence text. Pushed upstream, `ac36bbd` |
+| Tests | `npm run typecheck` clean; `npm test` 64/64 |
+| Verified | Live, in a browser, hard-reloaded: the cog offers Classic/Apple/Cyberpunk/Retro/**Hearts**, the default is still `retro`, and `theme-color` still tracks `--et-bg` — which is the proof that deleting the inline script was safe. Review link: <https://boardgames.heygabi.ai/> (cog in the top bar, signed in) |
+| ⚠️ NOT verified | The `hearts` LOOK on a signed-in games page. It was exercised on this app's own signed-out shell (white card, blush ground, 8-bit texture, legible light and dark) but the collection list itself was not viewed wearing it — no theme was applied to the owner's live session on purpose |
+| Reference | [`info/estate-theme.md`](info/estate-theme.md); the contract and "how to add theme #6" are `catalog-platform/docs/info/estate-themes.md` §3a |
+
 ## ✅ SHIPPED — role ladder redesign (six rungs, wishlist/scan splits, admin escalation limit), 2026-08-16
 
 Owner-approved role matrix implemented verbatim ("Role matrix approved").
