@@ -9,6 +9,7 @@ current state and work in flight live in [`../HANDOFF.md`](../HANDOFF.md).
 
 | File | Covers |
 |---|---|
+| [`RECOVERY.md`](RECOVERY.md) | 🔴 **REBUILD FROM NOTHING (new 2026-08-18)** — *from a git clone and the blob backups, how do I rebuild this app?* Full inventory, the rebuild order, every secret by NAME with custody and re-mint console, what a rebuild CANNOT recover, and a **drilled-vs-inference** table. ⚠️ **This app's D1 dump does NOT replay raw** — it dies at `no such table: main.app_user` after 2 of 18 tables and leaves a half-populated database that looks imported; reordering is mandatory. Restore *mechanics* live in `catalog-platform/docs/access/RECOVERY.md` |
 | [`external-apis.md`](external-apis.md) | Every third-party service: endpoints, key names, quotas, what breaks without them |
 | [`firebase-auth.md`](firebase-auth.md) | 🔶 **The auth model as of 2026-08-10** — Firebase ID tokens, the cutover off Cloudflare Access and why its order is a safety property, what edge protection is given up. **Read before `login.md`** |
 | [`login.md`](login.md) | Cloudflare Access: how sign-in works **today**, until the cutover's step 4. Being replaced |
