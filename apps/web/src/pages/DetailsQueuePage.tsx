@@ -182,16 +182,24 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
       <header className="page-head">
         <div>
           <h1>Fill in missing details</h1>
+          {/* ⚠️ TRIMMED 2026-08-17 on the owner's estate-wide order ("Let's trim
+              text like this all over each of the sites. Only keep what's
+              mandatory and keep all the text short and useful"), following
+              catalog-platform 204fb9d. "Scanning gives a name and little else"
+              was the setup and went; "fills only the blanks — anything already
+              recorded is left alone" is a WRITE-CONSENT promise and stays. */}
           <p className="subtitle">
-            Scanning gives a name and little else. This looks each game up on the web
-            and fills only the blanks — anything already recorded is left alone.
+            Looks each game up on the web and fills only the blanks — anything already
+            recorded is left alone.
           </p>
           {/* Said here rather than left to be inferred from a short list: the
               queue went from 694 rows to 78 when children stopped being asked,
-              and a page that quietly dropped 616 games would look broken. */}
+              and a page that quietly dropped 616 games would look broken. That
+              is why the sentence survives the trim at all — it is the reason a
+              short list is not a broken one. */}
           <p className="muted small">
-            Only games are listed. An expansion, promo or accessory takes its publisher
-            from the game it belongs to, so there is nothing here worth paying to look up.
+            Only games are listed. Anything filed under one takes its publisher from the
+            game, so there is nothing there to look up.
           </p>
           {/* This paragraph used to promise that closing the tab cost nothing.
               It was not true: the server got about thirty seconds to finish

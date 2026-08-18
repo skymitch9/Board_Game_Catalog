@@ -699,10 +699,10 @@ function LinkEditor({
   return (
     <section className="card">
       <h2>Linked games</h2>
-      <p className="muted small">
-        Links are added from a game&rsquo;s page or the related games screen. This is
-        where they come off.
-      </p>
+      {/* Trimmed 2026-08-17 (owner's estate-wide order). Where links are ADDED
+          is discoverable by going there; where they come OFF is not, which is
+          why that is the half that stayed. */}
+      <p className="muted small">This is where links come off.</p>
 
       {error != null && <ErrorBox error={error} what="Could not unlink" />}
 

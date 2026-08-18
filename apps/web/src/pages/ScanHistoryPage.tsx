@@ -130,10 +130,15 @@ export function ScanHistoryPage({ me, page }: { me: MeResponse; page: number }) 
       <header className="page-head">
         <div>
           <h1>Scan history</h1>
+          {/* Trimmed 2026-08-17 (owner's estate-wide order: "Only keep what's
+              mandatory and keep all the text short and useful"). "Nothing here
+              is deleted when a job finishes" stays — it is a RETENTION fact,
+              and a page that quietly kept or quietly dropped records would be
+              read wrong either way. The purpose sentence went; the page's own
+              rows say what it is for. */}
           <p className="subtitle">
-            Every photo and barcode session ever taken in, newest first, and what each
-            one produced. Nothing here is deleted when a job finishes — this is the
-            record of which scan a game came from.
+            Every photo and barcode session ever taken in, newest first, and what each one
+            produced. Nothing here is deleted when a job finishes.
           </p>
         </div>
         <Link to="/scan-jobs" className="btn btn-quiet">Back to the queue</Link>

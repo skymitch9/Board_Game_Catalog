@@ -52,11 +52,15 @@ export function ExportPage() {
           <section className="card export-option">
             <div className="grow">
               <h2>Spreadsheet</h2>
+              {/* "flattened view, not the whole database" is an HONESTY MARKER
+                  and stays: it is the only thing stopping this file being used
+                  as a backup. The 2026-08-17 trim (owner's estate-wide order)
+                  dropped the use-cases and the Excel/Numbers/Sheets line — a
+                  .csv download needs no introduction. */}
               <p className="muted small">
-                One row per copy, with the game it belongs to named beside it — for
-                sorting, totting up, or handing to an insurer. Opens in Excel, Numbers
-                or Sheets. It is a <strong>flattened view</strong>, not the whole
-                database: ratings, editions and the shape of the tree are not in it.
+                One row per copy, with the game it belongs to named beside it. A{' '}
+                <strong>flattened view</strong>, not the whole database: ratings, editions
+                and the shape of the tree are not in it.
               </p>
             </div>
             {/* A plain anchor, not a Link: the router must not intercept it, and
@@ -70,11 +74,13 @@ export function ExportPage() {
           <section className="card export-option">
             <div className="grow">
               <h2>Backup</h2>
+              {/* Trimmed 2026-08-17 (owner's estate-wide order). The dropped
+                  half enumerated the tables; that inventory's home of record is
+                  migrations/. The schema stamp stays — it is the fact that
+                  decides whether a restore is safe. */}
               <p className="muted small">
-                Every row of every table — items, editions, copies, ratings and sleeve
-                requirements — with the schema version stamped on it. This is the one to
-                keep if you ever want to <strong>rebuild the catalog</strong>, and the
-                one worth taking before anything drastic.
+                Every row of every table, with the schema version stamped on it. This is the
+                one to keep if you ever want to <strong>rebuild the catalog</strong>.
               </p>
             </div>
             <a className="btn" href="/api/export.json" download>
@@ -82,10 +88,12 @@ export function ExportPage() {
             </a>
           </section>
 
+          {/* The privacy claim is a thing the reader cannot check for himself,
+              so it stays whole. Only the "current as of that moment"
+              restatement went in the 2026-08-17 trim. */}
           <p className="muted small">
-            Both files are generated when you press the button, so they are current as of
-            that moment. Nothing is stored on the server and nothing is sent anywhere —
-            the download goes straight to this device.
+            Generated when you press the button. Nothing is stored on the server and nothing
+            is sent anywhere — the download goes straight to this device.
           </p>
         </>
       )}

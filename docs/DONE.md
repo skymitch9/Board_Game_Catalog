@@ -9,6 +9,46 @@
 > completion, moved **whole** from [`TODO.md`](TODO.md) — cut and paste, never
 > summarised, because the summary always drops the *why*.
 
+## Copy trimmed across the React app — ✅ DONE 2026-08-17
+
+**Estate-wide ask, landed the session it was raised, so it never sat in
+`TODO.md`.** The owner, verbatim:
+
+> *"Let's trim text like this all over each of the sites. Only keep what's
+> mandatory and keep all the text short and useful"*
+
+Raised after he trimmed heygabi.ai/admin's header himself ("I think what we have
+is self explanatory"); `catalog-platform` commit `204fb9d` is the precedent —
+prose out, home of record named in a comment beside the cut, string pins updated
+in the same commit.
+
+**Trimmed here** (8 blocks, 263 → 171 visible words, −35%):
+`DetailsQueuePage` (the scanning-gives-a-name setup, the only-games note),
+`ExportPage` (spreadsheet, backup and privacy notes), `ScanHistoryPage` and
+`ScanJobsPage` subtitles, `ItemPage`'s linked-games line.
+
+**Deliberately NOT trimmed, and the reason is the rule.** Every empty state;
+`SignIn.tsx` in full — both the misconfigured screen (a worded refusal that
+names the fix, which the no-bare-status rule requires) and "signing in doesn't
+let you in by itself", which is the approval gate; `PeoplePage`'s read-only
+notice and its access sentence; `Arrivals`' write-consent lines; `WishlistPage`'s
+shop-link legend, because "an empty result is a real answer" is an honesty
+marker; the per-lookup cost disclosures on `ScanPage` and `DetailsQueuePage`.
+
+⚠️ **`DetailsQueuePage`'s "each lookup takes twenty seconds to a minute"
+paragraph was left ENTIRELY alone, on purpose.** Its own code comment records
+that a shorter, more reassuring version of it was *wrong* — it promised closing
+the tab cost nothing, when the server had about thirty seconds to finish and
+half these lookups take longer, so they were killed without a word. That comment
+ends "saying less, and saying it accurately, is worth more than the reassurance
+was", which is the exact trap a trim pass walks into. It is the standing example
+in this repo of prose that looks like padding and is not.
+
+**Pins:** none. `npm test` covers `apps/worker/src/lib/*.test.ts` only — no web
+copy is string-pinned. Every removed string was grepped across `apps/`,
+`packages/` and `scripts/` first; no assertion named any of them. 64 tests pass,
+typecheck clean, UTF-8 sweep clean.
+
 ## Two thresholds worth re-measuring one day
 
 *Landed here 2026-08-17 by the docs hygiene sweep: the measuring this item asked for was done, and the threshold moved. VERIFIED: `docs/info/matcher-thresholds.md` (dated 2026-08-16) plus the harness `scripts/measure-matcher.ts` replayed all 255 real production shelf reads, and commit `1b7763e` raised the containment floor 0.60 → 0.68 on owner approval — every containment match 0.68 rejects was WRONG at 0.60, zero correct answers lost. The item's own BOSS MONSTER example is the reproduction it was measured against: "boss monster" vs "super boss monster 2" is 12/20 = 0.600, exactly on the old gate, and it filed a genuinely new game under its sequel on production job 13. It also corrected this item's framing — the historic 0.34 "floor that did nothing" was never the knob; it gates barcode lookups, not `matchExistingTitle`. The residue was not swept under the rug either: the sequel class survives ANY floor, and got confirm-first UX instead (`5e6a8a7`). Durable reference now lives by topic in [`info/matcher-thresholds.md`](info/matcher-thresholds.md).*

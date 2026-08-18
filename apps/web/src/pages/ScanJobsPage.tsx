@@ -386,11 +386,13 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
       <header className="page-head">
         <div>
           <h1>Add games</h1>
+          {/* Trimmed 2026-08-17 (owner's estate-wide order). The tabs below
+              name themselves, so listing them here was saying it twice. The
+              nothing-disappears promise stays: it is what makes it safe to stop
+              halfway, and somebody who does not know it will not stop. */}
           <p className="subtitle">
-            Scan a barcode, photograph a shelf, or type a name — every way in is a tab
-            below. Anything read off a code or a photo lands in the queue and waits
-            there until you have dealt with it, so nothing disappears because you only
-            got through half.
+            Anything read off a code or a photo waits in the queue until you have dealt
+            with it — nothing disappears because you only got through half.
           </p>
         </div>
         <Link to="/" className="btn btn-quiet">Collection</Link>
