@@ -1,10 +1,11 @@
 # Information — Index
 
-> **Audience:** Claude sessions. **Status:** TRACKED.
-> Last verified: **2026-08-17** (theme row added that day; the other rows were not re-checked).
+> **Audience:** Claude/Kiro sessions. **Status:** TRACKED.
+> Last verified: **2026-08-21** (three files added from HANDOFF.md split).
 
 How and why things work. Stable design facts only — current state and work in
-flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
+flight live in [`../TODO.md`](../TODO.md); finished work in
+[`../DONE.md`](../DONE.md); credentials and endpoints in
 [`../access/`](../access/README.md).
 
 | File | Covers |
@@ -18,6 +19,9 @@ flight live in [`../HANDOFF.md`](../HANDOFF.md); credentials and endpoints in
 | [`cost-reduction.md`](cost-reduction.md) | Measured cost of every lookup path, and the one change that would move the needle |
 | [`estate-theme.md`](estate-theme.md) | How this app gets its skin: the theme system is CANONICAL in catalog-platform and materialised here at build time by `scripts/sync-estate-theme.mjs`. ⚠️ `apps/web/public/assets/` is gitignored build output; the cog holds no theme list of its own |
 | [`matcher-thresholds.md`](matcher-thresholds.md) | Measured sweep of `matchExistingTitle`'s containment floor (the real knob — not the 0.34 lookup floor), the BOSS MONSTER reproduction, and the evidence for 0.68. ⚠️ **The threshold HAS since changed** — `1b7763e` raised the containment floor 0.60 → 0.68 on owner approval, and the sequel class got confirm-first UX (`5e6a8a7`). This row read "measurement only; the threshold is unchanged" until 2026-08-17 |
+| [`gotchas.md`](gotchas.md) | Traps found the hard way — things that look right and are not, or fail silently |
+| [`system-reference.md`](system-reference.md) | Deployment state, what works today, repo layout, commands |
+| [`design-decisions.md`](design-decisions.md) | Settled questions, owner decisions, future plans (from the original handoff) |
 
 The overall architecture and phase plan are in [`../DESIGN.md`](../DESIGN.md);
-the repo map is in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.
+the repo map is in [`system-reference.md`](system-reference.md).

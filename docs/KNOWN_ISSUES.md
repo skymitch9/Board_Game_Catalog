@@ -21,21 +21,12 @@
 
 ---
 
-## KI-1 · `HANDOFF.md` is the real work log, and `TODO.md` is nearly empty — `ACCEPTED`, temporarily
+## ~~KI-1~~ · RESOLVED 2026-08-21
 
-**Symptom.** `HANDOFF.md` is **223 KB across 52 sections** and holds the current
-state; `TODO.md` is **27 lines**. That is the inverse of the shape
-`DOCS_STANDARD.md` describes, and a session that reads only `TODO.md` will
-conclude this project has one open item.
-
-**Why tolerated.** Splitting it correctly means sorting 52 sections into
-finished (to `DONE.md`) and live (to `TODO.md`) **whole, without summarising** —
-a real pass, not a cleanup, and doing it carelessly would lose the state of the
-whole project.
-
-**What would change it.** ⚠️ Filed as a Kiro item. **Until that sweep runs,
-`HANDOFF.md` is where the truth is** — this entry exists so nobody mistakes the
-short `TODO.md` for the full picture.
+`HANDOFF.md` was split into `TODO.md` (4 open items) + `DONE.md` (36 finished
+sections) + `info/` (gotchas, system reference, design decisions) per estate
+DOCS_STANDARD. The original is archived at
+`archive/HANDOFF.superseded-2026-08-21.md`.
 
 ---
 
