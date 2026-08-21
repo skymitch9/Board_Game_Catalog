@@ -14,7 +14,7 @@
 
 ---
 
-## âœ… SHIPPED â€” the estate theme becomes a build artifact, and `hearts` arrives, 2026-08-17
+## ✅ SHIPPED — the estate theme becomes a build artifact, and `hearts` arrives, 2026-08-17
 
 Owner order, verbatim: *"Add the pink theme as an option for every site, when a
 theme is added all sites get it some may just default right away."* Commit
@@ -23,46 +23,46 @@ theme is added all sites get it some may just default right away."* Commit
 | | |
 |---|---|
 | The bug | `hearts` shipped into catalog-platform on 2026-08-16 and this cog kept offering four themes, with nothing failing. There were THREE places to remember here: the hand-copied `apps/web/public/assets/`, `ESTATE_THEMES` in `src/lib/theme.ts`, and `THEME_LABELS` in `ThemeToggle.tsx`. All three are gone |
-| Sync | `scripts/sync-estate-theme.mjs` â€” twin of the two existing estate syncs, on `pretypecheck`/`pretest`/`prebuild`/`predev`/`predev:web`/`predeploy`. Fails the build when the sibling checkout is missing, rather than shipping an unstyled page |
-| Gitignore | `apps/web/public/assets/` left git entirely â€” the whole directory is that script's output. âš ï¸ `apps/web/public/fonts/` is a different, still hand-written directory |
-| Cog | renders `estateThemes()` / `estateThemeLabel()`, both reading `window.estateTheme` at render time. `FALLBACK_THEMES` is only for a DOM with no switcher, and says so. `EstateTheme` is now `string` â€” a union over a local array is what made "offer whatever the switcher offers" untypeable |
+| Sync | `scripts/sync-estate-theme.mjs` — twin of the two existing estate syncs, on `pretypecheck`/`pretest`/`prebuild`/`predev`/`predev:web`/`predeploy`. Fails the build when the sibling checkout is missing, rather than shipping an unstyled page |
+| Gitignore | `apps/web/public/assets/` left git entirely — the whole directory is that script's output. ⚠ï¸ `apps/web/public/fonts/` is a different, still hand-written directory |
+| Cog | renders `estateThemes()` / `estateThemeLabel()`, both reading `window.estateTheme` at render time. `FALLBACK_THEMES` is only for a DOM with no switcher, and says so. `EstateTheme` is now `string` — a union over a local array is what made "offer whatever the switcher offers" untypeable |
 | Deleted | the two inline scripts in `index.html` (the `bgc-theme` migrate-once and the `theme-color` sync). Canonical `theme.js` does both for every estate site now; the migration is safe centrally because localStorage is origin-scoped. The static `theme-color` meta stays as the pre-script value |
 | Also | `fonts/OFL-rajdhani-sharetechmono.txt` was missing from CANONICAL (this repo had it), so every estate site had been serving Rajdhani and Share Tech Mono with no licence text. Pushed upstream, `ac36bbd` |
 | Tests | `npm run typecheck` clean; `npm test` 64/64 |
-| Verified | Live, in a browser, hard-reloaded: the cog offers Classic/Apple/Cyberpunk/Retro/**Hearts**, the default is still `retro`, and `theme-color` still tracks `--et-bg` â€” which is the proof that deleting the inline script was safe. Review link: <https://boardgames.heygabi.ai/> (cog in the top bar, signed in) |
-| âš ï¸ NOT verified | The `hearts` LOOK on a signed-in games page. It was exercised on this app's own signed-out shell (white card, blush ground, 8-bit texture, legible light and dark) but the collection list itself was not viewed wearing it â€” no theme was applied to the owner's live session on purpose |
-| Reference | [`info/estate-theme.md`](info/estate-theme.md); the contract and "how to add theme #6" are `catalog-platform/docs/info/estate-themes.md` Â§3a |
+| Verified | Live, in a browser, hard-reloaded: the cog offers Classic/Apple/Cyberpunk/Retro/**Hearts**, the default is still `retro`, and `theme-color` still tracks `--et-bg` — which is the proof that deleting the inline script was safe. Review link: <https://boardgames.heygabi.ai/> (cog in the top bar, signed in) |
+| ⚠ï¸ NOT verified | The `hearts` LOOK on a signed-in games page. It was exercised on this app's own signed-out shell (white card, blush ground, 8-bit texture, legible light and dark) but the collection list itself was not viewed wearing it — no theme was applied to the owner's live session on purpose |
+| Reference | [`info/estate-theme.md`](info/estate-theme.md); the contract and "how to add theme #6" are `catalog-platform/docs/info/estate-themes.md` §3a |
 
 ---
 
-## ðŸ“Œ 2026-08-16 â€” two things went live (Opus â†’ Fable handoff)
+## 📌 2026-08-16 — two things went live (Opus → Fable handoff)
 
 Deployed `bcf265c9`. 42 tests, typecheck clean across 7 workspaces.
 
-1. **Hourly missing-details sweep** â€” cron `7 * * * *`, its own schedule rather
-   than riding the existing 30-minute tick (these lookups cost ~1.4Â¢ each and
-   sharing would have doubled the ceiling for nothing). Cap **8 rows/tick** â‰ˆ
-   11Â¢/hour worst case, and only while a backlog exists.
-   âš ï¸ **It shipped broken and was fixed the same day.** The first version used
-   `ctx.waitUntil()` alone and returned immediately â€” but this repo had ALREADY
+1. **Hourly missing-details sweep** — cron `7 * * * *`, its own schedule rather
+   than riding the existing 30-minute tick (these lookups cost ~1.4¢ each and
+   sharing would have doubled the ceiling for nothing). Cap **8 rows/tick** ≈
+   11¢/hour worst case, and only while a backlog exists.
+   ⚠ï¸ **It shipped broken and was fixed the same day.** The first version used
+   `ctx.waitUntil()` alone and returned immediately — but this repo had ALREADY
    written down, about the request path (`routes/research.ts`), that "a
    waitUntil task gets about thirty seconds after the response is returned",
-   while one enrichment takes **20â€“70 seconds**. It would have completed roughly
+   while one enrichment takes **20–70 seconds**. It would have completed roughly
    ONE of eight and been killed mid-flight, leaving a run stuck at `running`.
    `scheduled()` now RETURNS the promise. **The lesson had been learned on the
-   request path and did not travel to the scheduled path â€” any new background
+   request path and did not travel to the scheduled path — any new background
    work here inherits the same trap.**
    Why it converges on its own: `listItemsNeedingDetails()` excludes per FIELD,
    never re-asks unless an input changed, and a lookup that cannot identify a
    game finishes `done` with a sentence rather than `error`.
 
-2. **`<estate-search>`** â€” an additive "search the whole estate" fold under the
+2. **`<estate-search>`** — an additive "search the whole estate" fold under the
    top bar, shut by default. `CollectionPage.tsx` is untouched.
-   âš ï¸ `estate-auth.js` is deliberately NOT synced: it calls `initializeApp()`
+   ⚠ï¸ `estate-auth.js` is deliberately NOT synced: it calls `initializeApp()`
    itself, which would stand up a **second Firebase app** on a page that already
    has one. An `authAdapter` over the app's existing `firebase.ts` is supplied
    instead.
-   âš ï¸ The element is built with `createElement` and NOT as JSX, so the adapter
+   ⚠ï¸ The element is built with `createElement` and NOT as JSX, so the adapter
    is attached before `connectedCallback`. Do not "simplify" it.
    It was CORS-blocked until `READ_ORIGINS` was set on the index Worker
    (catalog-platform, `befcce25`).
@@ -70,12 +70,12 @@ Deployed `bcf265c9`. 42 tests, typecheck clean across 7 workspaces.
 **Not verified:** nobody has typed in the search box on the deployed site.
 
 **Still open here:** the scan-history view, shelf-photo splitting (correctly
-gated on measuring first), and two thresholds worth re-measuring â€” all in
+gated on measuring first), and two thresholds worth re-measuring — all in
 [`TODO.md`](TODO.md), which remains short and accurate.
 
 ---
 
-## âœ… SHIPPED â€” role ladder redesign (six rungs, wishlist/scan splits, admin escalation limit), 2026-08-16
+## ✅ SHIPPED — role ladder redesign (six rungs, wishlist/scan splits, admin escalation limit), 2026-08-16
 
 Owner-approved role matrix implemented verbatim ("Role matrix approved").
 Commits `4220703` (constants+capabilities), `e5a57bc` (migration 0027),
@@ -84,109 +84,109 @@ Commits `4220703` (constants+capabilities), `e5a57bc` (migration 0027),
 | | |
 |---|---|
 | Ladder | `guest < member < contributor < moderator < admin < owner` (`ROLE_LADDER`, `packages/core/src/constants.ts`). `pending` stays a status, excluded from the ladder |
-| Renames | `viewer`->`guest`, `rater`->`member`, `manager`->`moderator` â€” same rungs, new names. Verified in `apps/worker/src/lib/capabilities.test.ts` that `moderator`'s capability set is a superset of the old `manager`'s: nobody in production lost anything |
+| Renames | `viewer`->`guest`, `rater`->`member`, `manager`->`moderator` — same rungs, new names. Verified in `apps/worker/src/lib/capabilities.test.ts` that `moderator`'s capability set is a superset of the old `manager`'s: nobody in production lost anything |
 | New roles | `contributor` (editCatalog + manageWishlist + scanBarcode, nobody migrates in automatically) and `admin` (+manageUsers, grantable only by `owner`) |
-| Wishlist split | `suggestWishlist` (member+, "I want this") vs `manageWishlist` (contributor+, curate/remove). Wired into `catalog.ts`'s copy routes by the copy's `status`, not just the route â€” see the file's own comment |
+| Wishlist split | `suggestWishlist` (member+, "I want this") vs `manageWishlist` (contributor+, curate/remove). Wired into `catalog.ts`'s copy routes by the copy's `status`, not just the route — see the file's own comment |
 | Scan split | `scanBarcode` (free, contributor+) vs `scanPhoto` (bills the Anthropic vision API, moderator+). `scan-jobs.ts`'s old blanket `editCatalog` gate is now per-route; `vision.ts`'s two routes moved from `runResearch` to `scanPhoto` |
-| Admin escalation limit | New pure helper `canGrantRole` (`packages/core/src/capabilities.ts`) â€” an `admin` may grant any role strictly beneath itself on the ladder, never `admin` or `owner`; only `owner` is unrestricted. Enforced in both `routes/users.ts` and `routes/admin.ts` (the federated surface), and mirrored client-side in `PeoplePage.tsx` so an `admin` is never offered a button that would 403 |
-| âš ï¸ Stored role string outside the DB | `apps/worker/src/middleware/estate.ts`'s `AUTH_POSTURE.defaultRole` was `'viewer'` â€” the estate default-grant role, written when `ESTATE_CHECK=enforce` (which production runs). Renamed to `'guest'`; missing this would have made every estate default-grant fail the new CHECK constraint |
-| Migration | `0027_role_ladder.sql` â€” same `app_user` rebuild shape as 0023/0024, now also carrying the 0026 estate columns. Applied local and remote. **Remote role counts, before -> after:** `manager=1, owner=2, rater=1` (4 total) -> `moderator=1, owner=2, member=1` (4 total). Row count preserved; CHECK constraint and `approved_by` self-references confirmed live via `sqlite_master` |
+| Admin escalation limit | New pure helper `canGrantRole` (`packages/core/src/capabilities.ts`) — an `admin` may grant any role strictly beneath itself on the ladder, never `admin` or `owner`; only `owner` is unrestricted. Enforced in both `routes/users.ts` and `routes/admin.ts` (the federated surface), and mirrored client-side in `PeoplePage.tsx` so an `admin` is never offered a button that would 403 |
+| ⚠ï¸ Stored role string outside the DB | `apps/worker/src/middleware/estate.ts`'s `AUTH_POSTURE.defaultRole` was `'viewer'` — the estate default-grant role, written when `ESTATE_CHECK=enforce` (which production runs). Renamed to `'guest'`; missing this would have made every estate default-grant fail the new CHECK constraint |
+| Migration | `0027_role_ladder.sql` — same `app_user` rebuild shape as 0023/0024, now also carrying the 0026 estate columns. Applied local and remote. **Remote role counts, before -> after:** `manager=1, owner=2, rater=1` (4 total) -> `moderator=1, owner=2, member=1` (4 total). Row count preserved; CHECK constraint and `approved_by` self-references confirmed live via `sqlite_master` |
 | Tests | `apps/worker/src/lib/role-grant.test.ts` (the three required escalation cases + owner sanity checks) and `capabilities.test.ts` (new roles, both splits, the manager-subset-of-moderator invariant). `npm test`: **32/32** (baseline 10 unaffected) |
-| Verified | `npm run typecheck` clean all workspaces. Deployed â€” `boardgames.heygabi.ai/api/health` 200. **Live-viewed `/people`** (authenticated as owner in an existing browser session): all four real users show the new vocabulary (`owner` Ã—2, `moderator`, `member`) and the grant-button list per row matches `canGrantRole` exactly for an `owner` granter (every other role offered, current role excluded) |
-| âš ï¸ NOT verified | `GET /api/admin/users` (the CORS-gated, `heygabi.ai`-only cross-origin surface) directly with a bearer token â€” extracting the token from the authenticated browser session to call it from `curl` was blocked by the coding agent's own safety classifier, and the block was respected rather than worked around. Same data source and same `ROLES` vocabulary as `/api/users` (verified live above), so it is very likely correct, but "very likely" is not "verified" â€” worth a manual check from `heygabi.ai/admin` when convenient |
+| Verified | `npm run typecheck` clean all workspaces. Deployed — `boardgames.heygabi.ai/api/health` 200. **Live-viewed `/people`** (authenticated as owner in an existing browser session): all four real users show the new vocabulary (`owner` ×2, `moderator`, `member`) and the grant-button list per row matches `canGrantRole` exactly for an `owner` granter (every other role offered, current role excluded) |
+| ⚠ï¸ NOT verified | `GET /api/admin/users` (the CORS-gated, `heygabi.ai`-only cross-origin surface) directly with a bearer token — extracting the token from the authenticated browser session to call it from `curl` was blocked by the coding agent's own safety classifier, and the block was respected rather than worked around. Same data source and same `ROLES` vocabulary as `/api/users` (verified live above), so it is very likely correct, but "very likely" is not "verified" — worth a manual check from `heygabi.ai/admin` when convenient |
 
 ---
 
-## âœ… SHIPPED â€” index-push staleness made data-aware, 2026-08-16
+## ✅ SHIPPED — index-push staleness made data-aware, 2026-08-16
 
 Closes the class behind the 2026-08-15 incident: a backfill script writes
-`item` directly via `wrangler d1 execute`, bypassing every mutation route â€”
+`item` directly via `wrangler d1 execute`, bypassing every mutation route —
 `indexPushAfterMutation` never fires, and the request-riding backstop
 (2026-08-13 entry below) only asked "is the last push >24h old?", which
 cannot see a bypassed write at all. Bit the games universe rows that day,
 fixed by hand with an unrelated mutation. Full context:
-`catalog-platform/docs/TODO.md`'s "Index-push staleness â€” the real fix" note
-(queued there, closed here and in the library catalog â€” the two
+`catalog-platform/docs/TODO.md`'s "Index-push staleness — the real fix" note
+(queued there, closed here and in the library catalog — the two
 `index-push.ts` files stay deliberately mirrored).
 
 | | |
 |---|---|
-| Design | `pushIndexIfStale` now ALSO compares `MAX(item.updated_at)` (new `getLatestSourceUpdateAt` in `packages/db/src/index-projection.ts`, UTC-safe parsed â€” same fix as `scan-jobs.ts`'s `toIso`) against the index's own `pushed_at`. A pure `decidePushForStaleness` gate in `apps/worker/src/lib/index-push.ts` makes the call: push if the index is empty, `pushed_at` is missing/unparseable, the push is >24h old, OR the data moved after the last push â€” that last branch is the fix, and it fires regardless of how young the push is |
-| Manual force | `POST /api/admin/index-push` (`routes/admin.ts`), gated exactly like the rest of that surface â€” `requireCapability('manageUsers')` |
-| Backfill fix | `scripts/rehost-covers.mjs` was writing `item.thumbnail_url` without bumping `updated_at` â€” invisible to the new check by construction; fixed |
-| âš ï¸ Test script | **This repo now HAS one** â€” `tsx --test apps/worker/src/lib/*.test.ts` (`npm test`), mirroring library_catalog. Supersedes the "no test script in this repo" parentheticals in the entries below; those were accurate when written |
-| Verified | `npm test` 10/10 new, `npm run typecheck` clean (all workspaces). Deployed â€” `boardgames.heygabi.ai/api/health` 200. **Live-captured via `wrangler tail`**: the deployed backstop ran the new `getLatestSourceUpdateAt` + `decidePushForStaleness` path against real traffic and logged `index backstop {"skipped":"index is fresh (837 rows, pushed 2026-08-16T03:53:53.256Z)"}` â€” the exact reason string only the new code produces, proving the new D1 query + comparison executes clean in production. Did **not** live-trigger the data-moved-since-push branch itself (would need an out-of-band write against production) â€” that branch is unit-test-verified only |
+| Design | `pushIndexIfStale` now ALSO compares `MAX(item.updated_at)` (new `getLatestSourceUpdateAt` in `packages/db/src/index-projection.ts`, UTC-safe parsed — same fix as `scan-jobs.ts`'s `toIso`) against the index's own `pushed_at`. A pure `decidePushForStaleness` gate in `apps/worker/src/lib/index-push.ts` makes the call: push if the index is empty, `pushed_at` is missing/unparseable, the push is >24h old, OR the data moved after the last push — that last branch is the fix, and it fires regardless of how young the push is |
+| Manual force | `POST /api/admin/index-push` (`routes/admin.ts`), gated exactly like the rest of that surface — `requireCapability('manageUsers')` |
+| Backfill fix | `scripts/rehost-covers.mjs` was writing `item.thumbnail_url` without bumping `updated_at` — invisible to the new check by construction; fixed |
+| ⚠ï¸ Test script | **This repo now HAS one** — `tsx --test apps/worker/src/lib/*.test.ts` (`npm test`), mirroring library_catalog. Supersedes the "no test script in this repo" parentheticals in the entries below; those were accurate when written |
+| Verified | `npm test` 10/10 new, `npm run typecheck` clean (all workspaces). Deployed — `boardgames.heygabi.ai/api/health` 200. **Live-captured via `wrangler tail`**: the deployed backstop ran the new `getLatestSourceUpdateAt` + `decidePushForStaleness` path against real traffic and logged `index backstop {"skipped":"index is fresh (837 rows, pushed 2026-08-16T03:53:53.256Z)"}` — the exact reason string only the new code produces, proving the new D1 query + comparison executes clean in production. Did **not** live-trigger the data-moved-since-push branch itself (would need an out-of-band write against production) — that branch is unit-test-verified only |
 
 ---
 
-## âœ… SHIPPED â€” the `viewer` role and the waiting badge, 2026-08-10
+## ✅ SHIPPED — the `viewer` role and the waiting badge, 2026-08-10
 
 | | |
 |---|---|
 | Live worker version | **`e9d844ed-ce07-46ed-8bb6-f030cc4e0b59`**, deployed 17:27 UTC |
-| Roll back to | `04a13312-57b4-43d9-beee-959c05bdf576` â€” the public-hostname deploy, before any of this |
+| Roll back to | `04a13312-57b4-43d9-beee-959c05bdf576` — the public-hostname deploy, before any of this |
 | Commits | `0c3f4ef` (role + migration), `a623064` (waiting badge), `63efc3d` (this doc) |
 | Migration | **`0023_viewer_role.sql` applied to production and recorded.** None pending |
-| Pushed | **yes** â€” `origin/main` level at `63efc3d` |
+| Pushed | **yes** — `origin/main` level at `63efc3d` |
 
 **Migration verified against production, before and after.** Every count
 identical across the rebuild, which is the whole point of how 0023 is written:
 
 | | Before | After |
 |---|---|---|
-| `app_user` | 2 | **2** â€” ids 1 and 2, both still `owner` |
-| `research_run.triggered_by` | 54 | **54** â† the one that mattered |
-| `app_user.approved_by` | 1 | **1** â€” user 2 â†’ 1, self-reference intact |
+| `app_user` | 2 | **2** — ids 1 and 2, both still `owner` |
+| `research_run.triggered_by` | 54 | **54** ← the one that mattered |
+| `app_user.approved_by` | 1 | **1** — user 2 → 1, self-reference intact |
 | `user_item` (ratings) | 0 | **0** |
-| stash / `app_user_new` leftovers | â€” | **0** |
+| stash / `app_user_new` leftovers | — | **0** |
 
 Live schema now reads `CHECK (role IN ('owner', 'rater', 'viewer', 'pending'))`,
 read back from `sqlite_master` rather than assumed. `d1_migrations` latest is
 `0023_viewer_role.sql`.
 
-âš ï¸ **`run_links` was 54, not the 46 recorded elsewhere in this file** â€” it had
+⚠ï¸ **`run_links` was 54, not the 46 recorded elsewhere in this file** — it had
 grown since. That is the argument for capturing before-counts rather than
 trusting a documented number: the check is *before == after*, not *== 46*.
 
-âš ï¸ **`d1 execute --remote` threw 7403 once and a straight retry worked.** Same
+⚠ï¸ **`d1 execute --remote` threw 7403 once and a straight retry worked.** Same
 transient noted in the 08-08 section. Do not conclude the account has lost
 access on a single failure.
 
-ðŸš¨ **Rollback is not just the worker.** The version above restores the code, but
-0023 has already run. It is safe to leave applied â€” old code never writes
-`viewer` and the widened CHECK accepts everything the old one did â€” so roll the
+🚨 **Rollback is not just the worker.** The version above restores the code, but
+0023 has already run. It is safe to leave applied — old code never writes
+`viewer` and the widened CHECK accepts everything the old one did — so roll the
 worker back alone. Only if the *data* were wrong would you need
 `npx wrangler d1 time-travel restore board-game-catalog --timestamp <before>`,
 and the table above says it is not.
 
-### âœ… Confirmed by the owner: `/people` renders and **Make viewer** is there
+### ✅ Confirmed by the owner: `/people` renders and **Make viewer** is there
 
-*"i see make viewer it all looks good"* â€” 2026-08-10, on
+*"i see make viewer it all looks good"* — 2026-08-10, on
 <https://boardgames.heygabi.ai/people>. That is the deploy verified end to end:
 the page loads, the new role shipped, and the role list now derives from `ROLES`
 rather than the hardcoded copy that would have made `viewer` assignable nowhere.
 
 **Why it had to come from a person.** Access intercepts every route at the edge,
-and this session had no outbound network at all â€” `curl` returned `000` for
+and this session had no outbound network at all — `curl` returned `000` for
 `/api/health` on both hostnames, which is a connection failure and **not** a
 302, so it proved nothing either way. A clean deploy plus a confirmed schema
 still does not tell you the Worker serves a page. Same gap the 08-09 restyle
 had, closed the same way: ask for one signed-in page load.
 
-â³ **The badge itself is still unseen, and correctly so** â€” production has **0**
+â³ **The badge itself is still unseen, and correctly so** — production has **0**
 pending users, and it is drawn only when somebody is actually waiting. Its
 absence is not a failure. It verifies itself the first time a real person signs
 in and lands as `pending`, which is exactly what the next invite produces. To
 force it early, sign in from any other Google account in a private window.
 
-### Why the migration looks so paranoid â€” do not "simplify" it
+### Why the migration looks so paranoid — do not "simplify" it
 
 `app_user` is not empty and five columns in four tables point at it, so the
 implicit `DELETE` that `DROP TABLE` performs fires FK actions: `user_item.user_id`
 is **ON DELETE CASCADE** and takes *every rating row*, and `research_run.triggered_by`
 (46 prod rows), `play.logged_by_user_id`, `research_finding.reviewed_by` and
 `app_user.approved_by` are all nulled. **Migration 0018's `DROP`-and-recreate is
-not a precedent** â€” that table was empty in every environment, and its header
+not a precedent** — that table was empty in every environment, and its header
 says so.
 
 Measured on the local D1 with throwaway tables, not reasoned about. Both dodges
@@ -198,23 +198,23 @@ stash-before, restore-after, which depends on no pragma and is checkable by
 counting both sides.
 
 The subtle one: `app_user_new.approved_by` references `app_user` **by name**,
-still the old table when `DROP` runs â€” so the new table's own column is nulled
+still the old table when `DROP` runs — so the new table's own column is nulled
 too, before the rename makes it self-referential.
 
 ### What the two commits contain
 
-**`viewer`** reads and nothing else â€” `rater` was the only other read-capable
+**`viewer`** reads and nothing else — `rater` was the only other read-capable
 role and it also carries `rate`. Verified through a real worker: `/api/me`
 returns `capabilities: ["read"]` alone, reads answer 200, and rating, item
 create/patch/delete, export, users, vision, scan-jobs, bgg import and cache
 clear all **403**.
 
 **The waiting badge** on the People link. Nothing previously told the owner that
-someone was stuck on the holding screen â€” no email, no push, and the link looked
+someone was stuck on the holding screen — no email, no push, and the link looked
 identical whether nobody or six people were waiting. Counted in `chores`, gated
 on `editCatalog` **or** `manageUsers`.
 
-âš ï¸ **`PeoplePage` no longer hardcodes its role list** â€” it derives from `ROLES`.
+⚠ï¸ **`PeoplePage` no longer hardcodes its role list** — it derives from `ROLES`.
 The old hardcoded copy is exactly how `viewer` would have shipped assignable
 nowhere. A new role now needs `ROLES`, `CAPABILITY_MATRIX`, `ROLE_BLURB`, a
 badge tone, **and a CHECK migration**.
@@ -222,7 +222,7 @@ badge tone, **and a CHECK migration**.
 ### Still open
 
 - **Nobody is a `viewer` in production yet**, and nothing is pre-provisioned.
-- âš ï¸ **The audiobook catalog cannot be migrated in â€” it stores no email addresses.**
+- ⚠ï¸ **The audiobook catalog cannot be migrated in — it stores no email addresses.**
   Read live 2026-08-10: **8 profiles, 3 passphrase users, 0 email-like fields on
   any of them.** `ensureProfile()` writes only `displayName`/`photoURL`, and the
   Google email lives in `localStorage` as `ab_identity_email`, never in
@@ -231,67 +231,67 @@ badge tone, **and a CHECK migration**.
   Amber Mitchell, Jamie Jeremiah Lievertz, Remy, Ronnie, Samantha Hardman,
   Skylar, Sparkling Ember, *Tim Connell* (the owner asked to exclude Tim).
   **The working route is the existing one:** they sign in, land as `pending`,
-  and the owner presses *Make viewer* â€” the badge now says when they are waiting.
-- âš ï¸ **Port 8787 is squatted by another project's dev server** (its `/api/me`
+  and the owner presses *Make viewer* — the badge now says when they are waiting.
+- ⚠ï¸ **Port 8787 is squatted by another project's dev server** (its `/api/me`
   answers with `trackReading`, `scan`, `reviewName`). `apps/web/vite.config.ts`
   proxies there, so `npm run dev` can silently talk to the wrong app's API.
   Check before trusting a local web session.
 
 ---
 
-## âœ… SHIPPED â€” public hostname, 2026-08-10
+## ✅ SHIPPED — public hostname, 2026-08-10
 
 | | |
 |---|---|
-| Live at | **<https://boardgames.heygabi.ai>** â€” behind Cloudflare Access, owner-only, as intended |
+| Live at | **<https://boardgames.heygabi.ai>** — behind Cloudflare Access, owner-only, as intended |
 | Worker version | `04a13312-57b4-43d9-beee-959c05bdf576` |
-| Commit | `a9b8e58` â€” `apps/worker/wrangler.toml` only, an 18-line `[[routes]]` block |
+| Commit | `a9b8e58` — `apps/worker/wrangler.toml` only, an 18-line `[[routes]]` block |
 | Migrations | **none** |
 | Pushed | **yes** |
 
 `custom_domain = true` means the **deploy** created the hostname and its DNS
-record â€” a config line, not a dashboard click, is what put the site online. The
+record — a config line, not a dashboard click, is what put the site online. The
 `workers.dev` URL is deliberately kept as the fallback.
 
-âš ï¸ **`CF_ACCESS_AUD` was deliberately NOT changed, and that is correct.** The
+⚠ï¸ **`CF_ACCESS_AUD` was deliberately NOT changed, and that is correct.** The
 hostname was added as a *second destination* on the existing Access application
 rather than as a new application, so it inherits that app's audience and its
 Production policy (Cloudflare allows five destinations per app). Verified live:
 an unauthenticated request 302s to the Access login, and a signed-in load renders
-real D1 data. Full reasoning: [`access/login.md`](access/login.md) Â§"Where the
+real D1 data. Full reasoning: [`access/login.md`](access/login.md) §"Where the
 app lives".
 
-âš ï¸ **If it looks unreachable from the house, it is almost certainly the router**
-caching NXDOMAIN â€” `ipconfig /flushdns` does not clear it. Check with
+⚠ï¸ **If it looks unreachable from the house, it is almost certainly the router**
+caching NXDOMAIN — `ipconfig /flushdns` does not clear it. Check with
 `Resolve-DnsName <host> -Server 1.1.1.1`. This cost a full false diagnosis.
 
 Access is untouched and still enforcing. Nothing about the app, its data or its
-policies changed â€” only where it answers.
+policies changed — only where it answers.
 
 ---
 
-## âœ… SHIPPED â€” the vintage pop-art restyle, 2026-08-09
+## ✅ SHIPPED — the vintage pop-art restyle, 2026-08-09
 
 | | |
 |---|---|
 | Live worker version | **`6ca9be76-701c-4d1f-8866-e9e16cd39139`** |
-| Roll back to | `4d303298-2636-450f-acfc-a0ce5edcf224` â€” everything except the restyle |
+| Roll back to | `4d303298-2636-450f-acfc-a0ce5edcf224` — everything except the restyle |
 | Commits | `154a9d3`, `99f60b4`, `987ef5c` |
-| Migrations | **none** â€” CSS, two font files and one `index.html` meta change |
-| Pushed | **yes** â€” `origin/main` is level for the first time this session |
+| Migrations | **none** — CSS, two font files and one `index.html` meta change |
+| Pushed | **yes** — `origin/main` is level for the first time this session |
 
-âœ… **Confirmed by the owner: the deployed pages render.** That closes the
-verification gap on *everything* shipped today â€” the arrivals checklist, the
-wishlist camera and its expansion picker, and the Export page â€” none of which a
+✅ **Confirmed by the owner: the deployed pages render.** That closes the
+verification gap on *everything* shipped today — the arrivals checklist, the
+wishlist camera and its expansion picker, and the Export page — none of which a
 session can check for itself, because Access intercepts every route at the edge
 including static assets. `curl` on `/fonts/bangers.woff2` from a terminal
 returns nothing at all.
 
-âš ï¸ **The one thing still worth a glance is the font path**, because it fails
+⚠ï¸ **The one thing still worth a glance is the font path**, because it fails
 *silently and legibly*: if `/fonts/*.woff2` did not survive the asset pipeline,
 headings simply fall back to Trebuchet and the site looks like a slightly odd
 sans-serif rather than broken. Verified in `dist/` locally and in the built CSS,
-never against production. **Headings should be comic caps** â€” if they are not,
+never against production. **Headings should be comic caps** — if they are not,
 that is the cause.
 
 ### What it is
@@ -303,13 +303,13 @@ offset shadow; buttons press into their own shadow; fields take the same border
 with an *inset* shadow, because a field is a hole in the paper rather than an
 object on it.
 
-Bangers and Luckiest Guy are **self-hosted** â€” see
+Bangers and Luckiest Guy are **self-hosted** — see
 [`apps/web/public/fonts/README.md`](../apps/web/public/fonts/README.md). 40 KB
 for the pair, and it keeps the app's zero-third-party-request property.
 
-The full reasoning â€” why there is no hero, why exactly one starburst and one
+The full reasoning — why there is no hero, why exactly one starburst and one
 speech bubble, why `.card` is deliberately *not* rotated, and why the viewfinder
-stays black â€” is in the commit messages and in the comments at the top of
+stays black — is in the commit messages and in the comments at the top of
 `styles.css`, which is where somebody editing it will actually be.
 
 ### Still not done
@@ -329,48 +329,48 @@ stays black â€” is in the commit messages and in the comments at the top of
 | Live worker version | **`7066047c-ee0d-4c72-ba95-0eacb6671d2b`** |
 | Roll back to | `bf029d3e-3b5d-470c-aaef-740fdcaa6ce1` (arrivals, before any of this) |
 | Commits | `2509082` (export), `cadce4c` (wishlist camera + the mobile fix) |
-| Migrations | **none** â€” nothing in this batch touches the schema |
+| Migrations | **none** — nothing in this batch touches the schema |
 
 ### One Export in the top bar
 
 The JSON and CSV downloads used to hang off the end of the collection page's
-result count, beside *"806 entries Â· 171 games Â· page 1 of 5"*. They are now a
+result count, beside *"806 entries · 171 games · page 1 of 5"*. They are now a
 single **Export** entry in the top bar next to Wishlist and People, opening
-`/export` â€” a page that names both formats and says what each is for.
+`/export` — a page that names both formats and says what each is for.
 
 A place rather than an action, which is what the bar is for. Two formats that
 are not interchangeable, so something has to offer the choice; a lone button
 that silently downloaded one of them would have to pick. Two taps either way.
-The page also says what the CSV **is not** â€” a flattened one-row-per-copy view
-with no ratings, editions or tree shape â€” which matters if you reach for the
+The page also says what the CSV **is not** — a flattened one-row-per-copy view
+with no ratings, editions or tree shape — which matters if you reach for the
 wrong file before doing something drastic.
 
 Gated on `editCatalog` in both the link and the route, because the API behind it
 is; a rater reaching the URL gets NotFound rather than a page whose every button
 403s.
 
-### âš ï¸ The expansions dropdown was unreadable on a phone â€” fixed
+### ⚠ï¸ The expansions dropdown was unreadable on a phone — fixed
 
 *"we need the expansion/accessory drop dowwn to work on mobile. right now it
 just says expansion and we need to be able to see the title and click on it like
-the webpage."* â€” the owner. **This was live and had been for some time.**
+the webpage."* — the owner. **This was live and had been for some time.**
 
 `.child-status` asks for `flex-basis: 100%` under 560px so the status gets a
-line of its own â€” but `.child-row` did not wrap, so the request was met by
+line of its own — but `.child-row` did not wrap, so the request was met by
 squeezing the only shrinkable thing on the row instead. `.child-name` is
 `flex: 1 1 0` with `overflow: hidden`, so it went to **zero width**, and every
 expanded game on a phone listed its contents as "EXPANSION", "ACCESSORY",
-"EXPANSION" â€” no titles and nothing to aim a thumb at.
+"EXPANSION" — no titles and nothing to aim a thumb at.
 
 Fix is `flex-wrap: wrap` on `.child-row`, plus `white-space: normal` on the name
 so a long title takes a second line rather than ellipsising.
 
 **Proved rather than assumed**, by reverting only `flex-wrap` in the live page
 and re-measuring: name width **0px before, 267px after**, same rows, same
-viewport. The item page's own child list (`.child-link`) was never affected â€”
+viewport. The item page's own child list (`.child-link`) was never affected —
 names measured 179px and rows 39px tall throughout.
 
-âš ï¸ **This is the third time one flex row has silently eaten its own name**, after
+⚠ï¸ **This is the third time one flex row has silently eaten its own name**, after
 `.arrival label` and `.arrival-meta`. The rule, now written in the stylesheet:
 *any row in this file that gives a child `flex-basis: 100%` has to be a wrapping
 row.*
@@ -379,23 +379,23 @@ row.*
 
 *"for wishlist add, utilize our existing technology for scanning barcodes and
 individual photos to add games to it. Also if a game is added, grab the
-expansions so we can quick add thoseâ€¦ add a see expansions expansion area where
-we can check them to add them to wishlist too."* â€” the owner.
+expansions so we can quick add those… add a see expansions expansion area where
+we can check them to add them to wishlist too."* — the owner.
 
 | | |
 |---|---|
 | New | `WishlistScan.tsx`, `WishlistExpansions.tsx`, `lib/catalog-add.ts` |
 | Changed | `WishlistAdd.tsx` (three tabs, and it no longer closes on add), `Completeness.tsx` and `ScanPage.tsx` (onto the shared module) |
 
-**Three tabs â€” Type it, Barcode, Photo.** Typing stays the default: it is the
+**Three tabs — Type it, Barcode, Photo.** Typing stays the default: it is the
 only one that works with no light, no barcode and no camera permission, and it
 is the screen this page has always had. The camera rungs are the *same modules*
-`/scan` uses â€” `startScanLoop`, `captureFrame`, `CameraStage`, `api.barcode`,
-`api.identifyPhoto`. The slow paid rung (Claude on a barcode number, 1â€“2
+`/scan` uses — `startScanLoop`, `captureFrame`, `CameraStage`, `api.barcode`,
+`api.identifyPhoto`. The slow paid rung (Claude on a barcode number, 1–2
 minutes) is deliberately **not** offered: it exists for a box you own and cannot
 identify, and it is far too much to spend on deciding whether to want something.
 
-âš ï¸ **This reverses a decision recorded on `WishlistPage`** â€” that sending
+⚠ï¸ **This reverses a decision recorded on `WishlistPage`** — that sending
 somebody to the scanner for something they do not have was "always the wrong
 direction". The observation was right and the conclusion was half of one:
 standing in a shop holding a box you have not bought is exactly a box in your
@@ -406,28 +406,28 @@ and navigates away.
 `WishlistExpansions`, which asks BoardGameGeek what else exists and offers it as
 a checklist behind *"See expansions (N)"*.
 
-âš ï¸ **Nothing is ticked to start with â€” the opposite of `Arrivals`, deliberately.**
+⚠ï¸ **Nothing is ticked to start with — the opposite of `Arrivals`, deliberately.**
 A preorder arriving already happened and the tick confirms it. Wanting an
 expansion has not happened, and wanting all sixteen is a claim nobody made.
 
-âš ï¸ **A component just added comes straight back in the list, and that was a
+⚠ï¸ **A component just added comes straight back in the list, and that was a
 double-add bug.** `outstanding` is everything not proven `held`, and a `wanted`
-copy is not held â€” so the two rows added in testing reappeared with
+copy is not held — so the two rows added in testing reappeared with
 `matchedItemId` set and the note "Already on your wishlist", tickable again, and
 the second attempt would fail on the unique `bgg_id` index. Filtered on
 `matchedItemId == null`, which is the same test `AddComponent` already applies
-for the same reason. Verified: **16 offered â†’ add 2 â†’ 14 offered.**
+for the same reason. Verified: **16 offered → add 2 → 14 offered.**
 
 **One BoardGameGeek call, fired once.** A game added a minute ago has never been
 swept, so `completeness` returns `never_checked` and there is nothing to show;
 the panel does one `POST /api/components/backfill?itemId=` and re-reads. Only
-here, on a row this session just created â€” never on the report, which has a
+here, on a row this session just created — never on the report, which has a
 button already.
 
-### `lib/catalog-add.ts` â€” the policy that was in three places
+### `lib/catalog-add.ts` — the policy that was in three places
 
 `fillableFieldsFor` decides what a row of a given kind may hold at all, and
-forgetting it produces a dice tray for 2â€“6 players with a description of a dice
+forgetting it produces a dice tray for 2–6 players with a description of a dice
 game. The scanner, the completeness report and now the wishlist all create items
 out of lookup results, and all three carried their own copy of that gate. It now
 lives once, in `createItemFromCandidate` / `createItemFromComponent` /
@@ -437,14 +437,14 @@ lives once, in `createItemFromCandidate` / `createItemFromComponent` /
 
 | Checked | Result |
 |---|---|
-| Type-it add, then expansions | âœ… Ticket to Ride â†’ "See expansions (16)", all unticked |
-| Tick 2, add | âœ… *"2 expansions of Ticket to Ride are on the wishlist too."*, and both land as `wanted` |
-| Double-add guard | âœ… 16 â†’ 14 after the filter; before it, the two stayed tickable |
-| Barcode / Photo tabs | âœ… camera stage and hints render; Photo also offers "Choose a photo instead" |
-| The write path a scan runs | âœ… exercised directly â€” item with `bggId` + `wanted` copy, appears on `/api/wishlist` |
-| Export page and both files | âœ… 200 with `Content-Disposition` on `.csv` and `.json`; old links gone from the collection page |
+| Type-it add, then expansions | ✅ Ticket to Ride → "See expansions (16)", all unticked |
+| Tick 2, add | ✅ *"2 expansions of Ticket to Ride are on the wishlist too."*, and both land as `wanted` |
+| Double-add guard | ✅ 16 → 14 after the filter; before it, the two stayed tickable |
+| Barcode / Photo tabs | ✅ camera stage and hints render; Photo also offers "Choose a photo instead" |
+| The write path a scan runs | ✅ exercised directly — item with `bggId` + `wanted` copy, appears on `/api/wishlist` |
+| Export page and both files | ✅ 200 with `Content-Disposition` on `.csv` and `.json`; old links gone from the collection page |
 
-âš ï¸ **`ItemPicker` suggestions fire on `onMouseDown`, not `onClick`** â€” deliberate,
+⚠ï¸ **`ItemPicker` suggestions fire on `onMouseDown`, not `onClick`** — deliberate,
 so the input's blur cannot close the list first. A test driving it with
 `.click()` silently selects nothing and the Add button stays disabled. It cost
 three rounds here; dispatch a real `mousedown`.
@@ -456,26 +456,26 @@ three rounds here; dispatch a real `mousedown`.
   already uses and the write path was exercised directly, but the capture itself
   is untested here.
 - **Phone width is measured at a 390px content width in desktop Chrome**, not on
-  iOS Safari. `resize_window` does nothing to a maximised window â€” see the note
+  iOS Safari. `resize_window` does nothing to a maximised window — see the note
   in the arrivals section for the technique that does work.
 
 ---
 
-## âœ… "It arrived" â€” a preorder lands in one pass, 2026-08-09
+## ✅ "It arrived" — a preorder lands in one pass, 2026-08-09
 
 *"we need a 1 button click to change a pre order game from preordered to owned
 and to have it update all the expansion too. It should prompt you and say what
 has arrived so you can exclude things that didn't arrive with the preorder."*
-â€” the owner.
+— the owner.
 
 | | |
 |---|---|
-| Migration | **none** â€” no schema change, nothing stored |
-| New endpoint | `GET /api/items/:id/arrivals` â€” **read-only** |
+| Migration | **none** — no schema change, nothing stored |
+| New endpoint | `GET /api/items/:id/arrivals` — **read-only** |
 | New component | `apps/web/src/components/Arrivals.tsx` |
 | Touched | `packages/core/src/schemas.ts`, `packages/db/src/items.ts`, `apps/worker/src/routes/catalog.ts`, `apps/web/src/api.ts`, `ItemPage.tsx`, `styles.css` |
-| Live worker version | **`bf029d3e-3b5d-470c-aaef-740fdcaa6ce1`** â€” the phone layout, 2026-08-09 |
-| Previous version | `124ca437-5976-4af2-a4ea-92afee8a232b` â€” the feature without the phone layout |
+| Live worker version | **`bf029d3e-3b5d-470c-aaef-740fdcaa6ce1`** — the phone layout, 2026-08-09 |
+| Previous version | `124ca437-5976-4af2-a4ea-92afee8a232b` — the feature without the phone layout |
 | Roll back to | `2f1a26a3-c60c-4292-850e-167d58a3935a` to remove the feature entirely |
 | Commits | `35fd354` (the feature), `0cc2030` (the phone layout) |
 
@@ -490,49 +490,49 @@ what did not turn up, and unticked rows are left exactly as they were.
 
 ### The three decisions worth not re-litigating
 
-âš ï¸ **It walks the subtree, not `root_game_id`.** The cheaper join is wrong: a
-game can hold two pledges at once â€” a base game bought years ago and an
-expansion wave still in the post â€” and confirming one must not offer up the
+⚠ï¸ **It walks the subtree, not `root_game_id`.** The cheaper join is wrong: a
+game can hold two pledges at once — a base game bought years ago and an
+expansion wave still in the post — and confirming one must not offer up the
 other. Asking from an expansion's page therefore lists that expansion's branch
 and nothing from the base game beside it. Verified locally: asking from item 112
 returned 3 rows, asking from item 111 returned 13.
 
-âš ï¸ **There is no bulk write endpoint, deliberately.** Each ticked row is an
-ordinary `PATCH /api/copies/:id` with `{ status: 'owned' }` â€” the same call the
+⚠ï¸ **There is no bulk write endpoint, deliberately.** Each ticked row is an
+ordinary `PATCH /api/copies/:id` with `{ status: 'owned' }` — the same call the
 wishlist's "bought it" and the copy editor's dropdown make. This is the rule
 already written on `/wishlist` and `/retag`: *a second way to change a copy's
 status is a second thing to keep honest.* The endpoint added here decides **what
 to offer** and never what to do with it. The consequence is the good one: a
 partial failure leaves whatever did not save still `preordered` and still on the
-list, so it is reported (`"8 of 11 savedâ€¦"`) and retried rather than rolled back.
+list, so it is reported (`"8 of 11 saved…"`) and retried rather than rolled back.
 
 **Indentation is conditional, and that is not cosmetic.** A row is indented only
 when its parent is *also on the list*. An accessory whose expansion arrived
 months ago sits two levels down with nothing above it to belong to, so it is
-rendered flush and names its parent instead â€” otherwise the shape of the list
+rendered flush and names its parent instead — otherwise the shape of the list
 lies about the shape of the tree.
 
 ### Measured, `npm run dev:worker` against the local D1
 
 A fixture seeded the shapes the 8 real Ark Nova preorders do not cover: depth 0,
 depth 2 under a preordered parent, depth 2 under an **owned** parent, depth 3,
-quantity 2, digital, and notes. **It has been deleted again** â€” the local D1 is
+quantity 2, digital, and notes. **It has been deleted again** — the local D1 is
 back to its 88 items / 10 copies / 8 preordered.
 
 | Checked | Result |
 |---|---|
-| 13 rows, depths 0â€“3, ordered by depth then sort name | âœ… |
-| Ticked 11 of 13, pressed once | âœ… 12 owned / 2 preordered in D1 â€” **exactly the two unticked rows survived** |
-| The two left behind | âœ… still `preordered`, still on the list, banner re-read "On preorder 2" |
-| One-row list | âœ… *"Mat Carry Tube" has arrived and is now owned.*, card then disappears |
-| Item with no preorders (35) | âœ… `{"arrivals":[]}`, **renders nothing at all** |
-| No such item / bad id | âœ… 404 / 400 |
-| `EXPLAIN QUERY PLAN` | `idx_item_parent` (covering) for the walk, `idx_copy_status` for the copies â€” no table scan |
+| 13 rows, depths 0–3, ordered by depth then sort name | ✅ |
+| Ticked 11 of 13, pressed once | ✅ 12 owned / 2 preordered in D1 — **exactly the two unticked rows survived** |
+| The two left behind | ✅ still `preordered`, still on the list, banner re-read "On preorder 2" |
+| One-row list | ✅ *"Mat Carry Tube" has arrived and is now owned.*, card then disappears |
+| Item with no preorders (35) | ✅ `{"arrivals":[]}`, **renders nothing at all** |
+| No such item / bad id | ✅ 404 / 400 |
+| `EXPLAIN QUERY PLAN` | `idx_item_parent` (covering) for the walk, `idx_copy_status` for the copies — no table scan |
 
-âš ï¸ **The bug the browser caught and the API could not.** `.arrival-note` takes a
-full flex basis, and without `flex-wrap` on the row it collapsed the *name* â€”
-the only shrinkable thing there â€” to zero width, leaving rows reading
-"EXPANSION Â· wave 2" about no identifiable object. Two of the thirteen rows were
+⚠ï¸ **The bug the browser caught and the API could not.** `.arrival-note` takes a
+full flex basis, and without `flex-wrap` on the row it collapsed the *name* —
+the only shrinkable thing there — to zero width, leaving rows reading
+"EXPANSION · wave 2" about no identifiable object. Two of the thirteen rows were
 nameless on screen while the JSON behind them was perfect. **Anything added to
 that row must be checked in a browser, not in curl.**
 
@@ -540,29 +540,29 @@ that row must be checked in a browser, not in curl.**
 
 The first cut was designed against an 8-row fixture and fell over on the real
 22-row Ascension pledge. **Every one of those 22 rows carries the same
-150-character note** â€” it describes the *pledge*, not the thing â€” and the first
+150-character note** — it describes the *pledge*, not the thing — and the first
 layout gave each note a line of its own. Twenty-two identical lines.
 
 | Fix | |
 |---|---|
 | `commonNote` | The note two or more rows share is hoisted above the list and said once |
 | `noteResidual` | A row that *extends* the shared note shows only what it adds |
-| Row stacks under 560px | Name on line one, `kind Â· Ã—N Â· digital Â· note` on line two, aligned past the checkbox |
+| Row stacks under 560px | Name on line one, `kind · ×N · digital · note` on line two, aligned past the checkbox |
 | `.arrivals .form-actions` is `position: sticky; bottom: 0` | 22 rows is three screens; the confirm button was at the bottom of all of them |
 
-âš ï¸ **A first version demanded that all notes be *equal*, and it never fired on
+⚠ï¸ **A first version demanded that all notes be *equal*, and it never fired on
 the data it was written for.** Twenty rows match exactly; the base game appends
 a sentence about playtime research and one expansion appends one about having no
 BoardGameGeek entry. So it is a shared *prefix*, and the two odd rows now show
 only their extra sentence rather than 150 characters of something already on
-screen. **`commonNote` requires two rows to agree and refuses to break a tie** â€”
+screen. **`commonNote` requires two rows to agree and refuses to break a tie** —
 with nothing to choose between two notes, hoisting either makes the other read
 as the exception.
 
 ### Three CSS traps, all found by measuring rather than looking
 
 1. **`flex-wrap` on the row is load-bearing.** The note takes a full basis;
-   with nowhere to wrap it collapsed the *name* â€” the only shrinkable thing â€”
+   with nowhere to wrap it collapsed the *name* — the only shrinkable thing —
    to zero width. Two of thirteen rows rendered nameless while the JSON behind
    them was perfect.
 2. **`.arrival-meta` needs `max-width: 45%` on desktop.** A `nowrap` note has an
@@ -572,9 +572,9 @@ as the exception.
 3. **The phone rule must be `flex: 1 1 0`, not `1 1 auto`.** With an auto basis a
    long name is wider than what is left beside the checkbox, so the whole span
    wrapped to the next flex line and **stranded the checkbox on a line of its
-   own** â€” a column of tick boxes with holes in it.
+   own** — a column of tick boxes with holes in it.
 
-âš ï¸ **`resize_window` silently does nothing to a maximised Chrome window** â€”
+⚠ï¸ **`resize_window` silently does nothing to a maximised Chrome window** —
 `innerWidth` stayed 2498 and reported success. The phone layout was verified by
 extracting the real `max-width: 560px` rules out of `document.styleSheets`,
 applying them unconditionally, and squeezing `body` to 390px. Measured, not
@@ -585,11 +585,11 @@ the last row at the end of the scroll.
 ### Still to do
 
 - **Only the item page has it.** A collection-page group card already says
-  "N on the way" in its footer and could carry the same button. Not built â€”
+  "N on the way" in its footer and could carry the same button. Not built —
   the owner asked for the game page.
 - **Partial arrival of one row is out of scope.** A copy with `quantity: 3` is
   ticked or not; if one of the three turned up, untick it and edit the copy by
-  hand. Ascension Sleeves is the live case â€” **quantity 24**.
+  hand. Ascension Sleeves is the live case — **quantity 24**.
 - **Nobody has run it on a real phone.** The layout is measured at a 390px
   content width in desktop Chrome, which is not the same as iOS Safari.
 
@@ -604,10 +604,10 @@ day started (`29f2c67`).
 | | |
 |---|---|
 | Live worker version | **`7cfae0a7-0cfe-4dae-a58b-ea5b94d45e33`**, deployed 16:38 UTC |
-| Previous version | `fcdd868d-6478-4fe4-a0ba-53f60928008b`, 14:58 UTC â€” roll back to this if the search changes misbehave |
+| Previous version | `fcdd868d-6478-4fe4-a0ba-53f60928008b`, 14:58 UTC — roll back to this if the search changes misbehave |
 | Migrations | `0021_item_alias` applied local **and** production. **None pending.** |
 | Catalog | **806 items**, 806 copies, 573 owned, 29 wanted |
-| `item_alias` | **72 rows across 18 items** â€” the D&D spellings, all `source = 'manual'` |
+| `item_alias` | **72 rows across 18 items** — the D&D spellings, all `source = 'manual'` |
 
 ### Deployed 2026-08-08, late session
 
@@ -616,16 +616,16 @@ day started (`29f2c67`).
 | Live worker version | **`a440debc-1781-499b-a37b-105fd8b16bbd`** |
 | Roll back to | `7cfae0a7-0cfe-4dae-a58b-ea5b94d45e33` |
 | Commits | `37de4b1`, `c50979e`, pushed to `origin/main` |
-| Migrations | **None** â€” the promo split is computed on read |
+| Migrations | **None** — the promo split is computed on read |
 
 **`game_component` needed nothing.** Checked before assuming: 139 eligible
 games, all 139 checked, 1,437 components, 0 unclassified, 0 due, 0 stale. The
-filter had live data to bite on the moment it deployed â€” **282 of 954** official
-components move. Unstable Unicorns' accessories go 17 â†’ 1 and Happy Little
-Dinosaurs' expansions 17 â†’ 4; neither game is in the local catalog, so neither
+filter had live data to bite on the moment it deployed — **282 of 954** official
+components move. Unstable Unicorns' accessories go 17 → 1 and Happy Little
+Dinosaurs' expansions 17 → 4; neither game is in the local catalog, so neither
 was part of the calibration.
 
-âš ï¸ **`wrangler d1 execute --remote` can read production even though Access blocks
+⚠ï¸ **`wrangler d1 execute --remote` can read production even though Access blocks
 every HTTP route.** That is the way to answer "what does production actually
 hold" without a signed-in browser. `d1 list` working while `migrations list
 --remote` answered `7403` was a transient; a straight retry of `execute` worked.
@@ -633,7 +633,7 @@ hold" without a signed-in browser. `d1 list` working while `migrations list
 ### Here to Slay: five `bgg_id`s set in production, 2026-08-09
 
 *"Here to slay has uncertain results but I'm certain we own them all. Except for
-the wishlist item."* â€” the owner. They were right, and the report agreed once it
+the wishlist item."* — the owner. They were right, and the report agreed once it
 had ids to agree with.
 
 **Diagnosed by running the real `buildCompleteness` over production rows**, not
@@ -641,39 +641,39 @@ by reading names: pull `game_component` and the owned tree with
 `wrangler d1 execute --remote --json`, then `npx tsx` a script importing
 `packages/core/src/completeness.ts`. That is the only way to tell `uncertain`
 from `missing` without a signed-in browser, and the distinction was the whole
-answer â€” the expansions were `uncertain` (a name matched), the accessories were
+answer — the expansions were `uncertain` (a name matched), the accessories were
 `missing` (nothing matched at all).
 
 | Item | Was | Now | BGG component |
 |---|---|---|---|
-| 858 | NULL | **321259** | Here to Slay: Warriors & Druids Expansion â€” name character-identical |
+| 858 | NULL | **321259** | Here to Slay: Warriors & Druids Expansion — name character-identical |
 | 859 | NULL | **349286** | Here to Slay: Berserkers & Necromancers |
-| 507 | NULL | **369125** | Warrior & Druids Meeples â€” *BGG's own typo*, "Warrior" singular |
+| 507 | NULL | **369125** | Warrior & Druids Meeples — *BGG's own typo*, "Warrior" singular |
 | 510 | NULL | **369244** | Berserkers & Necromancers Meeples |
-| 297 | NULL | **369040** | Central Play Mat â€” ours carries a "KS Exclusive" prefix |
-| 301 | NULL | **369501** | Acrylic Standees â€” run by the owner 00:48 UTC |
+| 297 | NULL | **369040** | Central Play Mat — ours carries a "KS Exclusive" prefix |
+| 301 | NULL | **369501** | Acrylic Standees — run by the owner 00:48 UTC |
 
 ```sql
 -- reversal
 UPDATE item SET bgg_id = NULL WHERE id IN (858, 859, 507, 510, 297, 301);
 ```
 
-Result: expansions **4 of 7 â†’ 6 of 7**, accessories **2 of 14 â†’ 6 of 14**, and
+Result: expansions **4 of 7 → 6 of 7**, accessories **2 of 14 → 6 of 14**, and
 the single remaining `uncertain` is *"Already on your wishlist"* against
-Sorcerers & Squires â€” which is correct and should stay.
+Sorcerers & Squires — which is correct and should stay.
 
 **301 and not 302/506/509.** BGG lists one `Acrylic Standees` (369501, 2020)
 against four standee rows of ours. 301 is the only one whose name contains the
 phrase, plural, and it is the base-game Kickstarter set BGG's row describes;
 506 and 509 are expansion standee sets and 302 is a single Dragon standee. The
-other three stay id-less on purpose â€” one-to-many, and a wrong id is harder to
+other three stay id-less on purpose — one-to-many, and a wrong id is harder to
 notice later than a missing one.
 
 Still not mapped, and probably genuinely not owned: `Bigger Box` and
 `Sorcerers & Squires Meeple Set` are 2027 products, and `10/6 Play Mat Bundle`
 and `Here to Sleigh: Play Mat` are retail bundles against our Kickstarter mats.
 
-**Where the missing ids came from â€” and it is not the "I have it" button.**
+**Where the missing ids came from — and it is not the "I have it" button.**
 An earlier version of this section blamed the completeness card and was wrong.
 `AddComponent` in `Completeness.tsx` passes `bggId: component.bggId` straight
 through to `api.createItem` (line 443), `createItemSchema` accepts it, and a
@@ -693,7 +693,7 @@ matching what it created against `game_component` and setting the ids.
 
 **Left alone deliberately:** BGG's single `Acrylic Standees` (369501) against
 our three standee sets, and `Play Mat` / `Expansion Play Mat 2-pack` against our
-three play-mat sets â€” one-to-many, so any pick is a guess, and a wrong id is
+three play-mat sets — one-to-many, so any pick is a guess, and a wrong id is
 harder to notice later than a missing one. `Bigger Box` and `Sorcerers & Squires
 Meeple Set` are 2027 products; `10/6 Play Mat Bundle` and `Here to Sleigh: Play
 Mat` are retail bundles against our Kickstarter mats. Those four are almost
@@ -701,20 +701,20 @@ certainly genuinely not owned.
 
 ---
 
-## Children inherit from their parent â€” built 2026-08-08
+## Children inherit from their parent — built 2026-08-08
 
 *"for the fill in details, can we make child objects inherit from the parent. I
-dont super care if an expansion or accessory has a different publisher"* â€”
+dont super care if an expansion or accessory has a different publisher"* —
 the owner, which is the whole specification.
 
 `listItemsNeedingDetails` asked every row for the same six facts. Measured
 against production on 2026-08-08: **695 of 737 items in the queue, and only 79
 of them top-level.** The other 616 were expansions, promos, playmats and dice
-trays, at ~1.4Â¢ of Claude usage each â€” about **$8.30 to answer questions like
+trays, at ~1.4¢ of Claude usage each — about **$8.30 to answer questions like
 "who publishes the Dice Throne Vanguard dice tray"**, whose answer is already in
 the database one row up.
 
-**695 â†’ 78.**
+**695 → 78.**
 
 ### Which fields inherit, and which deliberately do not
 
@@ -726,20 +726,20 @@ the database one row up.
 | `minPlayers` / `playtimeMin` | no | base games |
 | `description` | no | base games |
 
-- **publisher / publisherUrl** â€” the owner's instruction, and nearly always
+- **publisher / publisherUrl** — the owner's instruction, and nearly always
   right. `publisherUrl` matters twice over: it is what the official research
   tier needs before it can run, so inheriting it makes a child researchable for
   free rather than merely cheap.
 - **year does not inherit.** An expansion published years after its base game is
-  the common case, and the year renders in the `<h1>` next to the name â€” a
+  the common case, and the year renders in the `<h1>` next to the name — a
   visible false statement, for a fact worth very little. It is not inherited
   *and* not asked for on a child, so nothing is fabricated and nothing is
   bought.
 - **Player count and playing time do not inherit**, and this is the one that
-  looks safe and is not. An expansion mostly shares its base game's â€” except
+  looks safe and is not. An expansion mostly shares its base game's — except
   when it does not, and the exception is exactly the expansion that exists to
-  change it. **This catalog holds "Catan: Starfarers â€“ 5-6 Player Extension".**
-  Inheriting 3â€“4 players onto that would be wrong in precisely the case anyone
+  change it. **This catalog holds "Catan: Starfarers – 5-6 Player Extension".**
+  Inheriting 3–4 players onto that would be wrong in precisely the case anyone
   would look.
 - **description never inherits.** A dice tray is not described by the base
   game's description; copying it would be actively misleading rather than
@@ -750,7 +750,7 @@ the database one row up.
 Resolved on read, in `resolveInheritedDetails`, and never stored. A stored copy
 would assert something nobody verified, would be indistinguishable a month later
 from a fact somebody checked, and would go stale the moment the parent was
-corrected. Reading it through is reversible and honest â€” the catalog still says
+corrected. Reading it through is reversible and honest — the catalog still says
 this playmat's publisher is unknown while the page shows the game's and says so.
 
 A recursive CTE up `parent_item_id`, taking **per field** the first ancestor
@@ -765,8 +765,8 @@ the child does not fix it; researching the **root** does, once, and then answers
 for all fifty-three of its children. Queueing the children would pay
 fifty-three times for one answer.
 
-A parentless non-base row â€” an orphan expansion waiting for its game, or one of
-the three genuinely standalone accessories â€” is asked only for publisher and
+A parentless non-base row — an orphan expansion waiting for its game, or one of
+the three genuinely standalone accessories — is asked only for publisher and
 publisher site. The moment `adoptOrphans` re-parents it, it stops being asked,
 with nothing to clean up.
 
@@ -790,7 +790,7 @@ A hand-typed clause would be a second implementation of the decision.
 ### Surfaced, not smuggled
 
 The item page shows `Root Works` followed by a muted, linked **"from ZZ Inherit
-Root"**. The publisher's website link is only borrowed *alongside* the name â€” an
+Root"**. The publisher's website link is only borrowed *alongside* the name — an
 item with its own publisher and no URL gets nothing, because that link would
 name one company and point at another's site.
 
@@ -806,16 +806,16 @@ A four-deep chain built through `POST /api/items` and read back:
 
 | Row | Own publisher | Resolved |
 |---|---|---|
-| Root (base) | `Root Works`, `root.example` | `{}` â€” roots inherit nothing |
-| Hero (expansion, own URL only) | â€” | publisher â† Root |
-| Playmat (accessory, under Hero) | â€” | publisher â† **Root, two levels up**; URL â† Hero, one level up |
-| Sleeve (accessory, under Playmat) | â€” | publisher â† **Root, three levels up** |
-| Orphan expansion (no parent) | â€” | `{}`, and queued for publisher + publisher site |
+| Root (base) | `Root Works`, `root.example` | `{}` — roots inherit nothing |
+| Hero (expansion, own URL only) | — | publisher ← Root |
+| Playmat (accessory, under Hero) | — | publisher ← **Root, two levels up**; URL ← Hero, one level up |
+| Sleeve (accessory, under Playmat) | — | publisher ← **Root, three levels up** |
+| Orphan expansion (no parent) | — | `{}`, and queued for publisher + publisher site |
 
 The per-field split is the part worth keeping: the playmat's publisher skipped
 the hero, which had none, while its URL stopped there. `GET
 /api/research/needs-details` listed the base game (year, description) and the
-orphan, and none of the four children. **Test rows were deleted afterwards â€”
+orphan, and none of the four children. **Test rows were deleted afterwards —
 local is back to 86 items with no `ZZ Inherit%` leftovers.**
 
 > Production was measured with **read-only** `SELECT`s against the live D1; no
@@ -826,7 +826,7 @@ local is back to 86 items with no `ZZ Inherit%` leftovers.**
 
 ---
 
-## A curly apostrophe is not a different word â€” 2026-08-08
+## A curly apostrophe is not a different word — 2026-08-08
 
 > **COMMITTED as `086ac07`; not pushed and NOT DEPLOYED.** (This block said
 > UNCOMMITTED; it was committed later the same day.) Touches
@@ -835,43 +835,43 @@ local is back to 86 items with no `ZZ Inherit%` leftovers.**
 > is clean.
 
 *"Should we do a search type where we clear all marks and do a character compare
-only? player's handbook / players handbook etc return the same?"* â€” the owner.
+only? player's handbook / players handbook etc return the same?"* — the owner.
 
 Narrower than "clear all marks", because two of the marks are load-bearing.
 `foldSearchText` in `packages/core/src/schemas.ts` drops **seven characters** on
 both sides of every comparison: three apostrophes (U+2019, U+0027, U+2018), the
 backtick, and three dashes (hyphen, en dash, em dash). `&` and `:` are
-deliberately kept â€” `D&D` would fold to `dd`, and typing `D D` would then be two
+deliberately kept — `D&D` would fold to `dd`, and typing `D D` would then be two
 one-character terms matching most of the catalog.
 
-Measured on the catalog, which is what settled it: **15 rows carry `â€™` and 47
+Measured on the catalog, which is what settled it: **15 rows carry `’` and 47
 carry `'`**, so neither spelling is the odd one out; 189 hyphens against 12 en
 dashes. **Dashes fold to nothing, not to a space.** Terms are split on
 whitespace, so no term ever spans a ` - ` separator (145 of them) and the two
 options are indistinguishable there. Inside a word (56 of them) removal is a
-strict superset: `X-Men` â†’ `xmen` answers to "x-men", "x men" *and* "xmen".
+strict superset: `X-Men` → `xmen` answers to "x-men", "x men" *and* "xmen".
 
 ### The fold had to be paid for, and the payment was a shape change
 
-Query-time, no stored column â€” but naively it was a **4Ã— regression**. Wrapping
+Query-time, no stored column — but naively it was a **4× regression**. Wrapping
 four columns in seven `replace()` calls inside the existing *correlated* `EXISTS`
-cost **16â€“27 ms against a 4â€“5 ms baseline**, because that EXISTS re-folds rows
+cost **16–27 ms against a 4–5 ms baseline**, because that EXISTS re-folds rows
 once per candidate row.
 
-Hoisting the text clause to an **uncorrelated `IN`** â€” the same rewrite the alias
-probe already carried, for the same reason â€” folds the catalog once per term and
-probes through `idx_item_root`: **1.7â€“7.1 ms**, at or under the baseline it
+Hoisting the text clause to an **uncorrelated `IN`** — the same rewrite the alias
+probe already carried, for the same reason — folds the catalog once per term and
+probes through `idx_item_root`: **1.7–7.1 ms**, at or under the baseline it
 replaced. `EXPLAIN QUERY PLAN` now says `MULTI-INDEX OR` over two `LIST
 SUBQUERY`s. Checked answer-for-answer against the old EXISTS over **1,212 query
 pairs** with zero differences. End to end through a real worker the endpoint is
-unmoved: 44.0 â†’ 44.5 ms for a two-result search, 48.2 â†’ 48.6 for `dice throne`,
-and `zorblax` got *faster* (23.9 â†’ 19.1).
+unmoved: 44.0 → 44.5 ms for a two-result search, 48.2 → 48.6 for `dice throne`,
+and `zorblax` got *faster* (23.9 → 19.1).
 
-âš ï¸ **The one part that does not stay free is the alias fold**, because
+⚠ï¸ **The one part that does not stay free is the alias fold**, because
 `item_alias` is the only folded column whose table is unbounded. At 72 rows it
-costs nothing; at a full BGG backfill (22,852 rows) it is 64â€“125 ms against
-10â€“24 ms unfolded. The fix at that point is a stored folded column on
-`item_alias` â€” measured at 11â€“23 ms, back to baseline. The numbers and the
+costs nothing; at a full BGG backfill (22,852 rows) it is 64–125 ms against
+10–24 ms unfolded. The fix at that point is a stored folded column on
+`item_alias` — measured at 11–23 ms, back to baseline. The numbers and the
 trigger are in the comment on `aliasTermClause`. Not done now: production holds
 **0** alias rows.
 
@@ -881,7 +881,7 @@ trigger are in the comment on `aliasTermClause`. Not done now: production holds
 |---|---|---|
 | `players handbook` | **0** | **2** |
 | `player's handbook` | **0** | **2** |
-| `Playerâ€™s Handbook` | 2 | 2 |
+| `Player’s Handbook` | 2 | 2 |
 | `dungeon masters guide` | **1** | **2** |
 | `dungeon master's guide` | **0** | **2** |
 | `aeons end` | **0** | **2** |
@@ -895,17 +895,17 @@ trigger are in the comment on `aliasTermClause`. Not done now: production holds
 | `zorblax` / `qqq` | 0 | 0 |
 | *(empty)* | 171 / 171 roots, 114 grouped entries | identical |
 
-âš ï¸ The earlier section below records the empty search as "140 entries / 171
+⚠ï¸ The earlier section below records the empty search as "140 entries / 171
 roots". Measured on the same 806-item local D1 today it is **114 grouped entries
-/ 171 roots**, before *and* after â€” the 140 is stale, not a regression. An empty
+/ 171 roots**, before *and* after — the 140 is stale, not a regression. An empty
 search builds no term clause at all, so this change cannot reach it.
 
 `aeons end`, `xmen`, `56 player` and the hyphen-for-en-dash row were not in the
-brief â€” they are the same bug wearing other punctuation, found by counting
+brief — they are the same bug wearing other punctuation, found by counting
 characters in the catalog rather than by guessing.
 
-âš ï¸ **`itemMatchesTerm` had to fold too.** It backs the "why did this match" line,
-and the term reaches it already folded â€” left alone it would have returned
+⚠ï¸ **`itemMatchesTerm` had to fold too.** It backs the "why did this match" line,
+and the term reaches it already folded — left alone it would have returned
 *Betrayal at House on the Hill* for "widows walk" and then refused to say which
 child explained it. Verified: it names *Widow's Walk*.
 
@@ -914,22 +914,22 @@ child explained it. Verified: it names *Widow's Walk*.
 `vision.ts`, `barcode.ts` and `routes/aliases.ts` are not in the diff, and no
 scanner module imports `foldSearchText` or `searchTerms`. Running the real
 `buildTitleIndex`/`matchIndexedTitle` over `GET /api/item-names` with the 72
-alias rows present still gives **`aliasKeys` = 0**, still matches `CATAN` â†’ #54,
+alias rows present still gives **`aliasKeys` = 0**, still matches `CATAN` → #54,
 and still refuses `D&D`, `DnD` and `ZORBLAX QUANDARY`. `normaliseTitle` still
-folds `Playerâ€™s` to `player s` **with a space** â€” the two folds are deliberately
+folds `Player’s` to `player s` **with a space** — the two folds are deliberately
 different and remain so.
 
 ---
 
-## Search learns the line's name, and its spellings â€” 2026-08-08
+## Search learns the line's name, and its spellings — 2026-08-08
 
-> âš ï¸ **COMMITTED as `0e3e169`, not pushed and NOT DEPLOYED.** (This block said
+> ⚠ï¸ **COMMITTED as `0e3e169`, not pushed and NOT DEPLOYED.** (This block said
 > UNCOMMITTED; it was committed later the same day.) `scratchpad/dnd-aliases.sql`
-> is still untracked. **Nothing was written to production** â€” the alias rows are
+> is still untracked. **Nothing was written to production** — the alias rows are
 > applied to a local D1 only.
 
 *"We might also need to add aliases to the parents so DnD, Dungeons and Dragons,
-D&D etc all return in the search for this one."* â€” the owner.
+D&D etc all return in the search for this one."* — the owner.
 
 Two changes, because the two mechanisms that would answer this were both
 invisible to the search box: `termClause` looked only at `name`, `publisher` and
@@ -937,9 +937,9 @@ invisible to the search box: `termClause` looked only at `name`, `publisher` and
 
 | | |
 |---|---|
-| Change 1 | `termClause` also matches **`series`** â€” free, no new data |
+| Change 1 | `termClause` also matches **`series`** — free, no new data |
 | Change 2 | a new `aliasTermClause` also matches **`item_alias`**, per search term |
-| Change 3 | `scratchpad/dnd-aliases.sql` â€” **72 rows, 4 spellings on 18 roots** |
+| Change 3 | `scratchpad/dnd-aliases.sql` — **72 rows, 4 spellings on 18 roots** |
 
 ### Measured, local D1 loaded with production's 806 items and 806 copies
 
@@ -953,44 +953,44 @@ Result counts are **matching game trees**, which is what the page shows.
 | `Dungeons & Dragons` | 4 | 4 | **18** |
 | `dice throne` | 12 | 12 | 12 |
 | `zorblax` | 0 | 0 | 0 |
-| *(empty)* | 140 entries / 171 roots | â€” | unchanged |
+| *(empty)* | 140 entries / 171 roots | — | unchanged |
 
 `D&D` returning **1** before is the whole bug in one number: 109 rows across 14
 trees are the D&D line, and only the 2024 Dungeon Master's Guide came back,
 because somebody happened to type "D&D" into a child row's name.
 
-### âš ï¸ The alias clause must stay an uncorrelated `IN`
+### ⚠ï¸ The alias clause must stay an uncorrelated `IN`
 
 `item_alias` is empty in production today, so the cost is nothing *today*. It
-will not stay empty â€” a full BGG backfill is ~116 alternate names per game.
+will not stay empty — a full BGG backfill is ~116 alternate names per game.
 Measured against a synthetic 22,908-row table:
 
 | Alias clause | Cost of the collection count |
 |---|---|
-| correlated `EXISTS (â€¦ WHERE ta.root_game_id = i2.root_game_id â€¦)` | **22â€“27 ms** |
-| uncorrelated `i2.root_game_id IN (SELECT â€¦)` | **6â€“10 ms** |
-| unchanged code, for comparison | 3â€“5 ms |
+| correlated `EXISTS (… WHERE ta.root_game_id = i2.root_game_id …)` | **22–27 ms** |
+| uncorrelated `i2.root_game_id IN (SELECT …)` | **6–10 ms** |
+| unchanged code, for comparison | 3–5 ms |
 
 A leading-wildcard `LIKE` can use no index, so the table gets scanned either
 way; the `IN` form scans it **once per search term** instead of once per
 candidate row. `EXPLAIN QUERY PLAN` must say `LIST SUBQUERY`, not `CORRELATED`.
-End to end the endpoint is **35â€“40 ms** for a search either way, on 806 items.
+End to end the endpoint is **35–40 ms** for a search either way, on 806 items.
 
 ### Why looser matching is right here and wrong in the scanner
 
 The comment at the top of `routes/aliases.ts` and the three rules in
 `buildTitleIndex` keep aliases out of loose matching **because a scanner match
-is an unattended decision** â€” it marks a game already-owned and the box
+is an unattended decision** — it marks a game already-owned and the box
 disappears from the review list with nobody watching. A search box inverts every
 term of that: it is already `LIKE '%term%'`, a person reads the list and picks,
 and nothing is written. The failure that actually costs the owner something is
 typing "DnD" and being told they own nothing.
 
-**They share no code.** The scanner reads aliases through `listItemAliases` â†’
+**They share no code.** The scanner reads aliases through `listItemAliases` →
 `buildTitleIndex`/`matchIndexedTitle` in `packages/core`; search reads them in
 SQL in `matchingRootsSql`. `MIN_SPINE_SIMILARITY`, `isConfidentMatch` and the
 three index rules are untouched. The asymmetry is deliberate in both directions:
-a **contested alias belongs to nobody in the scanner and to everybody here** â€”
+a **contested alias belongs to nobody in the scanner and to everybody here** —
 showing both games that answer to a name is right for a human and wrong for an
 unattended matcher.
 
@@ -999,15 +999,15 @@ unattended matcher.
 **18 roots, not 109 rows.** Search matches whole *trees*, so one alias on a root
 surfaces its whole tree; tagging all 109 returns the identical page for six times
 the rows. 14 roots come from `series = 'D&D'` (the core books were promoted to
-roots today); the other 4 are the D&D-branded board games â€” Castle Ravenloft,
-Legend of Drizzt, Wrath of Ashardalon, Tomb of Annihilation â€” which carry no
+roots today); the other 4 are the D&D-branded board games — Castle Ravenloft,
+Legend of Drizzt, Wrath of Ashardalon, Tomb of Annihilation — which carry no
 `series`, were already returned by "Dungeons & Dragons" and were *not* returned
 by "D&D". Without them the four spellings disagree with each other.
 
-âš ï¸ **Spreading a string across the line is what makes it inert in the scanner.**
+⚠ï¸ **Spreading a string across the line is what makes it inert in the scanner.**
 `normaliseTitle` folds the four spellings to three keys (`d and d`, `dnd`,
 `dungeons and dragons`), each claimed by all 18 roots, so rule 2 drops all
-three â€” verified by running the real `buildTitleIndex` logic over
+three — verified by running the real `buildTitleIndex` logic over
 `GET /api/item-names`: **`aliasKeys` comes back empty.** Putting one of these on
 a *single* root is what would change scanner behaviour.
 
@@ -1017,29 +1017,29 @@ a *single* root is what would change scanner behaviour.
   here. Before-state and reversal are in the file's header; production
   `item_alias` was **0 rows** when read on 2026-08-08. It is idempotent.
 - **There is still no web UI for typing an alias.** These rows go in by SQL or by
-  `POST /api/aliases/items/:id`. Every other line â€” Dice Throne, Boss Monster â€”
+  `POST /api/aliases/items/:id`. Every other line — Dice Throne, Boss Monster —
   has the same spelling problem waiting.
 - **A series-level alias would be the honest model.** These 72 rows say
   "*Ryoko's Guide to the Yokai Realms* also answers to DnD", which is true of the
   line, not of the book. An `item_alias` row is the mechanism that exists today.
-- âš ï¸ **Unrelated find: `Playerâ€™s Handbook` uses a curly apostrophe (U+2019).**
+- ⚠ï¸ **Unrelated find: `Player’s Handbook` uses a curly apostrophe (U+2019).**
   Searching `players handbook` returns **0**; `dnd handbook` returns 2. Nothing
   to do with this change, and it will bite somebody.
 
 ---
 
-## A game with two names is one game â€” 2026-08-08
+## A game with two names is one game — 2026-08-08
 
-> âš ï¸ **UNCOMMITTED, UNDEPLOYED, and living in a worktree**, not in `main`:
+> ⚠ï¸ **UNCOMMITTED, UNDEPLOYED, and living in a worktree**, not in `main`:
 > `.claude/worktrees/agent-adb38407889808798`. Migration **0021 is applied
 > locally only**. The owner reviews and ships. The production *data* fix below
 > is already done and is the one exception.
 
-*"Settlers of Catan and Catan are the same game â€” the studio just did a naming
+*"Settlers of Catan and Catan are the same game — the studio just did a naming
 thing... maybe we figure out a solution for games that are the same but have
-alternate names."* â€” the owner.
+alternate names."* — the owner.
 
-### Part 1 â€” it was a real duplicate row, and it is gone
+### Part 1 — it was a real duplicate row, and it is gone
 
 Not a queue artefact. **Item 826 "The Settlers of Catan"** existed in production,
 added 2026-08-07 from scan job 12. Job 13 then matched *its own* second reading
@@ -1047,7 +1047,7 @@ against 826, so the two photos agreed with each other and both disagreed with
 item 54.
 
 Deleted from production, cascading to two child rows. Three rows, `changes: 3`,
-verified gone; item count 803 â†’ 802. **There is no undo on `--remote`**, so the
+verified gone; item count 803 → 802. **There is no undo on `--remote`**, so the
 exact reversal is written down here rather than only in a chat log:
 
 ```sql
@@ -1081,19 +1081,19 @@ VALUES (40, 826, 'details', 'claude-opus-5', 'low', 'done', NULL, 196, 1474,
 
 | Attached to 826 | |
 |---|---|
-| `copy` | **1** â€” id 801, `owned`, quantity 1, no notes, `created_at` identical to the item's. The add flow's default copy, not a recorded pledge |
+| `copy` | **1** — id 801, `owned`, quantity 1, no notes, `created_at` identical to the item's. The add flow's default copy, not a recorded pledge |
 | `research_run` | 1 (details, done) |
 | ratings, relations, editions, barcodes, children, components, plays | **none** |
 
-Item 54 "Catan" keeps its own `copy` id 55, **`owned` Ã— 2**, untouched.
+Item 54 "Catan" keeps its own `copy` id 55, **`owned` × 2**, untouched.
 
-âš ï¸ **Job 12's blob still carries `addedItemId: 826`**, now dangling â€” that job is
-`done` with 0 outstanding, so it is a dead "Added â€” open it" link on a closed
+⚠ï¸ **Job 12's blob still carries `addedItemId: 826`**, now dangling — that job is
+`done` with 0 outstanding, so it is a dead "Added — open it" link on a closed
 job and nothing else. Repointing it at 54 is a one-line JSON edit nobody needs.
 
-### Part 2 â€” `item_alias`, and why nothing cheaper works
+### Part 2 — `item_alias`, and why nothing cheaper works
 
-âš ï¸ **`bgg_id` matching was the obvious free answer and it is wrong here.**
+⚠ï¸ **`bgg_id` matching was the obvious free answer and it is wrong here.**
 Measured, not assumed: item 54 carries **13**, item 826 carried **152959**.
 152959 is a genuinely separate BGG entry (Mayfair, 2008) whose *own primary name*
 is "The Settlers of Catan", and the free lookup rung resolved the spine to it
@@ -1101,12 +1101,12 @@ correctly. An id comparison would have said "different games" and added the row
 anyway. It also only ever works for the 128 of 802 rows that have an id.
 
 What is true is that **BGG 13 lists "The Settlers of Catan" among its 64
-`<name type="alternate">` nodes** â€” and `packages/bgg/src/client.ts` was parsing
+`<name type="alternate">` nodes** — and `packages/bgg/src/client.ts` was parsing
 those and throwing them away in `primaryName()`. The identity already existed
 upstream.
 
-âš ï¸ **The similarity floor was not touched and must not be.** "Catan" vs "The
-Settlers of Catan" is the *same shape* as "Quandary" vs "Zorblax Quandary" â€” the
+⚠ï¸ **The similarity floor was not touched and must not be.** "Catan" vs "The
+Settlers of Catan" is the *same shape* as "Quandary" vs "Zorblax Quandary" — the
 case `isConfidentMatch` exists to reject. `MIN_SPINE_SIMILARITY` is still 0.7. An
 alias is an **exact** match on a specific string, asserted by BGG or a person; it
 earns no similarity credit and never enters the containment pass.
@@ -1115,7 +1115,7 @@ earns no similarity credit and never enters the containment pass.
 |---|---|
 | `bgg_id` match | measured false on this very case, and covers 16% of rows |
 | `alt_names` text column | cannot record a source, cannot delete one row, worse to query |
-| Resolve at read time from BGG | the repo's instinct, and it does not apply â€” `inheritCover` resolves from data already in D1; alternate names are behind a network call the scan path's subrequest budget cannot afford per title |
+| Resolve at read time from BGG | the repo's instinct, and it does not apply — `inheritCover` resolves from data already in D1; alternate names are behind a network call the scan path's subrequest budget cannot afford per title |
 
 **Three rules in `buildTitleIndex` stop an alias becoming a wrong-game bug**, and
 all three *drop* the alias rather than guess. Each is measured below.
@@ -1123,9 +1123,9 @@ all three *drop* the alias rather than guess. Each is measured below.
 1. **A real name always wins.** BGG's alternates are not curated against this
    catalog; BGG 13 alone offers the bare "The Settlers".
 2. **A contested alias belongs to nobody.** BGG 13 and 152959 both list "Los
-   Colonos de CatÃ¡n".
+   Colonos de Catán".
 3. **Aliases are exact-only.** Containment would let "The Settlers of Catan"
-   swallow "â€¦: Seafarers", which is a different box.
+   swallow "…: Seafarers", which is a different box.
 
 ### Measured, `wrangler dev` against a seeded local D1
 
@@ -1134,22 +1134,22 @@ exactly the pre-fix state.
 
 | Spine read | Before | After |
 |---|---|---|
-| **The Settlers of Catan** | **NEW GAME** â† the production bug, reproduced | **OWNED â†’ 54 "Catan"** |
-| ZORBLAX QUANDARY â†’ *Quandary* | NEW GAME | **NEW GAME** â€” guard holds |
+| **The Settlers of Catan** | **NEW GAME** ← the production bug, reproduced | **OWNED → 54 "Catan"** |
+| ZORBLAX QUANDARY → *Quandary* | NEW GAME | **NEW GAME** — guard holds |
 | The Settlers of Catan: Seafarers | NEW, parent *"The Settlers of Catan"* (the phantom root) | NEW, **parent "Catan"** |
-| Settlers of the Deep | OWNED â†’ 91 | OWNED â†’ 91 |
+| Settlers of the Deep | OWNED → 91 | OWNED → 91 |
 
 Collision rules, with the traps deliberately planted:
 
 | | |
 |---|---|
-| "Settlers of the Deep" while Catan *also* claims it as an alias | â†’ **item 91**, its real owner |
-| "Die Siedler von Catan" claimed by two items | â†’ **NEW GAME** â€” refuses to pick |
-| "Katan", one uncontested alias | â†’ item 54 |
+| "Settlers of the Deep" while Catan *also* claims it as an alias | → **item 91**, its real owner |
+| "Die Siedler von Catan" claimed by two items | → **NEW GAME** — refuses to pick |
+| "Katan", one uncontested alias | → item 54 |
 
 Then the whole thing again against **BGG's real list, imported live**:
-`POST /api/aliases/backfill` â†’ **1 BGG call, 2 items, 116 aliases**, and every
-verdict above still correct â€” plus a German box reading *Die Siedler von Catan*
+`POST /api/aliases/backfill` → **1 BGG call, 2 items, 116 aliases**, and every
+verdict above still correct — plus a German box reading *Die Siedler von Catan*
 now matching, which nothing asked for and is free.
 
 `SELECT instr(enriched,'ownership')` is still **0** on every job: this is
@@ -1159,37 +1159,37 @@ resolved on read and never written, same as `inheritCover`.
 
 | | |
 |---|---|
-| Migration | **0021_item_alias.sql** â€” `item_alias` + `alias_check`. Local only |
-| The decision | `buildTitleIndex` / `matchIndexedTitle`, `packages/core/src/vision.ts` â€” one implementation |
+| Migration | **0021_item_alias.sql** — `item_alias` + `alias_check`. Local only |
+| The decision | `buildTitleIndex` / `matchIndexedTitle`, `packages/core/src/vision.ts` — one implementation |
 | Scan paths | `scan-ownership.ts`, `scan-classify.ts`, `scan-jobs.ts`, `barcode-scan.ts`, `routes/vision.ts` |
 | Import | `lib/alias-backfill.ts`, `routes/aliases.ts` (`POST /api/aliases/backfill`) |
-| Read | **`GET /api/item-names` now returns `aliases` alongside `items`** â€” deliberately one call, because the "real name beats alias" rule cannot be applied to either list alone |
+| Read | **`GET /api/item-names` now returns `aliases` alongside `items`** — deliberately one call, because the "real name beats alias" rule cannot be applied to either list alone |
 
-âš ï¸ **A re-import never deletes a name a person typed** â€” `replaceBggAliases`
+⚠ï¸ **A re-import never deletes a name a person typed** — `replaceBggAliases`
 clears `source = 'bgg'` only. The manual door (`POST /api/aliases/items/:id`) is
 not a fallback: 674 of 802 rows have no `bgg_id` and never will.
 
 **No web UI for typing an alias yet.** The API is there; the item page has no
 field. That is the obvious next piece.
 
-### âš ï¸ Two local-dev traps, both new, both cost time here
+### ⚠ï¸ Two local-dev traps, both new, both cost time here
 
 - **The worktree path is too long for local D1.** Every `wrangler d1 --local`
   command in `.claude/worktrees/<agent>/apps/worker` fails with a bare
-  `internal error; reference = â€¦` â€” even `SELECT 1`. The sqlite file lands at
+  `internal error; reference = …` — even `SELECT 1`. The sqlite file lands at
   ~255 characters and Windows gives up at 260. **Fix: `--persist-to
   C:/Users/nbasl/AppData/Local/Temp/bgcd1`** on every `d1` and `dev` command. It
   does not present as a path error in any way.
 - **Two processes were already listening on 8787-8799.** Port 8799 answered
   `/api/health` happily while serving *another agent's* worker and *another*
-  database â€” the handoff's existing warning, one port over and with a new
+  database — the handoff's existing warning, one port over and with a new
   symptom: not a dead worker, a live wrong one. `/api/aliases/status` returning
   404 was what gave it away. Check `netstat -ano | grep LISTENING` first and
   pick something odd; 8942 was free.
 
 ---
 
-## The collection page at 640 items â€” built 2026-08-07
+## The collection page at 640 items — built 2026-08-07
 
 The page was built for 47 games. The catalog now holds **640 items in 107
 groups**, and the list endpoint assembled every matching tree with no paging.
@@ -1203,7 +1203,7 @@ groups, a 53-child group):
 | `GET /api/items`, page 1 of 5 | 125,850 | 7,973 |
 | median page | 78,775 | 5,519 |
 
-The five pages sum to 444,418 â€” the difference is `total`/`page`/`pageSize`/
+The five pages sum to 444,418 — the difference is `total`/`page`/`pageSize`/
 `pageCount` repeated per page, which is the arithmetic working.
 
 | Piece | Where |
@@ -1222,7 +1222,7 @@ clamps to the last one rather than answering empty.
 
 **Search is now one EXISTS per word, ANDed over the tree.** "catan seafarers"
 finds the Catan group because the two words are satisfied by two different rows
-in it â€” one LIKE over the whole box needs them adjacent in one field, and
+in it — one LIKE over the whole box needs them adjacent in one field, and
 pushing the AND onto a single item row needs one row to hold both. Tree-level
 matching is unchanged and still deliberate. A result says *why* when the hit was
 on a child, naming only the children that explain the terms the base game does
@@ -1230,34 +1230,34 @@ not. Measured: `q=catan knights` went from 0 results to 1.
 
 **Groups start collapsed above two children.** The control is itself a row, so
 collapsing one or two replaces two lines with one line and a click. Open state
-lives in a module-level `Map` in `ItemTree.tsx` â€” the card is unmounted and
+lives in a module-level `Map` in `ItemTree.tsx` — the card is unmounted and
 rebuilt on every re-fetch, so component state would close what you opened the
 moment you came back from a game.
 
-### âš ï¸ The trap this nearly walked into
+### ⚠ï¸ The trap this nearly walked into
 
 Shelf classification called `/api/items` to get the **whole catalog** to match
 spine text against. Paged, that would have matched against the first 25 groups
-and reported every other game you own as new â€” silently, with no error. It now
+and reported every other game you own as new — silently, with no error. It now
 calls **`GET /api/item-names`** (`listItemNames`, three columns, 41 KB against
 640 rows). **Anything that needs every item wants that route, not `items()`.**
 
 `preordered` also stopped sharing `wanted`'s amber: they mean opposite things
 about your wallet and the catalog holds 145 of one against 5 of the other, so
 the common state wore the colour for "you do not have this". New `--transit`
-token, cyan, both themes â€” 4.79:1 light, 6.82:1 dark.
+token, cyan, both themes — 4.79:1 light, 6.82:1 dark.
 
 ---
 
 ---
 
-## The four columns that had no UI â€” built 2026-08-07
+## The four columns that had no UI — built 2026-08-07
 
 Migration 0015 and a bulk import left four populated columns invisible.
 
 | Column | Rows | Shown as |
 |---|---|---|
-| `item.source_url` | 525 | External link named after its host â€” "Kickstarter", "Gamefound", "BackerKit" â€” **beside** the publisher link, never instead of it |
+| `item.source_url` | 525 | External link named after its host — "Kickstarter", "Gamefound", "BackerKit" — **beside** the publisher link, never instead of it |
 | `item.game_system` | 124 | Badge on the item page and card, plus a collection filter built from the distinct values with counts |
 | `copy.format` | 75 digital / 564 physical | A small `digital` tag on copy rows, cards and a parent's child list. `physical` is never labelled |
 | `requires` relation | 8 | A sentence at the top of the item page |
@@ -1266,26 +1266,26 @@ Migration 0015 and a bulk import left four populated columns invisible.
 other is where *this pledge* was made, and an item can have both. The edit form
 gives them two fields with two hints for that reason.
 
-**A digital tag appears only when *every* copy is digital** â€” a book owned in
+**A digital tag appears only when *every* copy is digital** — a book owned in
 print as well can still be handed across the table, which is the question this
 answers.
 
 ### The requires relation is directed, and two things make that true
 
-1. `getRelatedItems` returns **`outgoing`** â€” which end of the stored row you
+1. `getRelatedItems` returns **`outgoing`** — which end of the stored row you
    are standing at. Without it the Player's Handbook lists eight supplements and
    has no way to say it does not require them.
 2. `createRelation` **does not normalise the id order for `requires`**. That
    normalisation (`lo, hi`) exists so the unique index catches a duplicate
-   offered either way round â€” right for a symmetric claim, and it silently
+   offered either way round — right for a symmetric claim, and it silently
    inverts this one. The Player's Handbook has a low id and eight dependants, so
    sorting would have had it announcing it cannot be used without each of them.
    `DIRECTIONAL_RELATIONS` in `packages/core/src/constants.ts` is the list;
    `reimplements` arguably belongs in it and was left alone.
 
-It renders as **two different sentences** â€” "Requires: Player's Handbook" from
-the supplement, "Needed by â€¦" from the core book, which never uses the word
-requires â€” and is deliberately left out of the "Related games" list, which would
+It renders as **two different sentences** — "Requires: Player's Handbook" from
+the supplement, "Needed by …" from the core book, which never uses the word
+requires — and is deliberately left out of the "Related games" list, which would
 show it again without its direction.
 
 Verified both ends, and verified that a `requires` created through
@@ -1293,7 +1293,7 @@ Verified both ends, and verified that a `requires` created through
 direction. That is precisely the case the old code flipped.
 
 > **Local D1 was seeded to production's shape to measure this and then cleaned
-> back out** â€” 86 items, 77 groups, 10 copies, as before. To redo it, generate
+> back out** — 86 items, 77 groups, 10 copies, as before. To redo it, generate
 > rows with `publisher = 'Seed Works'` and remove them with one DELETE. Local
 > cannot exercise the 640-item case on its own; do not conclude paging works
 > from a 66-item copy.
@@ -1302,16 +1302,16 @@ direction. That is precisely the case the old code flipped.
 
 ---
 
-## Two photos of one shelf stop arguing â€” 2026-08-06
+## Two photos of one shelf stop arguing — 2026-08-06
 
 *"if items are in a queue and scanned and another photo is in the queue and
 scanned and they share games, when the game is resolved in 1 its not known to the
-other item waiting processing"* â€” the owner. Overlapping shelf photos are normal;
+other item waiting processing"* — the owner. Overlapping shelf photos are normal;
 resolving a box on one job left the other still offering it as new.
 
 **The job now stores the reading and the decision; ownership is computed.**
 `alreadyOwned` was a snapshot taken during enrichment and nothing revisited it.
-`addedItemId` and `dismissed` are still stored â€” they are things a person did â€”
+`addedItemId` and `dismissed` are still stored — they are things a person did —
 but *is this game in the catalog* is a fact about the catalog, and is answered
 when the job is read. Same trade as `inheritCover` and `resolveInheritedDetails`,
 which is why it took no new mechanism.
@@ -1321,20 +1321,20 @@ not repeated here. The state:
 
 | | |
 |---|---|
-| New file | `apps/worker/src/lib/scan-ownership.ts` â€” the entire decision |
+| New file | `apps/worker/src/lib/scan-ownership.ts` — the entire decision |
 | Reused, not rewritten | `matchExistingTitle` (now index-backed) and `isConfidentMatch`, both in `packages/core` |
 | Cost | **two D1 reads per request**, no per-title round trip |
-| Migration | **none** â€” nothing about this is stored |
+| Migration | **none** — nothing about this is stored |
 | Deployed | `3162e8fa-d650-4873-9f18-04420f20648b` (commits `50c4b14`, `d0aa235`) |
 
-### The proposals were the same bug, one field over â€” fixed the same day
+### The proposals were the same bug, one field over — fixed the same day
 
 `proposedKind`, `proposedParentId`, `proposedParentName`, `inferredParentName`
 and `reason` were **also** decided at enrichment and frozen, so an expansion
 whose base game you added from the *other* photo still said *"Wingspan is not in
-your collection â€” if this is an expansion, it will wait for it"* and offered no
+your collection — if this is an expansion, it will wait for it"* and offered no
 parent. `withFreshOwnership` is now **`withFreshView`** and resolves both, in
-that order â€” an owned row takes no part in classification, and a row whose base
+that order — an owned row takes no part in classification, and a row whose base
 game arrived elsewhere must be classified against a catalog that now holds it.
 
 New `apps/worker/src/lib/scan-classify.ts` is the **only** classifier; the
@@ -1342,9 +1342,9 @@ enrichment pass calls it too, differing only in how ownership is known at that
 point. Deployed **`9d3da413-5a84-4654-8ef0-bfb84e0cad86`**, commit `7bcfa7b`, no
 migration.
 
-âš ï¸ **A second defect, found while testing, that silently undid the first.** The
+⚠ï¸ **A second defect, found while testing, that silently undid the first.** The
 classifier used `resolvedName` where the Add button used `effectiveName`. A spine
-reading *"Qwixomo: Tidal Reach"* resolves to *Reach* â€” a doubtful one-word hit â€”
+reading *"Qwixomo: Tidal Reach"* resolves to *Reach* — a doubtful one-word hit —
 so the classifier saw a name with no colon, proposed no parent, and the row was
 saved as "Qwixomo: Tidal Reach" regardless. Both now call **`scanRowName`** in
 `packages/core/src/barcode.ts`; the web app's own rule moved to where both
@@ -1357,34 +1357,34 @@ and `instr(enriched,'ownership')` stayed 0 everywhere.
 
 **Verified locally against two seeded jobs sharing a title** (`npm run dev:worker`,
 no Access). Adding *Wingspan* from job A made job B's row read *"Added from
-another photo â€” Wingspan"* on its next read, with no reload trick and no polling
+another photo — Wingspan"* on its next read, with no reload trick and no polling
 change; job A's second *Everdell* line settled itself in the same response that
 recorded the first; a dismissed *Scythe* stayed dismissed with *Scythe* sitting in
 the catalog; a spine read *ZORBLAX QUANDARY* resolved to *Quandary* was **not**
 matched against a catalogued *Quandary*, because `isConfidentMatch` rejects the
-fragment; and `SELECT instr(enriched,'ownership')` stayed **0** â€” nothing is
+fragment; and `SELECT instr(enriched,'ownership')` stayed **0** — nothing is
 persisted. Screens checked in Chrome.
 
-âš ï¸ **The six jobs this was written for are gone.** Production now holds **one**
+⚠ï¸ **The six jobs this was written for are gone.** Production now holds **one**
 scan job (id 7, `done`, 36 titles, 0 outstanding), so nothing visible changes
-today â€” this pays from the next multi-photo session onward.
+today — this pays from the next multi-photo session onward.
 
-âš ï¸ **Orphaned `wrangler dev` processes were holding ports 8787 and 5173-5176**,
+⚠ï¸ **Orphaned `wrangler dev` processes were holding ports 8787 and 5173-5176**,
 from sessions on 08-05 and 08-06. `npm run dev:worker` silently moved to 8791 and
-Vite to 5177, and Vite's proxy still points at 8787 â€” so the UI talked to a dead
+Vite to 5177, and Vite's proxy still points at 8787 — so the UI talked to a dead
 worker reporting `database: down`. Kill the *node* parent, not the `workerd`
 child; workerd respawns.
 
 ---
 
-## Everything has a picture now â€” 2026-08-06
+## Everything has a picture now — 2026-08-06
 
 *"for 161 just use the base game photo, maybe we should use that as a default
-fallback so no matter what everything has an image"* â€” the owner.
+fallback so no matter what everything has an image"* — the owner.
 
-**323 â†’ 1.** Measured over all 760 rows through `GET /api/items`, walking every
+**323 → 1.** Measured over all 760 rows through `GET /api/items`, walking every
 tree: **437 have a cover of their own, 322 borrow one, and exactly one is still
-blank** â€” Excursion Tiles 1, a standalone accessory with no parent to borrow
+blank** — Excursion Tiles 1, a standalone accessory with no parent to borrow
 from. The same three numbers come out of SQL directly, so the API and the table
 agree.
 
@@ -1396,29 +1396,29 @@ Throne hero's playmat takes the hero's picture, not the box's.
 
 | Read path | How the ancestors are found |
 |---|---|
-| Collection trees (`buildTrees`) | the tree is already in memory â€” no query at all |
+| Collection trees (`buildTrees`) | the tree is already in memory — no query at all |
 | Item page (`resolveInheritedDetails`) | the recursive CTE it already ran for the publisher, now selecting `thumbnail_url` too |
 | Wishlist (`ancestorCoversFor`) | one extra read, and only for the rows that are blank |
 
-âš ï¸ **Do not "optimise" this into a stored column.** A copied URL would be
+⚠ï¸ **Do not "optimise" this into a stored column.** A copied URL would be
 indistinguishable from a researched cover a month later, and the cover-health
 cron would probe the same dead link 323 times instead of once.
 
 ### Where a borrowed cover actually shows, and where it does not
 
-- **Item page** â€” yes, with a muted, linked *"Cover from Deep Rock Galactic: The
+- **Item page** — yes, with a muted, linked *"Cover from Deep Rock Galactic: The
   Board Game"* under the name, the same treatment the borrowed publisher gets.
   Somebody looking at one row deserves to know the art is not that product's.
-- **Wishlist** â€” yes. **20 of the 25 wanted rows had no cover**; a thing nobody
+- **Wishlist** — yes. **20 of the 25 wanted rows had no cover**; a thing nobody
   has bought yet rarely does. No badge: the linked parent name is already beside
   the picture and says whose it is.
-- **Collection page** â€” **no change, and this is expected.** The cards on that
+- **Collection page** — **no change, and this is expected.** The cards on that
   page are game *trees*, one per root, and a root has no ancestor to borrow
   from. Its children are rendered as a text list with no thumbnails at all, so
   there is nowhere for a borrowed cover to appear. Adding pictures to that list
   is a separate change nobody has asked for.
 - **Group cards** now use the first member **that has art**, not `members[0]`
-  blindly â€” a one-line fix that stopped a group wearing a dashed box while its
+  blindly — a one-line fix that stopped a group wearing a dashed box while its
   second line had a picture.
 
 ### The dashed box is now on `.thumb`, not only `.thumb-blank`
@@ -1427,7 +1427,7 @@ An image that fails or has not arrived yet used to leave a hole in the row.
 `.thumb` now carries the same dashed outline as a deliberate blank, and
 `object-fit: cover` hides it completely once the picture paints. This matters
 more than it sounds: several covers are served from `dicethrone.com` at ~780 KB
-each, so **rows sit in the not-yet-loaded state for seconds** â€” verified in
+each, so **rows sit in the not-yet-loaded state for seconds** — verified in
 Chrome, where all 16 requests returned 200 and simply took their time.
 
 ### What was dropped, and why
@@ -1436,14 +1436,14 @@ The earlier plan was a placeholder image plus a marker distinguishing "looked
 for, nothing exists" from "not looked yet". **Both are unnecessary now.** With
 322 of the 323 blanks answered by an ancestor, a column to describe the
 remaining one would be a schema change carrying a single row. The `preordered`
-case needs nothing either â€” an undelivered item shows its game's art like
+case needs nothing either — an undelivered item shows its game's art like
 anything else.
 
 ---
 
-## The queue empties by design, not by having been asked â€” 2026-08-06
+## The queue empties by design, not by having been asked — 2026-08-06
 
-*"exclude the impossible fields so the queue can empty"* â€” the owner. The queue
+*"exclude the impossible fields so the queue can empty"* — the owner. The queue
 already read **0**, but only because layer 2 remembered asking two rows and
 finding nothing. Rebuild the run history and it came back.
 
@@ -1456,11 +1456,11 @@ with the run history deleted, so layer 2 could not help:
 | Claimed impossible | Already excluded? | By what |
 |---|---|---|
 | Playing time on 19 RPG books | **yes** | `game_system` is set on all 19 |
-| Player count on 6 reference books | **yes** | the same rule â€” it covers `minPlayers`/`maxPlayers`/`playtimeMin` together |
+| Player count on 6 reference books | **yes** | the same rule — it covers `minPlayers`/`maxPlayers`/`playtimeMin` together |
 | Excursion Tiles 1 & 2, Pangea Gaming Table | **yes**, and they were never in the queue | `kind = 'accessory'`, and all three already carry a publisher and a publisher site |
 
 So the 19 playtime gaps and the 6 player-count gaps are **real blanks in the
-table that the queue correctly never asks about** â€” they show as blanks on the
+table that the queue correctly never asks about** — they show as blanks on the
 item page and cost nothing. Nothing needed adding for them.
 
 **With the run history cleared, layer 1 left exactly two rows**: Go Fish
@@ -1478,7 +1478,7 @@ mirrored as `TRADITIONAL_SQL` in `packages/db/src/items.ts` the same way
   year IS NULL` describes an unresearched row exactly as well as a folk game, so
   no rule computed from the other columns can tell them apart. Somebody has to
   know. The Publisher field on the edit form now carries the hint
-  *"Nobody published it? Type "Traditional""* â€” that hint is the only place the
+  *"Nobody published it? Type "Traditional""* — that hint is the only place the
   convention is discoverable, so do not delete it.
 - **No migration and no new column.** The value goes in the ordinary publisher
   box and reads correctly on the item page: *Publisher: Traditional*.
@@ -1491,7 +1491,7 @@ mirrored as `TRADITIONAL_SQL` in `packages/db/src/items.ts` the same way
 ### Divine Dungeon the Game stays in layer 2, on purpose
 
 Its playing time is published nowhere, including Mountaindale Press's own store.
-That is **one item, not a class** â€” there is no column that makes it a class
+That is **one item, not a class** — there is no column that makes it a class
 without inventing one for a single row, and it is exactly what "asked once,
 found nothing" is for. If the publisher ever prints a number, changing the row's
 name or BGG id re-opens it; nothing else has to.
@@ -1505,44 +1505,44 @@ copies, 11 research runs) in `apps/worker/.wrangler/qsandbox`:
 
 | | With run history | Run history deleted |
 |---|---|---|
-| Before | **0** | **2** â€” Go Fish, Divine Dungeon |
-| After, marker not yet set | â€” | **2** â€” the rule is inert until someone opts a row in |
-| **After** | **0** | **1** â€” Divine Dungeon only |
+| Before | **0** | **2** — Go Fish, Divine Dungeon |
+| After, marker not yet set | — | **2** — the rule is inert until someone opts a row in |
+| **After** | **0** | **1** — Divine Dungeon only |
 
 The middle row is the one worth keeping: the new rule changed nothing until the
 marker was typed, so it cannot have quietly dropped a row that was merely
 unresearched.
 
-### âš ï¸ Loading a production snapshot into a local D1 needs three tricks
+### ⚠ï¸ Loading a production snapshot into a local D1 needs three tricks
 
 The recipe in [folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
 no longer works as written. All three failures present as the same unhelpful
-line â€” *"Durable Object was reset and rolled back â€¦ FOREIGN KEY constraint
-failed"* â€” with the whole import silently rolled back to zero rows:
+line — *"Durable Object was reset and rolled back … FOREIGN KEY constraint
+failed"* — with the whole import silently rolled back to zero rows:
 
 1. **Split the dump one table per file and load `item` first.** `copy` inserted
    before `item` fails.
 2. **Re-add `PRAGMA defer_foreign_keys=TRUE;` to the top of *each* file.**
    wrangler batches the statements, and the pragma does not survive the batch it
-   was issued in â€” `item` alone fails without it, because a child row can precede
+   was issued in — `item` alone fails without it, because a child row can precede
    its parent.
 3. **Insert an `app_user` row before `research_run`.** `research_run.triggered_by`
    references it, and the export does not include the users table.
 
 ---
 
-## "262 wanted" over a wishlist of 25 â€” 2026-08-06
+## "262 wanted" over a wishlist of 25 — 2026-08-06
 
 **Shipped.** Commits `88ca86a` and `29c12b5`, production version
 **`324cc0e8-a60b-4f77-a080-ba9d043f7ce3`**. No migration, no data touched.
 
-*"why does the site say 262 wanted but the wishlist is like 20 items"* â€” the
+*"why does the site say 262 wanted but the wishlist is like 20 items"* — the
 owner, and both numbers were internally correct. `262 = 26 wanted units + 236
 preordered units`, while `/wishlist` lists the 25 genuinely `wanted` rows. Two
 different sets under one word, and 236 of the 262 were pledges already paid for.
 
 **The fold lived in three places, not one**, which is the part worth carrying
-forward â€” the header was merely where it was noticed:
+forward — the header was merely where it was noticed:
 
 | Where | What it fed |
 |---|---|
@@ -1550,20 +1550,20 @@ forward â€” the header was merely where it was noticed:
 | `summarizeTree`, `packages/core/src/schemas.ts` | every game card |
 | `summariseGroups`, `packages/db/src/items.ts` | every group card |
 
-The Ascension card read **"22 items Â· 45 wanted"** â€” forty-three of the
+The Ascension card read **"22 items · 45 wanted"** — forty-three of the
 forty-five were pledges. A card claiming to want twice as many things as it
 holds is the same error as the header's 262, repeated once per line.
 
-Now: header reads **"25 wanted Â· 204 on the way"** with the wanted figure
-**linking to `/wishlist`**, and cards read "4 wanted Â· 9 on the way".
+Now: header reads **"25 wanted · 204 on the way"** with the wanted figure
+**linking to `/wishlist`**, and cards read "4 wanted · 9 on the way".
 
-### âš ï¸ Rows and units differ on purpose â€” do not "tidy" this
+### ⚠ï¸ Rows and units differ on purpose — do not "tidy" this
 
 - **Header figures are rows.** `wantedEntries` / `preorderedEntries` are
   `COUNT(*)`, because the header **links to `/wishlist`** and that page counts
-  rows â€” "25 games wanted", with a `Ã—2` on the single entry we want two of.
+  rows — "25 games wanted", with a `×2` on the single entry we want two of.
 - **Card figures are units.** `owned` beside them must be units or the
-  multi-copy `Ã—N` feature disappears from the card.
+  multi-copy `×N` feature disappears from the card.
 
 The rule that reconciles them: **a number counts what the thing it links to
 counts.** Card figures link nowhere. Make the header count units and it says 26
@@ -1574,11 +1574,11 @@ above a list of 25, which is where this started.
 
 An earlier agent spotted the disagreement while building the wishlist and
 resolved it by *not linking* the header to the page. Right instinct, wrong
-resolution â€” a visibly wrong number is worse than an unlinked one.
+resolution — a visibly wrong number is worse than an unlinked one.
 
 ---
 
-## The lookup that died quietly â€” fixed, and the fill is done â€” 2026-08-06
+## The lookup that died quietly — fixed, and the fill is done — 2026-08-06
 
 **Shipped.** Commit `e355873`, production version
 **`e71840f0-d0a0-4bb4-ad57-4a3568e07417`**. No migration. **The details queue is
@@ -1609,18 +1609,18 @@ lookup takes **17 to 73 seconds**:
 | 92 Dice Throne: Outcasts | 73.2s | 39.8s |
 
 So roughly half of them were being cancelled. **Item 92 passing and 383 failing
-was luck, not size** â€” 383 has since run in 22s, 21s and 61s on identical input.
+was luck, not size** — 383 has since run in 22s, 21s and 61s on identical input.
 Anthropic-side search latency is the variable, and it is wide.
 
-âš ï¸ **`wrangler tail` is the tool this project kept not reaching for.** Three
-separate silent failures â€” the shelf scan, the crons, this â€” were each diagnosed
+⚠ï¸ **`wrangler tail` is the tool this project kept not reaching for.** Three
+separate silent failures — the shelf scan, the crons, this — were each diagnosed
 by guessing. Tail prints the invocation outcome and any runtime warning, and it
 works on production without Access getting in the way. Reach for it first.
 
 ### The shape of the fix
 
-The work is **awaited inside the request** â€” an invocation that has not ended has
-no thirty-second clock â€” **and still registered with `waitUntil`**, which now
+The work is **awaited inside the request** — an invocation that has not ended has
+no thirty-second clock — **and still registered with `waitUntil`**, which now
 does the job it was originally reached for: if the caller disconnects mid-lookup
 the work keeps its thirty seconds and writes down whatever it reaches. The two
 failure modes of the two previous designs are covered by the same promise.
@@ -1629,21 +1629,21 @@ Three layers, because each catches what the one before it cannot:
 
 | Guard | Catches | Where |
 |---|---|---|
-| `AbortSignal.timeout(ENRICH_TIMEOUT_MS)`, 60s | a lookup that runs away â€” it throws, so it is recorded | `packages/research/src/enrich.ts` |
+| `AbortSignal.timeout(ENRICH_TIMEOUT_MS)`, 60s | a lookup that runs away — it throws, so it is recorded | `packages/research/src/enrich.ts` |
 | the `catch` | anything thrown, from anywhere | `runDetailsLookup`, `apps/worker/src/lib/details-run.ts` |
 | `closeStaleDetailsRuns`, on every read | the invocation killed outright, when none of our code runs | `packages/db/src/research.ts` |
 
 The third one is what makes a bulk fill *safe*, and it is worth understanding
 why: a row stuck at `running` made `activeDetailsRun` report the item as busy,
 so the queue page's driver waited on it for ever. **The fill would have stopped
-dead while looking healthy** â€” the exact failure this project has produced twice.
+dead while looking healthy** — the exact failure this project has produced twice.
 `error` does not count as "asked" in the three-layer policy, so a swept row is
 simply offered again.
 
 `STALE_AFTER_MINUTES` is 3, and the threshold now lives in SQL in one place;
 `isStale` in `details-run.ts` is gone.
 
-### âš ï¸ The POST is now slow on purpose â€” do not add a timeout
+### ⚠ï¸ The POST is now slow on purpose — do not add a timeout
 
 `api.startItemDetails` takes **20 to 60 seconds** and returns the *finished* run.
 Anything that wraps it in a timeout, or a proxy that gives up early, reintroduces
@@ -1653,7 +1653,7 @@ notice, and without the counter the driver fires the whole queue off at once.
 
 **60s is a real ceiling and it will occasionally bite.** Item 383 hit it once and
 was recorded as `error` with "The lookup was still searching after 60s and was
-stopped. Try again." That is the designed behaviour â€” visible and retryable â€”
+stopped. Try again." That is the designed behaviour — visible and retryable —
 but if it becomes common, the fix is not a bigger number: Cloudflare's edge gives
 up at 100s, so anything longer has to leave the request entirely (a local script
 against remote D1, which is how the original 47-game backfill ran for $1.22).
@@ -1661,7 +1661,7 @@ against remote D1, which is how the original 47-game backfill ran for $1.22).
 ### The fill, run 2026-08-06
 
 **A second agent's free web-research pass did nearly all of it.** The queue went
-**80 â†’ 50 â†’ 2** while this fix was being built, without spending anything. Do not
+**80 → 50 → 2** while this fix was being built, without spending anything. Do not
 read the small paid numbers below as the feature being cheap; read them as the
 free pass being the right thing to do first.
 
@@ -1669,17 +1669,17 @@ free pass being the right thing to do first.
 |---|---|
 | Queue before | **2** (`GET /api/research/needs-details`, the only authority) |
 | Queue after | **0** |
-| Completed | 2 â€” Divine Dungeon the Game, Go Fish |
+| Completed | 2 — Divine Dungeon the Game, Go Fish |
 | Errored | 0 in the fill itself |
 | Filled a field | **0** |
-| Paid spend, whole session, production | **~7Â¢** |
+| Paid spend, whole session, production | **~7¢** |
 
 Both rows came back **"Nothing new found."**, and both are believed genuine
 rather than a failure of the lookup:
 
 - **Go Fish** (publisher, publisher site, year) is a public-domain folk game.
   There is no publisher and no publication year to find. **Layer 1 should
-  probably exclude it** â€” this row will come back every time the queue is
+  probably exclude it** — this row will come back every time the queue is
   rebuilt, and a notification nobody can clear is worse than a blank field. It
   is the clearest candidate for a `kind`/policy exclusion the owner has.
 - **Divine Dungeon the Game** (playing time) is a real, small-press game whose
@@ -1687,37 +1687,37 @@ rather than a failure of the lookup:
   rather than mis-asked.
 
 The three-layer policy records `unfilled` per field, so neither returns to the
-queue â€” the queue is empty and stays empty. That is the policy working.
+queue — the queue is empty and stays empty. That is the policy working.
 
 ### Two side findings worth keeping
 
 - **The crons DO fire in production.** `wrangler tail` caught
   `"*/30 * * * *" @ 1:30:23 PM - Ok` with `cover check {"checked":20,"ok":20}`.
   The long section below claiming nothing scheduled has ever run is **out of
-  date** â€” it was written before `npx wrangler triggers deploy` was applied.
+  date** — it was written before `npx wrangler triggers deploy` was applied.
 - **A read taken during a deploy can be stale.** Two reads right after
   `wrangler deploy` reported a run as still `running` when the database already
-  said `error` â€” the old version was still serving. Not a caching bug: the API
+  said `error` — the old version was still serving. Not a caching bug: the API
   sends no cache headers, and a re-read a minute later was correct. Wait for the
   rollout before concluding a fix did not work.
 
 ---
 
-## A dice tray is not a dice game â€” built 2026-08-06
+## A dice tray is not a dice game — built 2026-08-06
 
 **Shipped.** Commit `a0fa75c`, production version
-**`915ce9c4-8901-4838-85ae-57cca17491fd`**. No migration â€” code only, and no
+**`915ce9c4-8901-4838-85ae-57cca17491fd`**. No migration — code only, and no
 catalog data was touched.
 
 *"maybe we remove the desc of accessories all together, the name and potential
 photo should be enough information for what something is. This is mainly a
-catalog of things i own"* â€” the owner.
+catalog of things i own"* — the owner.
 
 **The queue was already innocent. The lookups were not.** `detailFieldsFor` has
 never asked an accessory for a description: everything with a parent is asked for
 nothing, and the three parentless accessories are asked only for publisher and
 publisher site. Measured on production's 760 rows through
-`GET /api/research/needs-details`, before **and** after: **80 rows â€” 78 base, 2
+`GET /api/research/needs-details`, before **and** after: **80 rows — 78 base, 2
 accessory (Excursion Tiles 1, Pangea Gaming Table)**, the same rows with the same
 "missing:" lines. Nothing left the queue because nothing accessory-shaped was in
 it. Do not expect a number to move; the SQL is generated from `detailGapBranches`
@@ -1730,7 +1730,7 @@ copy of production's data. One click of **Free lookup** on
 > Filled in year, min players, max players, play time, description and cover
 > image from "Dice Throne: Vanguard".
 
-The accessory pack came away **2â€“4 players, 30 minutes** and the base game's
+The accessory pack came away **2–4 players, 30 minutes** and the base game's
 marketing copy. The identical click on its sibling *Accessory Pack - Duelist*
 after the change filled **year and cover image**, and nothing else.
 
@@ -1746,12 +1746,12 @@ description. It gates all three writers:
 | The free by-name lookup on an item page | `fillableFor`, `apps/web/src/pages/ItemPage.tsx` |
 | Adding a scanned candidate as an accessory | `addCandidate`, `apps/web/src/pages/ScanPage.tsx` |
 
-- **`expansion` is deliberately not on the list.** *Catan: Starfarers â€“ 5-6
+- **`expansion` is deliberately not on the list.** *Catan: Starfarers – 5-6
   Player Extension* is an expansion whose entire purpose is to change the number
   this would have refused to record.
 - **`promo` and `upgrade` were added on judgement, not instruction.** The owner
-  said accessories. A promo card and a set of metal coins are the same shape â€”
-  1 of 48 promos carries a description â€” but if that is wrong, deleting the two
+  said accessories. A promo card and a set of metal coins are the same shape —
+  1 of 48 promos carries a description — but if that is wrong, deleting the two
   strings from `A_THING_NOT_A_GAME` reverses it and nothing else changes.
 - **`yearPublished` is still allowed on an accessory.** A playmat really was
   printed in a year; unlike a player count it is not an invention. It is allowed
@@ -1765,7 +1765,7 @@ neither renders when there is only one page.
 
 ---
 
-## Right now â€” 2026-08-06 (evening)
+## Right now — 2026-08-06 (evening)
 
 **Working tree clean, pushed, migrated and deployed.** Head `b783883`,
 production version **`75a32bf6-39c3-450e-8e56-c936dbd5e8bf`**, migrations
@@ -1776,13 +1776,13 @@ Two things shipped today, in two commits, deliberately not batched:
 | Commit | Version | What |
 |---|---|---|
 | `fd7b142` | `f0b32c75-45d0-48f1-9733-7a53723affe5` | The collection header down to one button; Related games and Missing details moved to the nav and hidden when empty |
-| `b783883` | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` | "Ask once, re-ask when the world changes" â€” the three-layer details policy (migration 0020) |
+| `b783883` | `75a32bf6-39c3-450e-8e56-c936dbd5e8bf` | "Ask once, re-ask when the world changes" — the three-layer details policy (migration 0020) |
 
-### âœ… The bulk details fill has been run â€” see the section at the top
+### ✅ The bulk details fill has been run — see the section at the top
 
 This section used to say the fill was withheld because two of three trial runs
 stalled, and blamed the subrequest ceiling. **The diagnosis was wrong and the
-problem is fixed** â€” it was `waitUntil`'s post-response budget, not subrequests
+problem is fixed** — it was `waitUntil`'s post-response budget, not subrequests
 and not CPU. The queue is now empty. See
 [the lookup that died quietly](#the-lookup-that-died-quietly--fixed-and-the-fill-is-done--2026-08-06).
 
@@ -1800,25 +1800,25 @@ counts were **not** copied across by hand.
 
 Layer 1 removed exactly three rulebooks (Auroboros, Bergin's Book of Beasts,
 Cosmere Mistborn Handbook) and narrowed what fourteen others are asked for.
-Layer 2 removed nothing and could not have â€” `research_run` was empty, so
+Layer 2 removed nothing and could not have — `research_run` was empty, so
 nothing had ever been asked. It pays from the second pass onward.
 
 **All five tasks are shipped.**
-1. âœ… Shelf enrichment fix â€” chunked, resumable, error recorded, retry/stop
+1. ✅ Shelf enrichment fix — chunked, resumable, error recorded, retry/stop
    buttons, sorted jobs leave the queue (`d5f0c4b`)
-2. âœ… **The details lookup runs in the background** (`c496fb1`, migration
-   0018) â€” see [the details run](#the-details-lookup-outlives-the-request--built-2026-08-06)
-3. âœ… Barcode continuous intake (`bd4ec00`)
-4. âœ… Timezone parsing â€” `apps/web/src/lib/dates.ts`, used by `CopyEditor`,
+2. ✅ **The details lookup runs in the background** (`c496fb1`, migration
+   0018) — see [the details run](#the-details-lookup-outlives-the-request--built-2026-08-06)
+3. ✅ Barcode continuous intake (`bd4ec00`)
+4. ✅ Timezone parsing — `apps/web/src/lib/dates.ts`, used by `CopyEditor`,
    `Completeness` and `ScanJobsPage` (`bd4ec00`)
-5. âœ… **`series` column, grouping over `series` *and* `game_system`, and linked
-   parent labels** (`733367f`, migration 0019) â€” see
+5. ✅ **`series` column, grouping over `series` *and* `game_system`, and linked
+   parent labels** (`733367f`, migration 0019) — see
    [folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
 
 **Migration numbering deviated from the plan, deliberately.** The brief pinned
 `series` to 0018, on the assumption that backgrounding the details call needed
-no schema change. It did â€” `research_run.tier` was CHECKed against the three
-source tiers and there was nowhere to record what a run filled in â€” so the
+no schema change. It did — `research_run.tier` was CHECKed against the three
+source tiers and there was nowhere to record what a run filled in — so the
 details work took **0018** and `series` took **0019**.
 
 A separate agent is researching Dice Throne playmats.
@@ -1826,17 +1826,17 @@ A separate agent is researching Dice Throne playmats.
 ~~**Do yourself:** `game_component` is empty and the weekly cron next fires Sun 9
 Aug. From a signed-in browser console, ~8 runs covers the catalog:
 `await (await fetch('/api/components/backfill',{method:'POST'})).json()`.~~
-**Done â€” verified against production 2026-08-08 23:5x UTC: 1,437 components
+**Done — verified against production 2026-08-08 23:5x UTC: 1,437 components
 across 139 games, 139 checked, 0 due, 0 unclassified, 0 stale, last sweep 21:55
 UTC. Nothing left to run.** Kept struck through rather than deleted because two
 code comments were still asserting the table was empty and were wrong for days.
 
-Scan jobs 5, 6 and 7 **no longer need retrying â€” they finished on their own**
+Scan jobs 5, 6 and 7 **no longer need retrying — they finished on their own**
 the moment the fix went live: 73/73, 74/74 and 36/36, and they now sit at
 `review` with 24, 41 and 23 titles still to sort.
 
 **Three discoveries worth keeping:**
-- `wrangler deploy` printed "Deployed â€¦ triggers" for weeks while Cloudflare's
+- `wrangler deploy` printed "Deployed … triggers" for weeks while Cloudflare's
   Cron Events log showed **no events at all**. Fixed with
   `npx wrangler triggers deploy` plus a full deploy. **A cron is not working
   until something it writes has rows.** *Resolved and confirmed twice over:*
@@ -1847,11 +1847,11 @@ the moment the fix went live: 73/73, 74/74 and 36/36, and they now sit at
 - **The subrequest cap was the shelf killer, confirmed.** Workers allow 50 per
   invocation on the free plan and every D1 call counts alongside every fetch;
   one title costs about four, so a 73-title shelf wanted ~290. The invocation is
-  *terminated* rather than thrown, which takes `waitUntil` with it â€” hence an
+  *terminated* rather than thrown, which takes `waitUntil` with it — hence an
   empty `error` column and a job that looked busy for twenty minutes. The plan
   was never confirmed from the dashboard, but 73 titles dying is only consistent
   with the 50 ceiling; at 1000 it would have finished. Enrichment is now eight
-  titles per invocation, and **do not raise that number** â€” the pass that
+  titles per invocation, and **do not raise that number** — the pass that
   exceeds the ceiling is not slow, it is silently killed.
 - **GameUPC does not answer an unknown barcode with nothing.** It answers with
   fifteen guesses carrying real BGG ids, years and cover art. A textbook's ISBN
@@ -1860,19 +1860,19 @@ the moment the fix went live: 73/73, 74/74 and 36/36, and they now sit at
   cleanly: `verified`/`high` is trustworthy, `medium` needs a human, `low` is
   noise. That band is load-bearing in `apps/worker/src/lib/barcode-scan.ts`.
 
-**TODO â€” linking related games needs a search box, not an id.** The "Related
+**TODO — linking related games needs a search box, not an id.** The "Related
 games" screen asks for the other item's numeric id. Nobody knows an id; the owner
 has to go and look it up, which makes linking painful enough to avoid. Replace it
 with a type-ahead that searches existing items by name and resolves to the id
 behind the scenes. `/api/items` already supports multi-term search, and
-`/api/item-names` returns the whole catalog cheaply (41 KB for 640 rows) â€” it was
+`/api/item-names` returns the whole catalog cheaply (41 KB for 640 rows) — it was
 added for the shelf scanner and is exactly what a picker needs.
 
 **Open decisions:** Dice Throne shape (`docs/dice-throne-shape.md`, mock at
 `claude.ai/code/artifact/38ad3545-2a66-4212-a828-4b6ae702bc37`; owner chose
-options 2+3) Â· ~56 `same_family` relatives on every Dice Throne page Â· five
-BackerKit near-misses staged in `scratchpad/backerkit2-nearmisses.{md,sql}` Â·
-`createItemSchema` cannot create a standalone accessory Â· the Deadpool playmat is
+options 2+3) · ~56 `same_family` relatives on every Dice Throne page · five
+BackerKit near-misses staged in `scratchpad/backerkit2-nearmisses.{md,sql}` ·
+`createItemSchema` cannot create a standalone accessory · the Deadpool playmat is
 wishlisted but unconfirmed to exist.
 
 Stable reference lives alongside this file and is not duplicated here:
@@ -1881,42 +1881,42 @@ Stable reference lives alongside this file and is not duplicated here:
 **Last updated:** 2026-08-06 (series grouping). Everything is committed, pushed
 and deployed; the working tree is clean. Database was cleared and collection
 restarted fresh on 08-05, and is being written to by a separate data-only
-agent â€” item totals in this document move between 736 and 739 for that reason.
+agent — item totals in this document move between 736 and 739 for that reason.
 
 **Newest first:**
-[what the screen puts first](#what-the-screen-puts-first--built-2026-08-06) â€”
+[what the screen puts first](#what-the-screen-puts-first--built-2026-08-06) —
 ratings above a fifty-five-row family list, one add door instead of three, and
 lazy thumbnails. Then
-[accepting a guess](#accepting-a-guess--built-2026-08-06) â€” the review screen
+[accepting a guess](#accepting-a-guess--built-2026-08-06) — the review screen
 could only ever say no. Then
 [folding a line into one entry](#folding-a-line-into-one-entry--built-2026-08-06)
-â€” Dice Throne's eleven cards become one, and the same mechanism reaches the 79
+— Dice Throne's eleven cards become one, and the same mechanism reaches the 79
 D&D 5e rows scattered across nine trees. Then
 [the details lookup outlives the request](#the-details-lookup-outlives-the-request--built-2026-08-06)
-â€” a dropped connection no longer pays for a search and loses the answer. Then
+— a dropped connection no longer pays for a search and loses the answer. Then
 [children inherit from their parent](#children-inherit-from-their-parent--built-2026-08-08)
-â€” the details queue went from **695 rows to 78**, and a playmat now shows its
-game's publisher instead of costing 1.4Â¢ to be told it. Then
-["what am I missing"](#what-am-i-missing--built-2026-08-06) â€”
+— the details queue went from **695 rows to 78**, and a playmat now shows its
+game's publisher instead of costing 1.4¢ to be told it. Then
+["what am I missing"](#what-am-i-missing--built-2026-08-06) —
 the shopping list, cached and refreshed weekly. Then
 [the collection page at 640 items](#the-collection-page-at-640-items--built-2026-08-07)
-â€” paging, multi-term search, collapsed groups â€” and
+— paging, multi-term search, collapsed groups — and
 [the four columns that had no UI](#the-four-columns-that-had-no-ui--built-2026-08-07).
-Then the [cover picker](#the-cover-picker--built-2026-08-06) â€”
+Then the [cover picker](#the-cover-picker--built-2026-08-06) —
 printings, and choosing which one's artwork represents our copy. Before that,
 the [wishlist](#the-wishlist--built-2026-08-06) and
 [cover-image health](#cover-image-health--built-2026-08-06). If you read one
 thing from those, read why a dead BoardGameGeek image answers **400 and not
-404** â€” the check is a no-op without it.
+404** — the check is a no-op without it.
 
 ---
 
 ---
 
-## Cron triggers â€” were silently unregistered, FIXED and now firing
+## Cron triggers — were silently unregistered, FIXED and now firing
 
 > **RESOLVED 2026-08-06.** Everything below describes the outage as found; it is
-> kept because the diagnosis is the lesson. **Both crons run normally now** â€”
+> kept because the diagnosis is the lesson. **Both crons run normally now** —
 > `cover_check` has passed **437 rows**, growing 20 per run, and a `wrangler
 > tail` capture caught `"*/30 * * * *" - Ok` with
 > `cover check {"checked":20,"ok":20,"dead":0}` firing on schedule.
@@ -1939,13 +1939,13 @@ Evidence, all from production:
 
 | Check | Result |
 |---|---|
-| `SELECT COUNT(*) FROM cover_check` | **0** â€” the half-hourly check has never written a row |
+| `SELECT COUNT(*) FROM cover_check` | **0** — the half-hourly check has never written a row |
 | `SELECT COUNT(*) FROM component_check` | **0** |
 | Component cron temporarily set to `*/2 * * * *`, deployed, watched 19 minutes | **0 rows, 0 log lines** |
 | `wrangler deployments list` | the accelerated version was live at 100% the whole time |
 | `npm run secret:list` | `BGG_API_TOKEN` **is** set, so the handler's no-token early return is not the cause |
 
-Both schedules appear in the deploy output â€” that is registration, not
+Both schedules appear in the deploy output — that is registration, not
 execution, and this document previously recorded "Confirmed registered in the
 deploy output" as if it were evidence. It is exactly the trap the cover-check
 work warned about in a different form: **a scheduled job that looks healthy and
@@ -1954,26 +1954,26 @@ has never run.**
 What this means today:
 
 - **Cover-link health is a no-op in production.** The banner has nothing to
-  show because nothing has ever probed a URL. Locally it works â€” a forced
-  `POST /api/covers/check` returned `{checked:20, ok:20}` â€” so the code is
+  show because nothing has ever probed a URL. Locally it works — a forced
+  `POST /api/covers/check` returned `{checked:20, ok:20}` — so the code is
   fine and the scheduler is not.
 - **The weekly component refresh will not fire either** until this is fixed.
   Everything else about the feature works; the per-item "Check now" button and
   `POST /api/components/backfill` run the same code on demand.
 
 Not diagnosable from the CLI. Next steps for whoever picks this up: check
-**Workers â†’ board-game-catalog â†’ Settings â†’ Trigger Events** in the Cloudflare
+**Workers → board-game-catalog → Settings → Trigger Events** in the Cloudflare
 dashboard to see whether the crons are listed and whether any invocation is
 recorded, and check whether the account has cron triggers enabled at all.
 Cloudflare's own "Cron Events" view is the only place that reports a *missed*
 invocation.
 
-### âš ï¸ Production has no component data yet, and this is why
+### ⚠ï¸ Production has no component data yet, and this is why
 
 The backfill route is behind Cloudflare Access, and a service token cannot
 stand in (`auth.ts` requires an `email` claim; service-token JWTs carry
 `common_name`). With the cron dead, there is no unattended way in. **The owner
-can do it in seconds from a signed-in browser** â€” open the site, then in the
+can do it in seconds from a signed-in browser** — open the site, then in the
 console:
 
 ```js
@@ -1990,7 +1990,7 @@ is enough to see the feature work immediately.
 
 ---
 
-## What am I missing â€” built 2026-08-06
+## What am I missing — built 2026-08-06
 
 *Seven expansions exist, you have four, here are the three you do not.* The
 design facts live in [`info/completeness.md`](info/completeness.md) and are not
@@ -2002,21 +2002,21 @@ production.
 
 | Route | Capability |
 |---|---|
-| `GET /api/items/:id/completeness` | read â€” cached, never fetches |
-| `GET /api/components/status` | editCatalog â€” coverage, no BGG call |
-| `POST /api/components/backfill` | editCatalog â€” `?itemId=` `?calls=` `?force=` |
-| `POST /api/components/reclassify` | editCatalog â€” re-decide the split, **free** |
+| `GET /api/items/:id/completeness` | read — cached, never fetches |
+| `GET /api/components/status` | editCatalog — coverage, no BGG call |
+| `POST /api/components/backfill` | editCatalog — `?itemId=` `?calls=` `?force=` |
+| `POST /api/components/reclassify` | editCatalog — re-decide the split, **free** |
 
 ### The matcher, on a case with a known answer
 
-Here to Slay (item 107, BGG 299252) â€” production's real tree, 22 rows, replayed
+Here to Slay (item 107, BGG 299252) — production's real tree, 22 rows, replayed
 against local dev. BoardGameGeek lists **13 expansions and 23 accessories, all
 official** (TeeTurtle / Unstable Games; third-party count is 0, which is right).
 
 Reported: **1 of 13 expansions, 1 of 23 accessories.** True answer for
 expansions is 3. The two it misses are `KS Exclusive Monster Expansion Pack`
 (BGG's `Monsters Expansion`) and `KS Exclusive Dragon Sorcerers Expansion Pack`
-(BGG's `Dragon Sorcerer Expansion`) â€” both scored 0.29 and 0.44 after the
+(BGG's `Dragon Sorcerer Expansion`) — both scored 0.29 and 0.44 after the
 game-name strip and were counted missing. **That is the specified failure
 direction** and the fix is one field: type the BGG id on the edit screen.
 
@@ -2030,7 +2030,7 @@ expansion. The fragment rule in `isConfidentMatch` is what stops
 
 Ark Nova (BGG 342942), the third-party case: **4 official expansions**
 (3 already on the wishlist, `Promotion Team & Capybara` genuinely missing),
-**1 official accessory** (Portal Games' wooden tokens), **26 third-party** â€”
+**1 official accessory** (Portal Games' wooden tokens), **26 third-party** —
 including Kekpop Spiele's three 3D "expansions", which BoardGameGeek types as
 `boardgameexpansion`. Every verdict checked by hand and correct.
 
@@ -2038,11 +2038,11 @@ including Kekpop Spiele's three 3D "expansions", which BoardGameGeek types as
 
 | | |
 |---|---|
-| Production items with a `bgg_id` | 128, of which **83 are rooted games** â€” the only ones this can answer for |
+| Production items with a `bgg_id` | 128, of which **83 are rooted games** — the only ones this can answer for |
 | Components those 83 list | **1,148** (680 expansions, 468 accessories), 1,120 distinct ids |
 | Local catalog after a full pass | 1,137 components: **665 official**, **472 third-party**, 0 unclassified |
 | Game sweep | 5 BGG calls, 5.5s |
-| Classification sweep | ~56 calls, so it rotates â€” 8 runs cleared local |
+| Classification sweep | ~56 calls, so it rotates — 8 runs cleared local |
 | Reclassify (no BGG call) | 1,137 rows in **0.57s** |
 
 **557 of 640 catalog rows can never have an answer** and say "No data", never
@@ -2051,7 +2051,7 @@ including Kekpop Spiele's three 3D "expansions", which BoardGameGeek types as
 ### The "not filed yet" badge no longer fires on accessories
 
 `ItemCard` labelled **every** parentless non-base item "not filed yet". The
-intent was right for an orphaned expansion â€” a record waiting for its game â€”
+intent was right for an orphaned expansion — a record waiting for its game —
 and wrong for the three items in the catalog that are legitimately standalone:
 the **Pangea Gaming Table** (372, nineteen components under it) and
 **Excursion Tiles 1 and 2** (117, 118), system-agnostic terrain belonging to no
@@ -2060,16 +2060,16 @@ game. All three read as a broken catalog.
 `BELONGS_TO_A_GAME` in `ItemTree.tsx` now limits the badge to `expansion`,
 `promo` and `upgrade`. An accessory that *does* carry a `pendingParentName`
 still says what it is waiting for, because then it genuinely is. No catalog
-data was touched â€” the table's `kind` is correct.
+data was touched — the table's `kind` is correct.
 
 **Checked for the same premise elsewhere:**
 
 | Place | Carries it? |
 |---|---|
 | `matchingRootsSql`'s `uncatalogued` filter | **No.** It asks whether anything in the tree has a *copy*, which is a different question |
-| `suggestRetags` (`packages/core/src/vision.ts`) | **No** â€” it only considers `kind === 'base'`, so a standalone accessory is never proposed for filing. Correct as-is |
+| `suggestRetags` (`packages/core/src/vision.ts`) | **No** — it only considers `kind === 'base'`, so a standalone accessory is never proposed for filing. Correct as-is |
 | `createItem` (`packages/db/src/items.ts`) | **No.** An orphan roots itself, which is exactly right for the table |
-| **`createItemSchema`** (`packages/core/src/schemas.ts`) | **âš ï¸ Yes.** A non-base item must supply a parent *or* a `pendingParentName`, so **the app cannot create a standalone accessory at all** â€” the Pangea table can only have arrived through the bulk import |
+| **`createItemSchema`** (`packages/core/src/schemas.ts`) | **⚠ï¸ Yes.** A non-base item must supply a parent *or* a `pendingParentName`, so **the app cannot create a standalone accessory at all** — the Pangea table can only have arrived through the bulk import |
 
 The schema was **deliberately left alone**, because relaxing it is a real
 trade-off rather than a tidy-up: exempting `accessory` would also stop a sleeve
@@ -2078,13 +2078,13 @@ standalone root. That is the owner's call. Note that the display and the
 validation now openly disagree about whether a lone accessory is a complete
 record.
 
-### Weekly refresh â€” verified firing locally; **never fires in production**
+### Weekly refresh — verified firing locally; **never fires in production**
 
 `crons = ["*/30 * * * *", "41 5 * * 1"]`. Monday 05:41 UTC; minute 41 stays off
 the cover check's `:00`/`:30`. One `scheduled` handler dispatching on
 `event.cron`.
 
-Exercised with `wrangler dev --test-scheduled`, both directions â€” the dispatch
+Exercised with `wrangler dev --test-scheduled`, both directions — the dispatch
 is correct and the handler does real work:
 
 ```
@@ -2092,23 +2092,23 @@ GET /__scheduled?cron=41+5+*+*+1   -> component refresh {"gamesChecked":2,...,"b
 GET /__scheduled?cron=*/30+*+*+*+* -> cover check {"checked":20,"ok":20,...}
 ```
 
-**In production it never runs at all** â€” see
+**In production it never runs at all** — see
 [the cron section](#-cron-triggers-do-not-fire-in-production--nothing-scheduled-has-ever-run).
 The dispatch logic is not the problem; nothing invokes it.
 
-âš ï¸ **`COMPONENT_REFRESH_CRON` in `apps/worker/src/lib/component-backfill.ts`
+⚠ï¸ **`COMPONENT_REFRESH_CRON` in `apps/worker/src/lib/component-backfill.ts`
 must stay character-identical to the `wrangler.toml` entry.** A stray space
 routes the weekly refresh silently into the cover check.
 
 ### Things that will bite
 
 - **BoardGameGeek's `/thing` takes at most 20 ids.** 36 answers `400`, with no
-  partial result. `things()` now chunks â€” which also fixed a live silent bug in
+  partial result. `things()` now chunks — which also fixed a live silent bug in
   `hydrateFromBgg`, where a 101-candidate search 400'd and the `catch` recorded
   it as a BGG outage.
 - **Strip the game's name before comparing titles.** Full-string matching
   produced nine hints for Here to Slay, eight of them wrong ("Central Play Mat"
-  â†’ "Warriors & Druids Play Mat Set" at 0.71). After the strip: one hint, and it
+  → "Warriors & Druids Play Mat Set" at 0.71). After the strip: one hint, and it
   is genuine.
 - **Take the best candidate, not the first.** `owned.find()` let list order pick
   the winner among rows that all cleared the floor.
@@ -2116,7 +2116,7 @@ routes the weekly refresh silently into the cover check.
   `stale_at` and shown dimmed. A row disappearing looks exactly like the owner
   having bought it.
 
-> **Local D1 was seeded and cleaned back out** â€” 86 items, `WAM Seed` rows gone,
+> **Local D1 was seeded and cleaned back out** — 86 items, `WAM Seed` rows gone,
 > item 111's `bgg_id` returned to NULL. **Two pre-existing `copy` rows on items
 > 111/112 were lost** in the cleanup (local shows 8 copies where the earlier
 > note said 10); production is untouched, and
@@ -2127,7 +2127,7 @@ routes the weekly refresh silently into the cover check.
 
 ---
 
-## What the screen puts first â€” built 2026-08-06
+## What the screen puts first — built 2026-08-06
 
 Three ordering and naming fixes, no data touched (`34c1ecf`).
 
@@ -2136,36 +2136,36 @@ and the whole Dice Throne line is one family, so a hero page lists ~55
 relatives. Measured in Chrome on *Dice Throne Hero: Black Panther*: the Ratings
 heading sat at **3184px**, below a relations list starting at 756px. It now sits
 at **749px**, with the relations list at 978px. The owner chose to keep the
-relatives â€” only the order moved, and `RelatedGames`' contents and its
+relatives — only the order moved, and `RelatedGames`' contents and its
 "no relations and cannot edit" guard are unchanged. Verified on a plain game
 (Scythe, no relations) too: the empty state still reads, nothing is doubled.
 
 **The collection header collapses from five buttons to four**, one clearly
-primary. `Scan a barcode` pointed at `/scan-jobs?add=barcode` â€” the tab
-`+ Add games` already opens on â€” and `Check a game` (`/scan`) opens the same tab
+primary. `Scan a barcode` pointed at `/scan-jobs?add=barcode` — the tab
+`+ Add games` already opens on — and `Check a game` (`/scan`) opens the same tab
 strip over the same camera panel. Both are gone. The old split (bulk intake vs
 the in-shop "am I already holding this?") stopped being true when barcodes moved
 onto the queue: `BarcodeQueue` marks a code **"Already yours"** from our own
-table, on its own audio pitch. `/scan` is untouched and still reachable â€”
+table, on its own audio pitch. `/scan` is untouched and still reachable —
 **"Type a name"** opens it on the Manually tab, the one route the queue has no
 equivalent of, and the other three tabs are one tap from there. `?add=barcode`
 still works and is still used by the link *inside* `/scan`.
 
-**"Fill in details" â†’ "Missing details."** A place, not an act. The owner pressed
+**"Fill in details" → "Missing details."** A place, not an act. The owner pressed
 it expecting a lookup to run, landed on a list, and concluded the feature was
 broken. The buttons that do run a lookup live on that screen and keep their
 verbs ("Fill in N games", "Fill this one", "Look again").
 
-### âš ï¸ Lazy thumbnails defer the hero art; they do not shrink it
+### ⚠ï¸ Lazy thumbnails defer the hero art; they do not shrink it
 
 Every thumbnail rendered *in a list* now carries `loading="lazy"`, following the
 precedent `.thumb` already set in `ItemTree.tsx`: the related-games list
 (`ItemPage.tsx`), the expansion picker (`ItemForm.tsx`), and the candidate and
 suggestion lists on both scan screens. The item's own `.thumb-lg` is
-deliberately **not** lazy â€” it is the picture you opened the page to see.
+deliberately **not** lazy — it is the picture you opened the page to see.
 
 This landed because 45 Dice Throne hero rows now carry art served from
-`dicethrone.com` at **0.6â€“1.4 MB a PNG**, and `.thumb-sm` has no size rule of
+`dicethrone.com` at **0.6–1.4 MB a PNG**, and `.thumb-sm` has no size rule of
 its own, so it falls through to `.thumb` and draws at **44px**. Confirmed in the
 browser: 7/7 list thumbnails on a hero page carry the attribute and none is
 fetched at first paint.
@@ -2174,18 +2174,18 @@ fetched at first paint.
 the bottom still pulls every PNG at full size to render it at 44px, and a hero's
 family list is the thing you scroll. **The real fix is resizing at the data
 layer.** Do not swap the URLs for the Jetpack/Photon proxy (`i0.wp.com`) to get
-there â€” the publisher's own origin was chosen on purpose, and this project has
+there — the publisher's own origin was chosen on purpose, and this project has
 already been bitten by expiring CDN URLs.
 
 ---
 
 ---
 
-## Accepting a guess â€” built 2026-08-06
+## Accepting a guess — built 2026-08-06
 
 *"we need an option to accept a guess, in one of the photos it guessed the name
 of a dnd board game but wasn't sure. It was correct but I had no way of
-confirming with it"* â€” the owner.
+confirming with it"* — the owner.
 
 The confidence band stays load-bearing: GameUPC answers an unknown code with
 fifteen confident-looking guesses, so `medium` is shown and deliberately not
@@ -2196,33 +2196,33 @@ id, publisher, year and cover that came with the match.
 | Piece | Where |
 |---|---|
 | `TitleSuggestion`, `toSuggestions`, `ScannedTitle.candidates` / `.acceptedMatch` | `apps/worker/src/lib/barcode-scan.ts` |
-| `cachedResolveAll` â€” the same lookup, keeping the runners-up | `apps/worker/src/lib/resolve-title.ts` |
+| `cachedResolveAll` — the same lookup, keeping the runners-up | `apps/worker/src/lib/resolve-title.ts` |
 | `POST /api/scan-jobs/:id/titles/:index/accept` | `apps/worker/src/routes/scan-jobs.ts` |
 | `wantsHumanCall`, `needsRelookupToAccept`, `acceptMatch`, the copy note | `apps/web/src/pages/ScanJobsPage.tsx` |
 
 - **Suggestions are trimmed, and the difference was measured.** Five whole
   `BarcodeCandidate`s made one job's `enriched` blob **23 KB**, almost all
-  BoardGameGeek description prose â€” and that blob is returned for up to fifty
+  BoardGameGeek description prose — and that blob is returned for up to fifty
   jobs on a poll firing every 2.5 seconds while anything is working. Trimmed to
   name, year, publisher, cover and band: **2.3 KB**. Do not put the descriptions
   back.
 - **Accepting re-classifies against the name chosen.** A runner-up brings its own
-  proposed parent â€” accept "Catan: Seafarers" over a top answer of "Catan" and
-  the row must propose Catan as its parent rather than rooting itself beside it â€”
+  proposed parent — accept "Catan: Seafarers" over a top answer of "Catan" and
+  the row must propose Catan as its parent rather than rooting itself beside it —
   and its own `reason`, which otherwise still read "nobody has confirmed this
   code" directly under a line saying somebody had.
 - **The copy records that a human decided**: *"Identity confirmed by hand at
-  review on 2026-08-06 â€” the lookup was not confident."* A verified lookup and an
+  review on 2026-08-06 — the lookup was not confident."* A verified lookup and an
   accepted guess are not the same evidence and nothing else would tell them apart
   later.
 - **The lookup cache now stores a list.** Old single-object entries are read as a
   one-element list rather than invalidated, so existing entries stay useful and
   simply offer no alternatives until they expire.
-- âš ï¸ **Jobs enriched before this carry no suggestions.** The six sitting at
+- ⚠ï¸ **Jobs enriched before this carry no suggestions.** The six sitting at
   review in production are in exactly that state; those rows say so and point at
   "Look up again", which re-asks and stores the list.
 
-**Stop** now appears only where it stops something â€” `uploaded`, `reading`,
+**Stop** now appears only where it stops something — `uploaded`, `reading`,
 `enriching`, and a job parked at `read` with titles still to look up, because
 that one *is* working: the queue page asks for its next chunk on its own, and
 dropping Stop there would leave a 73-title shelf with no way out between passes.
@@ -2230,7 +2230,7 @@ It used to show on every job that was not `done`, including one at `review`
 waiting for you.
 
 Verified in Chrome against production's data: `824968717615` (medium, five
-suggestions, top accepted, refused on add as already in the collection â€” the
+suggestions, top accepted, refused on add as already in the collection — the
 duplicate guard) and `9780306406157`, a textbook ISBN with no resolved name at
 all, whose **third** suggestion was accepted and became item 786 with BGG 295945,
 KOSMOS, 2020, its cover and the note.
@@ -2239,9 +2239,9 @@ KOSMOS, 2020, its cover and the note.
 
 ---
 
-## Folding a line into one entry â€” built 2026-08-06
+## Folding a line into one entry — built 2026-08-06
 
-`item.series` (migration 0019), and a collection page that groups on it â€” and on
+`item.series` (migration 0019), and a collection page that groups on it — and on
 `game_system` through the same mechanism. **Nothing was re-parented.** The
 reasoning and the rejected alternatives are in
 [`dice-throne-shape.md`](dice-throne-shape.md); this is state and numbers.
@@ -2251,7 +2251,7 @@ reasoning and the rejected alternatives are in
 | Collection page entries | 114 | **93** |
 | Dice Throne | 11 cards | **1** |
 | D&D 5e (2014) | 9 cards | **1** |
-| Game trees | 114 | 114 â€” unchanged |
+| Game trees | 114 | 114 — unchanged |
 
 Five groups fold 26 lines into 5 entries: Dice Throne (11), D&D 5e (2014) (9),
 Cosmere RPG (2), Dungeon Crawler Carl RPG (2), system-agnostic (2).
@@ -2259,12 +2259,12 @@ Cosmere RPG (2), Dungeon Crawler Carl RPG (2), system-agnostic (2).
 **The half that cannot be fixed by re-parenting is the `game_system` half**, and
 it is the one the owner asked for. 79 rows need D&D 5e and they sit in **nine
 separate trees**: 53 digital books inside D&D under the DM's Guide, and 26
-physical third-party products â€” Auroboros, Bergin's Book of Beasts, Firestar
-Falling, three Midnight Tower adventures, Ryoko's Guide, Starlight Arcana â€” as
+physical third-party products — Auroboros, Bergin's Book of Beasts, Firestar
+Falling, three Midnight Tower adventures, Ryoko's Guide, Starlight Arcana — as
 their own top-level lines, because they `require` the Player's Handbook rather
 than being part of D&D. Filing them inside D&D would misdescribe what the owner
 owns. Filtering `D&D 5e (2014)` returns all nine regardless of tree, publisher or
-format, and the group card carries **26 physical Â· 53 digital** on its face â€”
+format, and the group card carries **26 physical · 53 digital** on its face —
 "paper or D&D Beyond?" is exactly the question a combined 5e list raises.
 
 | Piece | Where |
@@ -2272,7 +2272,7 @@ format, and the group card carries **26 physical Â· 53 digital** on its face �
 | `series` column, index, Dice Throne backfill | `migrations/0019_item_series.sql` |
 | `Item.series`, `itemQuerySchema.series`/`grouped`, `CollectionGroup`, `CollectionEntry`, `MatchedChild` | `packages/core/src/schemas.ts` |
 | `ROOT_GROUP_CTE`, `shouldGroup`, `summariseGroups`, `listGroupOptions` | `packages/db/src/items.ts` |
-| `GET /api/meta` â†’ `groups` | `apps/worker/src/routes/catalog.ts` |
+| `GET /api/meta` → `groups` | `apps/worker/src/routes/catalog.ts` |
 | `GroupCard` | `apps/web/src/components/ItemTree.tsx` |
 | `ParentLabel` | `apps/web/src/components/ui.tsx` |
 
@@ -2281,8 +2281,8 @@ format, and the group card carries **26 physical Â· 53 digital** on its face �
 - **A grouping of one line is not a grouping.** `HAVING COUNT(*) > 1` in the CTE
   drops it, for the same reason a group of one child on a game card starts
   expanded: replacing one row with one row and a click is an extra step, not a
-  saving. Four production systems qualify â€” D&D 2024, Cypher System, Lewd Dungeon
-  Adventures, the playtest sheet â€” and each stays the game it already was.
+  saving. Four production systems qualify — D&D 2024, Cypher System, Lewd Dungeon
+  Adventures, the playtest sheet — and each stays the game it already was.
 - **A tree's label is the value most of it carries**, not the alphabetically
   first. Production holds exactly one tree with two systems: 20 rows of
   "D&D 2024" and one of "D&D (playtest material)". `MIN()` would have filed the
@@ -2297,12 +2297,12 @@ format, and the group card carries **26 physical Â· 53 digital** on its face �
 A child that turns up away from its parent now says where it lives, muted, with
 the parent's name as a **link**. Searching `scarlet playmat` reads:
 
-> Matched **Marvel Dice Throne: Playmat - Scarlet Witch** â€” *Dice Throne Hero:
-> Scarlet Witch*, **Dice Throne Hero: Scarlet Witch** â€” *Marvel Dice Throne*
+> Matched **Marvel Dice Throne: Playmat - Scarlet Witch** — *Dice Throne Hero:
+> Scarlet Witch*, **Dice Throne Hero: Scarlet Witch** — *Marvel Dice Throne*
 
-and the wishlist reads **Ark Nova: Marine Worlds** â€” *Ark Nova*. Both halves are
+and the wishlist reads **Ark Nova: Marine Worlds** — *Ark Nova*. Both halves are
 links; the matched child was not clickable at all before. **Nothing was
-renamed** â€” `attachMatchReasons` already had the parent in hand while walking the
+renamed** — `attachMatchReasons` already had the parent in hand while walking the
 tree, and `listWishlist` already returned `parentItemId` and `parentName`.
 
 ### Verified against production's data, in a browser
@@ -2322,10 +2322,10 @@ npx wrangler dev --config apps/worker/wrangler.toml --port 8791 \
   --persist-to "<ABSOLUTE path>/apps/worker/.wrangler/sandbox"
 ```
 
-âš ï¸ **`--persist-to` must be an absolute path or a path under the repo.** A
+⚠ï¸ **`--persist-to` must be an absolute path or a path under the repo.** A
 relative path is resolved against the *config file's* directory for
 `wrangler dev` but against the cwd for `d1 execute`, so the two silently used
-different databases â€” the first attempt ran `dev` against the ordinary 86-item
+different databases — the first attempt ran `dev` against the ordinary 86-item
 local DB while the migrations went to the sandbox. A path in the system temp
 directory failed outright with `internal error`.
 
@@ -2336,7 +2336,7 @@ exercised in Chrome against that data, not only over curl.
 
 ---
 
-## The details lookup outlives the request â€” built 2026-08-06
+## The details lookup outlives the request — built 2026-08-06
 
 `POST /api/research/:id/details` answers in about **0.28s** with a run id and
 does the Claude web search under `executionCtx.waitUntil`. It used to `await`
@@ -2345,7 +2345,7 @@ the search and lost the answer.
 
 | Piece | Where |
 |---|---|
-| `research_run` redefined â€” `details` tier, `result_json` | `migrations/0018_details_runs.sql` |
+| `research_run` redefined — `details` tier, `result_json` | `migrations/0018_details_runs.sql` |
 | `RUN_TIERS` | `packages/core/src/constants.ts` |
 | `DetailsRun` | `packages/core/src/schemas.ts` |
 | `activeDetailsRun`, `latestDetailsRuns`, `finishRun(result)` | `packages/db/src/research.ts` |
@@ -2355,7 +2355,7 @@ the search and lost the answer.
 
 - **Migration 0018 drops and recreates `research_run`.** SQLite cannot alter a
   CHECK constraint, and `tier` was restricted to the three source tiers. That is
-  safe only because the table is empty in every environment â€” **verified
+  safe only because the table is empty in every environment — **verified
   immediately before running it**, along with `research_finding`, which
   references it. Check again before replaying this migration anywhere.
 - **`details` is not a source tier.** `SOURCE_TIERS` is where a claim came from;
@@ -2376,7 +2376,7 @@ Verified against the production-shaped local D1 (see above). Three real runs:
 
 | Item | Result |
 |---|---|
-| 383 Ascension 15th Anniversary | `done` in 19s, 195/562 tokens, 1.5Â¢, filled *playing time* â†’ `playtime_min = 30` |
+| 383 Ascension 15th Anniversary | `done` in 19s, 195/562 tokens, 1.5¢, filled *playing time* → `playtime_min = 30` |
 | 463 Auroboros | POST aborted at 1s; still `done` in 29s, "Nothing new found." |
 | 488 Before the Stroke of Midnight | started from the browser, **page navigated away and fully reloaded mid-run**, landed `done` at 59s and the row updated itself |
 
@@ -2386,7 +2386,7 @@ That last one is the whole point: 59 seconds is long enough for a phone to lock.
 
 ---
 
-## The wishlist â€” built 2026-08-06
+## The wishlist — built 2026-08-06
 
 `/wishlist`, linked from the top bar. Lists every copy marked `wanted`, with a
 **Mark as bought** button per row that flips that copy to `owned`.
@@ -2412,7 +2412,7 @@ reads as an Ark Nova expansion.
 
 - **`preordered` is excluded on purpose.** Something already bought and waiting
   for the post is a different question from what to buy next. If that turns out
-  to be wrong, the fix is one `WHERE` clause â€” but change the page's wording too,
+  to be wrong, the fix is one `WHERE` clause — but change the page's wording too,
   because "2 games wanted" would stop being true.
 - **There is no wishlist-specific write route.** "Mark as bought" is the ordinary
   `PATCH /api/copies/:id` the item page's copy editor already calls. Resist
@@ -2421,19 +2421,19 @@ reads as an Ark Nova expansion.
 - **The header stat on the collection page counts something else.**
   `collectionStats.wantedCopies` sums `wanted` **+** `preordered`, so it reads
   10 where the wishlist reads 2. That is why the count was deliberately *not*
-  linked to `/wishlist` â€” the numbers would visibly disagree. Splitting the stat
+  linked to `/wishlist` — the numbers would visibly disagree. Splitting the stat
   in two is the honest fix if it ever matters.
 
 ---
 
 ---
 
-## Cover-image health â€” built 2026-08-06
+## Cover-image health — built 2026-08-06
 
 Nothing here hosts a cover. Every `item.thumbnail_url` is a hotlink to
 BoardGameGeek (`cf.geekdo-images.com`), Kickstarter or Gamefound
 (`ksr-ugc.imgix.net`), none of whom owe us a stable URL. When one stops serving,
-the failure is silent â€” the card renders, the image slot is empty, and nobody
+the failure is silent — the card renders, the image slot is empty, and nobody
 re-opens a game they already catalogued.
 
 A cron probes a slice of the catalog every half hour and writes verdicts down; a
@@ -2446,7 +2446,7 @@ banner appears when something is confirmed dead.
 | The probing | `apps/worker/src/lib/cover-check.ts` |
 | Routes | `apps/worker/src/routes/covers.ts` |
 | Cron trigger | `[triggers] crons = ["*/30 * * * *"]` in `apps/worker/wrangler.toml` |
-| `scheduled` handler | `apps/worker/src/index.ts` â€” three lines, delegates to the lib |
+| `scheduled` handler | `apps/worker/src/index.ts` — three lines, delegates to the lib |
 | The banner | `apps/web/src/components/CoverHealthBanner.tsx`, mounted in `App.tsx` |
 
 **Keyed on the URL, not the item.** Several items share one image, and fetching
@@ -2457,16 +2457,16 @@ re-checked, with no invalidation step to forget.
 
 **Rotation, because of the subrequest ceiling.** 20 URLs per invocation
 (`COVER_BATCH`), oldest-checked first, never-checked first of all. Every half
-hour is ~960 probes a day against ~450 distinct covers â€” roughly two full passes.
+hour is ~960 probes a day against ~450 distinct covers — roughly two full passes.
 A URL can cost two subrequests when HEAD is refused and the ranged
 `GET Range: bytes=0-0` fallback runs, so the worst case is 40, inside the free
 plan's 50.
 
 **Two failures before anyone is told** (`DEAD_AFTER`), and five for failures that
-never produced a status code at all (`UNREACHABLE_AFTER`) â€” a timeout says
+never produced a status code at all (`UNREACHABLE_AFTER`) — a timeout says
 something about the network, not about the file.
 
-### âš ï¸ The gotcha that would have made this useless
+### ⚠ï¸ The gotcha that would have made this useless
 
 **`cf.geekdo-images.com` answers a dead path with `400`, never `404`.**
 
@@ -2475,7 +2475,7 @@ picture id, and a real picture id behind a wrong signature all returned **400
 Bad Request**. `ksr-ugc.imgix.net` returns **410** for a removed asset, which is
 conventional; BGG is not.
 
-So `PERMANENT` in `cover-check.ts` is `{400, 404, 410, 414}` â€” the codes that
+So `PERMANENT` in `cover-check.ts` is `{400, 404, 410, 414}` — the codes that
 mean *the URL itself* is permanently unacceptable. **Do not "tidy" 400 out of
 that set.** The first version of this check treated 400 as transient, ran over
 the whole local catalog, and reported zero dead covers while staring straight at
@@ -2487,13 +2487,13 @@ the client, and are far more often a CDN objecting to a Worker than a missing
 file. The probe also sends a browser-ish `User-Agent` for the same reason.
 
 **Verified end to end against local dev (2026-08-06).** Two known-bad covers were
-seeded â€” a geekdo path returning 400 and an imgix path returning 410 â€” alongside
+seeded — a geekdo path returning 400 and an imgix path returning 410 — alongside
 67 real BGG covers. First pass: 78 ok, 2 recorded as `dead`, and
-`/api/covers/health` reported **`dead: 0`** â€” the one-failure-is-not-enough rule
+`/api/covers/health` reported **`dead: 0`** — the one-failure-is-not-enough rule
 holding. Second pass: both surfaced with the right codes and
 `consecutiveFailures: 2`, and every real cover passed both times.
 
-> **Local dev still carries those two bad rows on purpose** â€” item 111
+> **Local dev still carries those two bad rows on purpose** — item 111
 > ("Ark Nova", a fake geekdo path) and item 121 ("Gamefound Pledge Test Game").
 > They are why the banner shows locally. Delete both items if you want a quiet
 > local app; production is unaffected.
@@ -2502,7 +2502,7 @@ holding. Second pass: both surfaced with the right codes and
 
 ---
 
-## The cover picker â€” built 2026-08-06
+## The cover picker — built 2026-08-06
 
 In the edit form, a grid of every cover this game could wear. Click one, Save
 changes, done.
@@ -2512,12 +2512,12 @@ between the BoardGameGeek image and the Kickstarter one" *and* "for games with
 several printings, let me see covers from multiple years". Those are the same
 question: an item has several known printings, each printing has a cover, and
 one of them looks like the box on our shelf. A crowdfunding edition **is** a
-printing â€” it belongs in the grid beside the 2019 and 2023 retail ones, not
+printing — it belongs in the grid beside the 2019 and 2023 retail ones, not
 behind a Kickstarter-shaped button of its own.
 
 **Almost none of this was new.** The `edition` table has existed since migration
 0001 (`item_id`, `bgg_version_id`, `name`, `year`, `publisher`, `language`,
-`image_url` â€” one row per printing). `packages/bgg/src/client.ts` has always
+`image_url` — one row per printing). `packages/bgg/src/client.ts` has always
 requested `versions=1` and parsed them. `importItem` has always inserted them.
 The table held **0 rows** because the catalog was populated by
 `POST /api/bgg/match/:id` and direct pledge inserts, and neither writes
@@ -2561,7 +2561,7 @@ the client retries a `202 Accepted` up to four times, so `BACKFILL_LIMIT = 80`
 
 **The one place it can stall.** "Printings not fetched yet" is inferred from the
 absence of any `source = 'bgg'` row, so a game BoardGameGeek genuinely lists no
-versions for is re-asked every run. That is deliberate â€” remembering the
+versions for is re-asked every run. That is deliberate — remembering the
 negative would mean writing a fake edition row, and a fake printing would show
 up in the picker. It costs one slot in a batch of ten, and
 `/api/editions/status` makes a stall visible.
@@ -2570,7 +2570,7 @@ up in the picker. It costs one slot in a batch of ten, and
 
 `updateItem` records the outgoing `thumbnail_url` as a printing before it
 changes it (`preserveDisplacedCover`). This is the guarantee that makes the
-whole feature honest â€” a Kickstarter image, once nothing points at it, is gone,
+whole feature honest — a Kickstarter image, once nothing points at it, is gone,
 so without this a swap to a BoardGameGeek printing would be one-way and "keep
 the KS image in the picker" would be a promise the data could not keep.
 
@@ -2583,20 +2583,20 @@ four times still leaves two candidates. Measured, not assumed.
 ### Picking writes through the ordinary item PATCH
 
 The picker sets the **form's** image URL; Save writes it. It does not PATCH on
-click, and that is not squeamishness â€” the form holds `thumbnailUrl` in its own
+click, and that is not squeamishness — the form holds `thumbnailUrl` in its own
 state, so an immediate write would have been silently reverted by the Save that
 followed it. There is no cover-specific write route, for the same reason there
 is no wishlist-specific one.
 
 ### Coverage is uneven on purpose, so the empty cases say why
 
-- **Several** â€” the good case, ~44 of 63 local items with any edition image.
-- **Exactly one** â€” says so, rather than offering a pointless grid of one.
-- **None** â€” explains which reason applies: never matched to BoardGameGeek
+- **Several** — the good case, ~44 of 63 local items with any edition image.
+- **Exactly one** — says so, rather than offering a pointless grid of one.
+- **None** — explains which reason applies: never matched to BoardGameGeek
   (most pledge accessories, and always will be), printings fetched and BGG lists
-  none, or nobody has asked yet â€” in which case a **Look up printings** button
+  none, or nobody has asked yet — in which case a **Look up printings** button
   appears and asks about that one game.
-- **A candidate that will not load** â€” two independent ways to know. `cover_check`
+- **A candidate that will not load** — two independent ways to know. `cover_check`
   supplies a verdict before the image is requested, reusing `DEAD_AFTER` /
   `UNREACHABLE_AFTER` so the picker cannot call something dead on weaker grounds
   than the banner; the browser's own `onError` catches everything the checker has
@@ -2606,11 +2606,11 @@ is no wishlist-specific one.
 **How hard a missing cover is worth chasing is not uniform** (owner, 2026-08-06):
 games and expansions matter a lot, miniatures somewhat, accessories and
 components barely at all. `CoverCandidates` therefore carries the item's `kind`,
-and the no-candidates message differs â€” a sleeve pack with no picture is told it
+and the no-candidates message differs — a sleeve pack with no picture is told it
 is fine and not worth chasing, while a base game is told to fix it and how. Do
 not flatten that back into one sentence.
 
-### âš ï¸ Three rows shared one Kickstarter collage â€” one fixed, two refused
+### ⚠ï¸ Three rows shared one Kickstarter collage — one fixed, two refused
 
 The campaign hero for `dice-throne-x-men-marvel-co-op-missions` shows three
 boxes together, and all three catalog rows used it as their cover. The owner
@@ -2618,9 +2618,9 @@ wants the BoardGameGeek art selected with the collage kept in the picker.
 
 | Item | Name | Outcome |
 |---|---|---|
-| 115 | Marvel Dice Throne: Missions | âœ… **Done.** Matched BGG 403495, cover now the 2025 Roxley printing, collage still offered |
-| 96 | Dice Throne: X-Men | âŒ **Refused** â€” `isFragmentOf` rejects it. Verified by hand as **BGG 403494** "Marvel Dice Throne: X-Men" (2025) |
-| 114 | Dice Throne: Deadpool Box Deluxe Edition | âŒ **Refused** â€” BGG's search returns *nothing* for that full string. Verified by hand as **BGG 403511** "Marvel Dice Throne: Deadpool" (2025) |
+| 115 | Marvel Dice Throne: Missions | ✅ **Done.** Matched BGG 403495, cover now the 2025 Roxley printing, collage still offered |
+| 96 | Dice Throne: X-Men | âŒ **Refused** — `isFragmentOf` rejects it. Verified by hand as **BGG 403494** "Marvel Dice Throne: X-Men" (2025) |
+| 114 | Dice Throne: Deadpool Box Deluxe Edition | âŒ **Refused** — BGG's search returns *nothing* for that full string. Verified by hand as **BGG 403511** "Marvel Dice Throne: Deadpool" (2025) |
 
 **Both refusals are the guard working, not a bug.** 96 fails because
 "Dice Throne: X-Men" is a strict word-subset of "Marvel Dice Throne: X-Men", and
@@ -2630,7 +2630,7 @@ identity. 114 fails earlier still: BGG's own search finds nothing for
 403511 immediately.
 
 They were **not forced**, because this project has been bitten three times by
-exact-name matches to the wrong game (Brink, Iliad, Moon â€” all scoring a perfect
+exact-name matches to the wrong game (Brink, Iliad, Moon — all scoring a perfect
 1.00). Both rows have a blank year *and* a blank publisher, so the disagreement
 guard in `/api/bgg/match/:id` had nothing to check against and name similarity
 was the only evidence there was.
@@ -2639,15 +2639,15 @@ The evidence for the two ids above is strong and independent of the name: both
 BGG entries are 2025, both are Roxley, and the campaign URL on all three rows
 literally reads `dice-throne-x-men-marvel-co-op-missions`. **If the owner agrees,
 the fix is to type the BGG ID into the edit form** (`bggId` is an editable field),
-then press "Look up printings" in the cover picker and choose the retail cover â€”
+then press "Look up printings" in the cover picker and choose the retail cover —
 no forcing, no new code, and the collage survives either way because
 `updateItem` now preserves it.
 
-> **The accessory split â€” now built**, see
+> **The accessory split — now built**, see
 > [what am I missing](#what-am-i-missing--built-2026-08-06). It lives in
 > `game_component.official`, decided by comparing BoardGameGeek *publisher ids*.
 > Note that `edition.source` is about *where a printing's record came from* and
-> is a different axis entirely â€” it was deliberately not overloaded to mean
+> is a different axis entirely — it was deliberately not overloaded to mean
 > "third-party", and must not be.
 
 > **Local dev carries one deliberate broken candidate**: item 36 ("Veiled Fate")
@@ -2660,7 +2660,7 @@ no forcing, no new code, and the collage survives either way because
 `bgg_id`. The BGG backfill added **771 printings across 67 items in 7 requests**
 with no failures; the campaign backfill has captured **132 covers** across three
 runs, the later ones picking up covers written while the work was in flight.
-**186 items now have at least one recorded cover and 53 have more than one** â€”
+**186 items now have at least one recorded cover and 53 have more than one** —
 which is the number that matters, because those 53 are the games where the
 picker has an actual choice to offer. Re-run both after any bulk cover work:
 `/api/editions/status` says whether the BGG half has anything left to do.
@@ -2671,17 +2671,17 @@ already on the item correctly recognised as the 2025 English edition rather than
 duplicated as an unattached "Current cover". A full run: 66 items, **687
 editions, 7 calls, 7.1s**, and an immediate re-run added nothing. Swapping item
 36 from its campaign cover to the BGG one left the campaign printing in the list,
-still offerable â€” which is the whole point of recording it.
+still offerable — which is the whole point of recording it.
 
 ---
 
 ---
 
-## Orphan expansions â€” built 2026-08-05
+## Orphan expansions — built 2026-08-05
 
 An expansion can now be catalogued before the game it belongs to. Previously it
 could not: `createItem` demanded a parent and `createItemSchema` refused without
-one, so both add flows silently saved it as a **base game** â€” a root in the
+one, so both add flows silently saved it as a **base game** — a root in the
 tree, counted in the header stats, with no record it was ever an expansion.
 Scanning the base game later reconciled nothing.
 
@@ -2698,13 +2698,13 @@ Scanning the base game later reconciled nothing.
 (...)`, so an orphan with a null root would be invisible rather than
 unattached. It is its own root until adopted, exactly like a base game.
 
-**Adoption matches on normalised name, not BGG id** â€” an orphan read off a
+**Adoption matches on normalised name, not BGG id** — an orphan read off a
 spine usually has no id, which is the situation that produced it. The whole
 subtree moves, so an accessory filed under a waiting expansion travels with it.
 
 Verified end to end against local dev: orphan created with kind intact,
 accessory nested beneath it, both visible as an unattached root, then the base
-game created â€” adopted, re-parented, subtree moved, pending name cleared.
+game created — adopted, re-parented, subtree moved, pending name cleared.
 
 **Still open:** adoption only triggers on *creation*. Renaming an existing game
 to match a waiting orphan does not adopt it, and neither does an import. If
@@ -2714,7 +2714,7 @@ that matters, `adoptOrphans` is already the right shape to call from `updateItem
 
 ---
 
-## Barcode scanning â€” backend done and verified end to end
+## Barcode scanning — backend done and verified end to end
 
 The previous stop point is cleared: everything typechecks, and every rung of the
 ladder has been exercised against live services.
@@ -2729,24 +2729,24 @@ ladder has been exercised against live services.
 |---|---|---|---|
 | local `edition.barcode` | `packages/db/src/barcodes.ts` | free | instant, offline |
 | **GameUPC** | `packages/barcode/src/gameupc.ts` | free, 100 new UPCs/day | ~1s |
-| **UPCitemdb â†’ GameUPC search** | `packages/barcode/src/upcitemdb.ts` | free, 100/day **per IP** | ~2s |
-| Claude + web search | `packages/research/src/barcode.ts` | ~$0.009 + search fee | **74â€“137s** |
+| **UPCitemdb → GameUPC search** | `packages/barcode/src/upcitemdb.ts` | free, 100/day **per IP** | ~2s |
+| Claude + web search | `packages/research/src/barcode.ts` | ~$0.009 + search fee | **74–137s** |
 
-`packages/barcode/src/resolve.ts` runs rungs 2â€“3 and returns a `trace` of what
+`packages/barcode/src/resolve.ts` runs rungs 2–3 and returns a `trace` of what
 actually happened. Every rung answers in the one shared shape,
 `BarcodeCandidate` in `packages/core/src/barcode.ts`.
 
 **Measured hit rate on four real games** (Catan, Wingspan, Wingspan: European
-Expansion, Brass: Birmingham): GameUPC alone got 2/4. Adding the UPCitemdb â†’
+Expansion, Brass: Birmingham): GameUPC alone got 2/4. Adding the UPCitemdb →
 GameUPC-search rung took it to **4/4, entirely free**. The LLM rung is a rare
-fallback, not the main path â€” which matters because it takes over a minute.
+fallback, not the main path — which matters because it takes over a minute.
 
 ### GameUPC is worth understanding
 
-Crowdsourced UPC â†’ BoardGameGeek-ID map, free, and the only board-game-native
+Crowdsourced UPC → BoardGameGeek-ID map, free, and the only board-game-native
 barcode database that exists. It answers with a **BGG id**, which is the same
 identifier the import path already speaks. `POST {update_url}` contributes a
-confirmed match back, so the shared database grows â€” `/api/barcode/link` does
+confirmed match back, so the shared database grows — `/api/barcode/link` does
 this automatically, keyed by a **SHA-256 hash of the user's email**, never the
 address itself.
 
@@ -2754,7 +2754,7 @@ address itself.
 
 | Method | Path | Capability | Notes |
 |---|---|---|---|
-| GET | `/api/barcode/:code` | `read` | Local + all free rungs. `read`, not `editCatalog` â€” checking whether you already own something is browsing |
+| GET | `/api/barcode/:code` | `read` | Local + all free rungs. `read`, not `editCatalog` — checking whether you already own something is browsing |
 | POST | `/api/barcode/identify` | `runResearch` | The paid rung. Separate route so nobody waits 2 minutes by accident |
 | POST | `/api/barcode/link` | `editCatalog` | The only route that writes. Contributes back to GameUPC after |
 
@@ -2770,37 +2770,37 @@ curl -s localhost:8787/api/barcode/029877030713   # bad check digit -> 400
 ### Not started
 
 - The scanner UI (`BarcodeDetector` + ZXing wasm fallback for iOS Safari)
-- Shelf mode / camera vision (discussed, not begun â€” see "Next session")
+- Shelf mode / camera vision (discussed, not begun — see "Next session")
 - All of phase 3
 
 ### Also outstanding
 
-- âœ… **`ANTHROPIC_API_KEY` is set in production** â€” `npm run secret:list`
+- ✅ **`ANTHROPIC_API_KEY` is set in production** — `npm run secret:list`
   returns it and nothing else (re-checked 2026-08-06). An earlier draft of this
   document claimed no secrets were set at all; that was true only before the
   08-05 rotation. Current state:
 
   | Mode | Live? | Why |
   |---|---|---|
-  | Barcode scan | âœ… works | Local + GameUPC `test` stage + UPCitemdb are all free and keyless |
-  | One box (photo) | âœ… works | `ANTHROPIC_API_KEY` is set |
-  | Whole shelf | âœ… works | `ANTHROPIC_API_KEY` is set |
-  | Photo queue | âœ… deployed | Same key; **not yet walked on a phone** |
+  | Barcode scan | ✅ works | Local + GameUPC `test` stage + UPCitemdb are all free and keyless |
+  | One box (photo) | ✅ works | `ANTHROPIC_API_KEY` is set |
+  | Whole shelf | ✅ works | `ANTHROPIC_API_KEY` is set |
+  | Photo queue | ✅ deployed | Same key; **not yet walked on a phone** |
   | BGG hydration | bypassed | Needs `BGG_API_TOKEN`; by design, degrades rather than breaks |
-- âœ… **Migration `0003_barcode_unique.sql` is applied to local and production**
+- ✅ **Migration `0003_barcode_unique.sql` is applied to local and production**
   (2026-08-05). Verified in production by reading back `sqlite_master`:
   `CREATE UNIQUE INDEX idx_edition_barcode ON edition(barcode) WHERE barcode IS
   NOT NULL AND barcode != ''`. Production held 0 editions at the time, so there
   was nothing to de-duplicate first.
 - Root `package.json` gained `npm run secret` / `npm run secret:list`, which run
-  wrangler against `apps/worker/wrangler.toml` â€” running `wrangler secret put`
+  wrangler against `apps/worker/wrangler.toml` — running `wrangler secret put`
   from the repo root fails with "Required Worker name missing".
 
 ---
 
 ---
 
-## Working tree â€” clean
+## Working tree — clean
 
 Nothing is in flight. The most recent commits:
 
@@ -2811,7 +2811,7 @@ Nothing is in flight. The most recent commits:
 | `13c5e88` | Let a person say "yes, that is the game" |
 | `733367f` | Fold a line of eleven boxes into one entry, without moving a box (migration 0019) |
 | `c496fb1` | Stop a lookup dying when the phone locks (migration 0018) |
-| `2d50224` | Stop paying to be told a dice tray's publisher â€” the queue, 695 â†’ 78 |
+| `2d50224` | Stop paying to be told a dice tray's publisher — the queue, 695 → 78 |
 | `5a35e83` | Stop calling a gaming table an unfinished record |
 | `d105209` | Say what else exists for a game, and what we do not have |
 | `36cb936` | Show the four things the catalog knew and never said |
@@ -2821,17 +2821,17 @@ Nothing is in flight. The most recent commits:
 | `5bac8d6` | Pick which printing's cover represents our copy |
 | `3aaa730` | Handoff refresh |
 | `6eb0c8e` | Cover-link health check, cron and banner |
-| `ce03a8f` | The wishlist â€” item-level, not tree-level |
+| `ce03a8f` | The wishlist — item-level, not tree-level |
 | `227f7d0` | `item.source_url` |
-| `0e61948` | The add restructure, item relations and the photo queue â€” all of it |
+| `0e61948` | The add restructure, item relations and the photo queue — all of it |
 
 `0e61948` is worth understanding as a process note rather than a code one: that
 work was **deployed straight from the working tree before it was committed**,
 so for a while production was running code with no commit behind it and no
 rollback point. It is committed as one unit because that is what actually went
-out. Don't repeat the pattern â€” commit, then deploy.
+out. Don't repeat the pattern — commit, then deploy.
 
-**The pipeline is verified end to end â€” against local dev, not a phone.**
+**The pipeline is verified end to end — against local dev, not a phone.**
 Exercised over curl on 2026-08-05 with `npm run dev:worker` (the `DEV_EMAIL`
 bypass in `middleware/auth.ts` means no Access and no tokens are needed; a
 Cloudflare *service token* would not work anyway, because `auth.ts` requires an
@@ -2839,18 +2839,18 @@ Cloudflare *service token* would not work anyway, because `auth.ts` requires an
 
 | Checked | Result |
 |---|---|
-| Upload â†’ vision â†’ enrich â†’ review | Reached `review` in ~8s |
+| Upload → vision → enrich → review | Reached `review` in ~8s |
 | Vision accuracy | Read all 5 synthetic spines, all `high` confidence |
 | Free lookups | Resolved all 5 to correct BGG ids, and normalised the caps |
 | Photo released on success | No blob in the local R2 store afterwards |
 | Photo released on failure | Forced a vision failure; still no blob |
-| Negative lookups cached | A true negative's `created_at` does **not** refresh on a repeat run, so it is read from cache rather than re-resolved â€” the `43bbf39` fix works |
+| Negative lookups cached | A true negative's `created_at` does **not** refresh on a repeat run, so it is read from cache rather than re-resolved — the `43bbf39` fix works |
 
 Production is still untouched: `scan_job` holds 0 rows and `bgc-photos` holds 0
-objects. **The phone half remains unverified** â€” nothing here exercised iOS
+objects. **The phone half remains unverified** — nothing here exercised iOS
 Safari, which is where the camera-roll decode failure lives.
 
-### Doubtful lookup matches â€” fixed, and worth understanding
+### Doubtful lookup matches — fixed, and worth understanding
 
 The free databases match on a *single word*, so a title they do not know comes
 back as whatever shared one, complete with a real BGG id, year and cover art.
@@ -2858,7 +2858,7 @@ Five of six invented titles resolved to a confident wrong game, and the review
 list pre-selected every one.
 
 Weak matches are now shown but left unticked (`MIN_SPINE_SIMILARITY`), and
-ticking one adds **only the title** â€” id, publisher, year and thumbnail are
+ticking one adds **only the title** — id, publisher, year and thumbnail are
 dropped, since confirming a game is on your shelf is not confirming it is that
 other game. The single-box path rejects outright instead, because the model has
 already read the box and a loose match can only make that worse.
@@ -2872,12 +2872,12 @@ already read the box and a loose match can only make that worse.
 
 **The gotcha that cost the first attempt:** reusing 0.34 for spine matching
 catches nothing. A one-word fragment of a two-word title scores
-`2*1/(1+2) = 0.67` *every time* â€” "Quandary" for "Zorblax Quandary", "Rift" for
-"Nurdleton Rift" â€” while genuine reads score 1.00. The two populations sit at
+`2*1/(1+2) = 0.67` *every time* — "Quandary" for "Zorblax Quandary", "Rift" for
+"Nurdleton Rift" — while genuine reads score 1.00. The two populations sit at
 0.67 and 1.00 with nothing between, which is where 0.7 comes from. Do not lower
 it without re-measuring; the fix looks correct at 0.34 and does nothing.
 
-### âš ï¸ Open question: should the photo go to R2 at all?
+### ⚠ï¸ Open question: should the photo go to R2 at all?
 
 **Nothing ever reads it back.** There is no `PHOTOS.get` in the repo. Vision
 gets the base64 straight from the request in memory, enrichment works from
@@ -2885,7 +2885,7 @@ gets the base64 straight from the request in memory, enrichment works from
 write-only storage whose entire purpose was to be deleted later.
 
 It is now released the moment vision finishes rather than at review, so it
-lives for seconds instead of indefinitely â€” but the honest options are:
+lives for seconds instead of indefinitely — but the honest options are:
 
 1. **Drop R2 from this path entirely.** `photo_key` becomes vestigial, the
    binding goes, and the transience requirement is satisfied by construction
@@ -2896,8 +2896,8 @@ lives for seconds instead of indefinitely â€” but the honest options are:
    re-runnable without walking back to the shelf. Both are real features;
    neither exists.
 
-Do not split the difference by leaving it as-is â€” write-only storage that must
-be cleaned up by hand is the shape that caused the leak in the first place. Also worth a look: four tabs across a narrow screen is tight, so at â‰¤560px
+Do not split the difference by leaving it as-is — write-only storage that must
+be cleaned up by hand is the shape that caused the leak in the first place. Also worth a look: four tabs across a narrow screen is tight, so at ≤560px
 the blurbs are hidden and the labels drop to 0.78rem ("Whole shelf" sets the
 size).
 
@@ -2905,23 +2905,23 @@ size).
 
 ---
 
-## â­ï¸ NEXT â€” the vintage pop-art restyle (superseded, see above)
+## â­ï¸ NEXT — the vintage pop-art restyle (superseded, see above)
 
-ðŸ“„ **[`claude-vintage-pop-art-board-game-prompt.md`](claude-vintage-pop-art-board-game-prompt.md)**,
-supplied by the owner 2026-08-09: *"make a new thread and consider thisâ€¦ We will
+📄 **[`claude-vintage-pop-art-board-game-prompt.md`](claude-vintage-pop-art-board-game-prompt.md)**,
+supplied by the owner 2026-08-09: *"make a new thread and consider this… We will
 be doing this next but lets finish the inflight work first."*
 
-**Nothing has been started.** It is a whole-site visual direction â€” aged-paper
-background, halftone dots, comic panels, Bangers/Luckiest Guy headlines â€” so it
+**Nothing has been started.** It is a whole-site visual direction — aged-paper
+background, halftone dots, comic panels, Bangers/Luckiest Guy headlines — so it
 lands almost entirely in `apps/web/src/styles.css`, which is ~1,250 lines of
 heavily-reasoned CSS. Read the comments before replacing anything: several rules
 that look decorative are load-bearing, and the file now records three separate
 occasions where a flex row silently collapsed the one element that mattered.
 
-âš ï¸ **The two fonts are a problem this repo has not had before.** Everything is
+⚠ï¸ **The two fonts are a problem this repo has not had before.** Everything is
 served from the Worker's own assets and there is no external font loading
 anywhere today. A restyle that adds Google Fonts introduces a third-party
-request on every page load â€” decide that deliberately, and check it against the
+request on every page load — decide that deliberately, and check it against the
 `connect-src`/`font-src` reality of the deployed site rather than assuming.
 
 ---
