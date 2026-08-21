@@ -32,3 +32,11 @@ apps/web/public/assets/
 .env
 .env.*
 .dev.vars.*
+
+# Agent worktrees. ⚠️ This rule was LOCAL-ONLY in .git/info/exclude until
+# 2026-08-21 — which is not shared, so a fresh clone on another machine had no
+# protection at all. It matters because these worktrees hold
+# apps/worker/.wrangler/tmp/*.js.map, and a wrangler dev source map INLINES the
+# .dev.vars values: a live ANTHROPIC_API_KEY sitting in a build artefact nobody
+# would think to look in, in a PUBLIC repo.
+.claude/worktrees/
