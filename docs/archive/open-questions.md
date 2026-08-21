@@ -1,5 +1,11 @@
 # Open questions
 
+> ⚠️ **ARCHIVED 2026-08-21** during the docs-tree restructure. Kept for the
+> reasoning and the evidence, **not as current fact** — do not act on anything
+> here without re-measuring. Current state: this repo's `docs/TODO.md`,
+> `docs/KNOWN_ISSUES.md` and the `access/` + `info/` indexes. Rules:
+> `catalog-platform/docs/DOCS_STANDARD.md` §6.
+
 > What still needs a person. Everything solved has been cut — the reasoning that
 > is still load-bearing lives in `HANDOFF.md` and the code. Last rewritten
 > 2026-08-06 at head `7bcfa7b`.

@@ -1,5 +1,11 @@
 # Claude Prompt: Vintage Pop-Art Board-Game Website
 
+> ⚠️ **ARCHIVED 2026-08-21** during the docs-tree restructure. Kept for the
+> reasoning and the evidence, **not as current fact** — do not act on anything
+> here without re-measuring. Current state: this repo's `docs/TODO.md`,
+> `docs/KNOWN_ISSUES.md` and the `access/` + `info/` indexes. Rules:
+> `catalog-platform/docs/DOCS_STANDARD.md` §6.
+
 Design a colorful board-game website using a muted vintage pop-art comic theme.
 
 ## Visual direction

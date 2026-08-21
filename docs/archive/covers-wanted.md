@@ -1,5 +1,11 @@
 # Covers Wanted — decisions for the owner
 
+> ⚠️ **ARCHIVED 2026-08-21** during the docs-tree restructure. Kept for the
+> reasoning and the evidence, **not as current fact** — do not act on anything
+> here without re-measuring. Current state: this repo's `docs/TODO.md`,
+> `docs/KNOWN_ISSUES.md` and the `access/` + `info/` indexes. Rules:
+> `catalog-platform/docs/DOCS_STANDARD.md` §6.
+
 > **Audience:** the owner first, Claude sessions second. **Status:** TRACKED.
 > Last verified: **2026-08-06**.
 

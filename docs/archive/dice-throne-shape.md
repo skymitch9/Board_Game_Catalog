@@ -1,5 +1,11 @@
 # Dice Throne — how should it be organised?
 
+> ⚠️ **ARCHIVED 2026-08-21** during the docs-tree restructure. Kept for the
+> reasoning and the evidence, **not as current fact** — do not act on anything
+> here without re-measuring. Current state: this repo's `docs/TODO.md`,
+> `docs/KNOWN_ISSUES.md` and the `access/` + `info/` indexes. Rules:
+> `catalog-platform/docs/DOCS_STANDARD.md` §6.
+
 > **Status: BUILT (2026-08-06) — options 2 and 3, as recommended below.**
 > Kept rather than deleted, because the argument against option 1 is the reason
 > the code looks the way it does and would otherwise be re-litigated. Current
