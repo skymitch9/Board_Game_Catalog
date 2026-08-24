@@ -651,6 +651,34 @@ textarea { resize: vertical; }
 @media (max-width: 640px) {
   .row-2, .row-3, .row-4 { grid-template-columns: 1fr 1fr; }
 }
+/*
+  Single column on a phone. Two columns of URL and number fields on a 360–390px
+  screen leave each input too narrow to read what you typed — the edit form's
+  Campaign URL / Game system / Series row was the worst of it. Below 440px every
+  form row is one field per line. The owner asked for the edit form to be
+  usable one-handed, and a stacked column is what delivers that.
+*/
+@media (max-width: 440px) {
+  .row-2, .row-3, .row-4 { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  /*
+    Touch targets. The desktop button is ~32px tall; a thumb wants ~44px, which
+    is the owner's explicit bar for this page. Inline text-buttons ("Use X
+    anyway", the picker's inline actions) keep their small size via .btn-inline,
+    because they sit mid-sentence and a 44px box there would break the line.
+  */
+  .btn:not(.btn-inline) { min-height: 44px; }
+  /*
+    16px stops iOS Safari zooming the whole page in the instant a field is
+    focused — the single most common "the form is unusable on my phone"
+    complaint, and it left the edit form scrolled sideways with no way back.
+  */
+  input, select, textarea { font-size: 16px; }
+  /* Rating pips to a full thumb. They already flex-wrap, so a second row on a
+     narrow screen is expected rather than a break. */
+  .pip { width: 2.75rem; height: 2.75rem; font-size: 0.95rem; }
+}
 
 .form-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
 .checks { display: flex; gap: 1.25rem; margin-bottom: 0.75rem; font-size: 0.9rem; }
