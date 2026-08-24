@@ -2,7 +2,7 @@
 
 > **Audience:** Claude/Kiro sessions first, the owner second.
 > **Status:** ⚠️ **MIXED** — check `git check-ignore` before assuming a file is tracked.
-> Last verified: **2026-08-21** (the tree below was measured that day).
+> Last verified: **2026-08-23** — the HANDOFF rows were re-checked that day; the rest of the tree was not (the tree below was measured that day).
 >
 > 📐 **The rules for this tree — filing, formatting, when to move things — live
 > in `catalog-platform/docs/DOCS_STANDARD.md`, and ONLY there.** All four repos
@@ -42,16 +42,21 @@ graph TD
 |---|---|
 | **What is active right now** | [`TODO.md`](TODO.md) |
 | **Is this a bug or deliberate?** | [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
-| **⚠️ Current state and handoffs** | [`HANDOFF.md`](HANDOFF.md) — **but see the note below** |
+| **Current state, what is active** | [`TODO.md`](TODO.md) — the split landed 2026-08-21 |
 | **How do I set it up / sign in / reach the APIs** | [`access/SETUP.md`](access/SETUP.md) · [`access/login.md`](access/login.md) · [`access/external-apis.md`](access/external-apis.md) |
 | **🔴 Rebuild from nothing** | [`access/RECOVERY.md`](access/RECOVERY.md) |
 | **The design, scan queue, thresholds** | [`info/README.md`](info/README.md) · [`info/DESIGN.md`](info/DESIGN.md) |
 | **Was this already solved** | [`DONE.md`](DONE.md) |
 
-⚠️ **`HANDOFF.md` is a 223 KB competing living doc and `TODO.md` is 27 lines** —
-the opposite of the shape the standard describes. Its finished sections belong
-in `DONE.md` and its live ones in `TODO.md`. Filed as a Kiro item; until that
-sweep runs, HANDOFF.md is where the real state is.
+✅ **That sweep ran on 2026-08-21 and this warning is retired.** It used to say
+`HANDOFF.md` was a 223 KB competing living doc where the real state lived.
+It is now a **15-line signpost**: finished sections went to `DONE.md`, live
+ones to `TODO.md`, traps to `info/gotchas.md`, and the original is kept whole
+at [`archive/HANDOFF.superseded-2026-08-21.md`](archive/HANDOFF.superseded-2026-08-21.md).
+
+⚠️ **Verified 2026-08-23.** This repo is the estate’s worked example of the
+retirement done properly — `library_catalog` still has the un-retired version
+of the same problem, and its TODO carries the task. Copy this shape, not that one.
 
 ## Where the rest of the estate is
 

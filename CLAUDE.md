@@ -1,8 +1,12 @@
 # Board Game Catalog — working rules
 
-Read `docs/HANDOFF.md` first; it holds current state and the gotchas that cost
-real time. This file is only the things that will bite you in the first ten
-minutes.
+Read `docs/README.md` first — it is the map. `docs/TODO.md` holds current
+state and `docs/info/gotchas.md` the traps that cost real time. This file is
+only the things that will bite you in the first ten minutes.
+
+⚠️ `docs/HANDOFF.md` is a **signpost, not state** — it was split per the estate
+docs standard on 2026-08-21 and is 15 lines of redirects. Following it for
+"current state" wastes a hop; this line used to send you there.
 
 ## Committing on Windows
 
