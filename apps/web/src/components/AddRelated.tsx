@@ -295,18 +295,26 @@ async function loadOffers(item: ItemDetail): Promise<Offers> {
 export function AddRelatedPanel({
   item,
   mode,
+  defaultKind = 'expansion',
   onSaved,
   onCancel,
 }: {
   item: ItemDetail;
   /** Which half of the dropdown starts selected. Nothing else differs. */
   mode: 'nest' | 'link';
+  /**
+   * Which nest kind the dropdown opens on. The expansions section wants it on
+   * `expansion`; the accessories section — now its own, lighter surface — opens
+   * the same panel on `accessory`, so the common case is one tap rather than a
+   * dropdown hunt. Ignored when `mode` is `link`.
+   */
+  defaultKind?: ItemKind;
   /** The report of what changed, which has to outlive the reload that proves it. */
   onSaved: (note: string) => void;
   onCancel: () => void;
 }) {
   const [offers] = useAsync(() => loadOffers(item), [item.id]);
-  const [action, setAction] = useState<Action>(mode === 'nest' ? 'nest:expansion' : 'works_with');
+  const [action, setAction] = useState<Action>(mode === 'nest' ? `nest:${defaultKind}` : 'works_with');
   /** The picker's own chip, which only a catalog row can fill. */
   const [picked, setPicked] = useState<PickedItem | null>(null);
   const [chosen, setChosen] = useState<Chosen | null>(null);
