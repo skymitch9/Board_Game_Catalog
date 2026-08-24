@@ -4,9 +4,12 @@ import {
   detailGaps,
   fillableFieldsFor,
   isTrustedMatch,
+  type Copy,
+  type CopyStatus,
   type DetailsRun,
   type InheritedDetail,
   type ItemDetail,
+  type ItemNode,
   type MeResponse,
   type RelatedItemRef,
   type UpdateItemInput,
@@ -49,13 +52,15 @@ export function ItemPage({
    */
   const [changeNote, setChangeNote] = useState<string | null>(null);
   /**
-   * Which half of the add panel is open, and where it is rendered.
+   * Which add panel is open, and where it is rendered.
    *
-   * One piece of state for two buttons in two sections, so opening one closes
-   * the other. They open the *same* component — see `AddRelatedPanel` — and
-   * differ only in which row of its dropdown starts selected.
+   * One piece of state for three buttons in three sections, so opening one
+   * closes the others. They open the *same* component — see `AddRelatedPanel` —
+   * and differ only in which row of its dropdown starts selected: `expansion`
+   * and `accessory` are both nest panels opened on their own kind, `link` is the
+   * sideways-relation panel on the related-games section.
    */
-  const [adding, setAdding] = useState<'nest' | 'link' | null>(null);
+  const [adding, setAdding] = useState<'expansion' | 'accessory' | 'link' | null>(null);
 
   const canEdit = me.capabilities.includes('editCatalog');
   const canRate = me.capabilities.includes('rate');
@@ -185,105 +190,31 @@ export function ItemPage({
 
       {item.description && <p className="description card">{item.description}</p>}
 
-      <section className="card">
-        <div className="section-head">
-          <h2>Our copies</h2>
-          {canEdit && !addingCopy && (
-            <button type="button" className="btn btn-quiet" onClick={() => setAddingCopy(true)}>
-              + Add copy
-            </button>
-          )}
-        </div>
+      <Shelf
+        item={item}
+        canEdit={canEdit}
+        addingCopy={addingCopy}
+        onAddCopy={() => setAddingCopy(true)}
+        onDoneAdding={() => {
+          setAddingCopy(false);
+          reload();
+        }}
+        onCancelAdding={() => setAddingCopy(false)}
+        reload={reload}
+      />
 
-        {addingCopy && (
-          <CopyForm
-            itemId={item.id}
-            onDone={() => {
-              setAddingCopy(false);
-              reload();
-            }}
-            onCancel={() => setAddingCopy(false)}
-          />
-        )}
-
-        {item.copies.length === 0 && !addingCopy && (
-          <p className="muted">
-            Nothing recorded for this one yet
-            {canEdit ? ' — add a copy to say we hold it.' : '.'}
-          </p>
-        )}
-
-        {item.copies.length > 0 && (
-          <ul className="copy-list">
-            {item.copies.map((copy) => (
-              <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onChanged={reload} />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="card">
-        <div className="section-head">
-          <h2>
-            Expansions &amp; accessories
-            {item.children.length > 0 && <span className="count"> {item.children.length}</span>}
-          </h2>
-          {/* A button, not a link out to a blank form. Adding an expansion used
-              to mean leaving the page for `/items/new`, which is where the
-              suggestion list that could not be acted on lived. */}
-          {canEdit && adding !== 'nest' && (
-            <button type="button" className="btn btn-quiet" onClick={() => setAdding('nest')}>
-              + Add
-            </button>
-          )}
-        </div>
-
-        {adding === 'nest' && (
-          <AddRelatedPanel
-            item={item}
-            mode="nest"
-            onSaved={(note) => {
-              setChangeNote(note);
-              setAdding(null);
-              reload();
-            }}
-            onCancel={() => setAdding(null)}
-          />
-        )}
-
-        {item.children.length === 0 ? (
-          <p className="muted">
-            Nothing filed under this{canEdit ? ' — expansions, promos, sleeves and inserts go here.' : '.'}
-          </p>
-        ) : (
-          <ul className="child-list">
-            {item.children.map((child) => {
-              const primary = child.copies[0];
-              return (
-                <li key={child.id}>
-                  <Link to={`/items/${child.id}`} className="child-link">
-                    <span className="child-kind">{KIND_LABEL[child.kind]}</span>
-                    <span className="child-name">{child.name}</span>
-                    {/* A container of D&D Beyond books has 53 children and not
-                        one of them can be handed across the table. Saying so
-                        here is the difference between a shelf and a library
-                        card. */}
-                    {child.copies.length > 0 &&
-                      child.copies.every((c) => c.format === 'digital') && <DigitalTag />}
-                    {primary ? (
-                      <Badge tone={STATUS_TONE[primary.status]}>
-                        {child.copies.length > 1 ? `${child.copies.length} copies` : primary.status}
-                      </Badge>
-                    ) : (
-                      <span className="muted">not catalogued</span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      <ChildSections
+        item={item}
+        canEdit={canEdit}
+        adding={adding}
+        onAdd={setAdding}
+        onSaved={(note) => {
+          setChangeNote(note);
+          setAdding(null);
+          reload();
+        }}
+        onCancel={() => setAdding(null)}
+      />
 
       {/* Only on the game itself. The report is always about the tree's root,
           so rendering it on an expansion's page would repeat the base game's
@@ -314,6 +245,276 @@ export function ItemPage({
           reload();
         }}
       />
+    </>
+  );
+}
+
+/**
+ * Shelf order — held first, gone last.
+ *
+ * The shelf leads with what you actually have, so `owned` and `lent` (still
+ * yours, just not in the house) sort to the top, then the box in the post, then
+ * the wishlist, then what has left the collection. A status the map does not
+ * know sorts to the end rather than throwing.
+ */
+const SHELF_ORDER: Record<CopyStatus, number> = {
+  owned: 0,
+  lent: 1,
+  preordered: 2,
+  wanted: 3,
+  sold: 4,
+};
+
+function byShelfOrder(a: Copy, b: Copy): number {
+  const ra = SHELF_ORDER[a.status] ?? 9;
+  const rb = SHELF_ORDER[b.status] ?? 9;
+  if (ra !== rb) return ra - rb;
+  // Within a status, newest-added first — the most recent shelf change on top.
+  return b.addedAt.localeCompare(a.addedAt);
+}
+
+/**
+ * On your shelf — what you hold, led by what you hold.
+ *
+ * The library's redesign leads a work with its editions and nests copies under
+ * them. **Board games differ, and deliberately.** `copy.edition_id` is null
+ * across the whole catalog and is settled to stay that way (the owner, 2026-08:
+ * *"that'll probably be null forever … I don't super care to track it down"*),
+ * so the catalog knows which printings *exist* — the cover picker on the edit
+ * form offers them — but never records which printing a given box is. There is
+ * therefore no edition to nest a copy under, and the copies themselves are the
+ * shelf units.
+ *
+ * What carries across is the shape, not the schema: lead with what you have, and
+ * never render an empty shelf. Copies sort held-first; a game with no copy at
+ * all shows a single "not on your shelf" slot rather than a blank — and mints
+ * nothing to do it, because a wish is not a fake copy (the data guard the whole
+ * catalog is built on).
+ */
+function Shelf({
+  item,
+  canEdit,
+  addingCopy,
+  onAddCopy,
+  onDoneAdding,
+  onCancelAdding,
+  reload,
+}: {
+  item: ItemDetail;
+  canEdit: boolean;
+  addingCopy: boolean;
+  onAddCopy: () => void;
+  onDoneAdding: () => void;
+  onCancelAdding: () => void;
+  reload: () => void;
+}) {
+  const shelved = [...item.copies].sort(byShelfOrder);
+
+  return (
+    <section className="card">
+      <div className="section-head">
+        <h2>On your shelf</h2>
+        {canEdit && !addingCopy && (
+          <button type="button" className="btn btn-quiet" onClick={onAddCopy}>
+            + Add copy
+          </button>
+        )}
+      </div>
+
+      {addingCopy && (
+        <CopyForm
+          itemId={item.id}
+          onDone={onDoneAdding}
+          onCancel={onCancelAdding}
+        />
+      )}
+
+      {shelved.length > 0 ? (
+        <ul className="copy-list">
+          {shelved.map((copy) => (
+            <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onChanged={reload} />
+          ))}
+        </ul>
+      ) : (
+        !addingCopy && (
+          /* Never a blank shelf. A single dashed slot standing in for "nothing
+             here yet" — display only, so no fake copy is minted to fill it. */
+          <ul className="copy-list">
+            <li className="copy copy--empty">
+              <Badge tone="neutral">not on your shelf</Badge>
+              <span className="copy-facts">
+                {canEdit
+                  ? 'No copy recorded yet — add one to say you hold it, or mark it wanted.'
+                  : 'No copy recorded yet.'}
+              </span>
+            </li>
+          </ul>
+        )
+      )}
+    </section>
+  );
+}
+
+/**
+ * What a nested row holds, said the same way wherever a child is listed.
+ *
+ * Pulled out so an expansion card and an accessory row cannot drift on how they
+ * report ownership — the digital tag, the copy count, the status badge. A child
+ * with no copy at all reads "not catalogued" rather than showing nothing, which
+ * on a shelf-first page would be indistinguishable from a bug.
+ */
+function ChildMeta({ child }: { child: ItemNode }) {
+  const primary = child.copies[0];
+  // A container of D&D Beyond books has 53 children and not one can be handed
+  // across the table. Saying so here is the difference between a shelf and a
+  // library card.
+  const allDigital = child.copies.length > 0 && child.copies.every((c) => c.format === 'digital');
+  return (
+    <>
+      {allDigital && <DigitalTag />}
+      {primary ? (
+        <Badge tone={STATUS_TONE[primary.status]}>
+          {child.copies.length > 1 ? `${child.copies.length} copies` : primary.status}
+        </Badge>
+      ) : (
+        <span className="muted">not catalogued</span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Expansions and accessories, now two sections rather than one.
+ *
+ * Expansions are the thing the owner reaches for — "what else can I add to this
+ * game" — so they lead as a grid of promoted cards, each its own full page
+ * behind a tap on its cover. Accessories, promos and upgrades are the long tail
+ * (the catalog holds 221 accessories against 186 expansions) and sit below as a
+ * lighter list, the same `.child-list` the page used before the split.
+ *
+ * Both open the *same* `AddRelatedPanel`; the only difference is which kind its
+ * dropdown starts on, so adding an accessory is one tap from the accessories
+ * heading rather than a dropdown hunt under "Expansions".
+ */
+function ChildSections({
+  item,
+  canEdit,
+  adding,
+  onAdd,
+  onSaved,
+  onCancel,
+}: {
+  item: ItemDetail;
+  canEdit: boolean;
+  adding: 'expansion' | 'accessory' | 'link' | null;
+  onAdd: (which: 'expansion' | 'accessory') => void;
+  onSaved: (note: string) => void;
+  onCancel: () => void;
+}) {
+  const expansions = item.children.filter((c) => c.kind === 'expansion');
+  // Everything nested that is not an expansion — accessory, promo, upgrade.
+  const extras = item.children.filter((c) => c.kind !== 'expansion');
+
+  return (
+    <>
+      {(expansions.length > 0 || canEdit) && (
+        <section className="card">
+          <div className="section-head">
+            <h2>
+              Expansions
+              {expansions.length > 0 && <span className="count"> {expansions.length}</span>}
+            </h2>
+            {/* A button, not a link out to a blank form. Adding an expansion used
+                to mean leaving the page for `/items/new`, which is where the
+                suggestion list that could not be acted on lived. */}
+            {canEdit && adding !== 'expansion' && (
+              <button type="button" className="btn btn-quiet" onClick={() => onAdd('expansion')}>
+                + Add
+              </button>
+            )}
+          </div>
+
+          {adding === 'expansion' && (
+            <AddRelatedPanel
+              item={item}
+              mode="nest"
+              defaultKind="expansion"
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+
+          {expansions.length === 0 ? (
+            <p className="muted">
+              No expansions filed under this{canEdit ? ' — add one to fold it into this game.' : '.'}
+            </p>
+          ) : (
+            <ul className="expansion-grid">
+              {expansions.map((child) => (
+                <li key={child.id}>
+                  <Link to={`/items/${child.id}`} className="expansion-card">
+                    <Cover item={child} size="md" />
+                    <span className="expansion-card__body">
+                      <span className="expansion-card__name">{child.name}</span>
+                      {child.yearPublished && (
+                        <span className="expansion-card__year">{child.yearPublished}</span>
+                      )}
+                      <span className="expansion-card__meta">
+                        <ChildMeta child={child} />
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {(extras.length > 0 || canEdit) && (
+        <section className="card">
+          <div className="section-head">
+            <h2>
+              Accessories &amp; extras
+              {extras.length > 0 && <span className="count"> {extras.length}</span>}
+            </h2>
+            {canEdit && adding !== 'accessory' && (
+              <button type="button" className="btn btn-quiet" onClick={() => onAdd('accessory')}>
+                + Add
+              </button>
+            )}
+          </div>
+
+          {adding === 'accessory' && (
+            <AddRelatedPanel
+              item={item}
+              mode="nest"
+              defaultKind="accessory"
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+
+          {extras.length === 0 ? (
+            <p className="muted">
+              Nothing else filed under this
+              {canEdit ? ' — accessories, promos, sleeves, inserts and upgrades go here.' : '.'}
+            </p>
+          ) : (
+            <ul className="child-list">
+              {extras.map((child) => (
+                <li key={child.id}>
+                  <Link to={`/items/${child.id}`} className="child-link">
+                    <span className="child-kind">{KIND_LABEL[child.kind]}</span>
+                    <span className="child-name">{child.name}</span>
+                    <ChildMeta child={child} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </>
   );
 }

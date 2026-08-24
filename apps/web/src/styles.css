@@ -651,6 +651,34 @@ textarea { resize: vertical; }
 @media (max-width: 640px) {
   .row-2, .row-3, .row-4 { grid-template-columns: 1fr 1fr; }
 }
+/*
+  Single column on a phone. Two columns of URL and number fields on a 360–390px
+  screen leave each input too narrow to read what you typed — the edit form's
+  Campaign URL / Game system / Series row was the worst of it. Below 440px every
+  form row is one field per line. The owner asked for the edit form to be
+  usable one-handed, and a stacked column is what delivers that.
+*/
+@media (max-width: 440px) {
+  .row-2, .row-3, .row-4 { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  /*
+    Touch targets. The desktop button is ~32px tall; a thumb wants ~44px, which
+    is the owner's explicit bar for this page. Inline text-buttons ("Use X
+    anyway", the picker's inline actions) keep their small size via .btn-inline,
+    because they sit mid-sentence and a 44px box there would break the line.
+  */
+  .btn:not(.btn-inline) { min-height: 44px; }
+  /*
+    16px stops iOS Safari zooming the whole page in the instant a field is
+    focused — the single most common "the form is unusable on my phone"
+    complaint, and it left the edit form scrolled sideways with no way back.
+  */
+  input, select, textarea { font-size: 16px; }
+  /* Rating pips to a full thumb. They already flex-wrap, so a second row on a
+     narrow screen is expected rather than a break. */
+  .pip { width: 2.75rem; height: 2.75rem; font-size: 0.95rem; }
+}
 
 .form-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
 .checks { display: flex; gap: 1.25rem; margin-bottom: 0.75rem; font-size: 0.9rem; }
@@ -717,6 +745,8 @@ textarea { resize: vertical; }
   box-shadow: none;
 }
 .thumb-lg { width: 72px; height: 72px; }
+/* The promoted expansion cards — bigger than a list row, smaller than the hero. */
+.thumb-md { width: 60px; height: 60px; }
 
 /* The lid on a group's contents. A real button, full width, thumb-sized: on a
    phone this is the control you hit most, and the Pangea table has nineteen
@@ -863,6 +893,12 @@ textarea { resize: vertical; }
 .copy-notes { flex-basis: 100%; font-size: 0.83rem; color: var(--muted); font-style: italic; }
 .copy-actions { display: flex; gap: 0.35rem; margin-left: auto; }
 .copy-form { border: 1px dashed var(--line); border-radius: 8px; padding: 0.85rem; margin: 0.5rem 0; }
+/* The "nothing on the shelf yet" slot — a real row so the shelf is never blank,
+   dashed and muted so it reads as an empty slot rather than a held copy. */
+.copy--empty {
+  border: 1.5px dashed var(--line); border-bottom: 1.5px dashed var(--line);
+  border-radius: 8px; padding: 0.6rem 0.75rem; color: var(--muted);
+}
 
 /* --- a preorder turning up ----------------------------------------------- */
 
@@ -1012,6 +1048,40 @@ textarea { resize: vertical; }
   padding: 0.55rem 0; color: var(--text); font-size: 0.9rem;
 }
 .child-link:hover { text-decoration: none; color: var(--accent); }
+
+/* --- expansions: the promoted cards ------------------------------------- */
+/*
+  Expansions lead the "what else is part of this game" question, so they are
+  cards rather than list rows — a cover you can aim a thumb at, the name, and
+  the ownership badge. `auto-fill` with a min track means one column on a phone
+  and as many as fit on a desktop, with `minmax(0, 1fr)` so a long expansion
+  name shrinks inside its card instead of pushing the grid wider than the page
+  (the horizontal-scroll trap the collection list hit once already).
+*/
+.expansion-grid {
+  list-style: none; margin: 0.5rem 0 0; padding: 0;
+  display: grid; gap: 0.6rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+}
+.expansion-card {
+  display: flex; align-items: center; gap: 0.7rem;
+  height: 100%; padding: 0.6rem 0.7rem;
+  border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--text);
+}
+.expansion-card:hover {
+  text-decoration: none; border-color: var(--accent); color: var(--text);
+}
+.expansion-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.expansion-card__body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+.expansion-card__name {
+  font-weight: 600; line-height: 1.25;
+  /* Two lines then ellipsis, so a long title neither pushes the card taller
+     without limit nor gets cut to one unreadable word. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.expansion-card__year { font-size: 0.78rem; color: var(--muted); }
+.expansion-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.1rem; }
 
 /* --- ratings ------------------------------------------------------------ */
 

@@ -91,11 +91,15 @@ export function Cover({
   size,
 }: {
   item: { name?: string; thumbnailUrl: string | null; inheritedCover?: { value: string } | null };
-  /** `lg` for the picture you opened the page to see. It is never lazy. */
-  size?: 'lg';
+  /**
+   * `lg` (72px) for the picture you opened the page to see — never lazy.
+   * `md` (60px) for the promoted expansion cards. Default (44px) is the list row.
+   */
+  size?: 'md' | 'lg';
 }) {
   const url = item.thumbnailUrl || item.inheritedCover?.value || null;
-  const className = size === 'lg' ? 'thumb thumb-lg' : 'thumb';
+  const className =
+    size === 'lg' ? 'thumb thumb-lg' : size === 'md' ? 'thumb thumb-md' : 'thumb';
   if (!url) return <span className={`${className} thumb-blank`} aria-hidden="true" />;
   return <img className={className} src={url} alt="" loading={size === 'lg' ? undefined : 'lazy'} />;
 }
