@@ -17,7 +17,7 @@
     "dev:web": "npm run dev --workspace @bgc/web",
     "prebuild": "node scripts/sync-estate-search.mjs && node scripts/sync-estate-theme.mjs",
     "build": "npm run build --workspace @bgc/web",
-    "predeploy": "node scripts/sync-estate-auth.mjs && node scripts/sync-estate-search.mjs && node scripts/sync-estate-theme.mjs && node scripts/check-clean.mjs",
+    "predeploy": "node scripts/sync-estate-auth.mjs && node scripts/sync-estate-search.mjs && node scripts/sync-estate-theme.mjs && npm run typecheck && npm test && node scripts/check-clean.mjs",
     "deploy": "npm run build && npm run deploy --workspace @bgc/worker",
     "secret": "wrangler secret put --config apps/worker/wrangler.toml",
     "secret:list": "wrangler secret list --config apps/worker/wrangler.toml",
