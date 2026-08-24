@@ -224,3 +224,53 @@ export type RelationType = (typeof RELATION_TYPES)[number];
  * existing rows is not this change's job.
  */
 export const DIRECTIONAL_RELATIONS: readonly RelationType[] = ['requires'];
+
+// ---------------------------------------------------------------------------
+// Ratings — the 0.5–5 half-star scale, shared with the audiobook library
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠️ This scale is DELIBERATELY the audiobook catalog's, not an independent
+ * choice. The estate's two book sites store reviews in one shared collection on
+ * a 0.5–5 half-star scale (audiobook `site/reviews.js` `renderStars` / the
+ * `rating < 0.5 || rating > 5 || (rating * 2) % 1 !== 0` write guard; the
+ * library's `packages/core` `RATING_MIN/MAX/STEP`). The board game catalog was
+ * a lone 1–10 integer scale until 2026-08-24, when the owner asked for the two
+ * catalogs to read the same. A "9 out of 10" and a "4.5 out of 5" mean the same
+ * feeling but never the same number, so the fix is one scale everywhere, not a
+ * translation layer — hence a migration that rescales the stored ratings once
+ * (`migrations/0028_rating_half_star.sql`) rather than a display-time convert
+ * that would leave two numbers to disagree.
+ *
+ * ⚠️ Mirrored by a CHECK constraint on `user_item.rating` — migration 0028 is
+ * the current definition. Widening this without a migration means a value that
+ * passes zod and then fails at the write with a bare SQLITE_CONSTRAINT.
+ */
+export const RATING_MIN = 0.5;
+export const RATING_MAX = 5;
+export const RATING_STEP = 0.5;
+
+/** Every selectable rating, low to high: 0.5, 1, 1.5, … 5. */
+export const RATING_STEPS: readonly number[] = Array.from(
+  { length: (RATING_MAX - RATING_MIN) / RATING_STEP + 1 },
+  (_, i) => RATING_MIN + i * RATING_STEP,
+);
+
+/** True when `n` is a legal stored rating: within bounds and on a half-step. */
+export function isHalfStarRating(n: number): boolean {
+  return Number.isFinite(n) && n >= RATING_MIN && n <= RATING_MAX && (n * 2) % 1 === 0;
+}
+
+/**
+ * Convert a legacy 1–10 integer board-game rating to the 0.5–5 half-star scale.
+ *
+ * The map is exact and lossless: `n / 2` sends 1→0.5, 2→1, … 10→5, and every
+ * integer in 1–10 lands on a legal half-step, so nothing rounds and no two old
+ * values collapse onto one new value. This is the SAME arithmetic the migration
+ * runs in SQL (`rating / 2.0`); it lives here too so the mapping is unit-tested
+ * (`apps/worker/src/lib/rating-scale.test.ts`) rather than trusted. `null`
+ * (rated-with-notes-but-no-score) is carried through untouched.
+ */
+export function legacyRatingToHalfStar(n: number | null): number | null {
+  return n === null ? null : n / 2;
+}

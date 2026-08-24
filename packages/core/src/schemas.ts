@@ -4,7 +4,15 @@
  */
 
 import { z } from 'zod';
-import { COPY_FORMATS, COPY_STATUSES, ITEM_KINDS, RELATION_TYPES } from './constants.js';
+import {
+  COPY_FORMATS,
+  COPY_STATUSES,
+  ITEM_KINDS,
+  RATING_MAX,
+  RATING_MIN,
+  RATING_STEP,
+  RELATION_TYPES,
+} from './constants.js';
 import type { InheritedDetail, InheritedField } from './details.js';
 
 export const itemKindSchema = z.enum(ITEM_KINDS);
@@ -137,7 +145,16 @@ export type UpdateCopyInput = z.infer<typeof updateCopySchema>;
 // ---------------------------------------------------------------------------
 
 export const upsertRatingSchema = z.object({
-  rating: z.number().int().min(1).max(10).nullable(),
+  // 0.5–5 in half-star steps — the audiobook library's scale, shared so a rating
+  // means the same number on both sites. See RATING_* in constants.ts, and the
+  // matching CHECK on user_item.rating in migration 0028. The `multipleOf` guard
+  // is what rejects a 2.25 that min/max alone would wave through.
+  rating: z
+    .number()
+    .min(RATING_MIN)
+    .max(RATING_MAX)
+    .multipleOf(RATING_STEP)
+    .nullable(),
   notes: nullableString(1000),
 });
 

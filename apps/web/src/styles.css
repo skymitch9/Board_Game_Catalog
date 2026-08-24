@@ -1103,8 +1103,31 @@ textarea { resize: vertical; }
 }
 .rating-list li:last-child { border-bottom: none; }
 .rating-who { font-weight: 550; }
-.rating-score { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); }
+.rating-score { font-weight: 700; }
 .rating-why { color: var(--muted); font-style: italic; }
+.rating-preview { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.95rem; }
+
+/* --- stars (0.5–5 half-star scale, shared with the audiobook catalog) ------
+ *
+ * Ported from the audiobook site's `renderStars` / the library's styles so a
+ * rating looks the same on all three. ⚠️ A half star must LOOK half: the base
+ * glyph is the empty star and a filled ★ is clipped to its left half on top, so
+ * 4.5 reads as four-and-a-half rather than five. Styling `.star.half` like
+ * `.star.full` is the bug that makes the whole half-star scale pointless. */
+.stars { letter-spacing: 1px; white-space: nowrap; }
+.star { position: relative; }
+.star.full { color: #d9a441; }
+.star.empty { color: var(--line); }
+.star.half { color: var(--line); }
+.star.half::after {
+  content: '★';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50%;
+  overflow: hidden;
+  color: #d9a441;
+}
 
 /* --- duplicates, quick add, export -------------------------------------- */
 
