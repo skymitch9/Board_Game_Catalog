@@ -22,6 +22,7 @@ flight live in [`../TODO.md`](../TODO.md); finished work in
 | [`gotchas.md`](gotchas.md) | Traps found the hard way — things that look right and are not, or fail silently |
 | [`system-reference.md`](system-reference.md) | Deployment state, what works today, repo layout, commands |
 | [`design-decisions.md`](design-decisions.md) | Settled questions, owner decisions, future plans (from the original handoff) |
+| [`audit-2026-08-findings.md`](audit-2026-08-findings.md) | Estate code audit (2026-08) — 24 confirmed findings (0 critical/high, 13 medium, 11 low), severity-ranked with evidence and fix notes; the two reviewed-high findings are also tracked as ☐ items in [`../TODO.md`](../TODO.md) |
 
 The overall architecture and phase plan are in [`../DESIGN.md`](../DESIGN.md);
 the repo map is in [`system-reference.md`](system-reference.md).

@@ -436,3 +436,33 @@ regardless, because `copy.edition_id` is null everywhere. **Do not build
 this.**
 
 ---
+
+## 🔍 AUDIT 2026-08 — confirmed findings
+
+From the estate-wide code audit (2026-08-23). Full severity-ranked table,
+evidence and fix notes: [`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md).
+
+**24 confirmed findings: 0 critical · 0 high · 13 medium · 11 low.** No finding
+survived verification at critical or high severity — the two the reviewers
+rated **high were both adjusted to medium** in refutation. They are the top of
+the ranking and are tracked here; all remaining medium/low findings live in the
+findings doc, not as checkboxes.
+
+- ☐ **Details sweep exceeds the 50-subrequest cron cap and terminates
+  silently** — `apps/worker/src/lib/details-sweep.ts:58`. `SWEEP_LIMIT=8` runs
+  ~80–88 subrequests in one invocation; once a backlog exists the sweep dies
+  mid-run and the tail never enriches (Claude calls for the items that *did*
+  complete are already paid for). Drop the limit to ~4 or chunk across
+  invocations. (Reviewed high → medium.)
+- ☐ **Batch parent link silently dropped on Whole-shelf add** —
+  `apps/web/src/pages/ScanPage.tsx:713`. `addSelected` reads batch-sibling ids
+  from React state that its own async `setBatchIds` never updates in-loop, so a
+  base game added earlier is invisible to its expansion; a manually-chosen
+  sibling parent is dropped and the expansion is stranded root-less. Mirror the
+  canonical local-object pattern in `ScanJobsPage.addSelected`. (Reviewed high →
+  medium.)
+
+⚠️ One present-tense exposure worth a look even though it verified **medium**,
+not high: `/api/export.json` returns **every account's email** to any
+`editCatalog` (contributor+) user (`apps/worker/src/routes/export.ts:31`) — see
+finding #4.
