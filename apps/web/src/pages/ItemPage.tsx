@@ -4,6 +4,8 @@ import {
   detailGaps,
   fillableFieldsFor,
   isTrustedMatch,
+  type Copy,
+  type CopyStatus,
   type DetailsRun,
   type InheritedDetail,
   type ItemDetail,
@@ -188,42 +190,18 @@ export function ItemPage({
 
       {item.description && <p className="description card">{item.description}</p>}
 
-      <section className="card">
-        <div className="section-head">
-          <h2>Our copies</h2>
-          {canEdit && !addingCopy && (
-            <button type="button" className="btn btn-quiet" onClick={() => setAddingCopy(true)}>
-              + Add copy
-            </button>
-          )}
-        </div>
-
-        {addingCopy && (
-          <CopyForm
-            itemId={item.id}
-            onDone={() => {
-              setAddingCopy(false);
-              reload();
-            }}
-            onCancel={() => setAddingCopy(false)}
-          />
-        )}
-
-        {item.copies.length === 0 && !addingCopy && (
-          <p className="muted">
-            Nothing recorded for this one yet
-            {canEdit ? ' — add a copy to say we hold it.' : '.'}
-          </p>
-        )}
-
-        {item.copies.length > 0 && (
-          <ul className="copy-list">
-            {item.copies.map((copy) => (
-              <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onChanged={reload} />
-            ))}
-          </ul>
-        )}
-      </section>
+      <Shelf
+        item={item}
+        canEdit={canEdit}
+        addingCopy={addingCopy}
+        onAddCopy={() => setAddingCopy(true)}
+        onDoneAdding={() => {
+          setAddingCopy(false);
+          reload();
+        }}
+        onCancelAdding={() => setAddingCopy(false)}
+        reload={reload}
+      />
 
       <ChildSections
         item={item}
@@ -268,6 +246,112 @@ export function ItemPage({
         }}
       />
     </>
+  );
+}
+
+/**
+ * Shelf order — held first, gone last.
+ *
+ * The shelf leads with what you actually have, so `owned` and `lent` (still
+ * yours, just not in the house) sort to the top, then the box in the post, then
+ * the wishlist, then what has left the collection. A status the map does not
+ * know sorts to the end rather than throwing.
+ */
+const SHELF_ORDER: Record<CopyStatus, number> = {
+  owned: 0,
+  lent: 1,
+  preordered: 2,
+  wanted: 3,
+  sold: 4,
+};
+
+function byShelfOrder(a: Copy, b: Copy): number {
+  const ra = SHELF_ORDER[a.status] ?? 9;
+  const rb = SHELF_ORDER[b.status] ?? 9;
+  if (ra !== rb) return ra - rb;
+  // Within a status, newest-added first — the most recent shelf change on top.
+  return b.addedAt.localeCompare(a.addedAt);
+}
+
+/**
+ * On your shelf — what you hold, led by what you hold.
+ *
+ * The library's redesign leads a work with its editions and nests copies under
+ * them. **Board games differ, and deliberately.** `copy.edition_id` is null
+ * across the whole catalog and is settled to stay that way (the owner, 2026-08:
+ * *"that'll probably be null forever … I don't super care to track it down"*),
+ * so the catalog knows which printings *exist* — the cover picker on the edit
+ * form offers them — but never records which printing a given box is. There is
+ * therefore no edition to nest a copy under, and the copies themselves are the
+ * shelf units.
+ *
+ * What carries across is the shape, not the schema: lead with what you have, and
+ * never render an empty shelf. Copies sort held-first; a game with no copy at
+ * all shows a single "not on your shelf" slot rather than a blank — and mints
+ * nothing to do it, because a wish is not a fake copy (the data guard the whole
+ * catalog is built on).
+ */
+function Shelf({
+  item,
+  canEdit,
+  addingCopy,
+  onAddCopy,
+  onDoneAdding,
+  onCancelAdding,
+  reload,
+}: {
+  item: ItemDetail;
+  canEdit: boolean;
+  addingCopy: boolean;
+  onAddCopy: () => void;
+  onDoneAdding: () => void;
+  onCancelAdding: () => void;
+  reload: () => void;
+}) {
+  const shelved = [...item.copies].sort(byShelfOrder);
+
+  return (
+    <section className="card">
+      <div className="section-head">
+        <h2>On your shelf</h2>
+        {canEdit && !addingCopy && (
+          <button type="button" className="btn btn-quiet" onClick={onAddCopy}>
+            + Add copy
+          </button>
+        )}
+      </div>
+
+      {addingCopy && (
+        <CopyForm
+          itemId={item.id}
+          onDone={onDoneAdding}
+          onCancel={onCancelAdding}
+        />
+      )}
+
+      {shelved.length > 0 ? (
+        <ul className="copy-list">
+          {shelved.map((copy) => (
+            <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onChanged={reload} />
+          ))}
+        </ul>
+      ) : (
+        !addingCopy && (
+          /* Never a blank shelf. A single dashed slot standing in for "nothing
+             here yet" — display only, so no fake copy is minted to fill it. */
+          <ul className="copy-list">
+            <li className="copy copy--empty">
+              <Badge tone="neutral">not on your shelf</Badge>
+              <span className="copy-facts">
+                {canEdit
+                  ? 'No copy recorded yet — add one to say you hold it, or mark it wanted.'
+                  : 'No copy recorded yet.'}
+              </span>
+            </li>
+          </ul>
+        )
+      )}
+    </section>
   );
 }
 

@@ -865,6 +865,12 @@ textarea { resize: vertical; }
 .copy-notes { flex-basis: 100%; font-size: 0.83rem; color: var(--muted); font-style: italic; }
 .copy-actions { display: flex; gap: 0.35rem; margin-left: auto; }
 .copy-form { border: 1px dashed var(--line); border-radius: 8px; padding: 0.85rem; margin: 0.5rem 0; }
+/* The "nothing on the shelf yet" slot — a real row so the shelf is never blank,
+   dashed and muted so it reads as an empty slot rather than a held copy. */
+.copy--empty {
+  border: 1.5px dashed var(--line); border-bottom: 1.5px dashed var(--line);
+  border-radius: 8px; padding: 0.6rem 0.75rem; color: var(--muted);
+}
 
 /* --- a preorder turning up ----------------------------------------------- */
 
