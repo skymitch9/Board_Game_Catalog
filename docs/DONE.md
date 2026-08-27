@@ -14,6 +14,70 @@
 
 ---
 
+## ✅ FIXED, NOT DEPLOYED — two refusal defects: a bare `estate_revoked`, and a comment that lied about the flag, 2026-08-26
+
+Defects **1 and 3** of the three in
+`catalog-platform/docs/info/llm-billing-control-design.md` §6.1, found while
+reading for the billing-control design.
+
+### 1. `estate_revoked` answered a bare `{ error }`
+
+`apps/worker/src/middleware/estate.ts` returned `{ error: 'estate_revoked' }`
+and nothing else, while its sibling one case down — `estate_unreachable` —
+carried a worded `detail`. Now:
+
+```
+detail: 'this account no longer has access to the estate; ask an owner to restore it'
+```
+
+Quiet and non-accusatory, matching the web app's own rule for this case (never
+explain the enforcement to the person it just applied to) while still doing the
+three things a refusal must: what happened, what it needs, how to get it.
+
+⚠️ **"The web app translates the code" is not a defence, and it is why this
+survived.** `apps/web/src/lib/errors.ts` maps `estate_revoked` to a sentence,
+so a browser never showed the code — but **the rule is about the RESPONSE**,
+not about one client being kind enough to make up for it. curl, GABI, a second
+surface or any future app got a machine code and no way to act on it.
+
+### 2. The `ESTATE_CHECK` comment said `off`; the value said `enforce`
+
+`apps/worker/wrangler.toml`'s comment claimed the flag was *"deliberately 'off'
+in the committed file … must be inert until the owner flips it"* — **three
+lines above `ESTATE_CHECK = "enforce"`.** Anyone reasoning about who this
+Worker refuses got the answer backwards. `docs/TODO.md`'s estate section
+carried the same stale claim and is corrected in place.
+
+🔴 **This is the sixth instance of a shape the estate audit already named:** a
+flag is flipped, the sweep updates three places, and **the missed copy is
+always a comment or a README, never code.** So the fix is not just new prose —
+`apps/worker/src/lib/estate-refusals.test.ts` now requires the comment block to
+contain the literal `⚠️ ESTATE_CHECK IS "<value>"` matching the value actually
+set, so the next flip cannot skip the sentence beside it.
+
+The rollout order (`off` → `shadow` → `enforce`) is kept in the comment, not
+deleted: it is how the next surface adopts this and how this one rolls back.
+
+### Verification
+
+6 new tests in `estate-refusals.test.ts`; **95 pass, 0 fail** (was 89);
+typecheck clean on `@bgc/web` and `@bgc/worker`. The refusal tests parse
+`c.json(...)` by counting parentheses rather than by regex — a refusal body
+spans several lines and a lazy match stops at the first inner bracket — and
+each test asserts it actually FOUND what it parses before asserting anything
+about it.
+
+⚠️ **NOT deployed, and NOT verified live.** No `wrangler deploy` was run, so
+the live Worker still answers the bare `estate_revoked` body until someone
+ships it. Nobody has provoked a real revoked 403 against either version. The
+comment fix is inert by nature — it changes no behaviour at all.
+
+⚠️ **The TODO section this touched is still stale at its heading** ("BUILT, NOT
+DEPLOYED … in shadow mode") and was deliberately left for someone to read whole
+rather than swept on the strength of its title.
+
+---
+
 ## ✅ SHIPPED — the estate theme becomes a build artifact, and `hearts` arrives, 2026-08-17
 
 Owner order, verbatim: *"Add the pink theme as an option for every site, when a

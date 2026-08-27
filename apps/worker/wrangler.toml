@@ -135,12 +135,27 @@ OWNER_EMAILS = "nbaslamking@gmail.com"
 # Estate auth (catalog-platform/docs/info/estate-auth-design.md, adopted per
 # §14.5 — shadow-first).
 #
-# ⚠️ ESTATE_CHECK is deliberately "off" in the committed file: the deploy that
-# carries the estate wiring must be inert until the owner flips it — first to
-# "shadow" (the full check runs and LOGS the §3.1 would-verdict, changes no
-# response; `npm run tail --workspace @bgc/worker` and grep for WOULD-DENY,
-# expect zero for household members), and only after days of clean shadow logs
-# to "enforce". Any other value behaves as "off" and complains in the log.
+# ⚠️ ESTATE_CHECK IS "enforce" — see the value two lines below. The §3.1
+# verdicts act: revoked → 403, unreachable with no local standing → a named
+# 503, default-grant assigns `guest`. Any unrecognised value behaves as "off"
+# and complains in the log.
+#
+# ⚠️ This comment said the flag was *"deliberately 'off' in the committed file
+# … must be inert until the owner flips it"* for as long as the line below it
+# has read `enforce` — corrected 2026-08-26 (defect 3 of 3 in
+# catalog-platform/docs/info/llm-billing-control-design.md §6.1). A comment
+# that contradicts the line it sits on is worse than no comment: this one told
+# a reader the games Worker's estate check was inert, three lines above the
+# flag that has it enforcing, so anyone reasoning about who this Worker refuses
+# got the answer exactly backwards. It is also the shape the estate audit
+# already named — a flag gets flipped, the sweep updates three places, and the
+# missed copy is ALWAYS a comment or a README, never code.
+#
+# The rollout order is kept, because it is how the NEXT surface adopts this and
+# how this one would roll back: ship inert at "off" → "shadow" (the full check
+# runs and LOGS the §3.1 would-verdict, changes no response; `npm run tail
+# --workspace @bgc/worker` and grep for WOULD-DENY, expect zero for household
+# members) → only after days of clean shadow logs, "enforce".
 #
 # The check also needs its bearer:
 #   npm run secret ESTATE_APP_TOKEN_GAMES

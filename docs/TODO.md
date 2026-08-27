@@ -47,7 +47,7 @@ Commit `0077a7a`, pushed. Design:
 
 | | |
 |---|---|
-| What | Estate membership check wired into `requireAuth`, gated by `ESTATE_CHECK` (`off` \| `shadow` \| `enforce`) — **committed as `off`, so deploying this is inert** |
+| What | Estate membership check wired into `requireAuth`, gated by `ESTATE_CHECK` (`off` \| `shadow` \| `enforce`). ⚠️ **This row said "committed as `off`, so deploying this is inert" — corrected 2026-08-26. The committed value is `enforce`**, and `wrangler.toml`'s comment carried the same stale claim (fixed in the same commit, now pinned by `apps/worker/src/lib/estate-refusals.test.ts`). ⚠️ **This section's heading — "BUILT, NOT DEPLOYED … in shadow mode" — is therefore stale too, and is deliberately NOT swept here:** the heading is the half that goes stale first, so somebody has to read the whole body and move it whole rather than trust the title |
 | New build dependency | ⚠ï¸ This repo now materialises the canonical `estate-auth` module from the sibling `catalog-platform` checkout — `scripts/sync-estate-auth.mjs` runs as `predev`/`pretypecheck`/`predeploy` and **fails loudly** if the checkout is missing. The old local verifier in `middleware/auth.ts` was replaced by it (behaviour-identical: the hardened bypass came FROM here) |
 | Migration | `0026_estate_cache.sql` — two nullable `app_user` columns, plain ADD COLUMN. **Applied LOCAL only; remote apply is a pending owner/dispatcher step**, before the deploy that carries this code |
 | Secret | `npm run secret ESTATE_APP_TOKEN_GAMES` (same value the auth Worker holds under that name) — without it, shadow logs `config unset` per request and skips |

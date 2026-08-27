@@ -186,7 +186,29 @@ export async function estateGate(
       case 'revoked':
         // Computed, never stored: the local role stays intact so a later
         // re-approval restores the person exactly as they were (§3.1 row 1).
-        return c.json({ error: 'estate_revoked' }, 403);
+        //
+        // ⚠️ `detail` is not optional here, and its ABSENCE was a real defect
+        // (llm-billing-control-design.md §6.1, defect 1 of 3): this body was a
+        // bare `{ error: 'estate_revoked' }` while its sibling one case down
+        // carried a sentence. The web app happens to translate the code
+        // (apps/web/src/lib/errors.ts), so a browser never saw it — but the
+        // rule is about the RESPONSE, not about one client that is kind
+        // enough to make up for it. Anything else reaching this route (curl,
+        // GABI, a second surface, a future app) got a machine code and no way
+        // to act on it.
+        //
+        // Deliberately quiet and non-accusatory, matching the web app's own
+        // wording rule for this case: never explain the enforcement to the
+        // person it just applied to. It still does the three things a refusal
+        // must — says what happened, what it needs, and how to get it — and
+        // stays lowercase and sentence-shaped like `estate_unreachable`'s.
+        return c.json(
+          {
+            error: 'estate_revoked',
+            detail: 'this account no longer has access to the estate; ask an owner to restore it',
+          },
+          403,
+        );
       case 'estate_unreachable':
         // Named so an outage is distinguishable from a denial (§6 row 1).
         return c.json(
