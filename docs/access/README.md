@@ -2,10 +2,14 @@
 
 > **Audience:** Claude sessions. **Status:** TRACKED (committed — no secret
 > values here, only names and how to obtain them).
-> Last verified: **2026-08-05**.
+> Last verified: **2026-08-31** — only the pointers were fixed that day
+> (`HANDOFF.md` was retired to a signpost on 2026-08-21, and this index still
+> sent readers there for "current state"; `SETUP.md` lives in this directory,
+> not at `../SETUP.md`). ⚠️ The rows and secret names below were NOT re-checked
+> and still carry **2026-08-05**.
 
 How to reach and operate everything this project depends on. Stable facts only —
-current state and work in flight live in [`../HANDOFF.md`](../HANDOFF.md).
+current state and work in flight live in [`../TODO.md`](../TODO.md).
 
 | File | Covers |
 |---|---|
@@ -15,8 +19,9 @@ current state and work in flight live in [`../HANDOFF.md`](../HANDOFF.md).
 | [`login.md`](login.md) | Cloudflare Access: how sign-in works **today**, until the cutover's step 4. Being replaced |
 | [`covers-r2.md`](covers-r2.md) | The `game-covers` R2 bucket, `gamecovers.heygabi.ai`, the migration script and its gotchas |
 
-Cloudflare, D1 and Access details are in [`../SETUP.md`](../SETUP.md); commands
-and deploy levers are in [`../HANDOFF.md`](../HANDOFF.md). Not duplicated here.
+Cloudflare, D1 and Access details are in [`SETUP.md`](SETUP.md); commands,
+repo layout and deploy levers are in
+[`../info/system-reference.md`](../info/system-reference.md). Not duplicated here.
 
 ## Secret names (values live in `.dev.vars` locally / `wrangler secret` in prod)
 
