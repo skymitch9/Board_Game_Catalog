@@ -18,6 +18,7 @@ current state and work in flight live in [`../TODO.md`](../TODO.md).
 | [`firebase-auth.md`](firebase-auth.md) | 🔶 **The auth model as of 2026-08-10** — Firebase ID tokens, the cutover off Cloudflare Access and why its order is a safety property, what edge protection is given up. **Read before `login.md`** |
 | [`login.md`](login.md) | Cloudflare Access: how sign-in works **today**, until the cutover's step 4. Being replaced |
 | [`covers-r2.md`](covers-r2.md) | The `game-covers` R2 bucket, `gamecovers.heygabi.ai`, the migration script and its gotchas |
+| [`deploys.md`](deploys.md) | 🆕 **How to ship (2026-09-02)** — the check-clean / deploy-guard / deploy-done chain, `docs/deploys.log` as the 3am rollback source of truth, every escape hatch, and the gotchas (a failed test leaves the lock; `version-unknown` is a failure, not a value) |
 
 Cloudflare, D1 and Access details are in [`SETUP.md`](SETUP.md); commands,
 repo layout and deploy levers are in

@@ -25,8 +25,20 @@ apps/web/public/assets/
 .dev.vars
 .DS_Store
 *.log
+# ⚠️ …EXCEPT the deploy record. `*.log` above would swallow it, and this file is
+# the shared state two concurrent runs read to avoid deploying over each other —
+# see scripts/deploy-guard.mjs. In `library_catalog` the same `*.log` line ate
+# the same file and was caught only because someone noticed the commit had no
+# log line in it; here the exception is written before the first line exists.
+!docs/deploys.log
 .vscode/
 !.vscode/extensions.json
+
+# ⚠️ The deploy coordination lock — see scripts/deploy-guard.mjs. Local by
+# design: it says "a deploy is running on THIS machine right now", which is not
+# a fact any other checkout should inherit. The shared record is
+# docs/deploys.log, which IS tracked.
+.deploy.lock
 
 # credentials-catalog F-3 (2026-08-17): cover .dev.vars variants + .env; repo is PUBLIC.
 .env

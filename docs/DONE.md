@@ -14,6 +14,66 @@
 
 ---
 
+## ✅ SHIPPED — deploy guards + `deploys.log` ported from `library_catalog`, 2026-09-02
+
+**The item as it stood in `TODO.md`, moved whole:**
+
+> ### ☐ Deploys here have NO guard and NO log (measured 2026-08-26 17:27 Phoenix)
+>
+> `npm run deploy` is `build` + bare `wrangler deploy` — no check-clean, no
+> deploy-guard, no `deploys.log` line (the session deployed `93fad25` as version
+> `a34971db-98bc-4b2f-8446-5117cf62b255` and had nowhere to record it). The global
+> rule says every deploy appends one line (timestamp / commit / holder / version)
+> and refuses a dirty tree. Port `library_catalog/scripts/{check-clean,deploy-guard,deploy-done}.mjs`
+> as-is (one canonical implementation, not a rewrite) and wire them into the
+> deploy script. Until then, the 3am rollback source of truth for this Worker is
+> `wrangler deployments list`, nothing in the repo.
+
+**What was done.** `check-clean.mjs` turned out to be **already present and
+byte-identical** to the library's — it was simply running *last* in `predeploy`,
+after typecheck and tests. The two that were missing, `deploy-guard.mjs` and
+`deploy-done.mjs`, were copied **verbatim** (`diff` clean against
+`library_catalog/scripts/`) — one canonical implementation, as the item asked.
+Neither needed adapting: both already resolve `apps/worker/wrangler.toml`, the
+same path in this repo, and the `--instance=` handling they carry for the
+library's second Worker is inert with one instance.
+
+`predeploy` is now `syncs → check-clean → deploy-guard → typecheck → test`, and
+a new `postdeploy` runs `deploy-done.mjs`. The guards run before the slow steps,
+the same order the library uses, so the two repos have one discipline rather
+than two.
+
+⚠️ **The `.gitignore` hole that would have silently defeated it.** This repo has
+a bare `*.log` line, which swallows `docs/deploys.log` — the file deploy-guard's
+ancestry check *reads*. Without the explicit `!docs/deploys.log` negation the
+record is never committed, the guard degrades to a lock file, and nothing looks
+wrong. Added, along with `.deploy.lock` (local by design; the log is the shared
+state). The same hole existed in `library_catalog` and was caught there only
+because somebody noticed a deploy commit with no log line in it.
+
+**The log is seeded with one backfilled line** — `93fad257` /
+`a34971db-…` / holder `backfilled` — the deploy the repo had already made and
+had nowhere to record. It exists so the first guarded deploy has a baseline to
+check ancestry against instead of being waved through.
+
+**Verified by running them, not by reading them** (2026-09-02):
+
+| Guard | Exercised against | Result |
+|---|---|---|
+| `check-clean` | the dirty tree of this very change | refused, exit 1, listed all 7 paths |
+| `deploy-guard` lock | clean HEAD `008bfafe` | took the lock, wrote `.deploy.lock` |
+| `deploy-guard` ancestry | a log line naming a commit not in the tree | **refused, exit 1, and took no lock** |
+
+⚠️ **NOT verified:** two genuinely concurrent runs (one machine, one session —
+the ancestry refusal was driven by a hand-written log line, not a real second
+deploy), and `deploy-done.mjs`'s Cloudflare version lookup, which only runs on a
+real successful deploy.
+
+Documented in [`access/deploys.md`](access/deploys.md), indexed from
+[`access/README.md`](access/README.md).
+
+---
+
 ## ✅ FIXED, NOT DEPLOYED — two refusal defects: a bare `estate_revoked`, and a comment that lied about the flag, 2026-08-26
 
 Defects **1 and 3** of the three in

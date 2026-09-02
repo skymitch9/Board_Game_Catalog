@@ -8,17 +8,6 @@ and [`info/`](info/README.md).
 
 ---
 
-## ☐ Deploys here have NO guard and NO log (measured 2026-08-26 17:27 Phoenix)
-
-`npm run deploy` is `build` + bare `wrangler deploy` — no check-clean, no
-deploy-guard, no `deploys.log` line (the session deployed `93fad25` as version
-`a34971db-98bc-4b2f-8446-5117cf62b255` and had nowhere to record it). The global
-rule says every deploy appends one line (timestamp / commit / holder / version)
-and refuses a dirty tree. Port `library_catalog/scripts/{check-clean,deploy-guard,deploy-done}.mjs`
-as-is (one canonical implementation, not a rewrite) and wire them into the
-deploy script. Until then, the 3am rollback source of truth for this Worker is
-`wrangler deployments list`, nothing in the repo.
-
 ## Splitting a shelf photograph into pieces
 
 Raised alongside the enrichment stall, and **would not have fixed it** — worth
