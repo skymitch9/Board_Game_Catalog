@@ -79,10 +79,15 @@ instead of waving the first one through.
    that happened on *every* line for the script's whole life (Windows `npx` +
    a regex that picked the oldest deployment) before being fixed on 2026-08-25;
    these copies carry that fix.
-3. **`wrangler d1 migrations apply --remote` returns 7403 on this account.**
-   Migrations go through `d1 execute --remote` as plain SQL, followed by an
-   `INSERT INTO d1_migrations (name) VALUES (…)`. **Migrate before deploy,
-   always** — new code must never meet an old schema.
+3. **Migrate before deploy, always** — new code must never meet an old schema.
+   `npm run db:migrate:local` then `npm run db:migrate` (`--remote`), *then*
+   `npm run deploy`. ⚠️ `docs/info/copy-status-history.md` §6 used to say
+   `migrations apply --remote` **returns 7403 on this account** and that you had
+   to apply the SQL by hand through `d1 execute --remote` plus a manual
+   `d1_migrations` INSERT. **Re-measured 2026-09-02: false.** It applied
+   migration 0029 in 10.42 ms on wrangler 4.118.0, `CREATE TRIGGER` bodies and
+   all. The hand method is strictly worse — it leaves `d1_migrations`
+   disagreeing with the database whenever somebody forgets the second half.
 4. **Never kill a deploy mid-flight.** A killed deploy can leave the live Worker
    out of step with the repo, which is the one genuinely expensive state.
 

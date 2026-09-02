@@ -1,7 +1,8 @@
 # Board_Game_Catalog — Known Issues, Waivers & Exceptions
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last verified: **2026-08-21**.
+> Last verified: **2026-09-02** — KI-4 added that day and measured against live
+> D1. ⚠️ KI-2 and KI-3 were **not** re-checked and still carry 2026-08-21.
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
@@ -76,3 +77,35 @@ it recurred:
    `…` and `·` came back as `â€”`, `â€¦` and `Â·`"*. A second pass turns that
    into *"`·` came back as `·`"* and destroys the example. It happened, and the
    line had to be restored verbatim from the original.
+
+---
+
+## KI-4 · A copy that was GIVEN AWAY is stored as `status = 'sold'` — `ACCEPTED`
+
+**Symptom.** `SELECT status FROM copy` says `sold` for a game the owner gave to
+a friend. Nothing in the app shows that word — `copyStateLabel()` renders "given
+away", the status dropdown reads "no longer ours", and both exports carry a
+`disposal` column beside `status` — but a hand-written query, or anyone reading
+the table directly, sees the wrong verb.
+
+**Why tolerated.** SQLite cannot alter a CHECK constraint. Adding `given_away`
+to `status IN (…)` requires the full 12-step rebuild of `copy`, which carries a
+self-referencing FK, two FKs out, **two triggers from migration 0002 that a
+rebuild drops silently**, five indexes and 838 live rows. Migration 0002 already
+hit this wall and chose triggers over a CHECK for exactly this reason. Option B
+— a nullable `disposal` column — is additive, reversible and was the plan doc's
+own recommendation ([`info/copy-status-history.md`](info/copy-status-history.md)
+§3). The distinction the owner asked for is a *reason*, not a state: sold, given
+away and lost all mean "no longer ours".
+
+**What would change it.** ⚠️ **The number to watch is how many people read the
+database directly, not how many copies are disposed.** Today that is one
+session at a time through `wrangler d1 execute`, and every rendering path goes
+through `copyStateLabel()`. If a second consumer of the raw `copy` table appears
+— a report, a sync, another app — that cannot be routed through
+`packages/core`, the rebuild becomes worth buying. `DISPOSED_STATUS` in
+`packages/core/src/constants.ts` is the one constant that moves when it does.
+
+**Not a candidate for change:** the count of disposed copies. It was **0** on
+2026-09-02, and even at 500 the storage shape would be no more wrong than it is
+at 1.

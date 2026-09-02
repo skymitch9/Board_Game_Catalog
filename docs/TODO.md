@@ -58,66 +58,16 @@ Commit `0077a7a`, pushed. Design:
 
 ---
 
-## â­ï¸ ON HOLD — disposal & copy history
+## Notes from the 2026-08-09 session
 
-â¸ï¸ **Do not start this, and do not re-ask the `lent` question, until the weekly
-usage limit resets.** The owner's instruction, 2026-08-09: *"keep holding the
-lent question until the weekly reset happens."* The plan is finished and
-waiting; what it needs is a decision, and the decision needs budget behind it to
-act on.
+⚠️ **This heading is a CONTAINER, not a work item.** The `###` sections below
+were swept in from `HANDOFF.md` on 2026-08-21 and are a record of that day, not
+a queue. They used to hang under a heading called *"Superseded note — marking
+things sold or given away"*, which was a genuine open item and has now shipped —
+it moved whole to [`DONE.md`](DONE.md) on 2026-09-02 together with the
+`ON HOLD — disposal & copy history` item above it. Read a body before moving
+anything else out of here; the headings are the half that goes stale first.
 
-📄 **The plan is written: [`info/copy-status-history.md`](info/copy-status-history.md).**
-Read it before touching anything; it is the whole design, measured against
-production on 2026-08-09.
-
-*"For sold and lent we can mark them as not owned anymore but we should keep a
-history of them items. Map this feature for tomorrow's reset."* — the owner.
-
-The four things that decide the shape, all in that doc:
-
-1. **`lent` and `sold` have existed since 0001 and have never been used** — 0
-   rows each in production. The feature is not "add statuses"; find out what
-   actually stopped the owner before writing a migration.
-2. **One question has to go to the owner first.** They said `lent` should stop
-   counting as owned. That makes a game lent to a friend reappear on the
-   shopping list — the exact "bought twice" failure `preordered` counts as held
-   to avoid. Recommendation and both readings are in §2.
-3. **"Held" is defined four times in two different ways** across
-   `packages/db` and `packages/core`. Consolidate before adding a value.
-4. **History must not cascade.** `copy` cascades from `item`, so the obvious FK
-   erases the record that you ever owned the thing — the one fact being kept.
-
----
-
----
-
-## â­ï¸ Superseded note — marking things sold or given away
-
-*"We also have no way to mark things sold or given away or any statuses
-manually. I gave away item 303 since another item covered it and I have many
-other games I want to give away or sell. Can we add a way to edit it and then
-change its status tag from owned to lent or sold or something. This can be in a
-different thread."* — the owner, 2026-08-09. **Not built. Do not start it
-without reading this first.**
-
-⚠ï¸ **Half of it already exists, so this is probably not the feature it sounds
-like.** `COPY_STATUSES` in `packages/core/src/constants.ts` is already
-`['owned','wanted','preordered','lent','sold']`, migration 0001 has the matching
-CHECK, and **`CopyEditor.tsx:102` already renders a `<select>` over all five**.
-So a copy *can* be moved from `owned` to `sold` today. Find out why that did not
-reach the owner before writing any code — the likely answers are
-discoverability (where `CopyEditor` is reachable from) or that neither `sold`
-nor `lent` means *given away*.
-
-| Known | |
-|---|---|
-| Item 303 | `The Binding of Isaac: Four Souls - Gold Box Expansion`, copy 298, still `owned` — the owner says it is gone |
-| Missing vocabulary | Nothing distinguishes *sold* from *given away*; `lent` implies it is coming back |
-| Likely blast radius | A new status value touches `constants.ts`, a CHECK-constraint migration, every `status IN (...)` query, the completeness "held" rule, and the collection filter |
-
-⚠ï¸ The completeness feature reads `owned/lent/preordered` as **held**. Any new
-status has to declare which side of that line it sits on, or a game you gave
-away starts counting towards "you own 6 of 7".
 
 ### Doomlings settled, and the "I have it" button proved correct in production
 

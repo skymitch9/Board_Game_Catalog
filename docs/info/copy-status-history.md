@@ -1,7 +1,11 @@
 # Disposal & copy history — Information Reference
 
-> **Audience:** Claude sessions. **Status:** TRACKED. **PLANNED — NOT BUILT.**
-> Last verified: **2026-08-09** (all counts read live from production D1).
+> **Audience:** Claude sessions. **Status:** TRACKED. ✅ **BUILT — shipped
+> 2026-09-02 as migration 0029.**
+> Last verified: **2026-09-02** — the counts in §1 were re-read live from
+> production D1 that day, and §6's 7403 claim was re-measured and found FALSE.
+> The rest of the prose still carries its 2026-08-09 reasoning, which is the
+> point of it.
 
 *"For sold and lent we can mark them as not owned anymore but we should keep a
 history of them items."* — the owner, 2026-08-09, deferring the build to the
@@ -9,6 +13,42 @@ next session.
 
 Read this before writing any code. **The obvious version of this feature is the
 wrong one**, and the reason is in the first two sections.
+
+---
+
+## 0. What was actually built — read this first
+
+Shipped 2026-09-02 as `migrations/0029_copy_disposal_history.sql`, plus the
+route, the db layer and the UI listed below. The full landing note, with the
+verification table and everything that was NOT verified, is in
+[`../DONE.md`](../DONE.md) under *"SHIPPED — disposal reasons + append-only copy
+history"*.
+
+| Where | What |
+|---|---|
+| `migrations/0029_copy_disposal_history.sql` | `copy.disposal` (`sold`/`given_away`/`lost`), the `copy_event` table, two indexes, **two append-only triggers** |
+| `packages/core/src/constants.ts` | `DISPOSALS`, `DISPOSED_STATUS`, `DISPOSAL_LABELS`, `COPY_STATUS_LABELS`, `copyStateLabel()`, `isDisposedStatus()` |
+| `packages/core/src/schemas.ts` | `disposalSchema`, `disposalConflict()` — the pairing rule, stated once — `disposalDetailsSchema`, and the `CopyEvent` contract |
+| `packages/db/src/copy-events.ts` | `copyEventInsert()` (a prepared statement, for batching) and `listItemCopyEvents()` |
+| `packages/db/src/copies.ts` | `updateCopy` — **the one place history is written**, batched with the UPDATE |
+| `apps/worker/src/routes/catalog.ts` | `GET /api/items/:id/history`, and the merged status/disposal check on `PATCH /api/copies/:id` |
+| `apps/web/src/components/CopyEditor.tsx` | The **"No longer ours"** action and the "What happened to it" fieldset |
+| `apps/web/src/components/CopyHistory.tsx` | The History card on the item page |
+| `packages/db/test/copy-event-no-cascade.test.ts` | 14 tests: the no-cascade guarantee against real SQLite, and the append-only triggers |
+| `apps/worker/src/lib/copy-disposal.test.ts` | 20 tests: the pairing rule rejects rather than strips, and a given-away copy never reads "sold" |
+
+⚠️ **Three things a later session will want to know, and each is argued in full
+in `DONE.md`:**
+
+1. **A given-away copy is stored as `status = 'sold'`** (option B, §3). Nothing
+   shows that word — `copyStateLabel()` is the only correct way to render a
+   copy's state, and `COPY_STATUS_LABELS` the only correct way to render a bare
+   status. Use them; do not print `copy.status`.
+2. **Creating a copy writes no event.** History is written by `updateCopy` and
+   nowhere else, so it can travel in the same `db.batch` as the change it
+   describes.
+3. **The collection's paging SQL was NOT changed** (§5 step 7 was implemented at
+   the item page instead). A game whose every copy has gone is still listed.
 
 ---
 
@@ -25,17 +65,22 @@ wrong one**, and the reason is in the first two sections.
 So a copy **can** be marked `sold` today, through existing UI, with no change at
 all.
 
-### ⚠️ And yet, production, 2026-08-09
+### ⚠️ And yet, production, 2026-08-09 — and still, on the day it shipped
 
-| status | copies | units |
-|---|---|---|
-| `owned` | 587 | 660 |
-| `preordered` | 204 | 236 |
-| `wanted` | 30 | 31 |
-| **`lent`** | **0** | **0** |
-| **`sold`** | **0** | **0** |
+| status | copies (2026-08-09) | units | copies (2026-09-02) | units |
+|---|---|---|---|---|
+| `owned` | 587 | 660 | 636 | 710 |
+| `preordered` | 204 | 236 | 172 | 204 |
+| `wanted` | 30 | 31 | 30 | 31 |
+| **`lent`** | **0** | **0** | **0** | **0** |
+| **`sold`** | **0** | **0** | **0** | **0** |
 
 `lent_to` is populated on **zero** rows.
+
+⚠️ **Three and a half weeks and 49 more owned copies later, `lent` and `sold`
+were still at zero** — which is the strongest available evidence that §1's
+diagnosis was right and the feature was never "add statuses". The collection
+moved; the premise did not.
 
 **Two statuses have existed since migration 0001 and have never once been
 used.** The owner's request is therefore not "add sold and lent" — they are
@@ -167,6 +212,25 @@ this reason. **Read its comment before deciding.**
 distinction the owner actually wants (*sold* vs *given away*) is a reason, not a
 state — both mean "no longer ours".
 
+### ✅ B was built, 2026-09-02 — and here is what it cost
+
+⚠️ **B partly overrides §2's ruling that *given away* is "its own value".** It
+is its own value — of `disposal`, not of `status`. The owner sees the word he
+asked for everywhere; the database does not have it.
+
+**So: a copy that was given away carries `status = 'sold'`.** That is the entire
+bill for skipping the rebuild, and it is paid in exactly one place —
+`copyStateLabel(status, disposal)` in `packages/core/src/constants.ts`, which
+every render goes through. A hand-written SQL query will still see `sold`; the
+CSV export therefore carries a `disposal` column beside `status` so a
+spreadsheet cannot make the same mistake.
+
+**Option A remains open** and costs one careful rebuild migration: recreate
+`copy` with the widened CHECK, then re-create migration 0002's two quantity
+triggers and all five indexes, which a rebuild drops silently. If the owner
+would rather pay that for the cleaner vocabulary, `DISPOSED_STATUS` is the
+constant that moves and no caller changes.
+
 ---
 
 ## 4. History is the actual feature, and it has one trap
@@ -239,10 +303,22 @@ npx wrangler d1 execute board-game-catalog --remote --config apps/worker/wrangle
   --command "SELECT item_name, from_status, to_status, disposal, at FROM copy_event ORDER BY at DESC LIMIT 10"
 ```
 
-⚠️ **`wrangler d1 migrations apply --remote` returns `7403` on this account.**
-Apply migrations as plain SQL through `d1 execute --remote`, followed by
-`INSERT INTO d1_migrations (name) VALUES ('0023_....sql');` — see
-[`../HANDOFF.md`](../HANDOFF.md).
+🔴 ~~**`wrangler d1 migrations apply --remote` returns `7403` on this
+account.**~~ **RETIRED 2026-09-02 — re-measured and FALSE.** `npm run db:migrate`
+(which is exactly `wrangler d1 migrations apply board-game-catalog --remote`)
+applied 0029 in **10.42 ms** on wrangler 4.118.0, and it handled the migration's
+two `CREATE TRIGGER` bodies — semicolons and all — without needing the file
+split by hand.
+
+The old advice was to apply migrations as plain SQL through `d1 execute --remote`
+and then `INSERT INTO d1_migrations (name) VALUES (…)` by hand. **Do not do
+that any more:** it is more work and it is the shape that leaves `d1_migrations`
+disagreeing with the database when somebody forgets the second half. The
+deploy runbook is [`../access/deploys.md`](../access/deploys.md).
+
+⚠️ Kept visible rather than deleted, because it is a claim a session may
+otherwise re-derive from an old transcript. If 7403 ever comes back, it is an
+account/permission condition to diagnose, not a standing fact about this repo.
 
 ## 7. Out of scope, deliberately
 

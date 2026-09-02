@@ -14,7 +14,7 @@ flight live in [`../TODO.md`](../TODO.md); finished work in
 | [`barcode-ladder.md`](barcode-ladder.md) | Why barcode resolution is tiered, what each rung buys, measured hit rates |
 | [`scan-queue.md`](scan-queue.md) | What a scan job stores and what it refuses to store — ownership is computed on every read, so two photos of one shelf stop arguing |
 | [`ios-camera.md`](ios-camera.md) | Every WebKit constraint the scanner works around, and why photos never reach the camera roll |
-| [`copy-status-history.md`](copy-status-history.md) | ⏳ **PLANNED, not built.** Marking a copy sold/given away and keeping its history — why the statuses that already exist have never been used, and the one question the owner has to answer first |
+| [`copy-status-history.md`](copy-status-history.md) | ✅ **BUILT 2026-09-02 (migration 0029)** — marking a copy sold / given away / lost and keeping an append-only history of it. ⚠️ Read §0 first: a **given-away copy is stored as `status = 'sold'`** (SQLite cannot widen a CHECK), so render state through `copyStateLabel()` and never print `copy.status`. Also holds the evidence that the statuses which already existed had still never been used, three weeks and 49 copies later |
 | [`future-plans.md`](future-plans.md) | Deferred ideas, and the measurements that killed the ones already tried |
 | [`cost-reduction.md`](cost-reduction.md) | Measured cost of every lookup path, and the one change that would move the needle |
 | [`estate-theme.md`](estate-theme.md) | How this app gets its skin: the theme system is CANONICAL in catalog-platform and materialised here at build time by `scripts/sync-estate-theme.mjs`. ⚠️ `apps/web/public/assets/` is gitignored build output; the cog holds no theme list of its own |

@@ -14,6 +14,169 @@
 
 ---
 
+## ✅ SHIPPED — disposal reasons + append-only copy history, migration 0029, 2026-09-02
+
+**The two items as they stood in `TODO.md`, moved whole** (their mojibake is
+carried across verbatim rather than repaired — KI-3 §3: never run a repair to
+convergence, and a cut-and-paste move must not become a rewrite):
+
+> ### â­ï¸ ON HOLD — disposal & copy history
+>
+> â¸ï¸ **Do not start this, and do not re-ask the `lent` question, until the weekly
+> usage limit resets.** The owner's instruction, 2026-08-09: *"keep holding the
+> lent question until the weekly reset happens."* The plan is finished and
+> waiting; what it needs is a decision, and the decision needs budget behind it to
+> act on.
+>
+> 📄 **The plan is written: [`info/copy-status-history.md`](info/copy-status-history.md).**
+> Read it before touching anything; it is the whole design, measured against
+> production on 2026-08-09.
+>
+> *"For sold and lent we can mark them as not owned anymore but we should keep a
+> history of them items. Map this feature for tomorrow's reset."* — the owner.
+>
+> The four things that decide the shape, all in that doc:
+>
+> 1. **`lent` and `sold` have existed since 0001 and have never been used** — 0
+>    rows each in production. The feature is not "add statuses"; find out what
+>    actually stopped the owner before writing a migration.
+> 2. **One question has to go to the owner first.** They said `lent` should stop
+>    counting as owned. That makes a game lent to a friend reappear on the
+>    shopping list — the exact "bought twice" failure `preordered` counts as held
+>    to avoid. Recommendation and both readings are in §2.
+> 3. **"Held" is defined four times in two different ways** across
+>    `packages/db` and `packages/core`. Consolidate before adding a value.
+> 4. **History must not cascade.** `copy` cascades from `item`, so the obvious FK
+>    erases the record that you ever owned the thing — the one fact being kept.
+>
+> ---
+>
+> ### â­ï¸ Superseded note — marking things sold or given away
+>
+> *"We also have no way to mark things sold or given away or any statuses
+> manually. I gave away item 303 since another item covered it and I have many
+> other games I want to give away or sell. Can we add a way to edit it and then
+> change its status tag from owned to lent or sold or something. This can be in a
+> different thread."* — the owner, 2026-08-09. **Not built. Do not start it
+> without reading this first.**
+>
+> ⚠ï¸ **Half of it already exists, so this is probably not the feature it sounds
+> like.** `COPY_STATUSES` in `packages/core/src/constants.ts` is already
+> `['owned','wanted','preordered','lent','sold']`, migration 0001 has the matching
+> CHECK, and **`CopyEditor.tsx:102` already renders a `<select>` over all five**.
+> So a copy *can* be moved from `owned` to `sold` today. Find out why that did not
+> reach the owner before writing any code — the likely answers are
+> discoverability (where `CopyEditor` is reachable from) or that neither `sold`
+> nor `lent` means *given away*.
+>
+> | Known | |
+> |---|---|
+> | Item 303 | `The Binding of Isaac: Four Souls - Gold Box Expansion`, copy 298, still `owned` — the owner says it is gone |
+> | Missing vocabulary | Nothing distinguishes *sold* from *given away*; `lent` implies it is coming back |
+> | Likely blast radius | A new status value touches `constants.ts`, a CHECK-constraint migration, every `status IN (...)` query, the completeness "held" rule, and the collection filter |
+>
+> ⚠ï¸ The completeness feature reads `owned/lent/preordered` as **held**. Any new
+> status has to declare which side of that line it sits on, or a game you gave
+> away starts counting towards "you own 6 of 7".
+---
+
+### What shipped
+
+The plan doc is [`info/copy-status-history.md`](info/copy-status-history.md),
+now marked BUILT. Its §5 build order was followed; where it posed a question,
+its own recorded recommendation was taken, and each of those is **vetoable** —
+listed below with what a veto would cost.
+
+| Step (§5) | Outcome |
+|---|---|
+| 1 · Reproduce the problem | Confirmed by reading the code rather than by clicking: `CopyEditor` already offered all five statuses, so nothing *stopped* the owner mechanically. The blocker was **vocabulary and reach**, exactly as §1 predicted |
+| 2 · The `lent` question | Already answered by the owner on 2026-08-09 and already implemented — `lent` is in `HELD_STATUSES`, so a lent game never reappears on the shopping list |
+| 3 · Consolidate "held" | **Already complete before this session.** `HELD_STATUSES` / `OWNED_COPY_STATUSES` live in `packages/core/src/constants.ts` and reach SQL through `statusList()`. Verified rather than assumed: every `status IN (…)` in `packages/db` goes through one of them |
+| 4 · Migration | `0029_copy_disposal_history.sql` — one `ALTER TABLE copy ADD COLUMN disposal`, the `copy_event` table, two indexes, two triggers. **No rebuild of `copy`** |
+| 5 · Route | Events are written from **one place**, `updateCopy` in `packages/db/src/copies.ts`, in the same `db.batch` as the UPDATE they describe |
+| 6 · UI | A **"No longer ours"** button on every copy row, a "What happened to it" fieldset asking which / who / how much, and a **History** card under the shelf |
+| 7 · Collection | Partially, deliberately — see decision 3 below |
+
+### ⚠️ The four decisions taken, all vetoable
+
+1. **Option B over option A (§3): `disposal` is a COLUMN, not a sixth status.**
+   SQLite cannot widen a CHECK; `given_away` as a status needs the 12-step
+   rebuild of `copy`, which silently drops migration 0002's two quantity
+   triggers. **The cost, stated plainly: a copy the owner gave away is STORED
+   with `status = 'sold'`.** No screen shows that word — `copyStateLabel()`
+   folds status and disposal into "given away", the status dropdown reads "no
+   longer ours", and the CSV export carries a `disposal` column beside `status`
+   for exactly this reason. A hand-written SQL query will still see `sold`.
+   **To veto:** option A is still open and costs one careful rebuild migration.
+2. **No event is written when a copy is CREATED.** `created_at` already records
+   the arrival and the first status change records what it arrived as in its
+   `from_status`, so the timeline is reconstructible either way. What a birth
+   event would cost is atomicity: the copy's id does not exist until the INSERT
+   has run, so the pair cannot share a `db.batch`, and a second statement
+   afterwards can fail alone and leave a history silently one row short.
+   **To veto:** accept a non-atomic second write, or move the insert into the
+   batch behind `last_insert_rowid()`.
+3. **§5 step 7 is implemented at the COPY surface, not in the collection query.**
+   Disposed copies are folded behind a `<details>` on the item page — collapsed,
+   with the count always visible — and the collection's status dropdown offers
+   "no longer ours" as the filter half. The collection's paging SQL is
+   **untouched**, so a game whose every copy has gone is still listed there.
+   That was deliberate: hiding whole trees is a different decision (the catalog
+   row is not the copy), and there are **zero disposed copies in production** to
+   calibrate it against. **To veto:** port `library_catalog`'s `NOT_ONLY_SOLD`
+   predicate into `matchingRootsSql`.
+4. **Append-only is enforced by TRIGGERS, not by a comment.** §7 says history is
+   append-only; a rule that matters gets promoted from prose to a mechanical
+   guard. ⚠️ The UPDATE trigger could not be a blanket abort: `ON DELETE SET
+   NULL` *is* an UPDATE, and SQLite fires triggers for foreign-key actions when
+   `recursive_triggers` is on — which is a pragma, not something we can promise
+   on D1. It permits exactly the shape a SET NULL makes and refuses everything
+   else, including re-pointing an event at a different game.
+
+### Also changed, and its absence would have been a hole
+
+**`copy_event` and `copy.disposal` joined `/export.json` and `/export.csv`.**
+The export is this app's answer to *"D1 is the only copy of your data"*. A
+backup that omitted the history would leave a gap shaped exactly like the
+feature's purpose: the one class of fact designed to outlive its row would not
+survive a restore. `schemaVersion` moved `0001_init` → `0029_copy_disposal_history`.
+
+### Verification — measured, not asserted
+
+| | |
+|---|---|
+| Tests | **129 pass, 0 fail** (95 before this change: **+14** in `packages/db/test/copy-event-no-cascade.test.ts`, **+20** in `apps/worker/src/lib/copy-disposal.test.ts`). The test glob was widened to include `packages/db/test/*.test.ts`, matching `library_catalog` |
+| ⚠️ The no-cascade test | Applies **every migration file in order** to a real in-memory SQLite with `PRAGMA foreign_keys = ON`, then deletes the copy, then deletes the *game*, and asserts the event is still standing with `item_name` intact — **including with `recursive_triggers = ON`**, the case the UPDATE trigger's shape exists for. Without that pragma every one of those deletions would have "passed" by doing nothing at all |
+| Migration, local | `npm run db:migrate:local` — 7 commands |
+| Migration, remote | `npm run db:migrate`, run **before** the deploy. Verified live in `sqlite_master`: `copy_event`, `copy_event_append_only_delete`, `copy_event_append_only_update`, `idx_copy_event_item`, `idx_copy_event_copy` |
+| Production copy counts, read live 2026-09-02 | `owned` 636 copies / 710 units · `preordered` 172 / 204 · `wanted` 30 / 31 · **`lent` and `sold` still 0**, `disposal` non-null on 0 rows. (The doc's 2026-08-09 reading was 587 / 204 / 30 — the collection has moved, the premise has not) |
+| Typecheck + build | All seven workspaces clean; `vite build` clean |
+
+### ⚠️ Corrected a stale gotcha while doing it
+
+The plan doc's §6 said *"`wrangler d1 migrations apply --remote` returns 7403 on
+this account"* and told the reader to apply migrations by hand through
+`d1 execute --remote` plus a manual `d1_migrations` INSERT. **Measured
+2026-09-02: it works.** `npm run db:migrate` applied 0029 remotely in 10.42 ms
+on wrangler 4.118.0. Retired in the plan doc and in
+[`access/deploys.md`](access/deploys.md).
+
+### ⚠️ What was NOT verified
+
+- **No pixels.** Nothing was opened in a browser. The History card, the "What
+  happened to it" fieldset, the collapsed gone-copies section and their CSS are
+  typechecked and built, not looked at.
+- **No live write.** No copy has been marked as gone in production, so the
+  `updateCopy` → `db.batch` → `copy_event` path has never run against D1. The
+  SQL it emits is exercised against SQLite; **`db.batch`'s transactional
+  behaviour is a D1 promise this took on trust.**
+- **Item 303** — `The Binding of Isaac: Four Souls - Gold Box Expansion`, the
+  game the owner actually gave away — is **still `owned`**. That is his to do,
+  and it is the one-click test of the whole feature.
+- The two export routes were not called.
+
+---
+
 ## ✅ SHIPPED — deploy guards + `deploys.log` ported from `library_catalog`, 2026-09-02
 
 **The item as it stood in `TODO.md`, moved whole:**
