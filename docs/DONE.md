@@ -14,6 +14,36 @@
 
 ---
 
+## ✅ DEPLOYED — `ca6e5ad7` live as version `57a3d118`, 2026-09-02 17:18Z
+
+Both entries below are now on `boardgames.heygabi.ai`, shipped **through the new
+guards** — the first real exercise of them, and the first line
+`deploy-done.mjs` has ever appended to `deploys.log`:
+
+```
+2026-09-02T17:18:38.268Z  ca6e5ad7978ae1dbc48da56b23227a52f4f1cb07  opus-disposal  57a3d118-e6ad-40c1-a1c6-763f2412326b
+```
+
+✅ **The Cloudflare version lookup WORKED** — `57a3d118` matches the
+`Current Version ID` wrangler printed. Worth stating, because the same script
+recorded `version-unknown` on every line for its whole life in `library_catalog`
+before the 2026-08-25 fix; this is the first evidence that fix holds here.
+
+**Order kept:** migration remote → commit → guards → deploy. The schema was in
+place before the code that reads it.
+
+| Live check | Result |
+|---|---|
+| `GET /api/health` | `200` · `{"ok":true,"database":"up","version":"0.1.0"}` |
+| `GET /api/items/303/history` unauthenticated | `401 {"error":"unauthenticated"}` |
+
+⚠️ **That 401 is NOT evidence the new route exists.** A deliberately bogus path,
+`/api/items/303/definitely-not-a-route`, returns the identical `401` — auth runs
+ahead of routing, so every unauthenticated probe looks the same. The history
+endpoint's live behaviour is **unverified** and needs one signed-in request.
+
+---
+
 ## ✅ SHIPPED — disposal reasons + append-only copy history, migration 0029, 2026-09-02
 
 **The two items as they stood in `TODO.md`, moved whole** (their mojibake is
