@@ -4,7 +4,73 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-**Last updated:** 2026-08-21 — split from `HANDOFF.md` per estate DOCS_STANDARD.
+**Last updated:** 2026-09-02 — billing phase 3 landed INERT; the soak that
+flips it is the item directly below.
+
+---
+
+## ☐ Billing phase 3 is deployed but INERT — the soak, then the flip (2026-09-02)
+
+All seven money paths are gated (`5150269f` live as `2e598a9e`; the build is in
+[`DONE.md`](DONE.md)) and **`BILLING_POLICY = "off"`**, so nothing has ever
+resolved, logged or refused.
+
+### The one-line change
+
+`apps/worker/wrangler.toml`, in `[vars]`, beside `ESTATE_AUTH_URL`:
+
+```
+- BILLING_POLICY = "off"
++ BILLING_POLICY = "shadow"
+```
+
+⚠️ **`apps/worker/src/lib/billing-gate.test.ts` reads that file and FAILS
+unless it says `"off"`** — deliberately, so a flip cannot ride along on an
+unrelated deploy (design §4.2). Update the assertion **and the comment block
+above the value** in the same commit; a second test fails if the prose stops
+naming the value, which is §6.1 defect 3's tripwire applied to this flag.
+
+🔴 **`BILLING_POLICY` is NOT `ESTATE_CHECK`.** That one is already `enforce`
+and answers *"is this person still a member"*. This one answers *"may this
+person spend"*. Reading the first as licence to flip the second is the mistake
+the test's second assertion exists to prevent.
+
+### Reading the soak
+
+```
+npm run tail --workspace @bgc/worker      # then: '"evt":"billing_policy"'
+```
+
+⚠️ **These lines are JSON, unlike this repo's prose `estate shadow:` lines** —
+a money soak is counted and filtered, not read by eye. Each carries
+`would_deny` **and** `proceeded`; the second is the field the estate paid to
+learn it needed
+(`catalog-platform/docs/info/audiobook-auth-soak-2026-08-16.md`: a soak whose
+criterion cannot be falsified is not a soak). The cron's lines carry
+`"principal_kind":"system"`, so G7 can be counted separately from the six
+request paths.
+
+### Flip shadow → enforce only when BOTH hold over ≥ 7 days (§4.2)
+
+1. **Zero `"would_deny":true`** on any feature the owner did not switch off.
+2. ⚠️ **At least one `"would_deny":true`** on a feature he DID switch off.
+   Without this half, "zero denials" is indistinguishable from "the instrument
+   never ran" — the exact `0 of 0 — unmeasured, not clean` verdict the
+   audiobook auth soak reached.
+
+⚠️ **Nothing can be measured until a rule exists.** The `billing_policy` table
+has no row for `games` today, so shadow would log a stream of
+`would_deny:false`, satisfy criterion 1, and fail criterion 2 forever. Write
+the throwaway deny FIRST, from the Spending panel on
+<https://heygabi.ai/admin/>. ⚠️ A change takes effect within **10 minutes** —
+the same number as the revocation delay, and the same number on purpose.
+
+### The cheapest first test, if you want one
+
+Switch **`sweep.details`** off for `games` with `principal_kind = system`. It
+is the only unattended biller here, it fires on the hour so evidence arrives
+without anyone clicking anything, and it is the row the design's §7.1 draws
+with a clock icon rather than a person icon.
 
 ---
 

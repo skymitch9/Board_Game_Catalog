@@ -14,6 +14,143 @@
 
 ---
 
+## ✅ DEPLOYED — billing phase 3: all seven money paths switchable from `/admin`, and every one ships INERT (`5150269f` live as `2e598a9e`, 2026-09-02 21:14Z)
+
+Design: `catalog-platform/docs/info/llm-billing-control-design.md`, phase 3 —
+*"library, library2 and games read `billing_denied` off /seen"*. The library's
+half landed the same day in its own repo.
+
+**Review link:** nothing renders differently here, and that is the point of
+shipping at `off`. The switch that drives it is <https://heygabi.ai/admin/> →
+the **"Spending — what may bill the model, and where"** panel, whose `games`
+column now reaches real code.
+
+### The seven paths, and what each is ANDed with
+
+⚠️ **Nothing was replaced.** The existing gate decides first; policy can only
+add a NO on top of it (design §3.3). Deny-only is structural rather than a
+convention — the gate returns a refusal or `null`, so no policy row can open
+anything (§9 Q1).
+
+| # | Path | Feature id | Still gated by, unchanged |
+|---|---|---|---|
+| G1 | `POST /api/vision/identify` | `scan.photo` | `scanPhoto` |
+| G2 | `POST /api/vision/shelf` | `scan.photo` | `scanPhoto` |
+| G3 | `POST /api/scan-jobs` | `scan.photo` | `scanPhoto` + key presence |
+| G4 | `POST /api/barcode/identify` | `barcode.paid` | `runResearch` |
+| G5 | `POST /api/research/:id/run` | `research.tier` | `runResearch` + the blocked-tier check |
+| G6 | `POST /api/research/:id/details` | `research.details` | `runResearch` + key presence + the in-flight dedupe |
+| G7 | the hourly cron sweep | `sweep.details` | cron match + key presence + `SWEEP_LIMIT = 8` |
+
+**G1/G2/G3 share one id on purpose.** `scan.photo` is the registry's single
+switch for every photo read, because they are the same spend on the same model
+and a second id would be a switch the owner has to remember to press twice.
+
+**G4 has its own id, and that mirrors the capability split this repo already
+made.** The vision routes are `scanPhoto` and read a PHOTO; the paid barcode
+rung is `runResearch` and buys a web search on a NUMBER. Two costs, two
+switches.
+
+**G3 and G5 are both checked BEFORE anything is written.** G3's vision call
+happens in `waitUntil`, so a job row created and then refused would sit in the
+queue looking like work in progress nobody is doing; G5's run row is the
+history, and a refusal must not litter it with a run that never ran.
+
+**G7 is the one that matters.** 🔴 It is the only unattended biller in this
+repo — ~11¢/hour while a backlog exists, with no user anywhere in it — so a
+per-person rule structurally cannot reach it. It resolves through the estate's
+fourth principal, `system`, and its own door
+(`GET /api/estate/billing/policy` on `ESTATE_APP_TOKEN_GAMES`), because a cron
+has no email to send to `/seen`. **Switching `sweep.details` off for `games` is
+the only way to stop it that is not a deploy.**
+
+### ⚠️ `SWEEP_LIMIT` was NOT touched, and that settles §9 Q2 here
+
+`lib/details-sweep.ts` deliberately refuses to make `SWEEP_LIMIT` an env var —
+*"a knob nobody tunes is a knob that hides its value"* — and a central spending
+switch reaches into exactly that sweep. Both stand, because they are different
+things: a **knob** is a number somebody must choose well, and the argument
+against exposing it is sound; a **switch** has no value to hide and one obvious
+meaning. This build adds only the switch. ⚠️ No numeric budget and no
+per-person spend cap shipped, per the same answer: a cap needs a spend ledger
+to enforce against, and a cap that silently mis-counts is worse than no cap.
+
+### What was built
+
+| Piece | File |
+|---|---|
+| The cache column | `migrations/0030_billing_cache.sql` — applied to the remote D1 before the deploy |
+| The read/write | `packages/db/src/estate.ts` |
+| The wiring | `apps/worker/src/middleware/estate.ts` — parses the cached column in, persists the refresh, sets `billingDenied` on the context, and sends `local_role` |
+| The gate + the system door | `apps/worker/src/lib/billing-gate.ts` |
+| The pins | `apps/worker/src/lib/billing-gate.test.ts` — 26 tests |
+| The posture | `apps/worker/wrangler.toml` — `BILLING_POLICY = "off"` |
+
+`local_role` is a **claim** by this app about its own user's rung, and that is
+the right trust level: the app is the authority on its own ladder, it already
+holds an app token, and the value is used only to pick a DENY row. Policy
+cannot grant, so a wrong claim can close something and never open it.
+
+### The two things this build got right on purpose, either of which fails silently
+
+1. 🔴 **`null` is UNKNOWN; `[]` is "the directory denied nothing".** They never
+   collapse — not on the wire, not in the D1 column (nullable, **no**
+   `DEFAULT '[]'`), not in the parser, not on the system door. An auth Worker
+   mid-deploy running pre-0016 code answers silence, and silence read as `[]`
+   would un-switch every policy the owner had set for the length of that
+   deploy, with nothing anywhere going red. Unknown **proceeds** (§3.5 row 3),
+   because denying every paid feature during an auth outage turns it into a
+   household-wide *"everything is broken"*. The wallet is bounded by
+   `SWEEP_LIMIT` and the timeouts — *a policy that can only deny cannot be
+   depended on to fail closed.*
+2. ⚠️ **`BILLING_POLICY` is not `ESTATE_CHECK`.** One answers *"is this person
+   still a member"* and is already at `enforce`; the other answers *"may this
+   person spend"* and has never run. A test asserts **both** values, so nobody
+   can read the first as licence to flip the second.
+
+### Mechanical guards, not prose
+
+- A **literal pin** on every feature id this Worker checks. A Worker checking
+  `research.cover` (singular) against a registry holding `research.covers`
+  fails **silently open, forever**, and nothing else in the estate would
+  notice.
+- A test that **reads `wrangler.toml`** and fails unless `BILLING_POLICY` is
+  `"off"`, so a flip cannot ride along on an unrelated deploy (§4.2).
+- A test that fails unless the **comment block beside the value names the
+  value** — §6.1 defect 3 was exactly that drift on `ESTATE_CHECK`, and the
+  same tripwire now covers the new flag.
+- Every refusal is asserted to carry a `detail`. ⚠️ That is the line
+  `estate-refusals.test.ts` already holds for `estateGate`, and it exists
+  because `estate_revoked` shipped as a bare `{error}` for weeks — surviving
+  only because `apps/web/src/lib/errors.ts` happened to translate the code, so
+  no browser ever showed it. The rule is about the RESPONSE.
+
+### Verified
+
+Tests **129 → 155** (+26), all green; `npm run typecheck` clean; the migration
+applied remotely **before** the deploy; the guarded `npm run deploy`
+(sync + check-clean + deploy-guard + typecheck + full suite) ran to completion;
+`/api/health` answered 200 afterwards; the deploy banner shows
+`env.BILLING_POLICY ("off")` on the live Worker.
+
+### ⚠️ NOT verified
+
+- **No rule has ever been written for `games`**, so `billing_denied` has never
+  been observed non-empty on a real `/seen` answer here, and **the gate has
+  never fired.** Every truth-table assertion is a unit test.
+- **No `wrangler tail` was read.** `BILLING_POLICY` is `off`, so no
+  `billing_policy` line has ever been emitted in production.
+- **The system door was never called live.** Its client is pinned against a
+  stubbed fetch; nobody has watched the cron present `ESTATE_APP_TOKEN_GAMES`
+  to `auth.heygabi.ai`, and if that secret were unset the door would log
+  `not configured` and answer unknown — which sweeps.
+- **The `local_role` claim was not observed server-side.** It is sent; nothing
+  here proves the directory used it.
+- **No refusal was provoked live**, so nobody has seen a `billing_denied` body
+  come off this Worker.
+
+---
+
 ## ✅ DEPLOYED — `ca6e5ad7` live as version `57a3d118`, 2026-09-02 17:18Z
 
 Both entries below are now on `boardgames.heygabi.ai`, shipped **through the new
