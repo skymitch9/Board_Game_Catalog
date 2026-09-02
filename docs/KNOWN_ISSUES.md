@@ -2,7 +2,8 @@
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
 > Last verified: **2026-09-02** — KI-4 added that day and measured against live
-> D1. ⚠️ KI-2 and KI-3 were **not** re-checked and still carry 2026-08-21.
+> D1; KI-5 added the same day and measured against the live site's response
+> headers. ⚠️ KI-2 and KI-3 were **not** re-checked and still carry 2026-08-21.
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
@@ -109,3 +110,39 @@ through `copyStateLabel()`. If a second consumer of the raw `copy` table appears
 **Not a candidate for change:** the count of disposed copies. It was **0** on
 2026-09-02, and even at 500 the storage shape would be no more wrong than it is
 at 1.
+
+---
+
+## KI-5 · The theme assets ship `immutable` **and** `no-cache` in the same header — `WATCHING`
+
+**Symptom.** Measured against the live site on **2026-09-02**:
+
+| Path | `Cache-Control` served |
+|---|---|
+| `/assets/fonts/rajdhani-400.woff2` | `public, max-age=31536000, immutable` |
+| `/assets/estate-theme.css` | `public, max-age=31536000, immutable, no-cache` |
+| `/assets/theme.js` | `public, max-age=31536000, immutable, no-cache` |
+| `/estate/estate-search.js` | `no-cache` |
+
+`apps/web/public/_headers` carves the two un-hashed theme files out of the
+`/assets/*` immutable rule and its comment states the mechanism as *"later rules
+override earlier ones for the same header"*. **Cloudflare Assets CONCATENATED
+them instead**, so `immutable` survives beside the `no-cache` that was meant to
+replace it. The `/estate/*` file is the control: it sits outside `/assets/`,
+inherits nothing, and comes back clean.
+
+**Why tolerated.** `no-cache` is the stronger directive and forces revalidation,
+and `immutable` is defined only for responses that are *fresh* — which
+`no-cache` prevents. So the intended behaviour almost certainly still holds, and
+the theme did update across the 2026-08-17 re-sync without anyone reporting a
+stale skin. ⚠️ **But that is reasoning, not a measurement** — no browser was
+observed revalidating this file, and Firefox and Safari are the two engines that
+honour `immutable` at all.
+
+**What would change it.** ⚠️ **One report of a phone stuck on an old theme after
+a re-sync**, or a measured load in Firefox/Safari that skips revalidation on
+`/assets/estate-theme.css` while the ETag has changed. The fix if it happens is
+to move the two files out of `/assets/` entirely — the same shape
+`sync-estate-search.mjs` already uses for `/estate/`, which is why that path is
+the clean one in the table above. Related durable reference:
+[`info/estate-theme.md`](info/estate-theme.md).

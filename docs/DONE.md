@@ -1,7 +1,9 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-08-21** — split from `HANDOFF.md` per estate DOCS_STANDARD.
+> Last updated: **2026-09-02** — the two 2026-08-13 "BUILT, NOT DEPLOYED" items
+> arrived, both already live. Split from `HANDOFF.md` per estate DOCS_STANDARD
+> on 2026-08-21.
 >
 > ⚠️ **This is an archive, not a living doc. APPEND ONLY.** Nothing here is
 > ever edited, re-summarised or tidied. An item arrives exactly once, at
@@ -11,6 +13,141 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ DEPLOYED — estate themes + the index backstop off the cron (`c1880c6` + `4dcf9b7`, live in `2e598a9e`, verified 2026-09-02)
+
+🔴 **Nothing was deployed to land this. It went live as a passenger** on the two
+guarded deploys of 2026-09-02 (`ca6e5ad7` → `57a3d118`, then `5150269f` →
+`2e598a9e`); both commits are ancestors of both. The heading below said "BUILT,
+NOT DEPLOYED" for twenty days after it was already live — which is the whole
+argument for reading a body before trusting a title.
+
+**Review link:** <https://boardgames.heygabi.ai/> — the cog, **Theme** group.
+Retro is still the default (`<html data-default-theme="retro">` is in the served
+HTML, checked 2026-09-02).
+
+### Verified live 2026-09-02, by measurement
+
+| Claim from 2026-08-13 | Verdict today |
+|---|---|
+| Retro stays the default | ✅ `data-default-theme="retro"` in the served index.html |
+| `/assets/estate-theme.css` + `theme.js` are served | ✅ both **200**, 50,947 and 12,728 bytes |
+| The cog offers **three** themes | ⚠️ **stale — it offers five.** `THEMES = ['classic','apple','cyberpunk','retro','hearts']` in the live `theme.js`. The manual vendoring this row describes was replaced on 2026-08-17 by `scripts/sync-estate-theme.mjs` (`0c84d6b`/`c56fabf`), which is exactly the drift that script exists to end |
+| Vendored assets are committed in `apps/web/public/assets/` | ⚠️ **stale — that directory is gitignored build output now.** Same 2026-08-17 change |
+| Index backstop rides request traffic, one health GET per isolate-hour, every `/api/*` logs its decision | ✅ **proved in production**, not inferred — see below |
+
+**The backstop, read off `wrangler tail` against the live Worker while six
+unauthenticated `GET /api/health` calls went in (2026-09-02 22:45Z):**
+
+```
+index backstop: due — checking index health
+index backstop {"skipped":"index is fresh (837 rows, pushed 2026-09-02T17:18:52.609Z)"}
+index backstop: throttled (checked 0m ago, next in 60m)
+index backstop: throttled (checked 3m ago, next in 57m)
+```
+
+That is the exact ladder the entry below promised from `wrangler dev` —
+due → fresh → throttled — now measured on the deployed artifact. The
+half-hourly cron no longer carries it (`apps/worker/src/index.ts:68` mounts
+`indexBackstopOnRequest()` on `/api/*`; the `scheduled()` handler says so at
+line 298).
+
+⚠️ **NOT verified, and still the owner's step:** an attended look at the themes.
+Token plumbing and delivery are measured; **pixels are not**, and the set grew
+from three to five since anybody looked.
+
+⚠️ **One live header does not match what `_headers` intends** — recorded as
+[KI-5](KNOWN_ISSUES.md).
+
+### The 2026-08-13 entry, moved whole from `TODO.md`
+
+*Byte-identical to what stood in `TODO.md` — mojibake and all, see
+[KI-3](KNOWN_ISSUES.md). Only the heading level changed (`##` → `####`) so it
+nests under the verdict above.*
+
+#### 🔶 BUILT, NOT DEPLOYED — estate themes adopted + index backstop off the cron, 2026-08-13
+
+Commits `4dcf9b7` (backstop) + `c1880c6` (themes), pushed. Contract additions
+landed in canonical `catalog-platform` as `e95a32d`. Deploying is the owner's
+step (`npm run deploy`); nothing here is live.
+
+| | |
+|---|---|
+| Themes | The app styles against the estate `--et-*` contract (guide: `catalog-platform/docs/info/estate-themes.md`). **Retro — this app's own look, extracted verbatim — stays the default** (`data-default-theme="retro"`); apple/cyberpunk selectable in the cog's new Theme group. Storage moved to `hg_theme`/`hg_mode` with a migrate-once from `bgc-theme` in index.html; `bgc-theme` is never written again |
+| Vendored assets | `apps/web/public/assets/` — estate-theme.css + theme.js from catalog-platform `cba0397` **plus the games-adoption tokens** (same patch as canonical `e95a32d`); Rajdhani Ã—3 + Share Tech Mono woff2 + OFL join the committed fonts. ⚠ï¸ Re-vendoring from canonical ≥`e95a32d` is safe and also brings the `classic` theme; the games cog offers three themes either way until someone adds it |
+| ⚠ï¸ Cache | `_headers` gives estate-theme.css/theme.js `no-cache` — they are NOT content-hashed; without that rule the `/assets/*` immutable line would pin the first theme css a phone ever saw for a year |
+| Index backstop | No longer rides the half-hourly cron (it silently failed 3 consecutive ticks 2026-08-13 while a manual push with the same token succeeded; tails died before catching it). Now rides request traffic: at most one health GET per isolate-hour, **every /api/\* request logs its backstop decision** — proof is `wrangler tail` + one unauthenticated `curl /api/health`. After-mutation pushes and the cron's other duties untouched |
+| Verified | typecheck all workspaces + vite build (⚠ï¸ no test script in this repo); local `wrangler dev` showed `due → skipped (fresh, 836 rows)` then `throttled (next in 60m)`. **Not verified: an attended look at the three themes** — token plumbing is checked (no undefined `var()` anywhere), pixels are not |
+
+
+---
+
+## ✅ DEPLOYED AND ENFORCING — estate auth (`0077a7a`, flipped to `enforce` 2026-08-14, live in `2e598a9e`, verified 2026-09-02)
+
+🔴 **This did not land in shadow, and it must not be put back into shadow.**
+`catalog-platform/docs/info/estate-auth-design.md`'s own status header records
+*"games flipped to **enforce** and deployed 2026-08-14T05:07Z"* — **one day
+after** the entry below was written. `wrangler.toml` has read
+`ESTATE_CHECK = "enforce"` ever since; the comment beside it lied about that
+until `93fad25` (2026-08-26) fixed it and `apps/worker/src/lib/estate-refusals.test.ts`
+pinned the fix.
+
+⚠️ **Rolling `enforce` → `shadow` would be an access-INCREASING change** — a
+revoked member would stop being refused — against a posture the owner already
+chose. The estate's shadow-first rule governs `off → shadow → enforce`; it has
+never been an instruction to walk one back. **Any future move of this flag is
+the owner's, on measured evidence, in its own commit.**
+
+**Review link:** <https://boardgames.heygabi.ai/> — signed in as a household
+member, everything behaves normally; that is what `enforce` looks like when the
+directory says yes. The membership side is <https://heygabi.ai/admin/>.
+
+### Verified live 2026-09-02, by measurement
+
+| Claim from 2026-08-13 | Verdict today |
+|---|---|
+| Committed as `off`, so deploying is inert | ⚠️ **false, and already corrected in the body below on 2026-08-26.** The committed and live value is `enforce` |
+| Migration `0026_estate_cache.sql` applied **local only**; remote apply pending | ✅ **applied remote.** `d1_migrations` holds 30 rows and `0026_estate_cache.sql` is among them |
+| Secret `ESTATE_APP_TOKEN_GAMES` needed, or shadow logs `config unset` | ✅ **set.** `wrangler secret list` names it (names only — no value was read) |
+| Deploying is the owner's step; nothing is live | ⚠️ **stale.** `0077a7a` is an ancestor of both 2026-09-02 deploys and is in the live artifact `2e598a9e` |
+| The check runs | ✅ **proved against live D1**: `app_user` carries **2 `approved`** rows whose newest `estate_checked_at` was **2026-09-02T22:44:36Z** — a minute before the read — and **2 `pending`** rows last answered 2026-08-16. The 10-minute TTL cache is being written in production |
+
+**Superseding one entry lower in this file:** *"✅ FIXED, NOT DEPLOYED — two
+refusal defects … 2026-08-26"* (`93fad25`) **is deployed** — an ancestor of both
+2026-09-02 deploys, in the live artifact `2e598a9e`. The archive is append-only,
+so that heading stays as it was written; this is the correction.
+
+⚠️ **NOT verified:** no shadow soak exists for this app and none can now be run
+without walking the flag back — so there is **no measured "zero WOULD-DENY"
+record** here, unlike the library's. What exists instead is nineteen days of
+`enforce` with two approved members and no reported refusal, which is weaker
+evidence of a different kind. Also not verified: what a *revoked* member
+actually sees (nobody is revoked), and the `estate_unreachable` 503 path
+against a real outage.
+
+### The 2026-08-13 entry, moved whole from `TODO.md`
+
+*Byte-identical to what stood in `TODO.md`, including the 2026-08-26 correction
+already embedded in its first row. Only the heading level changed
+(`##` → `####`).*
+
+#### 🔶 BUILT, NOT DEPLOYED — estate auth adopted in shadow mode, 2026-08-13
+
+Commit `0077a7a`, pushed. Design:
+`catalog-platform/docs/info/estate-auth-design.md` §3.1/§5/§14.5.
+
+| | |
+|---|---|
+| What | Estate membership check wired into `requireAuth`, gated by `ESTATE_CHECK` (`off` \| `shadow` \| `enforce`). ⚠️ **This row said "committed as `off`, so deploying this is inert" — corrected 2026-08-26. The committed value is `enforce`**, and `wrangler.toml`'s comment carried the same stale claim (fixed in the same commit, now pinned by `apps/worker/src/lib/estate-refusals.test.ts`). ⚠️ **This section's heading — "BUILT, NOT DEPLOYED … in shadow mode" — is therefore stale too, and is deliberately NOT swept here:** the heading is the half that goes stale first, so somebody has to read the whole body and move it whole rather than trust the title |
+| New build dependency | ⚠ï¸ This repo now materialises the canonical `estate-auth` module from the sibling `catalog-platform` checkout — `scripts/sync-estate-auth.mjs` runs as `predev`/`pretypecheck`/`predeploy` and **fails loudly** if the checkout is missing. The old local verifier in `middleware/auth.ts` was replaced by it (behaviour-identical: the hardened bypass came FROM here) |
+| Migration | `0026_estate_cache.sql` — two nullable `app_user` columns, plain ADD COLUMN. **Applied LOCAL only; remote apply is a pending owner/dispatcher step**, before the deploy that carries this code |
+| Secret | `npm run secret ESTATE_APP_TOKEN_GAMES` (same value the auth Worker holds under that name) — without it, shadow logs `config unset` per request and skips |
+| Reading shadow | `npm run tail --workspace @bgc/worker`, grep `estate shadow:`; the lines that matter carry **`WOULD-DENY`** — expect zero for household members before anyone flips `enforce` |
+| Default-grant | `viewer` (the smaller guest role, on purpose — rating stays a local upgrade, preserving 0023/0024). Written only in `enforce`; shadow logs the would-grant |
+| Untouched | `OWNER_EMAILS` recovery hatch (runs before the estate check), the rate limiter, every route and capability gate |
+| Verified | typecheck (⚠ï¸ no test script in this repo) + 11 `wrangler dev` probes against local D1 with a mock `/seen`: off inert; shadow logs revoked as WOULD-DENY while answering 200, rides a stale cache through an outage, would-grants without writing; enforce grants/403s/503s correctly and serves the standing owner through an outage |
 
 ---
 

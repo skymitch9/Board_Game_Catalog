@@ -5,7 +5,11 @@ Work that is agreed but not built/deployed. Finished work lives in
 and [`info/`](info/README.md).
 
 **Last updated:** 2026-09-02 — billing phase 3 landed INERT; the soak that
-flips it is the item directly below.
+flips it is the item directly below. The two 2026-08-13 **"BUILT, NOT
+DEPLOYED"** items left for [`DONE.md`](DONE.md) the same day: both were
+verified **already live** in `2e598a9e` (they rode the 2026-09-02 deploys) and
+neither needed a deploy of its own. ⚠️ The estate-auth one is at **`enforce`**,
+not shadow, and stays there — the reasoning is in its `DONE.md` entry.
 
 ---
 
@@ -87,40 +91,6 @@ cost more and changed nothing about the failure.
 It may still be worth doing later for **accuracy** on a very wide shelf, where
 spines at the edges are small and skewed. That is a different argument and needs
 its own evidence — measure the read rate on a wide shelf before building it.
-
----
-
-## 🔶 BUILT, NOT DEPLOYED — estate themes adopted + index backstop off the cron, 2026-08-13
-
-Commits `4dcf9b7` (backstop) + `c1880c6` (themes), pushed. Contract additions
-landed in canonical `catalog-platform` as `e95a32d`. Deploying is the owner's
-step (`npm run deploy`); nothing here is live.
-
-| | |
-|---|---|
-| Themes | The app styles against the estate `--et-*` contract (guide: `catalog-platform/docs/info/estate-themes.md`). **Retro — this app's own look, extracted verbatim — stays the default** (`data-default-theme="retro"`); apple/cyberpunk selectable in the cog's new Theme group. Storage moved to `hg_theme`/`hg_mode` with a migrate-once from `bgc-theme` in index.html; `bgc-theme` is never written again |
-| Vendored assets | `apps/web/public/assets/` — estate-theme.css + theme.js from catalog-platform `cba0397` **plus the games-adoption tokens** (same patch as canonical `e95a32d`); Rajdhani Ã—3 + Share Tech Mono woff2 + OFL join the committed fonts. ⚠ï¸ Re-vendoring from canonical ≥`e95a32d` is safe and also brings the `classic` theme; the games cog offers three themes either way until someone adds it |
-| ⚠ï¸ Cache | `_headers` gives estate-theme.css/theme.js `no-cache` — they are NOT content-hashed; without that rule the `/assets/*` immutable line would pin the first theme css a phone ever saw for a year |
-| Index backstop | No longer rides the half-hourly cron (it silently failed 3 consecutive ticks 2026-08-13 while a manual push with the same token succeeded; tails died before catching it). Now rides request traffic: at most one health GET per isolate-hour, **every /api/\* request logs its backstop decision** — proof is `wrangler tail` + one unauthenticated `curl /api/health`. After-mutation pushes and the cron's other duties untouched |
-| Verified | typecheck all workspaces + vite build (⚠ï¸ no test script in this repo); local `wrangler dev` showed `due → skipped (fresh, 836 rows)` then `throttled (next in 60m)`. **Not verified: an attended look at the three themes** — token plumbing is checked (no undefined `var()` anywhere), pixels are not |
-
----
-
-## 🔶 BUILT, NOT DEPLOYED — estate auth adopted in shadow mode, 2026-08-13
-
-Commit `0077a7a`, pushed. Design:
-`catalog-platform/docs/info/estate-auth-design.md` §3.1/§5/§14.5.
-
-| | |
-|---|---|
-| What | Estate membership check wired into `requireAuth`, gated by `ESTATE_CHECK` (`off` \| `shadow` \| `enforce`). ⚠️ **This row said "committed as `off`, so deploying this is inert" — corrected 2026-08-26. The committed value is `enforce`**, and `wrangler.toml`'s comment carried the same stale claim (fixed in the same commit, now pinned by `apps/worker/src/lib/estate-refusals.test.ts`). ⚠️ **This section's heading — "BUILT, NOT DEPLOYED … in shadow mode" — is therefore stale too, and is deliberately NOT swept here:** the heading is the half that goes stale first, so somebody has to read the whole body and move it whole rather than trust the title |
-| New build dependency | ⚠ï¸ This repo now materialises the canonical `estate-auth` module from the sibling `catalog-platform` checkout — `scripts/sync-estate-auth.mjs` runs as `predev`/`pretypecheck`/`predeploy` and **fails loudly** if the checkout is missing. The old local verifier in `middleware/auth.ts` was replaced by it (behaviour-identical: the hardened bypass came FROM here) |
-| Migration | `0026_estate_cache.sql` — two nullable `app_user` columns, plain ADD COLUMN. **Applied LOCAL only; remote apply is a pending owner/dispatcher step**, before the deploy that carries this code |
-| Secret | `npm run secret ESTATE_APP_TOKEN_GAMES` (same value the auth Worker holds under that name) — without it, shadow logs `config unset` per request and skips |
-| Reading shadow | `npm run tail --workspace @bgc/worker`, grep `estate shadow:`; the lines that matter carry **`WOULD-DENY`** — expect zero for household members before anyone flips `enforce` |
-| Default-grant | `viewer` (the smaller guest role, on purpose — rating stays a local upgrade, preserving 0023/0024). Written only in `enforce`; shadow logs the would-grant |
-| Untouched | `OWNER_EMAILS` recovery hatch (runs before the estate check), the rate limiter, every route and capability gate |
-| Verified | typecheck (⚠ï¸ no test script in this repo) + 11 `wrangler dev` probes against local D1 with a mock `/seen`: off inert; shadow logs revoked as WOULD-DENY while answering 200, rides a stale cache through an outage, would-grants without writing; enforce grants/403s/503s correctly and serves the standing owner through an outage |
 
 ---
 
