@@ -114,6 +114,24 @@ export interface Env {
   ESTATE_AUTH_URL?: string;
 
   /**
+   * The SPENDING posture — `off` | `shadow` | `enforce`, the exact idiom of
+   * `ESTATE_CHECK` above and coerced the same way (billing design §4). See
+   * `lib/billing-gate.ts`.
+   *
+   *   off      nothing resolves, nothing is logged, nothing costs
+   *   shadow   the decision is logged with `proceeded`, and the call bills
+   *   enforce  a denied path is refused, in words
+   *
+   * ⚠️ **It is NOT `ESTATE_CHECK`.** That flag answers *"is this person still a
+   * member"*; this one answers *"may this person spend"*. `ESTATE_CHECK` being
+   * `enforce` does not make this one enforce, and it must not be assumed to.
+   *
+   * ⚠️ Ships `"off"`, and flipping is the evidence-gated step (§4.2), never a
+   * side effect of an unrelated deploy.
+   */
+  BILLING_POLICY?: string;
+
+  /**
    * This app's own bearer for POST /api/estate/seen — the same value the auth
    * Worker holds as its ESTATE_APP_TOKEN_GAMES secret. Set with
    * `npm run secret ESTATE_APP_TOKEN_GAMES`, never in wrangler.toml. Absent
@@ -138,6 +156,16 @@ export interface Env {
 /** Values attached to the request context by middleware. */
 export interface Variables {
   user: AppUser;
+  /**
+   * The money-path ids this person may NOT spend on, on the `games` site — the
+   * cached `/seen` answer's billing half, put here by the estate gate and read
+   * by `lib/billing-gate.ts` (billing design §3.4).
+   *
+   * 🔴 `null` is UNKNOWN and proceeds; `[]` is "the directory denied nothing";
+   * `undefined` is a request the estate gate never ran for. All three proceed,
+   * and only `[]` proceeds because an answer said so.
+   */
+  billingDenied?: string[] | null;
 }
 
 export type AppBindings = { Bindings: Env; Variables: Variables };

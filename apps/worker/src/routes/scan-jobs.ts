@@ -52,6 +52,7 @@ import {
   withFreshView,
 } from '../lib/scan-ownership.js';
 import { requireCapability } from '../middleware/auth.js';
+import { BILLING_FEATURES, billingRefusal } from '../lib/billing-gate.js';
 
 /**
  * One line of an intake job. Declared in `lib/barcode-scan.ts` because both
@@ -228,6 +229,16 @@ export const scanJobRoutes = new Hono<AppBindings>()
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
+
+    // G3 — the spending gate, ANDed with `scanPhoto` above; it replaces
+    // nothing (billing design §3.3). Inert while `BILLING_POLICY` is "off".
+    //
+    // ⚠️ Checked BEFORE the job row is created. The vision call happens in
+    // `waitUntil`, so a job created here and then refused would sit in the
+    // queue looking like work in progress that nobody is doing — a refusal must
+    // leave no trace but its own sentence and one log line.
+    const billing = billingRefusal(c, BILLING_FEATURES.scanPhoto, 'Photo scanning', '$5/$25 per MTok');
+    if (billing) return c.json(billing.body, billing.status);
 
     // The photo is never stored. It goes straight from this request into the
     // vision call below and is then gone — it lives only in memory, for the few

@@ -13,6 +13,7 @@ import { ResearchError, identifyBarcode } from '@bgc/research';
 import type { AppBindings } from '../env.js';
 import { validateBarcode } from '../lib/barcode-scan.js';
 import { requireCapability } from '../middleware/auth.js';
+import { BILLING_FEATURES, billingRefusal } from '../lib/billing-gate.js';
 
 /**
  * Barcode scanning: a ladder, cheapest rung first.
@@ -137,6 +138,21 @@ export const barcodeRoutes = new Hono<AppBindings>()
     }
     const checked = validateBarcode(parsed.data.barcode);
     if (!checked.ok) return c.json({ error: 'bad_request', detail: checked.detail }, 400);
+
+    // G4 — the spending gate, ANDed with `runResearch` above; it replaces
+    // nothing (billing design §3.3). Inert while `BILLING_POLICY` is "off".
+    //
+    // ⚠️ `barcode.paid` is its OWN registry id and is not `scan.photo`, for the
+    // same reason this route is on `runResearch` while the vision routes are on
+    // `scanPhoto`: it is a research action about a NUMBER, not a photo, and it
+    // buys a web search on top of the model call. Two costs, two switches.
+    const billing = billingRefusal(
+      c,
+      BILLING_FEATURES.barcodePaid,
+      'Paid barcode identify',
+      'per call, plus a web search',
+    );
+    if (billing) return c.json(billing.body, billing.status);
 
     try {
       const result = await identifyBarcode(c.env.ANTHROPIC_API_KEY, checked.code);

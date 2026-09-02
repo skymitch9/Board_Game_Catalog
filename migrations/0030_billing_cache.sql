@@ -1,0 +1,42 @@
+-- Billing policy rides the estate cache — phase 3 of
+-- `catalog-platform/docs/info/llm-billing-control-design.md` (§3.4).
+--
+-- ## What this column holds
+--
+-- The `/seen` answer's `billing_denied` array, verbatim, as JSON text — the
+-- money-path ids this person may NOT spend on, on the `games` site, already
+-- resolved by the directory. A consumer applies it as-is and never recomputes
+-- it, exactly as it does `estate_status`.
+--
+-- ## 🔴 NULL MEANS "UNKNOWN". IT DOES NOT MEAN "NOTHING IS DENIED".
+--
+-- This is the one rule the whole phase rests on, and it is why the column is
+-- NULLABLE with no default rather than `DEFAULT '[]'`. `'[]'` is a real answer:
+-- *the directory replied and denied nothing*. NULL is the absence of an answer
+-- — a row that predates this migration, an auth Worker mid-deploy still running
+-- pre-0016 code, a garbled body. A consumer that read the two as the same thing
+-- would silently un-switch every policy the owner had set for the length of a
+-- deploy, with nothing anywhere going red.
+--
+-- ## Why it rides WITH the status
+--
+-- The one-answer rule (estate-auth-design §4.5): this fact and `estate_status`
+-- are one answer taken at one moment, sharing `estate_checked_at` as their
+-- single freshness stamp. "May this person spend" and "is this person still a
+-- member" must not age separately, so they are written in one UPDATE
+-- (`writeEstateCache`) and read in one SELECT (`readEstateCache`).
+--
+-- ## Shape
+--
+-- ⚠️ Deliberately a plain `ADD COLUMN`, the same choice 0026 made and for the
+-- same reason: 0023/0024 had to rebuild only because a CHECK constraint cannot
+-- be altered, and this column carries no CHECK on purpose — a registry that
+-- grows a new feature id must never need a table rebuild here.
+--
+-- Purely additive: nullable, no default, no backfill, no index (it is reached
+-- through the existing `app_user` row fetch, never queried by). Every existing
+-- row reads NULL, which is "unknown", which is today's behaviour — so this is
+-- safe to apply ahead of the Worker that reads it, and inert while
+-- `BILLING_POLICY` is `off`.
+
+ALTER TABLE app_user ADD COLUMN estate_billing_denied TEXT;

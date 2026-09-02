@@ -56,6 +56,7 @@ import {
   type Identity,
 } from '../estate-auth/index.js';
 import type { AppBindings } from '../env.js';
+import { parseCachedDenied } from '../lib/billing-gate.js';
 
 /**
  * The per-surface posture declaration (owner decision #1): this surface is
@@ -134,11 +135,27 @@ export async function estateGate(
     }
 
     // §5.2: cache while fresh, /seen otherwise, stale cache on failure. The
-    // cache columns live on this user's own app_user row (migration 0026).
+    // cache columns live on this user's own app_user row (migrations 0026 and
+    // 0030).
     const cached = await readEstateCache(c.env.DB, user.id);
     const result = await estateCheck(
-      { status: isEstateStatus(cached.status) ? cached.status : null, checkedAt: cached.checkedAt },
-      { email: user.email, firebaseUid: identity.uid, displayName: identity.name },
+      {
+        status: isEstateStatus(cached.status) ? cached.status : null,
+        checkedAt: cached.checkedAt,
+        billingDenied: parseCachedDenied(cached.billingDeniedJson),
+      },
+      {
+        email: user.email,
+        firebaseUid: identity.uid,
+        displayName: identity.name,
+        // ⚠️ The app's CLAIM about its own user's rung (billing design §3.4),
+        // so the directory can resolve `role`-principal deny rules — it does
+        // not hold this app's ladder and cannot ask. The trust level is right
+        // because policy can only DENY: a wrong claim can close something,
+        // never open it. Omit it and role rules are skipped server-side; user
+        // and everyone rules still apply.
+        localRole: user.role,
+      },
       { baseUrl, appToken },
     );
     if (result.refresh) {
@@ -146,8 +163,26 @@ export async function estateGate(
         userId: user.id,
         status: result.refresh.status,
         checkedAt: result.refresh.checkedAt,
+        // 🔴 NULL STAYS NULL. A fresh answer with no clean array (a pre-0016
+        // auth Worker mid-deploy) is UNKNOWN; writing it as `'[]'` would record
+        // silence as "the directory denied nothing" and un-switch every policy
+        // the owner set for the length of that deploy.
+        billingDeniedJson:
+          result.refresh.billingDenied === null
+            ? null
+            : JSON.stringify(result.refresh.billingDenied),
       });
     }
+
+    // The spending answer for THIS person, riding on the very same /seen answer
+    // the verdict below is computed from (§4.5: one answer, one moment).
+    // `lib/billing-gate.ts` is the only reader, and `BILLING_POLICY = "off"`
+    // means it ignores this entirely — so setting it costs a pointer.
+    //
+    // ⚠️ Set even in SHADOW, and that is correct: this variable is a fact, not
+    // an act. What `BILLING_POLICY` governs is whether anything is DONE with
+    // it, and it is a separate flag from `ESTATE_CHECK` on purpose.
+    c.set('billingDenied', result.billingDenied);
 
     // §3.1. `active` = any role beyond pending; `locallyDecided` = an owner
     // ever stamped approved_at (so an explicit local demotion stays standing).

@@ -9,6 +9,13 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { sweepOrphanAdoptions } from '@bgc/db';
 import type { AppBindings, Env } from './env.js';
+import {
+  BILLING_FEATURES,
+  BILLING_SITE,
+  billingPosture,
+  decideBilling,
+  fetchSystemDenied,
+} from './lib/billing-gate.js';
 import { COMPONENT_REFRESH_CRON, runComponentBackfill } from './lib/component-backfill.js';
 import { DETAILS_SWEEP_CRON, runDetailsSweep } from './lib/details-sweep.js';
 import { runCoverCheck } from './lib/cover-check.js';
@@ -128,6 +135,68 @@ app.onError((err, c) => {
   return c.json({ error: 'internal', detail: err.message }, 500);
 });
 
+/**
+ * G7 — the hourly details sweep, behind the `system` spending switch.
+ *
+ * 🔴 THE SWEEP IS THE ONLY UNATTENDED BILLER IN THIS REPO — ~11¢/hour while a
+ * backlog exists, with no user anywhere in it. A per-person rule cannot reach
+ * it, so it resolves through the estate's fourth principal, `system`, and its
+ * own door (`lib/billing-gate.ts`'s `fetchSystemDenied`). Switching
+ * `sweep.details` off for `games` is the only way to stop it that is not a
+ * deploy (billing design §2.5, §3.4, §7.1's clock-icon row).
+ *
+ * ⚠️ This does NOT touch `SWEEP_LIMIT`, and that is the settled answer to the
+ * design's own §9 Q2. `details-sweep.ts` refuses to make that number an env var
+ * — *"a knob nobody tunes is a knob that hides its value"* — and the argument
+ * stands. A KNOB is a number somebody must choose well; a SWITCH has no value
+ * to hide and one obvious meaning. This adds only the switch.
+ *
+ * ⚠️ Shadow-first like every other call site: `off` asks nothing; `shadow`
+ * asks, logs with `proceeded: true`, and SWEEPS ANYWAY; `enforce` skips and
+ * says so. There is no person here to word a refusal to — the log line IS the
+ * refusal, which is why it carries the same `evt: 'billing_policy'` shape the
+ * request paths emit and can be grepped with one filter across both.
+ *
+ * 🔴 An unknown policy (directory down, door unconfigured, garbage body)
+ * SWEEPS — §3.5 row 3's fail-open, chosen out loud. The wallet is bounded by
+ * `SWEEP_LIMIT = 8`, not by this switch.
+ */
+async function sweepIfPolicyAllows(env: Env) {
+  const posture = billingPosture(env.BILLING_POLICY);
+  if (posture === 'off') return runDetailsSweep(env);
+
+  const denied = await fetchSystemDenied(env);
+  const { wouldDeny, proceeded, log } = decideBilling({
+    posture,
+    feature: BILLING_FEATURES.sweep,
+    denied,
+  });
+
+  if (log) {
+    console.log(
+      JSON.stringify({
+        evt: 'billing_policy',
+        posture,
+        feature: BILLING_FEATURES.sweep,
+        site: BILLING_SITE,
+        // ⚠️ `system`, not `person`. A soak that could not tell the cron's
+        // decisions from a household member's could not answer §4.2's flip
+        // criterion for either of them.
+        principal_kind: 'system',
+        principal_value: null,
+        would_deny: wouldDeny,
+        proceeded,
+        est_cents: '~11/hr',
+      }),
+    );
+  }
+
+  if (!proceeded) {
+    return { skipped: 'billing_denied', feature: BILLING_FEATURES.sweep } as const;
+  }
+  return runDetailsSweep(env);
+}
+
 export default {
   fetch: app.fetch,
 
@@ -189,7 +258,7 @@ export default {
       // The lesson generalises: this repo learned the waitUntil-is-too-short
       // rule on the request path and it did not travel to the scheduled path.
       // Any NEW background work here inherits the same trap.
-      const sweeping = runDetailsSweep(env).then(
+      const sweeping = sweepIfPolicyAllows(env).then(
         (run) => console.log('details sweep', JSON.stringify(run)),
         (err) => console.error('details sweep failed', err),
       );

@@ -165,6 +165,39 @@ OWNER_EMAILS = "nbaslamking@gmail.com"
 ESTATE_CHECK = "enforce"
 ESTATE_AUTH_URL = "https://auth.heygabi.ai"
 
+# ── SPENDING POLICY (lib/billing-gate.ts, phase 3, 2026-09-02) ───────────────
+#
+# ⚠️ BILLING_POLICY IS "off" — see the value at the foot of this block.
+#
+# Which money paths on the `games` site may bill the model, decided by the
+# owner from the Spending panel on https://heygabi.ai/admin/ and delivered on
+# the /seen answer this Worker already makes. Design:
+# catalog-platform/docs/info/llm-billing-control-design.md §4.
+#
+#   off      nothing resolves, nothing is logged, nothing costs — TODAY
+#   shadow   the decision is logged with `proceeded`, and the call bills anyway
+#   enforce  a denied path is refused, in words
+#
+# 🔴 THIS IS NOT ESTATE_CHECK, and the two values above and below are allowed
+# to differ. `ESTATE_CHECK` answers *"is this person still a member"* and is
+# already at `enforce`; this one answers *"may this person spend"* and has
+# never run. Reading one as licence to flip the other is the mistake this
+# paragraph exists to prevent.
+#
+# ⚠️ It ships `off` and MUST. Flipping is the evidence-gated step, §4.2, and
+# BOTH halves of the criterion must hold over >= 7 days: ZERO `"would_deny":true`
+# on a feature the owner did not switch off, AND AT LEAST ONE on a feature he
+# did — the second half is what makes the first falsifiable rather than
+# indistinguishable from an instrument that never ran. That is exactly the
+# `0 of 0 — unmeasured, not clean` verdict the audiobook auth soak reached.
+#
+#   npm run tail --workspace @bgc/worker   # then grep '"evt":"billing_policy"'
+#
+# ⚠️ Never flip as a side effect of an unrelated deploy.
+# `apps/worker/src/lib/billing-gate.test.ts` reads this file and fails unless
+# the value below is "off", so the flip has to be a deliberate commit.
+BILLING_POLICY = "off"
+
 # The Firebase project whose ID tokens middleware/auth.ts accepts, pinned as
 # both `iss` and `aud`.
 #

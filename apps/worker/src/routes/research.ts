@@ -38,6 +38,7 @@ import {
 import type { AppBindings } from '../env.js';
 import { claimDetailsRun, runDetailsLookup, toDetailsRun } from '../lib/details-run.js';
 import { requireCapability } from '../middleware/auth.js';
+import { BILLING_FEATURES, billingRefusal } from '../lib/billing-gate.js';
 
 const RESEARCH_TIERS = SOURCE_TIERS.filter((t) => t !== 'community');
 const tierSchema = z.enum(['official', 'crowdfunding', 'retail']);
@@ -136,6 +137,14 @@ export const researchRoutes = new Hono<AppBindings>()
     if ('blocked' in resolved) {
       return c.json({ error: 'bad_request', detail: resolved.blocked }, 400);
     }
+
+    // G5 — the spending gate, ANDed with `runResearch` above; it replaces
+    // nothing (billing design §3.3). Inert while `BILLING_POLICY` is "off".
+    // 🔴 This is the most expensive path in the repo — 6–40¢ a run — and it is
+    // checked BEFORE the run row is written, for the same reason the blocked
+    // tier is: a refusal must not litter the history with a run that never ran.
+    const billing = billingRefusal(c, BILLING_FEATURES.tier, 'Research runs', '6-40');
+    if (billing) return c.json(billing.body, billing.status);
 
     const user = c.get('user');
     const run = await createRun(c.env.DB, {
@@ -251,6 +260,23 @@ export const researchRoutes = new Hono<AppBindings>()
 
     const item = await getItem(c.env.DB, id);
     if (!item) return c.json({ error: 'not_found' }, 404);
+
+    // G6 — the spending gate, ANDed with `runResearch` above, the key check
+    // below and the in-flight dedupe (billing design §3.3). Inert while
+    // `BILLING_POLICY` is "off".
+    //
+    // ⚠️ `research.details` here, NOT `research.tier` — the registry gives the
+    // missing-details lookup the same id the library's details run has, because
+    // they are the same question asked of the same model, and the owner
+    // switching "details research" off means both. The tier run above is its
+    // own, far more expensive, switch.
+    const billingDetails = billingRefusal(
+      c,
+      BILLING_FEATURES.details,
+      'Missing-details lookups',
+      '2-6',
+    );
+    if (billingDetails) return c.json(billingDetails.body, billingDetails.status);
 
     // Checked here rather than left to fail in the background: no key is a
     // misconfiguration the caller can act on, and recording it as a failed run

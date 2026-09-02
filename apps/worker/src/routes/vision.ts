@@ -14,6 +14,7 @@ import { ResearchError, identifyFromPhoto, isPhotoMediaType, readShelf } from '@
 import type { AppBindings } from '../env.js';
 import { cachedResolve } from '../lib/resolve-title.js';
 import { requireCapability } from '../middleware/auth.js';
+import { BILLING_FEATURES, billingRefusal } from '../lib/billing-gate.js';
 
 /**
  * Reading games off photographs.
@@ -111,6 +112,13 @@ export const visionRoutes = new Hono<AppBindings>()
       );
     }
 
+    // G1 — the spending gate, ANDed with `scanPhoto` above; it replaces
+    // nothing (billing design §3.3). Inert while `BILLING_POLICY` is "off".
+    // Checked after the body is validated and before anything is sent, so a
+    // refusal costs nothing and a malformed request still gets its 400.
+    const billing = billingRefusal(c, BILLING_FEATURES.scanPhoto, 'Photo scanning', '$5/$25 per MTok');
+    if (billing) return c.json(billing.body, billing.status);
+
     let result;
     try {
       result = await identifyFromPhoto(c.env.ANTHROPIC_API_KEY, {
@@ -168,6 +176,13 @@ export const visionRoutes = new Hono<AppBindings>()
         413,
       );
     }
+
+    // G2 — the same feature id as G1 above. `scan.photo` is ONE switch
+    // covering single-box and shelf reads, deliberately: the registry names
+    // them together because they are the same spend on the same model, and a
+    // second id would be a switch the owner has to remember to press twice.
+    const billing = billingRefusal(c, BILLING_FEATURES.scanPhoto, 'Photo scanning', '$5/$25 per MTok');
+    if (billing) return c.json(billing.body, billing.status);
 
     let reading;
     try {

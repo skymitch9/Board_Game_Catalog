@@ -18,23 +18,65 @@ export interface EstateCacheRow {
   /** 'pending' | 'approved' | 'revoked' — validated by the caller (module). */
   status: string | null;
   checkedAt: string | null;
+  /**
+   * The BILLING half of that same answer (migration 0030, billing design
+   * §3.4) — the denied money-path ids as the stored JSON-array text
+   * (`'["research.tier"]'`), or null.
+   *
+   * 🔴 **null is "UNKNOWN", not "nothing is denied".** `'[]'` is the directory
+   * answering and denying nothing; null is no answer existing at all — a row
+   * that predates 0030, or an auth Worker mid-deploy still running pre-0016
+   * code. A consumer that collapsed the two would un-switch every policy the
+   * owner had set for the length of that deploy, with nothing going red.
+   * Raw on purpose: the canonical module parses it at the boundary, so garbage
+   * dies there rather than in a second parser here.
+   */
+  billingDeniedJson: string | null;
 }
 
 export async function readEstateCache(db: D1Database, userId: number): Promise<EstateCacheRow> {
   const row = await db
-    .prepare('SELECT estate_status, estate_checked_at FROM app_user WHERE id = ?')
+    .prepare(
+      'SELECT estate_status, estate_checked_at, estate_billing_denied FROM app_user WHERE id = ?',
+    )
     .bind(userId)
-    .first<{ estate_status: string | null; estate_checked_at: string | null }>();
-  return { status: row?.estate_status ?? null, checkedAt: row?.estate_checked_at ?? null };
+    .first<{
+      estate_status: string | null;
+      estate_checked_at: string | null;
+      estate_billing_denied: string | null;
+    }>();
+  return {
+    status: row?.estate_status ?? null,
+    checkedAt: row?.estate_checked_at ?? null,
+    billingDeniedJson: row?.estate_billing_denied ?? null,
+  };
 }
 
+/**
+ * Persist a fresh /seen answer — both facts in ONE write, because §4.5's
+ * one-answer rule says the status and the billing deny-set must not age
+ * separately (they share `estate_checked_at` as their single freshness stamp).
+ *
+ * 🔴 `billingDeniedJson: null` IS WRITTEN AS NULL, and that is the whole
+ * discipline. A fresh answer that carried no clean array — a pre-0016 auth
+ * Worker mid-deploy — is UNKNOWN, and storing it as `'[]'` would record the old
+ * Worker's silence as *"the directory says nothing is denied"*, un-switching
+ * every policy the owner set until that deploy finished.
+ */
 export async function writeEstateCache(
   db: D1Database,
-  params: { userId: number; status: string; checkedAt: string },
+  params: {
+    userId: number;
+    status: string;
+    checkedAt: string;
+    billingDeniedJson: string | null;
+  },
 ): Promise<void> {
   await db
-    .prepare('UPDATE app_user SET estate_status = ?, estate_checked_at = ? WHERE id = ?')
-    .bind(params.status, params.checkedAt, params.userId)
+    .prepare(
+      'UPDATE app_user SET estate_status = ?, estate_checked_at = ?, estate_billing_denied = ? WHERE id = ?',
+    )
+    .bind(params.status, params.checkedAt, params.billingDeniedJson, params.userId)
     .run();
 }
 
