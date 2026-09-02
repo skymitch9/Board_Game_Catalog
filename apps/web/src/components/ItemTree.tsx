@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  COPY_STATUS_LABELS,
   ownedCount,
   summarizeTree,
   type CollectionGroup,
@@ -113,7 +114,15 @@ function copySummary(copies: Copy[]): {
   const order: Copy['status'][] = ['owned', 'lent', 'preordered', 'wanted', 'sold'];
   const primary = order.find((s) => counts.has(s)) ?? copies[0]!.status;
 
-  const label = (s: Copy['status']) => (counts.get(s)! > 1 ? `${counts.get(s)} ${s}` : s);
+  /*
+    ⚠️ Through `COPY_STATUS_LABELS`, never the raw value: a copy the owner gave
+    away is stored as `sold` (migration 0029 — SQLite cannot widen a CHECK), so
+    a card printing the stored word would tell him he sold a game he gave to a
+    friend. Aggregated here, so it reads "no longer ours" rather than picking
+    one copy's reason; the reason itself lives on the copy row and the history.
+  */
+  const label = (s: Copy['status']) =>
+    counts.get(s)! > 1 ? `${counts.get(s)} ${COPY_STATUS_LABELS[s]}` : COPY_STATUS_LABELS[s];
   const parts = order.filter((s) => counts.has(s)).map(label);
 
   const exceptions = order.filter((s) => s !== 'owned' && counts.has(s));

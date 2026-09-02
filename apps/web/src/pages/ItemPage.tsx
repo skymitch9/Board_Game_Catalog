@@ -3,6 +3,8 @@ import {
   DETAIL_FIELD_LABEL,
   detailGaps,
   fillableFieldsFor,
+  copyStateLabel,
+  isDisposedStatus,
   isTrustedMatch,
   type Copy,
   type CopyStatus,
@@ -21,6 +23,7 @@ import { AddRelatedPanel, RELATION_LABEL } from '../components/AddRelated';
 import { Arrivals } from '../components/Arrivals';
 import { Completeness } from '../components/Completeness';
 import { CopyForm, CopyRow } from '../components/CopyEditor';
+import { CopyHistory } from '../components/CopyHistory';
 import { ItemForm } from '../components/ItemForm';
 import { KIND_LABEL, STATUS_TONE } from '../components/ItemTree';
 import { Ratings } from '../components/Ratings';
@@ -203,6 +206,10 @@ export function ItemPage({
         reload={reload}
       />
 
+      {/* Directly under the shelf, because it is the shelf's own past tense.
+          Renders nothing when there is no history, which is every game today. */}
+      <CopyHistory itemId={item.id} />
+
       <ChildSections
         item={item}
         canEdit={canEdit}
@@ -308,7 +315,23 @@ function Shelf({
   onCancelAdding: () => void;
   reload: () => void;
 }) {
-  const shelved = [...item.copies].sort(byShelfOrder);
+  /*
+    Copies that have left are split out rather than sorted to the bottom.
+
+    `docs/info/copy-status-history.md` §5 step 7 asks for disposed copies to be
+    excluded by default and reachable behind a filter. This is that, at the one
+    surface where a copy is actually shown: a game given away is still catalog
+    data worth keeping, but it is not "on your shelf", and leaving it in the
+    list — even last — makes the section's own heading a lie.
+
+    ⚠️ The collection PAGE's query is deliberately untouched, so a game whose
+    every copy has gone is still listed there. Hiding whole trees is a bigger,
+    separate decision (the catalog row is not the copy), and there are zero
+    disposed copies in production today to justify it. The collection's status
+    dropdown offers "no longer ours" as the filter half.
+  */
+  const held = item.copies.filter((c) => !isDisposedStatus(c.status)).sort(byShelfOrder);
+  const gone = item.copies.filter((c) => isDisposedStatus(c.status)).sort(byShelfOrder);
 
   return (
     <section className="card">
@@ -329,9 +352,9 @@ function Shelf({
         />
       )}
 
-      {shelved.length > 0 ? (
+      {held.length > 0 ? (
         <ul className="copy-list">
-          {shelved.map((copy) => (
+          {held.map((copy) => (
             <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onChanged={reload} />
           ))}
         </ul>
@@ -351,7 +374,40 @@ function Shelf({
           </ul>
         )
       )}
+
+      {gone.length > 0 && <GoneCopies copies={gone} canEdit={canEdit} reload={reload} />}
     </section>
+  );
+}
+
+/**
+ * The copies that have left — folded away, one click from open.
+ *
+ * ⚠️ **Collapsed, not hidden.** The count is on the summary line whether it is
+ * open or shut, because a shelf that quietly omits three copies is how somebody
+ * concludes the catalog lost them. The bargain the completeness disclosures
+ * already make: default to the useful view, never to a silent one.
+ */
+function GoneCopies({
+  copies,
+  canEdit,
+  reload,
+}: {
+  copies: Copy[];
+  canEdit: boolean;
+  reload: () => void;
+}) {
+  return (
+    <details className="gone-copies">
+      <summary>
+        {copies.length === 1 ? '1 copy no longer ours' : `${copies.length} copies no longer ours`}
+      </summary>
+      <ul className="copy-list">
+        {copies.map((copy) => (
+          <CopyRow key={copy.id} copy={copy} canEdit={canEdit} onChanged={reload} />
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -374,7 +430,11 @@ function ChildMeta({ child }: { child: ItemNode }) {
       {allDigital && <DigitalTag />}
       {primary ? (
         <Badge tone={STATUS_TONE[primary.status]}>
-          {child.copies.length > 1 ? `${child.copies.length} copies` : primary.status}
+          {/* ⚠️ `copyStateLabel`, not `primary.status`: a given-away copy is
+              stored as `sold`, and the raw word would misreport it. */}
+          {child.copies.length > 1
+            ? `${child.copies.length} copies`
+            : copyStateLabel(primary.status, primary.disposal)}
         </Badge>
       ) : (
         <span className="muted">not catalogued</span>

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { COPY_STATUSES, ITEM_KINDS, type ItemQuery, type MeResponse } from '@bgc/core';
+import {
+  COPY_STATUSES,
+  COPY_STATUS_LABELS,
+  ITEM_KINDS,
+  type ItemQuery,
+  type MeResponse,
+} from '@bgc/core';
 import { api } from '../api';
 import { useAsync, useDebounced } from '../hooks';
 import { Link, collectionPath, replaceUrl, type CollectionFilters } from '../router';
@@ -228,9 +234,13 @@ export function CollectionPage({ me, filters }: { me: MeResponse; filters: Colle
         <div className="filter-row">
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
             <option value="">Any status</option>
+            {/* "No longer ours" IS offered here, unlike on quick-add: this is a
+                query, not a write, and it is the "reachable behind a filter"
+                half of docs/info/copy-status-history.md §5 step 7 — the way to
+                go and look at what has left. */}
             {COPY_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {COPY_STATUS_LABELS[s]}
               </option>
             ))}
           </select>

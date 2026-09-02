@@ -900,6 +900,58 @@ textarea { resize: vertical; }
   border-radius: 8px; padding: 0.6rem 0.75rem; color: var(--muted);
 }
 
+/* --- copies that have left ------------------------------------------------ */
+
+/*
+  A copy that is no longer ours: still legible, visibly past tense.
+  Deliberately NOT struck through — the row carries an Edit button and a reason,
+  and struck-out interactive text reads as disabled rather than as history.
+*/
+.copy--gone { opacity: 0.72; }
+
+/*
+  Folded away under the shelf rather than mixed into it. ⚠️ The count is in the
+  summary whether it is open or shut: a shelf that silently omits three copies is
+  how somebody concludes the catalog lost them.
+*/
+.gone-copies { margin-top: 0.75rem; border-top: 1px solid var(--line); padding-top: 0.6rem; }
+.gone-copies > summary {
+  cursor: pointer; color: var(--muted); font-size: 0.85rem;
+  /* Tall enough to be a phone target — the mobile pass's floor for a control. */
+  padding: 0.7rem 0; list-style-position: inside;
+}
+.gone-copies > summary:hover { color: var(--text); }
+
+/*
+  "What happened to it" — the disposal fieldset inside the copy form. Bordered
+  because it asks about a different thing from the fields above it: those
+  describe the box, these describe the moment it left.
+*/
+.copy-disposal {
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 0.75rem; margin: 0.75rem 0; min-width: 0;
+}
+.copy-disposal > legend { padding: 0 0.35rem; font-size: 0.85rem; color: var(--muted); }
+.copy-disposal input:disabled, .copy-disposal select:disabled { opacity: 0.5; }
+
+/* --- history -------------------------------------------------------------- */
+
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem;
+  padding: 0.5rem 0; border-bottom: 1px solid var(--line); font-size: 0.9rem;
+}
+.history-row:last-child { border-bottom: none; }
+/* Fixed column so the dates line up into a timeline rather than a ragged edge. */
+.history-when { color: var(--muted); flex: 0 0 7.5rem; font-variant-numeric: tabular-nums; }
+.history-what { flex: 1; min-width: 10rem; }
+.history-note { flex-basis: 100%; font-size: 0.83rem; color: var(--muted); font-style: italic; }
+
+/* On a phone the fixed date column eats the sentence beside it. */
+@media (max-width: 30rem) {
+  .history-when { flex-basis: 100%; }
+}
+
 /* --- a preorder turning up ----------------------------------------------- */
 
 /*

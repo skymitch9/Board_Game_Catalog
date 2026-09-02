@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import {
   COPY_STATUSES,
+  COPY_STATUS_LABELS,
+  DISPOSED_STATUS,
   ITEM_KINDS,
   type BarcodeCandidate,
   type CopyStatus,
@@ -202,9 +204,16 @@ export function QuickAdd({
             onChange={(e) => setStatus(e.target.value as CopyStatus)}
             disabled={!recordCopy}
           >
-            {COPY_STATUSES.map((s) => (
+            {/* ⚠️ "No longer ours" is deliberately NOT offered here, and that is
+                a correctness guard rather than tidiness: the server refuses a
+                disposed copy that does not say WHY (sold / given away / lost),
+                and quick-add has nowhere to ask. Offering it would hand the user
+                a 400 on save. Adding something you no longer have is real but
+                rare — add the copy, then use "No longer ours" on the row, which
+                asks the question properly and writes the history entry. */}
+            {COPY_STATUSES.filter((s) => s !== DISPOSED_STATUS).map((s) => (
               <option key={s} value={s}>
-                {s}
+                {COPY_STATUS_LABELS[s]}
               </option>
             ))}
           </select>

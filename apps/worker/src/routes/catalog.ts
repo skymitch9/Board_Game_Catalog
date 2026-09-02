@@ -4,6 +4,7 @@ import {
   createCopySchema,
   createItemSchema,
   createRelationSchema,
+  disposalConflict,
   itemQuerySchema,
   suggestRetags,
   updateCopySchema,
@@ -31,6 +32,7 @@ import {
   listCoverCandidates,
   listGroupOptions,
   listItemAliases,
+  listItemCopyEvents,
   listItemNames,
   listItemTrees,
   listPreorderArrivals,
@@ -189,6 +191,34 @@ export const catalogRoutes = new Hono<AppBindings>()
     const arrivals = await listPreorderArrivals(c.env.DB, id);
     if (!arrivals) return c.json({ error: 'not_found' }, 404);
     return c.json({ arrivals });
+  })
+
+  /**
+   * What has happened to this game's copies — the append-only history.
+   *
+   * `read`, and read-only in the strictest sense there is: `copy_event` has
+   * triggers refusing every UPDATE and DELETE (migration 0029), so there is no
+   * write route to pair with this one and never will be. Correcting a mistake
+   * is a new event, the same way re-acquiring something is a new copy.
+   *
+   * A route of its own rather than a field on `/items/:id`, matching
+   * `/completeness`, `/arrivals` and `/covers`: it is a second question about
+   * the same row, most pages never ask it, and folding it in would put a query
+   * on every item-page load to serve the empty list 821 of 821 copies return
+   * today.
+   *
+   * ⚠️ Answers `{ events: [] }` for an item that exists and has no history —
+   * and 404 only when the item itself is gone. A caller cannot otherwise tell
+   * "nothing ever happened" from "no such game".
+   */
+  .get('/items/:id/history', async (c) => {
+    const id = idParam(c.req.param('id'));
+    if (!id) return c.json({ error: 'bad_request', detail: 'invalid id' }, 400);
+
+    const item = await getItem(c.env.DB, id);
+    if (!item) return c.json({ error: 'not_found' }, 404);
+
+    return c.json({ events: await listItemCopyEvents(c.env.DB, id) });
   })
 
   /**
@@ -352,7 +382,32 @@ export const catalogRoutes = new Hono<AppBindings>()
     if (!parsed.success) {
       return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
     }
-    const copy = await updateCopy(c.env.DB, id, parsed.data);
+
+    /*
+      The status/disposal pairing rule, applied to the state this PATCH would
+      LEAVE BEHIND rather than to the body it arrived in.
+
+      ⚠️ The schema cannot do this and it is not an oversight: `updateCopySchema`
+      is `.partial()`, so a legitimate request may carry only one half. Sending
+      `{ status: 'sold' }` against a row that already says `given_away` is fine;
+      sending it against a row with no disposal is not, and the two bodies are
+      identical. Only the merge can tell them apart.
+
+      ⚠️ **Rejected, never quietly corrected.** The tempting shortcut — nulling
+      the disposal when the status moves off `sold` — silently discards a fact
+      the caller sent, and a caller that meant something else never finds out.
+      `'disposal' in patch` rather than a truthiness check, so an explicit
+      `{ disposal: null }` ("it is ours again") reads as the instruction it is.
+    */
+    const patch = parsed.data;
+    const effectiveStatus = patch.status ?? existing.status;
+    const effectiveDisposal = 'disposal' in patch ? (patch.disposal ?? null) : existing.disposal;
+    const conflict = disposalConflict(effectiveStatus, effectiveDisposal);
+    if (conflict) {
+      return c.json({ error: 'bad_request', detail: conflict }, 400);
+    }
+
+    const copy = await updateCopy(c.env.DB, id, patch);
     if (!copy) return c.json({ error: 'not_found' }, 404);
     return c.json({ copy });
   })

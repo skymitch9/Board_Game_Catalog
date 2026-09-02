@@ -7,17 +7,22 @@ import { z } from 'zod';
 import {
   COPY_FORMATS,
   COPY_STATUSES,
+  DISPOSALS,
+  DISPOSED_STATUS,
   ITEM_KINDS,
   RATING_MAX,
   RATING_MIN,
   RATING_STEP,
   RELATION_TYPES,
+  type CopyStatus,
+  type Disposal,
 } from './constants.js';
 import type { InheritedDetail, InheritedField } from './details.js';
 
 export const itemKindSchema = z.enum(ITEM_KINDS);
 export const copyStatusSchema = z.enum(COPY_STATUSES);
 export const copyFormatSchema = z.enum(COPY_FORMATS);
+export const disposalSchema = z.enum(DISPOSALS);
 
 const nullableString = (max: number) => z.string().trim().max(max).nullable().optional();
 
@@ -130,15 +135,89 @@ const copyFields = z.object({
   completenessNotes: nullableString(1000),
   lentTo: nullableString(120),
   notes: nullableString(1000),
+  /**
+   * Why this copy is no longer ours. Legal only alongside `status: 'sold'`,
+   * and required by it — see `disposalConflict`, which is the one place that
+   * rule is written.
+   */
+  disposal: disposalSchema.nullable().optional(),
 });
 
-export const createCopySchema = copyFields;
+/**
+ * The pairing rule between `status` and `disposal`, stated once.
+ *
+ * Returns a worded message when the pair is illegal, or `null` when it is fine.
+ * ⚠️ **It returns a SENTENCE, not a boolean**, because it is what a person
+ * reads: a 400 that says "bad_request" and nothing else is the bare-status
+ * failure the estate rules forbid.
+ *
+ * Two directions, and both are real mistakes rather than theoretical ones:
+ *
+ * 1. **`sold` with no disposal.** The status means "no longer ours" and nothing
+ *    else; without a reason the history reads "gone, no idea why", which is the
+ *    exact outcome §1 of the design doc calls *worse than doing nothing*.
+ * 2. **A disposal on a copy that is still ours.** A stale `given_away` left on
+ *    a row that was flipped back to `owned` would have the item page announcing
+ *    a game was given away while it sits on the shelf.
+ *
+ * ⚠️ It must be applied to the **merged** state on a PATCH, not to the request
+ * body: `{ status: 'sold' }` alone is legal when the row already carries a
+ * disposal, and `{ disposal: null }` alone is not when the row is `sold`.
+ * The route does that merge; `createCopySchema` can check the body directly
+ * because a create always carries both (status has a default).
+ */
+export function disposalConflict(
+  status: CopyStatus,
+  disposal: Disposal | null | undefined,
+): string | null {
+  const disposed = status === DISPOSED_STATUS;
+  if (disposed && !disposal) {
+    return 'say what happened to it — sold, given away or lost';
+  }
+  if (!disposed && disposal) {
+    return `a copy that is "${status}" cannot also be recorded as ${disposal.replace('_', ' ')} — clear the reason, or mark it as no longer ours`;
+  }
+  return null;
+}
+
+export const createCopySchema = copyFields.superRefine((d, ctx) => {
+  const message = disposalConflict(d.status, d.disposal ?? null);
+  if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ['disposal'] });
+});
+
+/**
+ * What a disposal is worth recording beyond the reason: who, how much, and any
+ * words. **Event metadata, not columns on `copy`** — they describe the moment
+ * the copy left, and a second disposal (a copy bought back and given away
+ * again) is a second event with its own answers.
+ *
+ * Nothing here is required. The owner giving a game to a friend whose name he
+ * does not want to type must not be blocked from recording that it is gone.
+ */
+export const disposalDetailsSchema = z.object({
+  /** Who bought it / who has it. Free text — never a user id. */
+  counterpart: nullableString(120),
+  /** What it fetched, in cents. ⚠️ Not an accounting feature; nothing sums it. */
+  priceCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  note: nullableString(1000),
+});
+
 export const updateCopySchema = copyFields
   .partial()
+  .extend({
+    /**
+     * Ride-along detail for the history row this update writes. Not a column:
+     * `updateCopy` reads it, writes it into `copy_event`, and never sets it on
+     * `copy`. Ignored when the update changes no status and no disposal, since
+     * there is then no event for it to land on.
+     */
+    disposalDetails: disposalDetailsSchema.optional(),
+  })
   .refine((d) => Object.keys(d).length > 0, { message: 'no fields to update' });
 
 export type CreateCopyInput = z.infer<typeof createCopySchema>;
 export type UpdateCopyInput = z.infer<typeof updateCopySchema>;
+export type DisposalDetailsInput = z.infer<typeof disposalDetailsSchema>;
 
 // ---------------------------------------------------------------------------
 // Ratings — the one per-person thing
@@ -339,11 +418,47 @@ export interface Copy {
   lentTo: string | null;
   notes: string | null;
   /**
+   * Why this copy is no longer ours — `sold`, `given_away` or `lost`.
+   *
+   * Non-null exactly when `status` is `sold`; see `disposalConflict`. Read it
+   * with `copyStateLabel(status, disposal)` rather than showing `status`
+   * directly, or a game the owner gave away will tell him he sold it.
+   */
+  disposal: (typeof DISPOSALS)[number] | null;
+  /**
    * When this copy joined the collection, as an ISO instant. Set by the
    * database on insert and never editable — it records a fact about the
    * catalog, not a claim about the box.
    */
   addedAt: string;
+}
+
+/**
+ * One thing that happened to one copy — the append-only history.
+ *
+ * ⚠️ **`copyId` and `itemId` are nullable and that is the feature.** The FKs
+ * are `ON DELETE SET NULL`, so deleting the copy — or the whole game — leaves
+ * the event standing. `itemName` is the denormalised snapshot that keeps such
+ * an orphaned event readable: *"Catan — given away to Dave"*, never *"item 41"*.
+ * See `docs/info/copy-status-history.md` §4 and migration 0029.
+ */
+export interface CopyEvent {
+  id: number;
+  copyId: number | null;
+  itemId: number | null;
+  /** The item's name as it stood when the event was written. Never re-read. */
+  itemName: string;
+  /** Null on a copy's first event — it came from nowhere. */
+  fromStatus: (typeof COPY_STATUSES)[number] | null;
+  toStatus: (typeof COPY_STATUSES)[number];
+  disposal: (typeof DISPOSALS)[number] | null;
+  /** Who bought it / who has it. Free text, never a user id. */
+  counterpart: string | null;
+  /** What it fetched. ⚠️ Not an accounting feature — nothing sums it. */
+  priceCents: number | null;
+  note: string | null;
+  /** When it happened, as an ISO instant. */
+  at: string;
 }
 
 export interface Rating {

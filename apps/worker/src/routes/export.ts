@@ -28,7 +28,7 @@ export const exportRoutes = new Hono<AppBindings>()
     // `play` was deliberately NOT dropped: also empty, but unbuilt rather than
     // superseded — it is a reasonable design for logging game nights, kept as a
     // standing intention.
-    const [items, editions, copies, ratings] = await c.env.DB.batch([
+    const [items, editions, copies, ratings, copyEvents] = await c.env.DB.batch([
       c.env.DB.prepare('SELECT * FROM item ORDER BY id'),
       c.env.DB.prepare('SELECT * FROM edition ORDER BY id'),
       c.env.DB.prepare('SELECT * FROM copy ORDER BY id'),
@@ -36,21 +36,36 @@ export const exportRoutes = new Hono<AppBindings>()
         `SELECT ui.*, u.email FROM user_item ui
            JOIN app_user u ON u.id = ui.user_id ORDER BY ui.id`,
       ),
+      /*
+        ⚠️ **The copy history has to be in the backup or the feature has a hole
+        in the shape of its own purpose.** `copy_event` exists so a record
+        survives the deletion of the copy and the game (migration 0029), and a
+        backup that omits it means the one class of fact designed to outlive its
+        row does not outlive a restore. Added with 0029; every export before
+        that date has no `copyEvents` key at all, which a reader must not read
+        as "nothing ever happened".
+      */
+      c.env.DB.prepare('SELECT * FROM copy_event ORDER BY id'),
     ]);
 
     const payload = {
       exportedAt: new Date().toISOString(),
-      schemaVersion: '0001_init',
+      // Bumped with 0029, which is what added `copyEvents` and `copy.disposal`.
+      // It names the last migration whose shape this file knows about, so a
+      // restore can tell what it is looking at.
+      schemaVersion: '0029_copy_disposal_history',
       counts: {
         items: items?.results.length ?? 0,
         editions: editions?.results.length ?? 0,
         copies: copies?.results.length ?? 0,
         ratings: ratings?.results.length ?? 0,
+        copyEvents: copyEvents?.results.length ?? 0,
       },
       items: items?.results ?? [],
       editions: editions?.results ?? [],
       copies: copies?.results ?? [],
       ratings: ratings?.results ?? [],
+      copyEvents: copyEvents?.results ?? [],
     };
 
     const stamp = new Date().toISOString().slice(0, 10);
@@ -72,6 +87,11 @@ export const exportRoutes = new Hono<AppBindings>()
          i.year_published AS year,
          i.publisher,
          c.status,
+         -- WARNING: carried beside the status because the status alone is
+         -- misleading in a spreadsheet. A copy the owner GAVE AWAY is stored as
+         -- sold, and an insurance inventory that says "sold" about a gift is
+         -- wrong in the one direction that matters. See migration 0029.
+         c.disposal,
          c.is_sleeved, c.is_punched,
          c.lent_to, c.completeness_notes, c.notes,
          c.created_at AS added_at
@@ -82,7 +102,7 @@ export const exportRoutes = new Hono<AppBindings>()
     ).all<Record<string, unknown>>();
 
     const headers = [
-      'game', 'item', 'kind', 'year', 'publisher', 'status',
+      'game', 'item', 'kind', 'year', 'publisher', 'status', 'disposal',
       'sleeved', 'punched',
       'lent_to', 'completeness_notes', 'notes', 'added_at',
     ];
@@ -98,6 +118,7 @@ export const exportRoutes = new Hono<AppBindings>()
       [
         r['game'], r['item'], r['kind'], r['year'], r['publisher'],
         r['status'],
+        r['disposal'],
         r['is_sleeved'] ? 'yes' : 'no',
         r['is_punched'] ? 'yes' : 'no',
         r['lent_to'], r['completeness_notes'], r['notes'], r['added_at'],

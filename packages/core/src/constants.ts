@@ -100,6 +100,87 @@ export const COPY_STATUSES = ['owned', 'wanted', 'preordered', 'lent', 'sold'] a
 export type CopyStatus = (typeof COPY_STATUSES)[number];
 
 /**
+ * Why a copy is no longer ours.
+ *
+ * ⚠️ **Mirrored by CHECK constraints on `copy.disposal` and
+ * `copy_event.disposal` — migration 0029.** Adding a value here without a
+ * migration means it passes zod and then fails at the write with a bare
+ * SQLITE_CONSTRAINT.
+ *
+ * ⚠️ **This is a REASON, not a state, and that is the design.**
+ * `docs/info/copy-status-history.md` §3 chose it over a sixth `COPY_STATUSES`
+ * value because SQLite cannot alter a CHECK constraint: a `given_away` status
+ * needs the full 12-step rebuild of `copy`, which silently drops the two
+ * quantity triggers migration 0002 added *because* of that same wall. So the
+ * status stays `sold` — read it as "no longer ours" — and this says which
+ * flavour. Nothing shows the word "sold" to a person unless the disposal
+ * actually is `sold`; see `copyStateLabel`.
+ */
+export const DISPOSALS = ['sold', 'given_away', 'lost'] as const;
+export type Disposal = (typeof DISPOSALS)[number];
+
+/**
+ * The one status that carries a `disposal`, and the only one that may.
+ *
+ * Named rather than typed as `'sold'` at each site, because the string is a
+ * storage detail of the decision above: if the owner ever buys the table
+ * rebuild, this constant and the CHECK move together and no caller changes.
+ */
+export const DISPOSED_STATUS = 'sold' as const satisfies CopyStatus;
+
+/**
+ * What a person is shown for each status — the single home for that mapping.
+ *
+ * ⚠️ **Only `sold` differs from its stored value, and it has to.** The value
+ * means "no longer ours" (sold, given away or lost); showing the word "sold"
+ * would make the owner pick it to record a gift, which is exactly the
+ * vocabulary complaint that started this feature —
+ * `docs/info/copy-status-history.md` §1: *"`sold` implies money changed hands;
+ * given away did not"*. Which flavour it was is `disposal`'s job, and
+ * `copyStateLabel` is what folds the two back together for a copy that has one.
+ */
+export const COPY_STATUS_LABELS: Record<CopyStatus, string> = {
+  owned: 'owned',
+  wanted: 'wanted',
+  preordered: 'preordered',
+  lent: 'lent',
+  sold: 'no longer ours',
+};
+
+/** What a person is shown, per disposal. `given_away` is the owner's own word. */
+export const DISPOSAL_LABELS: Record<Disposal, string> = {
+  sold: 'sold',
+  given_away: 'given away',
+  lost: 'lost',
+};
+
+/**
+ * What to call a copy's state in the UI — the single place status and disposal
+ * are folded back into one word.
+ *
+ * ⚠️ **A `sold` copy whose disposal is `given_away` must never render as
+ * "sold".** That is the entire user-visible cost of the storage decision above,
+ * and this function is what pays it. A `sold` copy with no disposal at all
+ * reads "no longer ours", which is honest: the route refuses to create one, but
+ * a row written by hand before this shipped could exist.
+ */
+export function copyStateLabel(status: CopyStatus, disposal: Disposal | null): string {
+  if (status !== DISPOSED_STATUS) return COPY_STATUS_LABELS[status];
+  return disposal ? DISPOSAL_LABELS[disposal] : COPY_STATUS_LABELS[DISPOSED_STATUS];
+}
+
+/**
+ * Is this copy gone — sold, given away or lost?
+ *
+ * The complement of `HELD_STATUSES` for display purposes only. ⚠️ It is NOT a
+ * third status set: nothing may use it to decide ownership counts, because
+ * `wanted` is neither held nor disposed and this would call it "not disposed".
+ */
+export function isDisposedStatus(status: CopyStatus): boolean {
+  return status === DISPOSED_STATUS;
+}
+
+/**
  * "Do we have this — should I stop looking for it?"
  *
  * The question completeness asks. `preordered` counts, deliberately: it is

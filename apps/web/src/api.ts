@@ -9,6 +9,7 @@ import type {
   EditionBackfillRun,
   ShelfMatch,
   Copy,
+  CopyEvent,
   CreateCopyInput,
   CreateItemInput,
   CreateRelationInput,
@@ -195,6 +196,20 @@ export const api = {
    */
   arrivals: (itemId: number) =>
     req<{ arrivals: PreorderArrival[] }>(`/api/items/${itemId}/arrivals`),
+
+  /**
+   * Everything that has happened to this game's own copies, newest first.
+   *
+   * Read-only, and there is no write twin **by construction**: `copy_event`
+   * carries triggers refusing every UPDATE and DELETE (migration 0029). History
+   * is written as a side effect of `updateCopy`, from one place in the database
+   * layer, so no screen can produce a status change that leaves no trace.
+   *
+   * Fetched on demand rather than riding on `item()` — most games have no
+   * history at all, and this keeps a query off every item-page load.
+   */
+  itemHistory: (itemId: number) =>
+    req<{ events: CopyEvent[] }>(`/api/items/${itemId}/history`),
 
   createItem: (data: CreateItemInput) =>
     post('/api/items', data) as Promise<{ item: Item; adopted: Item[] }>,

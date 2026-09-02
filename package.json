@@ -30,7 +30,7 @@
     "estate:sync": "node scripts/sync-estate-auth.mjs && node scripts/sync-estate-search.mjs && node scripts/sync-estate-theme.mjs",
     "secrets:push": "node scripts/push-secrets.mjs",
     "pretest": "node scripts/sync-estate-auth.mjs && node scripts/sync-estate-search.mjs && node scripts/sync-estate-theme.mjs",
-    "test": "tsx --test apps/worker/src/lib/*.test.ts"
+    "test": "tsx --test packages/db/test/*.test.ts apps/worker/src/lib/*.test.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
