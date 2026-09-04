@@ -103,10 +103,11 @@ import { Link, navigate } from '../router';
  *
  * ## ⚠️ ONE WRITE PATH
  *
- * `copyDefaults(copyStatusFor(target))` in `addCandidate` below is the only
- * place either door decides what a scan MEANS. `ScanJobsPage` (the intake
- * queue) has its own `createCopy` with its own hardcoded status; that screen is
- * a different job and was deliberately left alone.
+ * `copyDefaults(copyStatusFor(target))` lives on exactly one line in this app's
+ * add paths — `recordCopy` below — and every add either door makes goes through
+ * it. `ScanJobsPage` (the intake queue) has its own `createCopy` with its own
+ * hardcoded status; that screen is a different job and was deliberately left
+ * alone.
  */
 
 /**
@@ -356,6 +357,55 @@ export function ScanPanel({
   // --- adding --------------------------------------------------------------
 
   /**
+   * ⚠️ **THE ONE WRITE.** Every game either door adds — scanned, photographed,
+   * batched off a shelf, or wanted a second time — becomes a copy through this
+   * line and no other.
+   *
+   * `copyDefaults(copyStatusFor(target))` appears exactly once in this app's
+   * add paths as a result. It was two places before 2026-09-04: `ScanPage`'s
+   * `addCandidate` and `WishlistScan`'s `want`, and the second one had a
+   * hardcoded `'wanted'` that no switch could ever have reached.
+   *
+   * ⚠️ `ScanJobsPage` (the intake queue) has a `createCopy` of its own with its
+   * own hardcoded status. That screen is a different job — nothing is confirmed
+   * at scan time there — and was deliberately left alone.
+   */
+  const recordCopy = useCallback(
+    (itemId: number) => api.createCopy(itemId, copyDefaults(copyStatusFor(target))),
+    [target],
+  );
+
+  /**
+   * Want ANOTHER of a game the catalog already has.
+   *
+   * ⚠️ Carried from `WishlistScan`, whose words this keeps: *"The item may
+   * already exist — a barcode we have seen before resolves to a catalog row —
+   * and then wanting it is a fact about a **copy**, so a copy is the only thing
+   * created. Owning one and wanting another are both true at once, which is how
+   * the `×2` rows on this list came about in the first place."*
+   *
+   * So this deliberately does NOT go through `addCandidate`: that one creates
+   * an item first, and doing so here would mint a duplicate catalog row for a
+   * game we can already see.
+   */
+  const wantExisting = useCallback(
+    async (item: Item) => {
+      setBusy(`Adding ${item.name}…`);
+      setError(null);
+      try {
+        await recordCopy(item.id);
+        onAdded?.(item, { bulk: false });
+        if (!onAdded) navigate(`/items/${item.id}`);
+      } catch (err) {
+        setError(err);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [onAdded, recordCopy],
+  );
+
+  /**
    * Add one candidate to the collection.
    *
    * `goToItem` is false for shelf mode. Navigating away after a single add threw
@@ -388,11 +438,10 @@ export function ScanPanel({
         });
 
         // Scanning a game used to mean you own it. Since 2026-09-04 it means
-        // whatever the *Adding to* switch says — a copy on the shelf, or a
-        // want on the wishlist — and this is the ONE place either door decides.
-        // `physical` either way: a barcode or a cover means the box is in front
-        // of you, whether or not it is going home with you.
-        await api.createCopy(item.id, copyDefaults(copyStatusFor(target)));
+        // whatever the target says — a copy on the shelf, or a want on the
+        // wishlist. `physical` either way: a barcode or a cover means the box
+        // is in front of you, whether or not it is going home with you.
+        await recordCopy(item.id);
 
         if (barcode && canEdit) {
           await api
@@ -422,7 +471,7 @@ export function ScanPanel({
         if (goToItem) setBusy(null);
       }
     },
-    [canEdit, lookup, onAdded, target],
+    [canEdit, lookup, onAdded, recordCopy],
   );
 
   // --- render --------------------------------------------------------------
@@ -441,6 +490,10 @@ export function ScanPanel({
             return (
               <button
                 key={id}
+                // ⚠️ Explicit, because this panel is now rendered inside the
+                // wishlist door's <form>: a bare <button> there defaults to
+                // `submit`, so choosing a tab would submit the typed-name form.
+                type="button"
                 role="tab"
                 aria-selected={mode === id}
                 className={mode === id ? 'scan-mode scan-mode--on' : 'scan-mode'}
@@ -616,9 +669,11 @@ export function ScanPanel({
         <BarcodeResult
           lookup={lookup}
           canResearch={canResearch}
+          busy={busy != null}
           target={target}
           onAskClaude={() => askClaude(lookup.barcode)}
           onAdd={(c) => addCandidate(c, lookup.barcode)}
+          onWantExisting={wantExisting}
         />
       )}
 
@@ -719,25 +774,63 @@ function PhotoFallback({
 function BarcodeResult({
   lookup,
   canResearch,
+  busy,
   target,
   onAskClaude,
   onAdd,
+  onWantExisting,
 }: {
   lookup: BarcodeLookup;
   canResearch: boolean;
-  /** Where this sweep lands — it names the add button. */
+  busy: boolean;
+  /** Where this sweep lands — it names the add button, and it decides two branches below. */
   target: ScanTarget;
   onAskClaude: () => void;
   onAdd: (c: BarcodeCandidate) => void;
+  /** Want another of a game the catalog already has — no new item. */
+  onWantExisting: (item: Item) => void;
 }) {
   if (lookup.owned && lookup.match) {
+    const existing = lookup.match.item;
     return (
       <div className="scan-result scan-result--owned">
         <Badge tone="owned">Already in your collection</Badge>
         <h2>
-          <Link to={`/items/${lookup.match.item.id}`}>{lookup.match.item.name}</Link>
+          <Link to={`/items/${existing.id}`}>{existing.name}</Link>
         </h2>
         {lookup.match.editionName && <p className="muted">{lookup.match.editionName}</p>}
+
+        {/*
+          ⚠️ On a WANT this is not a dead end, and that is carried from
+          `WishlistScan`, which said it plainly: *"Already in the catalog.
+          Adding it here records that you want **another** one."* It is a real
+          case for a game you lend out, and it is how the `×2` rows on the
+          wishlist came about.
+
+          On a SHELF sweep the answer is still just the answer — "you already
+          own this" is the question somebody came here to ask, and offering to
+          add a second copy over it would be answering a question nobody asked.
+        */}
+        {target === 'wishlist' && (
+          <>
+            <p className="muted small">
+              Adding it here records that you want <strong>another</strong> one.
+            </p>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={() => onWantExisting(existing)}
+              >
+                Want another
+              </button>
+              <Link to={`/items/${existing.id}`} className="btn btn-quiet">
+                Open it
+              </Link>
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -762,7 +855,22 @@ function BarcodeResult({
             ) : null}
             .
           </p>
-          {canResearch ? (
+          {/*
+            ⚠️ The paid rung is NOT offered over a want, and the reason is
+            `WishlistScan`'s, kept: *"The slow paid rung — Claude on a barcode
+            number, one to two minutes — is deliberately not offered here. It
+            exists for a box you own and cannot identify; it is far too much to
+            spend on deciding whether to want something."*
+
+            That argument is about the TARGET, not about which door you came
+            through, which is why it is written against `target` and applies to
+            `/scan` with the switch on Wishlist as well.
+          */}
+          {target === 'wishlist' ? (
+            <p className="muted">
+              Try photographing the box instead — it reads the title off the cover.
+            </p>
+          ) : canResearch ? (
             <>
               <button type="button" onClick={onAskClaude}>
                 Search the web for it

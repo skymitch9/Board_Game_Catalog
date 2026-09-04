@@ -5,8 +5,15 @@ import { copyDefaults } from '../lib/catalog-add';
 import { ErrorBox, Field } from './ui';
 import { ItemPicker, type PickedItem } from './ItemPicker';
 import { KIND_LABEL } from './ItemTree';
+import {
+  WISHLIST_DOOR_MODES,
+  WISHLIST_DOOR_NEEDS,
+  addModeSpec,
+  usableModes,
+  type AddMode,
+} from '../lib/add-modes';
 import { WishlistExpansions } from './WishlistExpansions';
-import { WishlistScan } from './WishlistScan';
+import { ScanPanel } from './ScanPanel';
 
 /**
  * Put something on the wishlist.
@@ -51,8 +58,27 @@ import { WishlistScan } from './WishlistScan';
  * barcodes and individual photos"* — and is offered as two tabs beside the
  * field rather than in place of it. Typing stays the default because it is the
  * only one that works with no light, no barcode and no signal, and because the
- * screen it produces is the one this page has always had. See `WishlistScan`
- * for the rungs and for which one is deliberately missing.
+ * screen it produces is the one this page has always had.
+ *
+ * ## ⚠️ ONE SCANNER, NOT TWO — 2026-09-04
+ *
+ * Owner, from his phone: *"I want to have all scanning be the same menu and
+ * then have the option to add to wishlist or add to catalog. No need to go to a
+ * different route."* Asked whether this page keeps a door at all: **"Keep
+ * it."**
+ *
+ * So the camera tabs are `ScanPanel` — the same component `/scan` renders, with
+ * the same camera loop, the same lookups and the same single `copyDefaults(
+ * copyStatusFor(target))` — **pinned** to `wishlist`, with no *Adding to*
+ * switch: a switch here would offer to put a game on the shelf from the
+ * wishlist page, which is a control whose only correct setting is the one it
+ * already has. It replaced `WishlistScan.tsx`, a second 326-line scan stack,
+ * whose header's argument now lives in `ScanPanel`'s.
+ *
+ * ⚠️ **This file still owns which tabs are offered and in what order**, because
+ * that is the door's question and not the scanner's — `lib/add-modes.ts` holds
+ * both doors' answers side by side, including why *Whole shelf* and *Manually*
+ * are not here.
  *
  * ## What happens *after* an add is now the interesting half
  *
@@ -85,8 +111,15 @@ export function WishlistAddForm({
   onClose: () => void;
 }) {
   const canCreateItems = me.capabilities.includes('editCatalog');
-  const canScanBarcode = me.capabilities.includes('scanBarcode');
-  const canScanPhoto = me.capabilities.includes('scanPhoto');
+  /**
+   * The camera tabs this person can actually use, in this door's order.
+   *
+   * ⚠️ Narrower than `/scan`'s in exactly one entry — barcode is gated here on
+   * `scanBarcode` and ungated there — which `lib/add-modes.ts` argues rather
+   * than smooths away. A tab this door cannot use is HIDDEN, not disabled,
+   * because typing is always left standing beside it.
+   */
+  const cameraModes = usableModes(me.capabilities, WISHLIST_DOOR_MODES, WISHLIST_DOOR_NEEDS);
   /**
    * Which door. Typing is the default and the fallback for both others.
    *
@@ -94,7 +127,7 @@ export function WishlistAddForm({
    * can throw away a half-finished scan — a candidate list left standing behind
    * a form somebody has moved on from is an invitation to add the wrong thing.
    */
-  const [mode, setMode] = useState<'type' | 'barcode' | 'photo'>('type');
+  const [mode, setMode] = useState<'type' | AddMode>('type');
   /**
    * The thing that just landed on the list, kept so its expansions can be
    * offered. Null until something has been added, and the whole form becomes
@@ -244,13 +277,17 @@ export function WishlistAddForm({
           it is the screen this page has always had. The other two are filtered
           by capability rather than always offered and left to 403 on submit:
           barcode needs `scanBarcode`, photo needs `scanPhoto` (it bills the
-          vision API) — see the note on `me` above. */}
+          vision API) — see the note on `me` above.
+
+          ⚠️ The camera tabs take their labels from `lib/add-modes.ts`, which is
+          where `/scan` takes its own from, so *One box* is called the same
+          thing on both doors. It read "Photo" here until 2026-09-04, and one
+          menu with two names for one tab is the thing the owner asked to end. */}
       <div className="wishlist-add__modes" role="tablist">
         {(
           [
             ['type', 'Type it'] as const,
-            ...(canScanBarcode ? [['barcode', 'Barcode'] as const] : []),
-            ...(canScanPhoto ? [['photo', 'Photo'] as const] : []),
+            ...cameraModes.map((id) => [id, addModeSpec(id).label] as const),
           ]
         ).map(([id, label]) => (
           <button
@@ -272,25 +309,43 @@ export function WishlistAddForm({
       {error != null && <ErrorBox error={error} what="Could not add that to the wishlist" />}
 
       {mode !== 'type' && (
-        <>
-          <WishlistScan
+        <div className="wishlist-scan">
+          <ScanPanel
             // Remounted per tab, so switching away throws the camera and any
             // half-read candidate list out rather than leaving them behind the
             // other tab.
             key={mode}
-            mode={mode}
-            onAdded={(item, message) => {
-              onAdded(message);
+            me={me}
+            /* One live tab, chosen by the strip above. `showTabs` off because
+               that strip IS the choice — a second row here would say it
+               twice, and the panel's own strip carries blurbs this door has
+               no room for. */
+            modes={[mode]}
+            showTabs={false}
+            initialMode={mode}
+            /* ⚠️ Pinned, not defaulted. There is no switch on this door and
+               nothing to read out of storage: a want is what this page is. */
+            pinTarget="wishlist"
+            /*
+             * ⚠️ THE EXPANSIONS OFFER HANGS OFF THIS. `WishlistScan` used to
+             * hand back `(item, message)`; the panel hands back the item and
+             * the message is this door's own words, which is the right split —
+             * "is on the wishlist" is a sentence about this page, not about a
+             * scanner that can also fill a shelf.
+             *
+             * Passing an `onAdded` at all is also what stops the panel
+             * navigating to the game it just created (see its prop docs), which
+             * is exactly what would throw this offer on the floor.
+             */
+            onAdded={(item) => {
+              onAdded(`“${item.name}” is on the wishlist.`);
               setAdded({ id: item.id, name: item.name });
             }}
-            onError={setError}
+            /* On `/scan` there is nothing to back out of. Here the panel itself
+               is the thing being backed out of, so it draws the Cancel. */
+            onCancel={onClose}
           />
-          <div className="form-actions">
-            <button type="button" className="btn btn-quiet" onClick={onClose}>
-              Cancel
-            </button>
-          </div>
-        </>
+        </div>
       )}
 
       {mode === 'type' && (

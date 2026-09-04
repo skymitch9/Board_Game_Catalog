@@ -10,7 +10,8 @@
  *
  * What "can't" meant there was true here too: a wishlist add DID exist — the
  * completeness report's *+ Wishlist* button and the wishlist page's own
- * `WishlistAdd` / `WishlistScan` door — but `/scan` has written
+ * `WishlistAdd` door (which then had a scanner of its own, `WishlistScan`,
+ * replaced later the same day by the shared `ScanPanel`) — but `/scan` has written
  * `status: 'owned'` on every copy it has ever created, so a barcode in a shop
  * could only ever mean "I own this".
  *
