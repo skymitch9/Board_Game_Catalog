@@ -83,10 +83,76 @@ after part 1 is deployed; Opus, ~150–250k; the library's `c82eae7` +
 * Tests: whatever pure logic the extraction exposes, as
   `apps/web/test/*.test.ts`.
 
-☐ part 2 build → ☐ tests → ☐ deploy from a clean tree → ☐ live proof on
+☑ part 2 build (`5572fe8` the extraction + `dc62cad` the door) → ☑ tests
+(`5572fe8`, `apps/web/test/add-modes.test.ts`, 20 assertions; suite 169 →
+189) → ☐ deploy from a clean tree → ☐ live proof on
 <https://boardgames.heygabi.ai/wishlist> (*+ Add something* → the same tabs
 as `/scan`, no switch, "goes on your wishlist" sentence) → ☐ owner adds one
 game from each door on his phone.
+
+### BUILT 2026-09-04 — `5572fe8` (the extraction), `dc62cad` (the door)
+
+**Files.** `apps/web/src/components/ScanPanel.tsx` (new, the shared
+scanner) · `apps/web/src/lib/add-modes.ts` (new) ·
+`apps/web/test/add-modes.test.ts` (new) ·
+`apps/web/src/pages/ScanPage.tsx` (1062 lines → 75) ·
+`apps/web/src/components/WishlistAdd.tsx` ·
+`apps/web/src/components/WishlistScan.tsx` **deleted** ·
+`apps/web/src/lib/scan-target.ts` (one stale cross-reference).
+
+**Shared, and what is not.** `ScanPanel` is the tab strip and everything
+under it — camera loop, barcode/photo/shelf lookups, the paid rung, the
+*Adding to* switch, the candidate and shelf-review rows, `addCandidate`.
+Each door still owns what genuinely differs, and the panel's header carries
+the table: the target (`/scan` draws the switch; the door passes
+`pinTarget="wishlist"` and gets the sentence with no switch), which tabs
+(`lib/add-modes.ts` holds both answers side by side), what happens after an
+add, and whether there is a way out.
+
+⚠️ **The two doors gate the barcode tab differently and that was kept, not
+tidied:** `/scan` has never gated it (a barcode lookup is `read`), the
+wishlist door demands `scanBarcode`. Normalising it would have widened
+access on one of the two screens, which is the change that is hard to take
+back.
+
+**The one line that writes a copy status**, `ScanPanel`'s `recordCopy`:
+
+```
+api.createCopy(itemId, copyDefaults(copyStatusFor(target)))
+```
+
+Grepped: `copyDefaults(copyStatusFor(target))` now appears on exactly that
+one line in `apps/web/src`. `addCandidate` and the new `wantExisting` both
+call it. `ScanJobsPage.tsx:915` (the intake queue) keeps its own
+`createCopy` with its own hardcoded status — out of scope, untouched,
+named here so nobody thinks it was missed.
+
+**The expansions offer still works.** `WishlistScan` handed back
+`(item, message)`; the panel hands back the item and `WishlistAdd` supplies
+its own sentence, then sets `added` exactly as before, so
+`WishlistExpansions` receives the same `{ id, name }`. Passing an `onAdded`
+at all is also what stops the panel navigating to the game it just created.
+
+**Two behaviours restored rather than lost**, both written against the
+TARGET, so they also reach `/scan` with the switch on Wishlist: a barcode
+resolving to a game already in the catalog offers *Want another* (through
+`wantExisting`, which creates no duplicate item) instead of dead-ending;
+and the paid ask-Claude rung is not offered over a want.
+
+**The door shows Type it / Barcode / One box.** No *Whole shelf* (a
+wishlist is not bulk intake) and no *Manually* (that tab is `QuickAdd`,
+whose own copy-status dropdown could contradict the door it stands in — and
+the door already has a better typed path). The camera tabs now take their
+labels from `add-modes`, so the tab read "Photo" here and "One box" on
+`/scan` until today.
+
+⚠️ **NOT VERIFIED.** Nothing was rendered — no browser, no phone, no
+camera, no add of any kind, and this app has no jsdom. The expansions offer
+is traced through the code, not exercised. What IS evidence: the four moved
+helper components diff byte-identical against the old `ScanPage`, the
+remaining differences in the extraction are inert with the three new props
+absent, `npm test` 189/189, `npm run typecheck` clean across seven
+workspaces, `npm run build` green.
 
 **Part 1 (the switch on `/scan`):**
 
