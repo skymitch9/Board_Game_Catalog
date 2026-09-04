@@ -92,9 +92,17 @@ game from each door on his phone.
 
 ☑ build (`bf98714` + `a955270`) → ☑ tests (`bf98714`,
 `apps/web/test/scan-target.test.ts`; the root `test` glob gained
-`apps/web/test/*.test.ts` — the first web test in this repo) → ☐ deploy from
-a clean tree → ☐ live proof on <https://boardgames.heygabi.ai/scan> → ☐ owner
-scans one game to the wishlist.
+`apps/web/test/*.test.ts` — the first web test in this repo) → ☑ deploy from
+a clean tree 12:54 Phoenix (`0ffd112f` → version `8d952922…`, holder fable,
+169/169 tests in predeploy, line in `deploys.log`) → ☑ live proof 12:56 on
+<https://boardgames.heygabi.ai/scan>, signed in as the owner, bundle
+`index-ERLFv-yu.js`: *ADDING TO · Shelf | Wishlist* under the four tabs;
+tapping Wishlist changes the sentence to "Scanned games go on your wishlist —
+a want, not a copy you own." and writes `sessionStorage.bgc.scanTarget`
+= `wishlist`; tapped back to Shelf and left there. **NOT verified:** an actual
+scan writing a `wanted` copy (no camera here — the owner's phone scan is that
+test), rendered pixels, a non-`suggestWishlist` role seeing no switch. →
+☐ owner scans one game to the wishlist.
 
 ### BUILT 2026-09-04 — `bf98714` (lib + tests), `a955270` (the screen)
 
