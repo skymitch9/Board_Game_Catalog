@@ -42,10 +42,64 @@ wishlist*), never "Added" over a want.
 stays the primary way onto the wishlist; this switch is the mixed-basket
 case, exactly as on the library.
 
-☐ build (Opus) → ☐ tests (`apps/web/test/scan-target.test.ts`; the root
-`test` script's glob gains `apps/web/test/*.test.ts` — this repo has no web
-tests yet) → ☐ deploy from a clean tree → ☐ live proof on
-<https://boardgames.heygabi.ai/scan> → ☐ owner scans one game to the wishlist.
+**Refined 10:55 Phoenix, owner verbatim:** *"I want to have all scanning be
+the same menu and then have the option to add to wishlist or add to catalog.
+No need to go to a different route."* Read as: the scanner page is THE scan
+menu, and the wishlist-vs-catalog choice lives on it — nobody navigates to
+`/wishlist` to scan a want. Consequence for THIS repo: `WishlistScan.tsx` is
+a second scan stack (its own camera/file loop, 326 lines) and therefore a
+second menu; it should be replaced by the same scanner component `/scan`
+uses, pinned to wishlist, the way the library's `AddBookPanel` serves both
+doors — ☐ scoped once the owner answers whether the wishlist page keeps a
+door at all (asked 10:55; see the library TODO's ONE SCAN MENU section for
+the question).
+
+☑ build (`bf98714` + `a955270`) → ☑ tests (`bf98714`,
+`apps/web/test/scan-target.test.ts`; the root `test` glob gained
+`apps/web/test/*.test.ts` — the first web test in this repo) → ☐ deploy from
+a clean tree → ☐ live proof on <https://boardgames.heygabi.ai/scan> → ☐ owner
+scans one game to the wishlist.
+
+### BUILT 2026-09-04 — `bf98714` (lib + tests), `a955270` (the screen)
+
+**Files.** `apps/web/src/lib/scan-target.ts` (new) ·
+`apps/web/test/scan-target.test.ts` (new) · `package.json` (test glob) ·
+`apps/web/src/pages/ScanPage.tsx` · `apps/web/src/styles.css`.
+
+**The one line that changed what a scan means**, in `addCandidate`:
+
+```
+- await api.createCopy(item.id, copyDefaults('owned'));
++ await api.createCopy(item.id, copyDefaults(copyStatusFor(target)));
+```
+
+Grepped: it is the only place this screen writes a copy status. The other
+`owned` hits on the page are a `Badge` tone and the lookup's own "already in
+your collection" facts, both untouched.
+
+**Shared, not forked.** `lib/scan-target.ts` is the one place the
+target→status mapping and every word live: the row button (*Add* / *Add to
+wishlist*), the shelf-photo batch button (*Add 9 games [to wishlist]*), a
+settled row (*Added [to wishlist] -- open it*) and the tally. Bulk goes
+through the same `addCandidate`, so it inherits the status and the words.
+Gate: `suggestWishlist` — the capability `WishlistPage` uses and the one
+`routes/catalog.ts:360` demands for a `wanted` copy. Without it the switch is
+not drawn AND the effective target is pinned to shelf, so a `wishlist` stored
+before a role change cannot write a want.
+
+**Two deliberate differences from the library's copy**, both recorded in the
+module's own header: the storage key is `bgc.scanTarget` (this app's
+convention, cf. `bgc.coverBannerDismissed`) rather than `lc_scan_target_v1`;
+and the switch is NOT drawn on the *Manually* tab, because that tab is
+`QuickAdd`, whose form already asks for a copy status outright with a
+dropdown that can also say `preordered` or `lent`.
+
+⚠️ **NOT VERIFIED.** Nothing was rendered — no browser, no phone. That the
+switch appears, that a tap survives a reload, and that a wishlist scan writes
+a `wanted` row end to end are all unproven. `npm test` 169/169, `npm run
+typecheck` clean across five workspaces and `npm run build` green are the
+whole of the evidence. `ScanJobsPage`'s own `createCopy` (the queue) was left
+alone: this ask was `/scan`.
 
 ## ☐ Billing phase 3 is deployed but INERT — the soak, then the flip (2026-09-02)
 
