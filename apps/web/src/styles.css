@@ -1493,6 +1493,34 @@ code {
 }
 .scan-mode--on .muted { color: var(--et-btn-fg); opacity: 0.75; }
 
+/* Adding to: Shelf | Wishlist — where the sweep LANDS (owner ask 2026-09-04).
+   Modelled on `.theme-menu__modes`, which is already this app's spelling of
+   "pick exactly one of a short list": a heading in the same small-caps as
+   `.theme-menu__head`, a row of buttons, the chosen one filled with the
+   theme's primary rather than ringed. Two differences, both because this one
+   is used one-handed at a shelf rather than inside a settings popover:
+   the targets are 44px, and a sentence sits under them saying what the choice
+   means — "wishlist" alone does not tell anyone what will NOT be recorded. */
+.scan-target { display: flex; flex-direction: column; gap: 0.3rem; }
+.scan-target__label {
+  color: var(--muted);
+  font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.scan-target__opts { display: flex; gap: 0.35rem; }
+.scan-target__opts button {
+  flex: 1; min-height: 44px; padding: 0.4em 0.6em;
+  background: var(--paper-deep); color: var(--muted);
+  border: var(--ink) solid var(--et-panel-border); border-radius: var(--et-radius);
+  font: inherit; font-family: var(--font-label); font-weight: 400;
+  letter-spacing: 0.02em; cursor: pointer;
+}
+.scan-target__opts button[aria-pressed='true'] {
+  background: var(--et-btn-bg); color: var(--et-btn-fg);
+  border-color: var(--ink-color);
+}
+.scan-target__note { font-size: 0.78rem; line-height: 1.3; }
+
 /*
   The viewfinder gets an ink frame — a panel with a photograph in it — but the
   inside **stays black** and is not themed. That is not an oversight: it is a

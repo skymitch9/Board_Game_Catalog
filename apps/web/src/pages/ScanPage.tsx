@@ -13,6 +13,19 @@ import {
 import { api, ApiError, describeError, type BarcodeLookup } from '../api';
 import { captureFrame, fileToPhoto, onceSteady } from '../lib/camera';
 import { copyDefaults, createItemFromCandidate } from '../lib/catalog-add';
+import {
+  DEFAULT_SCAN_TARGET,
+  SCAN_TARGETS,
+  TARGET_LABEL,
+  addActionLabel,
+  addedLabel,
+  bulkAddLabel,
+  copyStatusFor,
+  loadScanTarget,
+  saveScanTarget,
+  targetSentence,
+  type ScanTarget,
+} from '../lib/scan-target';
 import { preloadDecoder, startScanLoop } from '../lib/scanner';
 import { CameraStage } from '../components/CameraStage';
 import { QuickAdd } from '../components/QuickAdd';
@@ -79,6 +92,32 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
   // API, split out of `runResearch` by the 2026-08-16 role redesign so a
   // contributor keeps free barcode scanning without the paid rungs.
   const canScanPhoto = me.capabilities.includes('scanPhoto');
+  /*
+   * `suggestWishlist` (member+) — the same capability `WishlistPage` gates its
+   * Add door on, and the same one `POST /items/:id/copies` demands when the
+   * status is `wanted` (`routes/catalog.ts`). Matching the server's check
+   * rather than guessing at it is the point: a switch that writes a status the
+   * Worker then refuses is the worst of the ways this could fail.
+   */
+  const canSuggest = me.capabilities.includes('suggestWishlist');
+
+  /*
+   * ⚠️ **Where this sweep LANDS** — the owner's 2026-09-04 ask, from his phone:
+   * *"let's add that when you scan something you can add it to library or
+   * wishlist."*
+   *
+   * ONE choice for the whole sweep, written on the tap, remembered for the
+   * SESSION and not across visits: a shop trip is an errand, not a habit.
+   * `lib/scan-target.ts` carries the argument.
+   */
+  const [scanTarget, setScanTarget] = useState<ScanTarget>(() => loadScanTarget());
+  /*
+   * ⚠️ The MECHANICAL guard, not just an undrawn switch: a `wishlist` stored in
+   * an earlier session must not survive a change of role. Everything below
+   * reads `target`, never `scanTarget`, so there is no path on which somebody
+   * without `suggestWishlist` writes a want.
+   */
+  const target: ScanTarget = canSuggest ? scanTarget : DEFAULT_SCAN_TARGET;
 
   const reset = useCallback(() => {
     setLookup(null);
@@ -226,9 +265,12 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
           pendingParentName: pendingParentName ?? null,
         });
 
-        // Scanning a game means you own it — create a copy so it counts.
-        // `physical`, because a barcode or a cover means it is in front of you.
-        await api.createCopy(item.id, copyDefaults('owned'));
+        // Scanning a game used to mean you own it. Since 2026-09-04 it means
+        // whatever the *Adding to* switch says — a copy on the shelf, or a
+        // want on the wishlist — and this is the ONE place on this screen that
+        // decides. `physical` either way: a barcode or a cover means the box is
+        // in front of you, whether or not it is going home with you.
+        await api.createCopy(item.id, copyDefaults(copyStatusFor(target)));
 
         if (barcode && canEdit) {
           await api
@@ -254,7 +296,7 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
         if (goToItem) setBusy(null);
       }
     },
-    [canEdit, lookup],
+    [canEdit, lookup, target],
   );
 
   // --- render --------------------------------------------------------------
@@ -313,6 +355,51 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
           </button>
         ))}
       </div>
+
+      {/*
+        ⚠️ **SHELF or WISHLIST** — the owner's 2026-09-04 ask, and the one
+        control on this screen that changes what a scan MEANS rather than how it
+        reads a box. It sits under the tabs and above the camera because it is
+        the thing somebody arrives here having already decided.
+
+        ⚠️ It is not drawn on the *Manually* tab, where the library catalog's
+        equivalent does render. The reason they differ: that tab is `QuickAdd`,
+        whose form already carries a full copy-status dropdown, so a two-state
+        switch above it would be a second answer to a question already being
+        asked — and the dropdown, which can also say `preordered` or `lent`, is
+        the better one.
+
+        ⚠️ No refusal sentence, because there is no refusal to explain: without
+        `suggestWishlist` the switch is not rendered at all and every scan goes
+        to the shelf, exactly as it did before this existed. A person who never
+        had the choice is not being told "no" — nothing has changed for them.
+      */}
+      {canSuggest && mode !== 'manual' && (
+        <div className="scan-target">
+          <span className="scan-target__label" id="scan-target-label">
+            Adding to
+          </span>
+          <div className="scan-target__opts" role="group" aria-labelledby="scan-target-label">
+            {SCAN_TARGETS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={target === t}
+                onClick={() => {
+                  setScanTarget(t);
+                  // Written on the tap, not on unmount: a phone that locks
+                  // mid-sweep is the case this screen is built around, and an
+                  // unmount handler is exactly what that does not run.
+                  saveScanTarget(t);
+                }}
+              >
+                {TARGET_LABEL[t]}
+              </button>
+            ))}
+          </div>
+          <span className="muted scan-target__note">{targetSentence(target)}</span>
+        </div>
+      )}
 
       {/* The typed path: the same Quick add that used to live on the collection
           page, inline here so switching to it never loses the tab you were on. */}
@@ -410,10 +497,14 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
       {error != null && <ErrorBox error={error} what="Scan" />}
       {note && <p className="scan-note">{note}</p>}
 
+      {/* `target` goes to all three so no add button, batch button or settled
+          row can say "Added" over a want. It is the effective target, never
+          `scanTarget` — see the guard where it is computed. */}
       {lookup && (
         <BarcodeResult
           lookup={lookup}
           canResearch={canResearch}
+          target={target}
           onAskClaude={() => askClaude(lookup.barcode)}
           onAdd={(c) => addCandidate(c, lookup.barcode)}
         />
@@ -422,6 +513,7 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
       {candidates && candidates.length > 0 && (
         <CandidateList
           candidates={candidates}
+          target={target}
           onAdd={(c) => addCandidate(c, lookup?.barcode ?? null)}
         />
       )}
@@ -429,6 +521,7 @@ export function ScanPage({ me, initialMode }: { me: MeResponse; initialMode?: Mo
       {shelf && (
         <ShelfResult
           matches={shelf}
+          target={target}
           onAdd={(c, kind, parentId, pendingParentName) =>
             addCandidate(c, null, false, kind, parentId, pendingParentName)
           }
@@ -504,11 +597,14 @@ function PhotoFallback({
 function BarcodeResult({
   lookup,
   canResearch,
+  target,
   onAskClaude,
   onAdd,
 }: {
   lookup: BarcodeLookup;
   canResearch: boolean;
+  /** Where this sweep lands — it names the add button. */
+  target: ScanTarget;
   onAskClaude: () => void;
   onAdd: (c: BarcodeCandidate) => void;
 }) {
@@ -532,7 +628,7 @@ function BarcodeResult({
       </p>
 
       {lookup.candidates.length > 0 ? (
-        <CandidateList candidates={lookup.candidates} onAdd={onAdd} />
+        <CandidateList candidates={lookup.candidates} target={target} onAdd={onAdd} />
       ) : (
         <div className="scan-empty">
           <p>
@@ -576,9 +672,12 @@ function BarcodeResult({
 
 function CandidateList({
   candidates,
+  target,
   onAdd,
 }: {
   candidates: BarcodeCandidate[];
+  /** Where this sweep lands — it names the add button. */
+  target: ScanTarget;
   onAdd: (c: BarcodeCandidate) => void;
 }) {
   return (
@@ -603,7 +702,7 @@ function CandidateList({
             {c.note && <span className="muted candidate__note">{c.note}</span>}
           </div>
           <button type="button" className="primary" onClick={() => onAdd(c)}>
-            Add
+            {addActionLabel(target)}
           </button>
         </li>
       ))}
@@ -619,9 +718,17 @@ function CandidateList({
  */
 function ShelfResult({
   matches,
+  target,
   onAdd,
 }: {
   matches: ShelfMatch[];
+  /**
+   * Where this sweep lands. Bulk goes through the same `addCandidate` as every
+   * other row, so it already writes the right status — this is only so the
+   * words agree with the write. A batch button reading "Add 9 games" over a
+   * wishlist sweep is the same lie as a row reading "Added".
+   */
+  target: ScanTarget;
   onAdd: (
     c: BarcodeCandidate,
     kind?: ItemKind,
@@ -781,7 +888,9 @@ function ShelfResult({
       <p className="muted">
         Read {matches.length} title{matches.length === 1 ? '' : 's'}
         {owned.length > 0 && ` \u00b7 ${owned.length} already yours`}
-        {addedCount > 0 && ` \u00b7 ${addedCount} added`}
+        {/* "9 added" / "9 added to wishlist": the tally is a settled row too,
+            and the sweep it summarises may not have gone on the shelf. */}
+        {addedCount > 0 && ` \u00b7 ${addedCount} ${addedLabel(target).toLowerCase()}`}
       </p>
 
       {fresh.length > 0 && (
@@ -797,7 +906,7 @@ function ShelfResult({
                 ? `Adding\u2026 ${addedCount}`
                 : pendingCount === 0
                   ? 'All done'
-                  : `Add ${pendingCount} game${pendingCount === 1 ? '' : 's'}`}
+                  : bulkAddLabel(target, pendingCount)}
             </button>
             <button
               type="button"
@@ -895,7 +1004,9 @@ function ShelfResult({
                     )}
 
                     {result && 'itemId' in result && (
-                      <Link to={`/items/${result.itemId}`}>Added -- open it</Link>
+                      <Link to={`/items/${result.itemId}`}>
+                        {addedLabel(target)} -- open it
+                      </Link>
                     )}
                     {result && 'error' in result && (
                       <span className="muted candidate__note">{result.error}</span>
