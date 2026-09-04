@@ -42,7 +42,9 @@ wishlist*), never "Added" over a want.
 stays the primary way onto the wishlist; this switch is the mixed-basket
 case, exactly as on the library.
 
-**Refined 10:55 Phoenix, owner verbatim:** *"I want to have all scanning be
+**Refined ~11:00 Phoenix (⚠️ estimated — the clock was not read between the
+10:47 dispatch and a 12:53 read; the owner's two messages fell somewhere in
+that gap), owner verbatim:** *"I want to have all scanning be
 the same menu and then have the option to add to wishlist or add to catalog.
 No need to go to a different route."* Read as: the scanner page is THE scan
 menu, and the wishlist-vs-catalog choice lives on it — nobody navigates to
@@ -50,9 +52,43 @@ menu, and the wishlist-vs-catalog choice lives on it — nobody navigates to
 a second scan stack (its own camera/file loop, 326 lines) and therefore a
 second menu; it should be replaced by the same scanner component `/scan`
 uses, pinned to wishlist, the way the library's `AddBookPanel` serves both
-doors — ☐ scoped once the owner answers whether the wishlist page keeps a
-door at all (asked 10:55; see the library TODO's ONE SCAN MENU section for
-the question).
+doors. Asked whether the wishlist page keeps a door at all; **owner: "Keep
+it"** — *+ Add something* stays, as a second entrance to the ONE scanner.
+
+**Part 2, scoped from that answer — ONE SCANNER BEHIND TWO DOORS** (build
+after part 1 is deployed; Opus, ~150–250k; the library's `c82eae7` +
+`1702768` is the worked precedent):
+
+* Extract the scanner out of `pages/ScanPage.tsx` (~950 lines) into a shared
+  component (`components/ScanPanel.tsx`, or whatever this repo's naming
+  says): the mode tabs, camera loop, barcode/photo lookups, candidate rows,
+  the format and *Adding to* controls, `addCandidate`. Props on the
+  library's shape — `{ target, modes, initialMode, onAdded, onFinished,
+  onCancel }` — with the target either *switchable* (`/scan`: Shelf |
+  Wishlist) or *pinned* (the wishlist door: wishlist, no switch drawn).
+* `/scan` renders the panel; that commit must leave the page doing exactly
+  what it did (a pure extraction, like `c82eae7`).
+* `components/WishlistAdd.tsx` renders the same panel pinned to wishlist in
+  place of `WishlistScan.tsx`, which is then deleted — its header records
+  the 2026-08 decision reversal; carry that rationale into the panel's
+  header, do not lose it. The typed-name path of `WishlistAdd` stays; only
+  the scanning part is replaced. ⚠️ The expansions offer after a wishlist
+  add (`onAdded(item)` → `WishlistExpansions`) must keep working — it is
+  the one behaviour the door has that `/scan` does not.
+* One write path: `copyDefaults(copyStatusFor(target))` in exactly one
+  place (today: `ScanPage.tsx` `addCandidate` — part 1 — and
+  `WishlistScan.tsx:139`, which part 2 removes). `ScanJobsPage.tsx:915`
+  (the queue) also creates copies with its own hardcoded status — out of
+  this ask's scope, untouched, noted so nobody thinks it was missed.
+* Tests: whatever pure logic the extraction exposes, as
+  `apps/web/test/*.test.ts`.
+
+☐ part 2 build → ☐ tests → ☐ deploy from a clean tree → ☐ live proof on
+<https://boardgames.heygabi.ai/wishlist> (*+ Add something* → the same tabs
+as `/scan`, no switch, "goes on your wishlist" sentence) → ☐ owner adds one
+game from each door on his phone.
+
+**Part 1 (the switch on `/scan`):**
 
 ☑ build (`bf98714` + `a955270`) → ☑ tests (`bf98714`,
 `apps/web/test/scan-target.test.ts`; the root `test` glob gained
