@@ -85,10 +85,21 @@ after part 1 is deployed; Opus, ~150–250k; the library's `c82eae7` +
 
 ☑ part 2 build (`5572fe8` the extraction + `dc62cad` the door) → ☑ tests
 (`5572fe8`, `apps/web/test/add-modes.test.ts`, 20 assertions; suite 169 →
-189) → ☐ deploy from a clean tree → ☐ live proof on
-<https://boardgames.heygabi.ai/wishlist> (*+ Add something* → the same tabs
-as `/scan`, no switch, "goes on your wishlist" sentence) → ☐ owner adds one
-game from each door on his phone.
+189) → ☑ deploy from a clean tree 13:16 Phoenix (`c0b9c340` → version
+`3d26cc3f…`, holder fable, 189/189 in predeploy, line in `deploys.log`) →
+☑ live proof 13:18 on the owner's signed-in session, bundle
+`index-DgSGLDd1.js`: <https://boardgames.heygabi.ai/scan> reads exactly as
+before (four tabs, *ADDING TO · Shelf | Wishlist*, same sentence);
+<https://boardgames.heygabi.ai/wishlist> — the button is labelled **+ Add**
+on this page (not "+ Add something"; the spec line above used the library's
+label) → *Add to the wishlist* with **Type it / Barcode / One box**, no
+switch (`.scan-target` absent), and the Barcode tab shows "Games you add
+here go on your wishlist — a want, not a copy you own." above *Start camera*.
+Cancelled without adding. **NOT verified:** any scan resolving or writing a
+`wanted` copy (no camera here), the expansions offer after a scanned add
+(traced in code only), rendered pixels / the `.wishlist-scan` wrapper's
+layout, a `scanBarcode`-less role on the door. → ☐ owner adds one game from
+each door on his phone.
 
 ### BUILT 2026-09-04 — `5572fe8` (the extraction), `dc62cad` (the door)
 
