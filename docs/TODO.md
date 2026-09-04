@@ -13,6 +13,40 @@ not shadow, and stays there — the reasoning is in its `DONE.md` entry.
 
 ---
 
+## ☐ SCAN TARGET: "Adding to · Shelf | Wishlist" on `/scan`, so a scan can land on the wishlist — owner ask 2026-09-04 10:40 Phoenix
+
+Owner, from his phone, verbatim: *"let's add that when you scan something you
+can add it to library or wishlist. Do this for both games and the libraries."*
+
+**Read as:** the switch the library catalog shipped this morning on its `/add`
+page (`library_catalog/apps/web/src/lib/scan-target.ts` + the *Adding to*
+group in its `ScanPage.tsx`) comes to this catalog's `/scan`. The libraries
+already have it (both instances, live-verified 10:08); this repo is the open
+half. This catalog has ONE instance (`boardgames.heygabi.ai`; no `[env.*]`
+in `apps/worker/wrangler.toml`), so "both games" = the games catalog beside
+the two library instances, not a second games instance.
+
+**What it is here.** `pages/ScanPage.tsx:231` writes
+`api.createCopy(item.id, copyDefaults('owned'))` for every scan, in one
+place; `lib/catalog-add.ts`'s `copyDefaults(status)` already takes the status.
+The switch chooses `owned` | `wanted` for the sweep, remembered per SESSION
+(an errand, not a habit — the library's reasoning, kept verbatim in the new
+`lib/scan-target.ts`), default **shelf** (what every scan has written since
+the feature existed). Gate: the Wishlist option renders only for
+`suggestWishlist` (the same capability `WishlistPage` uses) — without it the
+switch is not drawn and the target is pinned to shelf. The row's add-button
+and settled-row words follow the target (*Add to wishlist* / *Added to
+wishlist*), never "Added" over a want.
+
+**Kept:** the Wishlist page's own door (`WishlistAdd` + `WishlistScan`)
+stays the primary way onto the wishlist; this switch is the mixed-basket
+case, exactly as on the library.
+
+☐ build (Opus) → ☐ tests (`apps/web/test/scan-target.test.ts`; the root
+`test` script's glob gains `apps/web/test/*.test.ts` — this repo has no web
+tests yet) → ☐ deploy from a clean tree → ☐ live proof on
+<https://boardgames.heygabi.ai/scan> → ☐ owner scans one game to the wishlist.
+
 ## ☐ Billing phase 3 is deployed but INERT — the soak, then the flip (2026-09-02)
 
 All seven money paths are gated (`5150269f` live as `2e598a9e`; the build is in
