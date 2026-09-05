@@ -1159,6 +1159,17 @@ textarea { resize: vertical; }
 .rating-why { color: var(--muted); font-style: italic; }
 .rating-preview { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.95rem; }
 
+/* The family roll-up, above everybody's individual scores. Boxed and sitting on
+ * its own so it does not read as one more person's rating — it is the one
+ * number on this card nobody typed in. Wraps on a phone: the "across N rated of
+ * M" clause is the honest half and must not be what gets cut off. */
+.rating-family {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+  margin: 0 0 0.9rem; padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); font-size: 0.9rem;
+}
+
 /* --- stars (0.5–5 half-star scale, shared with the audiobook catalog) ------
  *
  * Ported from the audiobook site's `renderStars` / the library's styles so a

@@ -30,6 +30,7 @@ import {
   normaliseTitle,
   searchTerms,
 } from '@bgc/core';
+import { getFamilyScore } from './family-score.js';
 import { getRelatedItems } from './relations.js';
 import { preserveDisplacedCover } from './editions.js';
 import { mapCopyRow, statusList, toIso, type CopyRow } from './copies.js';
@@ -985,6 +986,12 @@ export async function getItemDetail(db: D1Database, id: number): Promise<ItemDet
   // Related items — standalone games linked to this one (bidirectional).
   const relatedItems = await getRelatedItems(db, id);
 
+  // The family's one number. Derived on read from the ratings and relations
+  // above — no column, no migration, nothing to go stale. See
+  // `family-score.ts` in this package for what counts as the family, and
+  // `@bgc/core`'s `family-score.ts` for the weights.
+  const familyScore = await getFamilyScore(db, id);
+
   // The children list on this page is text, not pictures, so it is deliberately
   // left without borrowed covers — there is nowhere for one to show.
   const { inherited, cover } = await resolveInheritedDetails(db, item);
@@ -997,6 +1004,7 @@ export async function getItemDetail(db: D1Database, id: number): Promise<ItemDet
     children: children.sort((a, b) => (a.sortName ?? a.name).localeCompare(b.sortName ?? b.name)),
     ratings,
     relatedItems,
+    familyScore,
     inherited,
   };
 }

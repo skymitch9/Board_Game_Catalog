@@ -231,10 +231,17 @@ export function ItemPage({
       {/* Ratings before related games, deliberately. A Dice Throne hero lists
           about fifty-five relatives — family is transitive and the whole line is
           one family — so a related-games list above this buried the short useful
-          thing under the long one. The list is unchanged; only its position is. */}
+          thing under the long one. The list is unchanged; only its position is.
+
+          The family score rides in here rather than on the "Related games"
+          heading below, which is the other place the family is shown: one fact,
+          one home. It is a fact about ratings, it sits directly above the list
+          it summarises, and printing it twice on one page is how two numbers
+          eventually disagree. */}
       <Ratings
         itemId={item.id}
         ratings={item.ratings}
+        familyScore={item.familyScore}
         myEmail={me.email}
         canRate={canRate}
         onChanged={reload}

@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { RATING_STEPS, type Rating } from '@bgc/core';
+import {
+  RATING_STEPS,
+  isFamilyScoreWorthShowing,
+  type FamilyScore,
+  type Rating,
+} from '@bgc/core';
 import { api } from '../api';
 import { ErrorBox } from './ui';
 
@@ -36,15 +41,48 @@ function Stars({ rating }: { rating: number }) {
     </span>
   );
 }
+/**
+ * The family's one number, above everyone's individual ones.
+ *
+ * Decided by the owner 2026-09-05: the **base-weighted mean** (option (a) of
+ * `docs/info/design-decisions.md`). The base game counts for six times what a
+ * playmat does, so the tail is visible without being able to sink the box. The
+ * weights, and the arithmetic that justifies them, are in `@bgc/core`'s
+ * `family-score.ts` — this only renders what the wire carries.
+ *
+ * ⚠️ It says **what it was computed over**, not just the number. "4.4 across 6
+ * of 19" and "4.4 across 19 of 19" are different claims, and a bare 4.4 makes
+ * the weaker one look like the stronger. Hidden entirely below two rated rows
+ * (`isFamilyScoreWorthShowing`), where it would only restate a single rating
+ * under a grander heading.
+ */
+function FamilyRow({ family }: { family: FamilyScore }) {
+  if (!isFamilyScoreWorthShowing(family) || family.score === null) return null;
+
+  return (
+    <p className="rating-family">
+      <span className="rating-who">This family</span>
+      <Stars rating={family.score} />
+      <span className="rating-score">{family.score.toFixed(1)}</span>
+      <span className="muted">
+        across {family.rated} rated of {family.members} in the family
+        {!family.hasBase && ' — no base game among them'}
+      </span>
+    </p>
+  );
+}
+
 export function Ratings({
   itemId,
   ratings,
+  familyScore,
   myEmail,
   canRate,
   onChanged,
 }: {
   itemId: number;
   ratings: Rating[];
+  familyScore: FamilyScore;
   myEmail: string;
   canRate: boolean;
   onChanged: () => void;
@@ -89,6 +127,8 @@ export function Ratings({
     <section className="card">
       <h2>Ratings</h2>
       {error ? <ErrorBox error={error} what="Could not save your rating" /> : null}
+
+      <FamilyRow family={familyScore} />
 
       {canRate && (
         <div className="rating-mine">

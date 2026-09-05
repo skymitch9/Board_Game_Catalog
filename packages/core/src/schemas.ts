@@ -18,6 +18,7 @@ import {
   type Disposal,
 } from './constants.js';
 import type { InheritedDetail, InheritedField } from './details.js';
+import type { FamilyScore } from './family-score.js';
 
 export const itemKindSchema = z.enum(ITEM_KINDS);
 export const copyStatusSchema = z.enum(COPY_STATUSES);
@@ -579,6 +580,16 @@ export interface ItemDetail extends Item {
   children: ItemNode[];
   ratings: Rating[];
   relatedItems: RelatedItemRef[];
+  /**
+   * One number for the whole family — the base-weighted mean, derived on read.
+   *
+   * Never stored, never a column: it is a roll-up over the per-item ratings and
+   * the `same_family` relations that already exist. `score` is `null` when
+   * nothing in the family is rated, which is not a zero. The weights and the
+   * decision behind them are in `family-score.ts`; the family it is rolled up
+   * over is decided by `packages/db/src/family-score.ts`.
+   */
+  familyScore: FamilyScore;
   parent: Item | null;
   /**
    * Blank fields answered by the nearest ancestor that has one.

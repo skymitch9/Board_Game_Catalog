@@ -5,6 +5,7 @@ export * from './items.js';
 export * from './copies.js';
 export * from './copy-events.js';
 export * from './ratings.js';
+export * from './family-score.js';
 export * from './import.js';
 export * from './aliases.js';
 export * from './barcodes.js';
