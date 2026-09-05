@@ -222,6 +222,57 @@ typecheck` clean across five workspaces and `npm run build` green are the
 whole of the evidence. `ScanJobsPage`'s own `createCopy` (the queue) was left
 alone: this ask was `/scan`.
 
+## ☑ SECOND-INSTANCE MACHINERY landed 2026-09-05 — ☐ phase 9: the provisioner's games path
+
+Owner, 2026-09-05 ~06:50 Phoenix, on whether the Games card gets the same "+"
+and flow as the Books card: **"Both."** That answer made
+`catalog-platform/docs/info/request-a-catalog-design.md` §8 a build section, and
+its items 1–3 are this repo's half. They are **done**:
+
+| # | What | Commit |
+|---|---|---|
+| 1 | `ESTATE_APP` lifted out of source + the same-id build guard | `fc17ea3` |
+| 2 | Instance-aware scripts; a bulk secret push that refuses per-instance keys | `30dc045` |
+| 3 | A commented `[env.<instance>]` TEMPLATE + its drift guard | `4db2f2e` |
+
+Durable reference (this is where the facts live — do not restate them here):
+[`access/second-instance.md`](access/second-instance.md) for how to operate one,
+[`info/instance-model.md`](info/instance-model.md) for shared-vs-per-instance and
+the measured `RATE_LIMITER` answer.
+
+🔴 **NO SECOND INSTANCE EXISTS**, and nothing here creates one — no D1, no R2
+bucket, no hostname, no second deploy. That is phase 9's job.
+
+### ☐ Phase 9 — the GAMES path in the provisioner
+
+The provisioner (`scripts/provision-catalog.mjs`) is being built in
+`library_catalog` for the BOOKS path (design §10 phase 7). The games path comes
+after it and after this phase, and lands **in this repo**. What it must do is the
+12-step checklist in [`access/second-instance.md`](access/second-instance.md) §4,
+of which steps 5 (auth-Worker `CONSUMER_APPS` + `vis_games2`) and 9 (Firebase
+Authorised domains, the estate directory row) are 🔴 **MANUAL, owner-only** —
+no CLI reaches them.
+
+⚠️ **The warning worth carrying, from design §8's close:** a games request can be
+*filed and accepted* the day the shared half ships and cannot be *provisioned*
+until this lands. If those moments are far apart, someone has been told yes and
+is waiting.
+
+### ☐ Two follow-ups this build deliberately did not do
+
+* **`BILLING_SITE` is still the constant `'games'`**
+  (`apps/worker/src/lib/billing-gate.ts`, and it now says so in its own comment).
+  A second instance would identify correctly at the estate directory and still
+  report and be billed as the `games` site. Inert today — `BILLING_POLICY =
+  "off"`, nothing has ever resolved — but it must be lifted the way `ESTATE_APP`
+  was **before a second instance bills**.
+* **No donor, no peers.** There is no `DONOR_URL`, no `PEERS`, no donor route
+  here. For the libraries, "no Claude key on either side" still leaves a free
+  donor sweep healing against the main library; for games, **no key means no
+  self-healing at all**. ⚠️ The Accept panel must therefore not reuse the books
+  sentence on a games row (design §7.6) — that mockup line is true for books and
+  false for games.
+
 ## ☐ Billing phase 3 is deployed but INERT — the soak, then the flip (2026-09-02)
 
 All seven money paths are gated (`5150269f` live as `2e598a9e`; the build is in

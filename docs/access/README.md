@@ -19,6 +19,7 @@ current state and work in flight live in [`../TODO.md`](../TODO.md).
 | [`login.md`](login.md) | Cloudflare Access: how sign-in works **today**, until the cutover's step 4. Being replaced |
 | [`covers-r2.md`](covers-r2.md) | The `game-covers` R2 bucket, `gamecovers.heygabi.ai`, the migration script and its gotchas |
 | [`deploys.md`](deploys.md) | 🆕 **How to ship (2026-09-02)** — the check-clean / deploy-guard / deploy-done chain, `docs/deploys.log` as the 3am rollback source of truth, every escape hatch, and the gotchas (a failed test leaves the lock; `version-unknown` is a failure, not a value) |
+| [`second-instance.md`](second-instance.md) | 🆕 **A SECOND games instance (2026-09-05)** — 🔴 none exists; this is the machinery that landed and the runbook for using it. The `:games2` command twins, which secrets are per-instance and which are shared, the 12-step checklist (including the owner-only Firebase and auth-Worker steps), what a bulk secret push REFUSES and why, and the three ways it goes wrong silently. Why the model looks like this: [`../info/instance-model.md`](../info/instance-model.md) |
 
 Cloudflare, D1 and Access details are in [`SETUP.md`](SETUP.md); commands,
 repo layout and deploy levers are in
@@ -29,7 +30,8 @@ repo layout and deploy levers are in
 | Name | Required? | Without it |
 |---|---|---|
 | `FIREBASE_PROJECT_ID` | yes | `/api/*` answers 500 `misconfigured`. Must equal `projectId` in `apps/web/src/lib/firebase.ts` |
-| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | 🔶 no longer read | Nothing. Kept set until the Access application is deleted — [`firebase-auth.md`](firebase-auth.md) §3 step 6 |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | 🔶 no longer read | Nothing. Kept set until the Access application is deleted — [`firebase-auth.md`](firebase-auth.md) §3 step 6. ⚠️ A second instance must NOT restate these |
+| `ESTATE_APP_TOKEN_GAMES` | for estate auth | The estate check logs `estate config unset` and behaves as `off`. ⚠️ Its NAME follows the `ESTATE_APP` var (`[vars]`, `"games"`); a second instance uses `ESTATE_APP_TOKEN_GAMES2` — [`second-instance.md`](second-instance.md) |
 | `OWNER_EMAILS` | yes | Nobody is seeded as owner |
 | `ANTHROPIC_API_KEY` | for research | `/api/barcode/identify` and phase 3 return 503 |
 | `BGG_API_TOKEN` | for BGG | `/api/bgg/*` returns 502; barcode lookups still work, unhydrated |

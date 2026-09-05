@@ -11,6 +11,23 @@
 
 ---
 
+## ⚠️ PARTLY SUPERSEDED — 2026-09-05
+
+**The owner asked, and the build happened** (*"Both."*, 2026-09-05 ~06:50
+Phoenix — `catalog-platform/docs/info/request-a-catalog-design.md` §9). Phases
+1–3 of §4 below are **DONE** (`fc17ea3`, `30dc045`, `4db2f2e`), so this doc's
+description of the repo is a snapshot of 2026-08-25 and no longer describes it.
+
+| Section | Status |
+|---|---|
+| §0, §2, §3 — *"this repo is currently zero-instance-aware"*, the gap table | 🔴 **STALE.** The estate identity is config, the script twins exist, the deploy guards were already instance-aware, and a template `[env.<instance>]` block exists. Current facts: [`instance-model.md`](instance-model.md) |
+| §4 phases 1–3 | ✅ **DONE.** ⚠️ Phase 1 was already stale when written — the guards existed on `main` |
+| §4 phases 4–6, §6, §7 | Still open, still correct in shape. The operating runbook is now [`../access/second-instance.md`](../access/second-instance.md), which owns §6's checklist |
+| §5 — the open `RATE_LIMITER` question | ✅ **ANSWERED, MEASURED** — per ACCOUNT. [`instance-model.md`](instance-model.md) §3, with the verbatim quote and its URL |
+| **§1 — how `library_catalog` does it** | ✅ **Still the best reference in the estate**, and the reason this file is kept rather than archived |
+
+---
+
 ## 0. The one-sentence answer
 
 `library_catalog` runs two libraries from one codebase by giving the second

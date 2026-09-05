@@ -23,7 +23,8 @@ flight live in [`../TODO.md`](../TODO.md); finished work in
 | [`system-reference.md`](system-reference.md) | Deployment state, what works today, repo layout, commands |
 | [`design-decisions.md`](design-decisions.md) | Settled questions, owner decisions, future plans (from the original handoff) |
 | [`audit-2026-08-findings.md`](audit-2026-08-findings.md) | Estate code audit (2026-08) — 24 confirmed findings (0 critical/high, 13 medium, 11 low), severity-ranked with evidence and fix notes; the two reviewed-high findings are also tracked as ☐ items in [`../TODO.md`](../TODO.md) |
-| [`multi-catalog-strategy.md`](multi-catalog-strategy.md) | ⏳ **PREP ONLY, nothing built.** How `library_catalog` runs two library instances from one codebase (the `[env.friend]` pattern), a gap analysis for this repo (currently zero-instance-aware), and a repeatable checklist for standing up a second board-game catalog when the owner asks |
+| [`instance-model.md`](instance-model.md) | 🆕 **The instance model (2026-09-05)** — what is SHARED vs PER-INSTANCE in this repo now that the second-instance machinery exists, why the estate identity had to become config before it could differ, the gaps a second instance would inherit — and 🔴 the **MEASURED** `RATE_LIMITER` `namespace_id` answer (per ACCOUNT, quoted from Cloudflare's docs with its URL). Operating a second instance: [`../access/second-instance.md`](../access/second-instance.md) |
+| [`multi-catalog-strategy.md`](multi-catalog-strategy.md) | ⚠️ **PARTLY SUPERSEDED 2026-09-05** — see its banner. Its §1 (how `library_catalog` runs two instances, the `[env.friend]` pattern) is still the best reference; its §2–§4 gap analysis described a repo that no longer exists, and its §5 `RATE_LIMITER` open question is now answered in [`instance-model.md`](instance-model.md) §3 |
 
 The overall architecture and phase plan are in [`../DESIGN.md`](../DESIGN.md);
 the repo map is in [`system-reference.md`](system-reference.md).
