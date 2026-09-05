@@ -113,10 +113,13 @@ Assumes the phase-8 machinery (this page) is landed, which it is.
    envs declaring the same `ESTATE_APP` fails here**, before a deploy can
    misidentify anyone.
 7. `npm run db:migrate:games2` — every existing migration against the new, empty
-   D1. Confirm with the migrations list, not with silence. ⚠️ **This account
-   cannot run `d1 migrations apply --remote`** (it answers `7403`); see
-   [`../TODO.md`](../TODO.md)'s 2026-08-09 note for the `d1 execute --remote`
-   workaround, including the bookkeeping `INSERT` into `d1_migrations`.
+   D1. Confirm with the migrations list, not with silence. ⚠️ **Do not use the
+   hand-applied `d1 execute --remote` + manual `d1_migrations` INSERT method.**
+   Two older notes in this tree say `migrations apply --remote` answers `7403`
+   on this account; that was **re-measured false on 2026-09-02** and the hand
+   method is strictly worse — it leaves `d1_migrations` disagreeing with the
+   database whenever somebody forgets the second half.
+   [`deploys.md`](deploys.md) gotcha 3 owns this fact.
 8. Set its secrets **one at a time**: `npm run secret:games2 -- ESTATE_APP_TOKEN_GAMES2`,
    then `ANTHROPIC_API_KEY`, `INDEX_PUSH_TOKEN`. Never bulk-push them (§5).
 9. **Owner console steps — no CLI can do these.** Add the new hostname to

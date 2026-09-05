@@ -99,9 +99,13 @@ byte-identical here; `deploy-guard.mjs` and `deploy-done.mjs` were copied
 unchanged (both already resolve `apps/worker/wrangler.toml`, which is the same
 path in both repos). The `--instance=` handling they carry for the library's
 second Worker is inert here: this repo has one instance, so every line is
-written and read as `default`. If a second board-game catalog is ever stood up
-([`../info/multi-catalog-strategy.md`](../info/multi-catalog-strategy.md)), the
-per-instance ancestry filtering is already there.
+written and read as `default`.
+
+✅ **Updated 2026-09-05.** That `--instance=` handling now has callers: the
+`predeploy:games2` / `deploy:games2` / `postdeploy:games2` twins, which refuse in
+words while no `[env.games2]` block exists. This repo still has ONE live
+instance and every `deploys.log` line here is still `default`. The runbook is
+[`second-instance.md`](second-instance.md).
 
 Keeping them identical is the point: a fix made in one repo is a `cp` away from
 the other, and a diff is the test that they have not drifted.
