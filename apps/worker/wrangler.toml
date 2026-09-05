@@ -242,3 +242,124 @@ FIREBASE_PROJECT_ID = "audiobook-catalog"
 # the second is the preview (*-board-game-catalog) URL.
 CF_ACCESS_TEAM_DOMAIN = "wispy-snowflake-2801.cloudflareaccess.com"
 CF_ACCESS_AUD = "65e61dbe36fd4482fab983072ad4365d1d4cabe4492e29cfb492b1f67d5f14c6,bd08ade937830541f55725ecf12ae2d02d88c5d647851b6b6a50f1d4239add2b"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TEMPLATE — a SECOND games instance. Nothing below is active.
+# Added 2026-09-05 (request-a-catalog design §8 item 3). ⚠️ THIS REPO HAS ONE
+# LIVE INSTANCE. No second D1, R2 bucket, hostname or Worker exists, and none is
+# created by uncommenting this — the owner-run provisioner does that (§7.6).
+# The runbook, the manual steps and what only the owner can do:
+#   docs/access/second-instance.md
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 🔴 THE ONE RULE THAT MATTERS: `[env.*]` INHERITS NOTHING that matters here.
+# Vars, D1, R2, routes, triggers and unsafe bindings are NOT inherited from the
+# top level — an omission below is a MISSING binding on that Worker, never a
+# fallback to main's value. (`main`, `compatibility_date` and
+# `compatibility_flags` are the exceptions wrangler does inherit.) A half-filled
+# block is worse than no block: it deploys a live Worker whose D1 binding points
+# at the MAIN catalog's database.
+#
+# 🔴 TWO LINES THAT MUST NOT BE COPIED — `CF_ACCESS_TEAM_DOMAIN` and
+# `CF_ACCESS_AUD`. They are DEPRECATED-but-present at the top level (Cloudflare
+# Access stopped authenticating this Worker on 2026-08-10; `middleware/auth.ts`
+# verifies Firebase ID tokens). They are kept only until the Access application
+# is deleted, and `src/env.ts` marks both `@deprecated`. Restating them on a new
+# instance extends something that is being removed and would need deleting twice.
+# Their absence below is deliberate and is asserted by
+# `apps/worker/src/lib/instance-template.test.ts`.
+#
+# ⚠️ NAMING. Pick an identity-neutral internal name (env, D1, bucket) that does
+# not chase the hostname — `library_catalog`'s `friend`/`library-catalog-2nd`
+# outlived a `sam.` → `padhard.` rename with zero other files touched. Only
+# `[[routes]].pattern` is allowed to change afterwards. `games2` is the id this
+# codebase already knows (`src/lib/estate-app.ts`); using another means editing
+# that allowlist, `Env`, and the bearer switch in the same commit.
+#
+# [env.games2]
+# # Pinned so a wrangler default change can never collide it with the main
+# # Worker. Wrangler would otherwise name it `board-game-catalog-games2`.
+# name = "board-game-catalog-2nd"
+#
+# # ONE built PWA, shipped to both Workers. There is no per-instance frontend
+# # build, and `apps/web/dist` is why the deploy lock is shared across instances.
+# [env.games2.assets]
+# directory = "../web/dist"
+# binding = "ASSETS"
+#
+# # 🔴 ITS OWN namespace_id, NOT "1001". MEASURED 2026-09-05 against
+# # https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/:
+# # *"Two rate limiting bindings that share the same `namespace_id` — even across
+# # different Workers on the same account — share the same rate limit counters
+# # for a given key"*, and *"If you do not want to share rate limit state between
+# # bindings, use a unique `namespace_id` for each binding."* The key here is the
+# # client IP, so a shared id makes two households throttle each other whenever
+# # they share an egress IP — and it is one account. Reasoning and quotes:
+# # docs/info/instance-model.md.
+# # ⚠️ Never change the MAIN instance's "1001": that silently resets every counter.
+# [[env.games2.unsafe.bindings]]
+# name = "RATE_LIMITER"
+# type = "ratelimit"
+# namespace_id = "1002"
+# simple = { limit = 300, period = 60 }
+#
+# # Its own database. Same migration FILES, applied separately:
+# #   npm run db:migrate:games2      (remote only — see below)
+# # ⚠️ There is deliberately no local twin. miniflare keeps one local D1 per
+# # BINDING name and both instances bind `DB`, so a local second-instance command
+# # would read the MAIN local database and report confidently on the wrong
+# # catalog. `library_catalog` paid for that lesson: 47 of 369 books on its second
+# # instance needed a backfill no sweep could reach.
+# [[env.games2.d1_databases]]
+# binding = "DB"
+# database_name = "board-game-catalog-2nd"
+# database_id = "<from `wrangler d1 create board-game-catalog-2nd`>"
+# migrations_dir = "../../migrations"
+#
+# # Its own covers bucket + its own custom domain. ⚠️ `gamecovers.heygabi.ai` is
+# # TAKEN — a custom domain belongs to exactly one bucket — so a second instance
+# # needs a third covers hostname, with the same 1-year Cache Rule (covers are
+# # content-hashed, so a cached copy can never be stale).
+# [[env.games2.r2_buckets]]
+# binding = "COVERS"
+# bucket_name = "game-covers-2nd"
+#
+# # ⚠️ COPY THE CRON STRINGS CHARACTER FOR CHARACTER. `scheduled()` dispatches on
+# # the expression matching a constant (DETAILS_SWEEP_CRON,
+# # COMPONENT_REFRESH_CRON); "roughly the same" is a sweep that silently never
+# # fires and nothing reports it.
+# [env.games2.triggers]
+# crons = ["*/30 * * * *", "41 5 * * 1", "7 * * * *"]
+#
+# [[env.games2.routes]]
+# pattern = "<the new hostname>.heygabi.ai"
+# custom_domain = true
+#
+# # ⚠️ EVERY var restated. Nothing here falls back to the block above.
+# [env.games2.vars]
+# APP_VERSION = "0.1.0"
+# ENVIRONMENT = "production"
+# # Both, or neither, with the COVERS binding — its OWN bucket's domain.
+# COVERS_BASE_URL = "https://<the new covers hostname>.heygabi.ai"
+# # Shared index Worker, same URL; the paired INDEX_PUSH_TOKEN is PER INSTANCE
+# # (the index tells its machine callers apart BY THE VALUE) and is refused by
+# # `secrets:push:games2` — set it one at a time.
+# INDEX_URL = "https://index.heygabi.ai"
+# # The estate owner's break-glass, on every instance: he needs a way back into
+# # a catalog he did not create, the same reason it is set on the friend library.
+# OWNER_EMAILS = "nbaslamking@gmail.com"
+# ESTATE_CHECK = "enforce"
+# ESTATE_AUTH_URL = "https://auth.heygabi.ai"
+# # 🔴 ITS OWN identity, never "games". Two envs declaring the same id FAILS
+# # `apps/worker/src/lib/estate-app.test.ts` at build time. The paired secret's
+# # name follows it: ESTATE_APP_TOKEN_GAMES2, same value on the auth Worker under
+# # the identical name, and `CONSUMER_APPS` + a `vis_games2` column added there
+# # first (a manual auth-worker step — design §7.6 row 5).
+# ESTATE_APP = "games2"
+# # Ships "off" like main, and is flipped only on its own evidence.
+# BILLING_POLICY = "off"
+# # 🔴 SHARED, NEVER FORKED. One Google account is one person across the whole
+# # estate; a second Firebase project would make the same human two people. The
+# # new hostname must be added to that project's Authorised domains BEFORE anyone
+# # signs in on it — an owner console step no CLI can do.
+# FIREBASE_PROJECT_ID = "audiobook-catalog"
