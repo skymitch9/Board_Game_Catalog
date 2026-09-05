@@ -28,11 +28,17 @@ opposite directions:** the two audit findings — and the export exposure beside
 them — were BUILT and moved to [`DONE.md`](DONE.md) (`751980b`, `7f75804`,
 `6394cca`), and the owner had **already written the deny rule** on 2026-09-02;
 the billing section's "no row for `games`" claim was stale and is corrected in
-place. What is open now: ❓ **one owner decision** (the family score); 🔴 **the
-billing shadow flip, which is an OWNER STEP** — the session that came to make it
-was refused by the permission system on `apps/worker/wrangler.toml`, and the
-exact three-file change is written out in that section; three person-errands in
-*What still wants a person*; and three owner reviews on his phone.
+place. What is open now: ❓ **one owner decision** (the family score); 🔴 **ONE
+DEPLOY** — `DEPLOY_HOLDER=<you> npm run deploy`, which ships all three audit
+fixes, refused to the session that made them; 🔴 **the billing shadow flip,
+also an OWNER STEP** — refused on `apps/worker/wrangler.toml`, with the exact
+three-file change written out in that section; three person-errands in *What
+still wants a person*; and three owner reviews on his phone.
+
+🔴 **Two of those are permission refusals, not judgement calls.** Agent
+W2-GAMES was denied every edit to `apps/worker/wrangler.toml` and denied
+`npm run deploy`, stopped rather than working around either, and left both
+written out to the keystroke.
 
 ~~**What is genuinely open, in full:** ❓ one owner decision (the family score),
 the billing soak (which needs the owner to write a deny rule before anything can
@@ -474,7 +480,15 @@ and the same file's next test, which asserts the prose:
 
 Then, from a clean tree: `DEPLOY_HOLDER=<you> npm run deploy` (worker + web
 together; **no migration** — this touches nothing under `migrations/`), and
-record the soak start time in this section.
+record the soak start time in this section. ⚠️ **That same deploy is already
+owed for the three audit fixes** (see the CODE LANDED section below) — if the
+flip is made first, one deploy carries both, and the soak starts from it.
+
+**After the deploy, read the tail once:** `npm run tail --workspace @bgc/worker`,
+filtered on `"evt":"billing_policy"`. ⚠️ The hourly cron fires at **:07**, so
+unless the deploy lands just before that, the first `system` line will not
+arrive inside a short watch — an empty tail is NOT evidence of a broken gate.
+A request path (a research run, a photo scan) produces a line immediately.
 
 ⚠️ **Never weaken either assertion — MOVE them.** The test reads
 `wrangler.toml` and fails unless it names the value, deliberately, so a flip
@@ -922,13 +936,24 @@ this.**
 
 ---
 
-## ✅ 2026-08 AUDIT — the three tracked findings are FIXED, moved to [`DONE.md`](DONE.md)
+## ☑ CODE LANDED 2026-09-05 — 2026-08 audit, the three tracked findings — 🔴 ☐ NOT DEPLOYED
 
-Closed 2026-09-05 by `751980b` (the sweep's subrequest budget), `7f75804` (the
-batch-parent link) and `6394cca` (the `/api/export.json` email exposure). The
-section moved **whole** to [`DONE.md`](DONE.md); this pointer stays only
+Fixed by `751980b` (the sweep's subrequest budget), `7f75804` (the batch-parent
+link) and `6394cca` (the `/api/export.json` email exposure). The section moved
+**whole** to [`DONE.md`](DONE.md), where the full story is; this pointer stays
 because the billing section above and `info/README.md` link to the audit by
-name.
+name — **and because one step is left**:
+
+🔴 **The deploy was REFUSED by the permission system and none of the three is
+live.** One command, from a clean tree in this repo, **no migration**:
+
+```bash
+DEPLOY_HOLDER=<you> npm run deploy
+```
+
+⚠️ Until it runs, `/api/export.json` still hands every contributor every
+household account's email address. That is the one of the three with
+present-tense impact and the reason not to leave this long.
 
 ⚠️ **The other 21 findings were never checkboxes and are still open** — they
 live in [`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md),

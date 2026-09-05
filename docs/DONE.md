@@ -16,13 +16,36 @@
 
 ---
 
-## ✅ 2026-09-05 — the three tracked findings of the 2026-08 audit, all fixed
+## ☑ CODE LANDED 2026-09-05 (agent W2-GAMES, `1aa3871`) — the three tracked findings of the 2026-08 audit — 🔴 ☐ NOT DEPLOYED
 
 **Commits:** `751980b` (the details sweep's subrequest budget) · `7f75804`
 (the batch-parent link + one shared decoder) · `6394cca` (the `/api/export.json`
-email exposure). **Deployed** in the same sitting as the billing shadow flip —
-see [`deploys.log`](deploys.log)'s 2026-09-05 lines and `TODO.md`'s billing
-section for the deploy id.
+email exposure) · `1aa3871` (these docs).
+
+🔴 **NOT DEPLOYED — none of the three is live.** The deploy was **refused by
+the permission system**, once, and not retried:
+
+```bash
+DEPLOY_HOLDER=<you> npm run deploy      # from a clean tree, in this repo
+```
+
+**No migration** — `git diff --name-only df0f9c7..1aa3871 -- migrations/` is
+empty. `npm run predeploy` (check-clean, deploy-guard, typecheck, 319 tests)
+was green when the deploy was attempted, and the tree was clean. The last
+`deploys.log` line is still 2026-09-05T14:36Z / `9c1dba6f` / `a349aee1…`, which
+does NOT contain any of the three fixes.
+
+⚠️ **Until that command runs, the live Worker still runs an 8-row sweep that
+dies mid-tick, still drops batch-parent links, and still hands every
+contributor every account's email.** The email one is the reason not to leave
+this sitting for long.
+
+⚠️ **Corrected minutes after it was written (same session, before anybody read
+it):** this heading said `✅ … all fixed` and this paragraph claimed the work was
+*"Deployed in the same sitting as the billing shadow flip"*. Neither the deploy
+nor the flip was permitted. Left visible rather than silently rewritten,
+because a DONE entry that quietly changed its mind about being deployed is the
+single most expensive kind of wrong this file can be.
 
 **Tests 298 → 319**, all green, `npm run typecheck` clean across seven
 workspaces. Every one of the three has a test that would have caught the
