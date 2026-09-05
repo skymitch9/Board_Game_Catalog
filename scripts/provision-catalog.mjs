@@ -511,9 +511,13 @@ export function deriveNames(
   const inst = instance
     ? sanitiseInstanceName(instance, { existingEnvs: envNames })
     : sanitiseInstanceName(subdomain, { existingEnvs: envNames });
-  const next = nextEstateApp(estateApps, allowlist);
+  // ⚠️ `nextEstateApp` is only ASKED when nothing is pinned. On a `--resume`
+  // this instance's id is already in the toml, so the "next free" id is the one
+  // AFTER it — which is usually outside the allowlist and would throw a refusal
+  // about an instance nobody is provisioning. Measured by the resume test.
+  const next = forceEstateApp ? null : nextEstateApp(estateApps, allowlist);
   const estateApp = forceEstateApp || next.app;
-  const n = forceEstateApp ? Number(String(forceEstateApp).replace(/^\D+/, '')) || next.n : next.n;
+  const n = forceEstateApp ? Number(String(forceEstateApp).replace(/^\D+/, '')) || 2 : next.n;
   const ord = ordinalWord(n);
   return {
     requestId: row.id,
@@ -990,12 +994,12 @@ export function manualRunbook(names, { platformDir = '<catalog-platform>' } = {}
  * What a new instance gets, and what it is refused — the `push-secrets.mjs`
  * classification, imported rather than restated so a change there reaches here.
  */
-export function secretPlan({ production = PRODUCTION_SECRETS } = {}) {
+export function secretPlan({ production = PRODUCTION_SECRETS, classify = isPerInstance } = {}) {
   const push = [];
   const lines = [];
   for (const name of production) {
     if (name === 'ANTHROPIC_API_KEY') continue; // handled by its own step
-    if (isPerInstance(name)) {
+    if (classify(name)) {
       lines.push(`refuse (per-instance)    ${name}`);
       lines.push(`                           ↳ ${perInstanceReason(name)}`);
       continue;
@@ -1011,7 +1015,12 @@ export function secretPlan({ production = PRODUCTION_SECRETS } = {}) {
   lines.push('                           ↳ the sealed key if there is one, else the OWNER\'S');
   lines.push('                             (design §6.4, standing decision 2026-09-05). Read in');
   lines.push('                             code, piped over stdin, never printed.');
-  // A belt-and-braces assertion: nothing per-instance may enter the push set.
+  // 🔴 THE LAST-MOMENT GUARD, and it deliberately uses the REAL `isPerInstance`
+  // rather than the injected `classify`. The failure it exists for is "a list
+  // edit, a reordered branch or a future flag put a per-instance key into the
+  // payload" — a guard that trusted the same classifier the loop trusted would
+  // agree with the mistake. (`classify` is injectable so a test can BE that
+  // mistake; see `scripts/test/provision-catalog.test.mjs`.)
   const leak = push.filter((n) => isPerInstance(n));
   if (leak.length) {
     throw new Error(
@@ -1168,7 +1177,10 @@ async function main() {
   const argv = process.argv.slice(2);
   const dry = argv.includes('--dry') || argv.includes('--dry-run');
   const resumeMode = argv.includes('--resume');
-  const requestId = Number(flagValue(argv, 'request'));
+  // ⚠️ `Number(null)` is 0, not NaN — so an ABSENT --request read as request #0
+  // and the usage below never printed. Measured by the test that asserts it does.
+  const requestRaw = flagValue(argv, 'request');
+  const requestId = requestRaw === null ? Number.NaN : Number(requestRaw);
   const fixture = flagValue(argv, 'fixture');
   const instanceOverride = flagValue(argv, 'instance');
   const coversFlag = flagValue(argv, 'covers-base-url');
