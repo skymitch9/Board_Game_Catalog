@@ -14,6 +14,7 @@ import {
 import { api, describeError, type BarcodeLookup } from '../api';
 import { captureFrame, fileToPhoto, onceSteady } from '../lib/camera';
 import { addModeSpec, type AddMode } from '../lib/add-modes';
+import { resolveBatchParent } from '../lib/batch-parents';
 import { copyDefaults, createItemFromCandidate } from '../lib/catalog-add';
 import {
   DEFAULT_SCAN_TARGET,
@@ -1035,28 +1036,43 @@ function ShelfResult({
       .filter((i) => !results[i])
       .sort((a, b) => (getKind(a) === 'base' ? 0 : 1) - (getKind(b) === 'base' ? 0 : 1));
 
+    /*
+     * 🔴 LOCAL, AND MUTATED SYNCHRONOUSLY. This line is the fix for the 2026-08
+     * audit's finding 2.
+     *
+     * The `batchIds` STATE below is for rendering (the parent dropdown), and it
+     * is the wrong thing to read here: `setBatchIds` schedules a new object, it
+     * does not change the one this closure captured, so every id written during
+     * this loop was invisible to the rest of it. A base game added seconds
+     * earlier could not be found by its expansion, and a hand-picked sibling
+     * parent was dropped on the floor.
+     *
+     * Seeded from state so a second press of Add — after some rows have already
+     * settled — still sees the ids the first press wrote. Both maps are kept up
+     * to date below: this one for the loop, the state one for the screen.
+     *
+     * The canonical version of this pattern is `ScanJobsPage.addSelected`,
+     * which has always used a local object; the decoding both screens share now
+     * lives in `lib/batch-parents.ts`.
+     */
+    const batchIdsNow: Record<number, number> = { ...batchIds };
+
     for (const i of pending) {
       const item = classified[i];
       const m = fresh[i];
       if (!item || !m) continue;
 
       const kind = getKind(i);
-      let parentId = getParentId(i);
-
-      // Resolve batch parent references:
-      // - Negative IDs are pseudo-IDs for not-yet-added items (-(idx+1) -> idx)
-      // - Null with a proposedParentName means auto-classified batch sibling
-      if (kind !== 'base' && parentId != null && parentId < 0) {
-        const batchIdx = -(parentId + 1);
-        parentId = batchIds[batchIdx] ?? null;
-      } else if (kind !== 'base' && parentId == null && item.proposedParentName) {
-        const parentIdx = classified.findIndex(
-          (c) => c.proposedKind === 'base' && c.name === item.proposedParentName,
-        );
-        if (parentIdx >= 0 && batchIds[parentIdx]) {
-          parentId = batchIds[parentIdx]!;
-        }
-      }
+      // Resolve batch parent references — negative pseudo-ids for rows not yet
+      // added, or a null choice whose proposed parent is a base game in this
+      // same batch. Both decoded in lib/batch-parents.ts.
+      const parentId = resolveBatchParent({
+        kind,
+        parentRef: getParentId(i),
+        proposedParentName: item.proposedParentName,
+        siblings: classified,
+        batchIds: batchIdsNow,
+      });
 
       // No demotion. An expansion whose base game is not here yet stays an
       // expansion and remembers what it is waiting for, rather than entering
@@ -1070,6 +1086,9 @@ function ShelfResult({
         const candidate = toCandidate(m);
         const itemId = await onAdd(candidate, kind, parentId, pendingParentName);
         if (itemId) {
+          // ⚠️ The local map FIRST and synchronously — the next row of this
+          // same loop reads it. The state write beside it is for the screen.
+          batchIdsNow[i] = itemId;
           setResults((r) => ({ ...r, [i]: { itemId } }));
           setBatchIds((b) => ({ ...b, [i]: itemId }));
         } else {

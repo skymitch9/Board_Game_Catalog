@@ -13,6 +13,7 @@ import { api, describeError, type EnrichedTitle, type ScanJob, type TitleOwnersh
 import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
 import { formatDateTime } from '../lib/dates';
+import { resolveBatchParent } from '../lib/batch-parents';
 import { BarcodeQueue } from '../components/BarcodeQueue';
 import { QuickAdd } from '../components/QuickAdd';
 import { KIND_LABEL } from '../components/ItemTree';
@@ -863,6 +864,10 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       .filter((i) => !isSettled(i) && !isQuestion(i) && !isNameless(fresh[i]!))
       .sort((a, b) => (getKind(a) === 'base' ? 0 : 1) - (getKind(b) === 'base' ? 0 : 1));
 
+    // 🔴 LOCAL, and mutated synchronously inside the loop below. This is the
+    // canonical shape — `ScanPanel.addSelected` kept the same map in React
+    // state and silently lost every id it wrote (2026-08 audit, finding 2);
+    // both screens now decode a batch reference through the one module.
     const batchIds: Record<number, number> = {};
     const added: { index: number; addedItemId: number }[] = [];
 
@@ -871,16 +876,13 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       if (!t) continue;
 
       const kind = getKind(i);
-      const rawParentId = getParentId(i);
-
-      // Resolve batch references: "batch:3" means "the item at index 3 in this batch".
-      let parentId: number | null = null;
-      if (typeof rawParentId === 'string' && rawParentId.startsWith('batch:')) {
-        const batchIdx = Number(rawParentId.slice(6));
-        parentId = batchIds[batchIdx] ?? null;
-      } else if (typeof rawParentId === 'number') {
-        parentId = rawParentId;
-      }
+      // Resolve batch references: "batch:3" means "the item at index 3 in this
+      // batch". Decoded in lib/batch-parents.ts, which the scan panel shares.
+      const parentId = resolveBatchParent({
+        kind,
+        parentRef: getParentId(i),
+        batchIds,
+      });
 
       // No demotion. An expansion whose base game is not here yet stays an
       // expansion and remembers the name it is waiting for; it used to be saved
