@@ -27,10 +27,12 @@ write a deny rule before anything can be measured"*. **Both are now wrong, in
 opposite directions:** the two audit findings — and the export exposure beside
 them — were BUILT and moved to [`DONE.md`](DONE.md) (`751980b`, `7f75804`,
 `6394cca`), and the owner had **already written the deny rule** on 2026-09-02;
-the billing section's "no row for `games`" claim was stale and is corrected
-in place. What is open now: ❓ **one owner decision** (the family score), the
-**billing soak**, which is RUNNING, three person-errands in *What still wants a
-person*, and three owner reviews on his phone.
+the billing section's "no row for `games`" claim was stale and is corrected in
+place. What is open now: ❓ **one owner decision** (the family score); 🔴 **the
+billing shadow flip, which is an OWNER STEP** — the session that came to make it
+was refused by the permission system on `apps/worker/wrangler.toml`, and the
+exact three-file change is written out in that section; three person-errands in
+*What still wants a person*; and three owner reviews on his phone.
 
 ~~**What is genuinely open, in full:** ❓ one owner decision (the family score),
 the billing soak (which needs the owner to write a deny rule before anything can
@@ -370,7 +372,26 @@ the item moved **whole** to [`DONE.md`](DONE.md).)
   sentence on a games row (design §7.6) — that mockup line is true for books and
   false for games.
 
-## ☐ Billing phase 3 — 4 of 5 steps left: write a deny rule, flip to shadow, soak 7 days, flip to enforce (2026-09-02)
+## ☐ Billing phase 3 — 3 of 5 steps left: 🔴 flip to shadow (OWNER — a session cannot edit `wrangler.toml`), soak 7 days, flip to enforce (after deleting rule id 1)
+
+⚠️ **Re-headed 2026-09-05 evening (agent W2-GAMES).** It read *"4 of 5 steps
+left: write a deny rule, flip to shadow, …"*. **Step 2 — the deny rule — was
+already written by the owner three days ago**, which nothing in this file
+knew; see the correction below. So three steps are left, and the first of them
+is the flip.
+
+🔴 **THE FLIP DID NOT HAPPEN, AND NOT BECAUSE OF THE EVIDENCE.** The agent sent
+to make it was **refused by the permission system**, twice, on any edit to
+`apps/worker/wrangler.toml` — a whole-block rewrite and then a single comment
+line. Nothing was worked around. **Everything the flip needs is decided and
+written out in *Exactly what to change* below; it is now an owner errand of
+about two minutes plus a deploy.**
+
+⚠️ **The test was deliberately LEFT ASSERTING `"off"`.** It must name whatever
+the file says, and moving it on its own would both break the suite and disarm
+the one tripwire that stops a flip riding along on an unrelated deploy. The two
+move together or not at all — which is exactly the property it was built for,
+working as intended.
 
 ✅ **Step 1 of 5 — the build — is DONE and live** (`5150269f` as `2e598a9e`, in
 [`DONE.md`](DONE.md)). ⚠️ **Re-measured 2026-09-05 (docs audit):**
@@ -378,28 +399,90 @@ the item moved **whole** to [`DONE.md`](DONE.md).)
 comment block at line 193 still names the value, and
 `apps/worker/src/lib/billing-gate.test.ts:348` still asserts both — so the
 tripwire that stops a flip riding along on an unrelated deploy is intact and
-nothing has moved since 2026-09-02. **The first of the four remaining steps
+nothing has moved since 2026-09-02. ~~**The first of the four remaining steps
 needs the OWNER** (a deny rule written from the Spending panel); the session
-cannot start the soak alone.
+cannot start the soak alone.~~
+
+✅ **Step 2 of 5 — the deny rule — is DONE, and was done before this file ever
+asked for it.** ⚠️ **Corrected 2026-09-05 (agent W2-GAMES).** The *Reading the
+soak* section below said that *"the `billing_policy` table has no row for
+`games` today"*. **Measured read-only against the live `estate_auth` D1 on
+2026-09-05: it holds exactly one row, and it is precisely the rule the
+"cheapest first test" section asks for** —
+
+> `id 1 · feature sweep.details · site games · principal_kind system ·
+> allow 0 · updated_by <the owner> · 2026-09-02T22:45:48Z · why "throwaway soak
+> rule: shadow-mode falsifiability evidence for the billing gate (would-deny
+> lines hourly). BILLING_POLICY is off everywhere, so nothing is blocked.
+> Delete this rule before any site flips to enforce."`
+
+So the owner wrote it the same evening phase 3 landed, expecting shadow, and
+this file has been telling every reader since that the soak could not start.
+**Nothing is blocking the flip but the flip.**
 
 All seven money paths are gated (`5150269f` live as `2e598a9e`; the build is in
 [`DONE.md`](DONE.md)) and **`BILLING_POLICY = "off"`**, so nothing has ever
 resolved, logged or refused.
 
-### The one-line change
+### 🔴 Exactly what to change — the OWNER STEP, three files, one commit
 
-`apps/worker/wrangler.toml`, in `[vars]`, beside `ESTATE_AUTH_URL`:
+⚠️ **A session cannot do this.** Both attempts on 2026-09-05 were refused by
+the permission system on `apps/worker/wrangler.toml`. The change itself is
+decided and unambiguous; only the hands are missing.
+
+**1.** `apps/worker/wrangler.toml`, in `[vars]`, beside `ESTATE_AUTH_URL`
+(line 222 as of `1aa3871`):
 
 ```
 - BILLING_POLICY = "off"
 + BILLING_POLICY = "shadow"
 ```
 
-⚠️ **`apps/worker/src/lib/billing-gate.test.ts` reads that file and FAILS
-unless it says `"off"`** — deliberately, so a flip cannot ride along on an
-unrelated deploy (design §4.2). Update the assertion **and the comment block
-above the value** in the same commit; a second test fails if the prose stops
-naming the value, which is §6.1 defect 3's tripwire applied to this flag.
+**2.** The comment block above it (line 193). Two lines carry the value and
+BOTH must move, or `billing-gate.test.ts`'s prose tripwire fails:
+
+```
+- # ⚠️ BILLING_POLICY IS "off" — see the value at the foot of this block.
++ # ⚠️ BILLING_POLICY IS "shadow" — see the value at the foot of this block.
+
+- #   off      nothing resolves, nothing is logged, nothing costs — TODAY
++ #   off      nothing resolves, nothing is logged, nothing costs
++ #   shadow   — TODAY. Refuses NOTHING: every money path bills exactly as it
++ #            did yesterday, and the only new thing is one JSON line per
++ #            decision. That is the off → shadow → enforce rule's middle rung.
+```
+
+Also worth rewriting while you are in there: the paragraph beginning *"It ships
+`off` and MUST"* is now history, and the block should say that the **next** flip
+is shadow → enforce, is not due, and 🔴 **must delete `billing_policy` id 1
+before it happens** — left in place under `enforce` that rule would silently
+stop the hourly details sweep.
+
+**3.** `apps/worker/src/lib/billing-gate.test.ts:348` — in the SAME commit:
+
+```
+- assert.deepEqual(billing, ['off']);
++ assert.deepEqual(billing, ['shadow']);
+```
+
+and the same file's next test, which asserts the prose:
+
+```
+- toml.includes('⚠️ BILLING_POLICY IS "off"'),
++ toml.includes('⚠️ BILLING_POLICY IS "shadow"'),
+```
+
+Then, from a clean tree: `DEPLOY_HOLDER=<you> npm run deploy` (worker + web
+together; **no migration** — this touches nothing under `migrations/`), and
+record the soak start time in this section.
+
+⚠️ **Never weaken either assertion — MOVE them.** The test reads
+`wrangler.toml` and fails unless it names the value, deliberately, so a flip
+cannot ride along on an unrelated deploy (design §4.2). It did its job on
+2026-09-05: the flip was refused, the test was left alone, and the suite is
+still honest about what is deployed.
+
+🔴 **STOP AT SHADOW.** `enforce` is a separate, evidence-gated step below.
 
 🔴 **`BILLING_POLICY` is NOT `ESTATE_CHECK`.** That one is already `enforce`
 and answers *"is this person still a member"*. This one answers *"may this
@@ -429,19 +512,33 @@ request paths.
    never ran" — the exact `0 of 0 — unmeasured, not clean` verdict the
    audiobook auth soak reached.
 
-⚠️ **Nothing can be measured until a rule exists.** The `billing_policy` table
-has no row for `games` today, so shadow would log a stream of
-`would_deny:false`, satisfy criterion 1, and fail criterion 2 forever. Write
-the throwaway deny FIRST, from the Spending panel on
-<https://heygabi.ai/admin/>. ⚠️ A change takes effect within **10 minutes** —
-the same number as the revocation delay, and the same number on purpose.
+⚠️ **Nothing can be measured until a rule exists**, and ✅ **one does — since
+2026-09-02.** ~~The `billing_policy` table has no row for `games` today, so
+shadow would log a stream of `would_deny:false`, satisfy criterion 1, and fail
+criterion 2 forever. Write the throwaway deny FIRST, from the Spending panel on
+<https://heygabi.ai/admin/>.~~ ⚠️ **Corrected 2026-09-05 (agent W2-GAMES),
+measured read-only against the live `estate_auth` D1:** the table holds exactly
+one row — `id 1 · sweep.details · site games · principal_kind system · allow 0`,
+written by the owner at `2026-09-02T22:45:48Z`, whose own `why` says it is the
+throwaway soak rule and to delete it before any site enforces. It is quoted in
+full at the top of this section. **The struck sentence was false for three days
+and was the reason this section believed the soak could not start.**
+⚠️ A change takes effect within **10 minutes** — the same number as the
+revocation delay, and the same number on purpose.
 
-### The cheapest first test, if you want one
+### ~~The cheapest first test, if you want one~~ ✅ ALREADY WRITTEN — this is rule id 1
 
-Switch **`sweep.details`** off for `games` with `principal_kind = system`. It
-is the only unattended biller here, it fires on the hour so evidence arrives
-without anyone clicking anything, and it is the row the design's §7.1 draws
-with a clock icon rather than a person icon.
+~~Switch~~ The owner switched **`sweep.details`** off for `games` with
+`principal_kind = system` on 2026-09-02. It is the only unattended biller here,
+it fires on the hour so evidence arrives without anyone clicking anything, and
+it is the row the design's §7.1 draws with a clock icon rather than a person
+icon. ⚠️ **So criterion 2's evidence should begin arriving within an hour of
+the flip**, on the `7 * * * *` cron, as a line carrying
+`"principal_kind":"system"`, `"feature":"sweep.details"`, `"would_deny":true`
+and — because shadow refuses nothing — `"proceeded":true`.
+
+🔴 **And it is the rule to DELETE before enforcing.** Under `enforce` that same
+row stops the hourly details sweep, silently, for good.
 
 ---
 
