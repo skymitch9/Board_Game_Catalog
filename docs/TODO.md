@@ -4,7 +4,22 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-**Last updated:** 2026-09-05 — phase 9 landed (the games provisioner + the
+**Last updated:** 2026-09-05 (afternoon) — **a full docs audit re-measured
+every `##` section in this file against git, the code and live D1**, and the
+headline is that **this file was telling the truth in its bodies and lying in
+its headings**. Two `##` sections carried `☐` over bodies that read BUILT →
+DEPLOYED → live-proved; a third said `☐ phase 9` over a body saying phase 9 had
+moved to `DONE.md`. Both are fixed, and each carries a dated
+`⚠️ Corrected 2026-09-05` line saying what was measured. **Four rows of *What
+still wants a person* turned out to have already happened** — the component
+backfill, the Excursion Tiles edge, the three orphaned rows and the Excursion
+Tiles year — all struck with the live number that settled them. One stale
+`file:line` in the audit section would have sent a fixer to a file that no
+longer holds the code. **Nothing was built and nothing was deployed on this
+pass; only claims changed.** What is genuinely open now: the billing soak
+(needs the owner first), two audit findings, three person-errands, and two
+owner reviews on his phone. Before that:
+2026-09-05 — phase 9 landed (the games provisioner + the
 `BILLING_SITE` lift) and both items moved WHOLE to [`DONE.md`](DONE.md); the
 one owner question it left (the naming split) was answered the same morning:
 (a), as built. Before that:
@@ -17,7 +32,26 @@ not shadow, and stays there — the reasoning is in its `DONE.md` entry.
 
 ---
 
-## ☐ SCAN TARGET: "Adding to · Shelf | Wishlist" on `/scan`, so a scan can land on the wishlist — owner ask 2026-09-04 10:40 Phoenix
+## ☑ BUILT + DEPLOYED 2026-09-04 — SCAN TARGET: "Adding to · Shelf | Wishlist" on `/scan`, so a scan can land on the wishlist — ☐ owner review
+
+⚠️ **Corrected 2026-09-05 (docs audit).** This heading read `## ☐ SCAN
+TARGET…` while both of its bodies said BUILT → tested → DEPLOYED →
+live-proved, and it cost a wrong status report. Measured today: `5572fe8`,
+`dc62cad`, `bf98714`, `a955270` all exist in `main`;
+`apps/web/src/components/WishlistScan.tsx` is **gone** and
+`components/ScanPanel.tsx` (1,288 lines) exists as claimed;
+`pages/ScanPage.tsx` is **75 lines**; `deploys.log` lines 4 and 5 carry
+`0ffd112f → 8d952922…` and `c0b9c340 → 3d26cc3f…`, holder `fable`, both
+2026-09-04. Nothing here is open but the owner's phone. Owner ask
+2026-09-04 10:40 Phoenix.
+
+🔗 **The owner review, ~2 minutes on the phone.**
+<https://boardgames.heygabi.ai/scan> — under the four tabs there is a row
+reading *ADDING TO · Shelf | Wishlist*. Tap **Wishlist**, scan one game: the
+row's button should say *Add to wishlist*, and the game should land on
+<https://boardgames.heygabi.ai/wishlist> rather than the shelf. Then from
+that page tap **+ Add** — the same scanner, no switch drawn — and add one
+game there. Those two adds are the only unproven half of this item.
 
 Owner, from his phone, verbatim: *"let's add that when you scan something you
 can add it to library or wishlist. Do this for both games and the libraries."*
@@ -226,7 +260,20 @@ typecheck` clean across five workspaces and `npm run build` green are the
 whole of the evidence. `ScanJobsPage`'s own `createCopy` (the queue) was left
 alone: this ask was `/scan`.
 
-## ☑ SECOND-INSTANCE MACHINERY landed 2026-09-05 — ☐ phase 9: the provisioner's games path
+## ☑ BUILT + DEPLOYED 2026-09-05 — SECOND-INSTANCE MACHINERY, phase 9's provisioner included — ☐ owner review
+
+⚠️ **Corrected 2026-09-05 (docs audit).** This heading read `— ☐ phase 9: the
+provisioner's games path` while its own body three sub-sections down said
+phase 9 was **BUILT and moved whole to `DONE.md`** the same morning. Measured
+today: `b11a373` (the script), `ad2258c` (74 tests), `54faef0` (the runbook +
+the DONE move) and `7d35e72` (the naming decision) are all in `main`;
+`scripts/provision-catalog.mjs` and `access/provision-catalog.md` both exist.
+The only ☐ left in this section is the owner's signed-in page load, below.
+
+🔗 **The owner review, ~1 minute.** Open <https://boardgames.heygabi.ai>
+signed in as yourself and load the collection page. That is the one thing
+`configured:true` cannot prove — see *NOT verified* at the end of the next
+sub-section.
 
 Owner, 2026-09-05 ~06:50 Phoenix, on whether the Games card gets the same "+"
 and flow as the Books card: **"Both."** That answer made
@@ -261,6 +308,12 @@ answered **200**, and the body's new `estate` block reads
 assert, and its paired bearer is present. `wrangler deploy` also printed
 `env.ESTATE_APP ("games")` in the binding list.
 
+✅ **Re-measured 2026-09-05 13:17 Phoenix** (docs audit, so the claim above is
+not left standing on a six-hour-old reading): the same cache-busted `curl -s
+-D -` answered **200** and the body still reads
+`"estate":{"mode":"enforce","app":"games","tokenVar":"ESTATE_APP_TOKEN_GAMES","configured":true}`,
+`"database":"up"`. Still **NOT** re-measured: anything behind a sign-in.
+
 ⚠️ **NOT verified, and the owner is the only one who can:** nobody signed in.
 `configured:true` says both halves of the config EXIST, not that the directory
 accepts the token — only a real `/seen` proves the value. **What to confirm:**
@@ -282,7 +335,13 @@ Phoenix). The rule and the rejected alternatives are recorded once, in
 `catalog-platform/docs/info/request-a-catalog-design.md` §7.1; nothing in this
 repo changed but the header comment of `scripts/provision-catalog.mjs`.
 
-### ☐ One follow-up this build deliberately did not do
+### 📌 One follow-up this build deliberately did not do — a CONSTRAINT, not a task in this repo
+
+⚠️ **Corrected 2026-09-05 (docs audit).** This carried a `☐`, which read as
+open work here. It is not: nothing in this repo changes because of it. The one
+thing it asks for — the Accept panel's wording — lives in
+`catalog-platform/docs/info/request-a-catalog-design.md` §7.6 and is that
+repo's to hold. Kept here because this is where the *reason* is.
 
 (The other, `BILLING_SITE`, was lifted on 2026-09-05 as phase 9's first commit —
 the item moved **whole** to [`DONE.md`](DONE.md).)
@@ -294,7 +353,17 @@ the item moved **whole** to [`DONE.md`](DONE.md).)
   sentence on a games row (design §7.6) — that mockup line is true for books and
   false for games.
 
-## ☐ Billing phase 3 is deployed but INERT — the soak, then the flip (2026-09-02)
+## ☐ Billing phase 3 — 4 of 5 steps left: write a deny rule, flip to shadow, soak 7 days, flip to enforce (2026-09-02)
+
+✅ **Step 1 of 5 — the build — is DONE and live** (`5150269f` as `2e598a9e`, in
+[`DONE.md`](DONE.md)). ⚠️ **Re-measured 2026-09-05 (docs audit):**
+`apps/worker/wrangler.toml:222` still reads `BILLING_POLICY = "off"`, its
+comment block at line 193 still names the value, and
+`apps/worker/src/lib/billing-gate.test.ts:348` still asserts both — so the
+tripwire that stops a flip riding along on an unrelated deploy is intact and
+nothing has moved since 2026-09-02. **The first of the four remaining steps
+needs the OWNER** (a deny rule written from the Spending panel); the session
+cannot start the soak alone.
 
 All seven money paths are gated (`5150269f` live as `2e598a9e`; the build is in
 [`DONE.md`](DONE.md)) and **`BILLING_POLICY = "off"`**, so nothing has ever
@@ -359,23 +428,17 @@ with a clock icon rather than a person icon.
 
 ---
 
-## Splitting a shelf photograph into pieces
+## 📓 Notes from the 2026-08-09 session — a RECORD, not a queue
 
-Raised alongside the enrichment stall, and **would not have fixed it** — worth
-recording so nobody spends a day on it for the wrong reason.
-
-Vision reads a wide shelf perfectly well: production job 5 produced all 73
-titles and stored them. What ran out of budget was the per-title *enrichment*
-afterwards, which is now chunked. Splitting the image would have made vision
-cost more and changed nothing about the failure.
-
-It may still be worth doing later for **accuracy** on a very wide shelf, where
-spines at the edges are small and skewed. That is a different argument and needs
-its own evidence — measure the read rate on a wide shelf before building it.
-
----
-
-## Notes from the 2026-08-09 session
+⚠️ **Corrected 2026-09-05 (docs audit).** The heading was a bare
+`## Notes from the 2026-08-09 session`, which reads exactly like a work item;
+the warning that it is not one was buried in the first line of the body. It is
+now in the heading. **The one sub-section that DOES hold live work is
+[*What still wants a person*](#what-still-wants-a-person)** — four of its rows
+were measured today and are finished; the rest is history. Also moved out on
+this pass: *Splitting a shelf photograph into pieces* (a measured, parked idea,
+not work in flight) now lives whole at
+[`info/future-plans.md`](info/future-plans.md).
 
 ⚠️ **This heading is a CONTAINER, not a work item.** The `###` sections below
 were swept in from `HANDOFF.md` on 2026-08-21 and are a record of that day, not
@@ -419,7 +482,7 @@ general rule for this catalog, since stretch goals reach backers only.
 group on the report, a fourth `<Aside>`. **45 of 672** chaseable official
 components move; Catan's expansions fall **84 → 57**, Codenames 29 → 19.
 
-⚠ï¸ **The false positive the owner predicted was real, and it is `die`** — the
+⚠️ **The false positive the owner predicted was real, and it is `die`** — the
 German article and the English singular of *dice*. A first cut flagged
 `Veiled Fate: Fate Die` and `Veiled Fate: Renewal Die` as German. The fix is the
 strong/weak split now in the code: words absent from English flag alone, words
@@ -443,7 +506,7 @@ pattern. The owner's ruling, and it applies to Monopoly when it lands:
 | Migration | **0022 applied to production**, `d1_migrations` row written |
 | Commit | `0d57fd3` |
 
-⚠ï¸ **`wrangler d1 migrations apply --remote` does not work on this account.** It
+⚠️ **`wrangler d1 migrations apply --remote` does not work on this account.** It
 answers `7403 — the given account is not valid or is not authorized to access
 this service`, the same error `migrations list --remote` gives. **`d1 execute
 --remote` is unaffected**, so migrations have to be applied as plain SQL plus a
@@ -510,7 +573,7 @@ the 5 Dice Throne sleeves, which no id can fix (see the section below).
 | 495 | 474551 | Deep Rock Galactic: Hidden cave segments | ours says "Randomizers" |
 | 423 | 443289 | Cyberpunk: Female V with Mantis Blades | |
 | 424 | 443290 | Cyberpunk: V with Mantis Blades | |
-| 425 | 429978 | Cyberpunk: Johnny Silverhand **& NCPD** | ⚠ï¸ **not** 430049 |
+| 425 | 429978 | Cyberpunk: Johnny Silverhand **& NCPD** | ⚠️ **not** 430049 |
 
 ```sql
 -- reversal
@@ -518,7 +581,7 @@ UPDATE item SET bgg_id = NULL
  WHERE id IN (192, 254, 258, 257, 162, 236, 495, 423, 424, 425);
 ```
 
-⚠ï¸ **Two traps, both caught by the owner rather than by the matcher.**
+⚠️ **Two traps, both caught by the owner rather than by the matcher.**
 
 **Slay the Spire.** BGG's `Character & Deck Playmats` (440472) is a *base game*
 product, and we own it as item **254**. The name matcher hinted it against item
@@ -565,7 +628,7 @@ Mystic Brawler). It cannot be all three. Same shape for the two Premium Sleeves
 rows: a set hinted against a single-hero sleeve. And *Deep Rock Galactic: Dice
 bag* is hinted against *Expansions Dice Tray* — a bag is not a tray.
 
-⚠ï¸ **The Dice Throne sleeves are the interesting failure.** `withoutGamePrefix`
+⚠️ **The Dice Throne sleeves are the interesting failure.** `withoutGamePrefix`
 strips the *game's* name, but these components are named for a **hero** the game
 name does not contain, so what is compared is "Minimalist Card Sleeves" against
 "Card Sleeves - Raveness" — mostly shared words describing a product category
@@ -607,7 +670,7 @@ inside the disclosure with both buttons gone, and puts *"· you have N"* on the
 header. It does **not** move the "X of Y" figure — out of the numerator and the
 denominator alike, which is the same bargain third-party has always had.
 
-### ⚠ï¸ Work in flight at the moment this was written
+### ⚠️ Work in flight at the moment this was written
 
 Two agents were still running and their work is **uncommitted in the tree**.
 If the session ended here, this is what you are looking at in `git status`:
@@ -661,18 +724,26 @@ is recorded in the section for each.
 
 ### What still wants a person
 
+🔬 **Re-measured against live D1 on 2026-09-05** (docs audit; read-only
+`wrangler d1 execute --remote`, no writes). **Four of these rows had already
+happened and the table did not know it** — they are struck through below with
+the number that settled each. What is genuinely left is **three** rows: the
+accessory-implies-the-game sweep, the HELLDIVERS rename (waiting on a pledge)
+and counting the Dice Throne playmats on a shelf. The three `✅` rows were
+already correct and are untouched.
+
 | | |
 |---|---|
-| â³ **`game_component` is filling — finish it** | Was 0 all day; the owner started the backfill 2026-08-08 and it is at **1,217 components / 100 games checked**. Roughly 7 more runs of `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, or the Sunday 05:41 UTC cron does the rest unattended. **Until it finishes, the completeness page reads "Not checked yet" and the collapsible sections built today are invisible** — they are not broken, they have nothing to show |
+| ~~⏳ **`game_component` is filling — finish it**~~ ✅ **FINISHED — the cron did it unattended** | ⚠️ **Corrected 2026-09-05:** measured live — **1,462 components**, **142 of 143 eligible games checked**, **0** components still awaiting the second pass (`details_at IS NULL AND stale_at IS NULL`), last `component_check` written **2026-08-30 05:42 UTC** — i.e. the Sunday 05:41 UTC cron is alive and did exactly what this row said it would. The completeness page has had something to show for weeks. ~~Original: "Was 0 all day; the owner started the backfill 2026-08-08 and it is at **1,217 components / 100 games checked**. Roughly 7 more runs of `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, or the Sunday 05:41 UTC cron does the rest unattended. **Until it finishes, the completeness page reads 'Not checked yet' and the collapsible sections built today are invisible** — they are not broken, they have nothing to show"~~ |
 | **Accessory implies the game — a sweep worth doing** | Proved on Here to Slay: six accessories (Warriors & Druids ×3, Berserkers & Necromancers ×3) existed with no expansion row behind them, and both expansions were real. Now added as items **858** and **859**. You own **221 accessories against 186 expansions**, so this almost certainly holds on other lines. Banner Quest is the control case — accessory *and* expansion both present |
 | ✅ **The BGG audit is CLOSED** | All 806 rows audited and resolved. **`bgg_id` coverage went 197 → 232.** Every remaining row without one has a *recorded reason*, not a gap. The map is `scratchpad/bgg-audit-2026-08-08.tsv`; the decision sheet `scratchpad/bgg-audit-review.md` is **spent** — its "nothing has been applied" line is historical. Both are safe to delete once you trust the result |
-| ✅ **All five SUSPECT rows resolved** | 114 Deadpool (id is right; see [`dice-throne-shape.md`](dice-throne-shape.md) — the box owns the id) · 496 Yeti or Not (id is the game, our name says which version) · 801 Go Fish (the `Traditional` marker) · 56 and 68 (publisher-spelling noise). **Do not re-open these** |
+| ✅ **All five SUSPECT rows resolved** | 114 Deadpool (id is right; see [`archive/dice-throne-shape.md`](archive/dice-throne-shape.md) — the box owns the id; ⚠️ **corrected 2026-09-05**, this link read `dice-throne-shape.md` and pointed at `docs/dice-throne-shape.md`, which has not existed since the 2026-08-21 restructure) · 496 Yeti or Not (id is the game, our name says which version) · 801 Go Fish (the `Traditional` marker) · 56 and 68 (publisher-spelling noise). **Do not re-open these** |
 | ✅ **`copy.edition_id` stays null — settled, not a gap** | The owner, 2026-08-08: *"that'll probably be null forever, it's a hard thing to find and I don't super care to track it down."* 1,063 edition rows exist with 768 BGG version ids, so the catalog knows which printings **exist** and deliberately does not record which one is on the shelf. **Do not re-flag this as missing data.** Consequences, all fine: the cover picker is unaffected (it sets `thumbnail_url`, not `edition_id`), and it independently kills the "grab the closest edition" half of any BoardGameGeek sync — you cannot match a printing you never recorded. Under 1% of BGG users populate that field either |
-| Excursion Tiles (117, 118) | share a `series` but have **no `same_family` edge**, so the group card forms while neither item's page mentions the other. One row: `INSERT INTO item_relation (from_item_id,to_item_id,relation) VALUES (117,118,'same_family');` |
-| ⚠ï¸ Three orphaned non-base rows sitting as their own roots | 823 Dark Moon: Shadow Corporation (`expansion`, wants nesting under 790), 842 Tiny Epic Dungeons Adventures: The Phantom Voyage (`expansion`, under 840), 830 Scales of Fate Metal Upgrade Kit (`accessory`, under 91) |
-| HELLDIVERS 2: Mystery Expansions (item 414) | rename from the box when the pledge ships; deliberately a placeholder |
-| Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md` |
-| ⚠ï¸ Excursion Tiles 1 (117) says **2024** | its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree |
+| ~~Excursion Tiles (117, 118)~~ ✅ **the edge EXISTS** | ⚠️ **Corrected 2026-09-05:** measured live — the `same_family` edge between 117 and 118 is present (**1** row matching either direction). ~~Original: "share a `series` but have **no `same_family` edge**, so the group card forms while neither item's page mentions the other. One row: `INSERT INTO item_relation (from_item_id,to_item_id,relation) VALUES (117,118,'same_family');`"~~ **Do not run that INSERT** — it would duplicate the edge |
+| ~~⚠️ Three orphaned non-base rows sitting as their own roots~~ ✅ **all three are nested** | ⚠️ **Corrected 2026-09-05:** measured live — `SELECT id,parent_item_id FROM item WHERE id IN (823,842,830)` returns **823 → 790**, **842 → 840**, **830 → 91**: exactly the three parents this row asked for, and **0** of them is a root. ~~Original: "823 Dark Moon: Shadow Corporation (`expansion`, wants nesting under 790), 842 Tiny Epic Dungeons Adventures: The Phantom Voyage (`expansion`, under 840), 830 Scales of Fate Metal Upgrade Kit (`accessory`, under 91)"~~ |
+| HELLDIVERS 2: Mystery Expansions (item 414) | rename from the box when the pledge ships; deliberately a placeholder. ⚠️ **Still true 2026-09-05** — the live row still reads `HELLDIVERS 2: Mystery Expansions`. Waiting on a pledge, not on anyone here |
+| Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md`. ⚠️ **Still open 2026-09-05** — no instrument reaches a shelf; this one is genuinely a person's errand |
+| ~~⚠️ Excursion Tiles 1 (117) says **2024**~~ ✅ **it says 2025** | ⚠️ **Corrected 2026-09-05:** measured live — `year_published` for item 117 is **2025**, the value this row argued for. Somebody applied it. ~~Original: "its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree"~~ (the campaign facts are kept because they are the evidence for the value that is now stored) |
 
 ### Login is now Google SSO — and the email PIN was deliberately kept
 
@@ -720,16 +791,33 @@ findings doc, not as checkboxes.
   ~80–88 subrequests in one invocation; once a backlog exists the sweep dies
   mid-run and the tail never enriches (Claude calls for the items that *did*
   complete are already paid for). Drop the limit to ~4 or chunk across
-  invocations. (Reviewed high → medium.)
+  invocations. (Reviewed high → medium.) ✅ **Re-verified 2026-09-05 (docs
+  audit): still exactly true** — `apps/worker/src/lib/details-sweep.ts:58`
+  still reads `export const SWEEP_LIMIT = 8;`, and the only test guarding it
+  (`details-sweep.test.ts:120`) asserts `SWEEP_LIMIT <= 10`, so it would not
+  notice. **Genuinely unbuilt.**
 - ☐ **Batch parent link silently dropped on Whole-shelf add** —
-  `apps/web/src/pages/ScanPage.tsx:713`. `addSelected` reads batch-sibling ids
-  from React state that its own async `setBatchIds` never updates in-loop, so a
-  base game added earlier is invisible to its expansion; a manually-chosen
-  sibling parent is dropped and the expansion is stranded root-less. Mirror the
-  canonical local-object pattern in `ScanJobsPage.addSelected`. (Reviewed high →
-  medium.)
+  ⚠️ **Corrected 2026-09-05 (docs audit): the file:line moved and this entry
+  would have sent the fixer to a page that no longer contains the code.** It
+  read `apps/web/src/pages/ScanPage.tsx:713`; that file is **75 lines** since
+  the 2026-09-04 extraction (`5572fe8`). The defect is intact and now lives at
+  **`apps/web/src/components/ScanPanel.tsx:1029`** (`addSelected`), read today:
+  `const [batchIds, setBatchIds] = useState(...)` at :1011, the loop reads
+  `batchIds[batchIdx]` at :1051 and `batchIds[parentIdx]` at :1056–1057, and
+  writes `setBatchIds(...)` at :1074 — React state, so nothing it writes is
+  visible to a later iteration of the same loop. A base game added earlier is
+  invisible to its expansion; a manually-chosen sibling parent is dropped and
+  the expansion is stranded root-less. Mirror the canonical local-object
+  pattern in `ScanJobsPage.addSelected` — still there and still correct, a
+  plain `const batchIds: Record<number, number> = {}` at
+  `apps/web/src/pages/ScanJobsPage.tsx:866` written at :960. **The extraction
+  moved the bug into a component BOTH doors now render**, which widens it from
+  `/scan` to `/wishlist` as well. (Reviewed high → medium.)
 
 ⚠️ One present-tense exposure worth a look even though it verified **medium**,
 not high: `/api/export.json` returns **every account's email** to any
-`editCatalog` (contributor+) user (`apps/worker/src/routes/export.ts:31`) — see
-finding #4.
+`editCatalog` (contributor+) user — see finding #4. ⚠️ **Corrected 2026-09-05:**
+the line reference read `apps/worker/src/routes/export.ts:31`; the
+`SELECT ui.*, u.email FROM user_item ui JOIN app_user u …` is at **:36** today,
+and the `requireCapability('editCatalog')` that gates the whole router is at
+**:14**. Both were re-read, and the exposure is unchanged.

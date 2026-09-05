@@ -1,13 +1,18 @@
 # Future Plans — Information Reference
 
 > **Audience:** Claude sessions. **Status:** TRACKED.
-> Last verified: **2026-08-05**.
+> Last verified: **2026-08-05** for the fingerprinting measurements below —
+> they were NOT re-run on 2026-09-05. What the 2026-09-05 docs audit *did*
+> do is repair this file's pointers and file one more parked idea into it
+> (the shelf-photograph split, moved whole out of `TODO.md`).
 
 Ideas deliberately deferred, with enough detail to pick up later and enough
 honesty about why they were deferred to avoid repeating a dead end.
 
-Current work in flight lives in [`../HANDOFF.md`](../HANDOFF.md); this file is
-only for things nobody is building right now.
+Current work in flight lives in [`../TODO.md`](../TODO.md); this file is
+only for things nobody is building right now. ⚠️ **Corrected 2026-09-05:**
+this line used to send readers to `../HANDOFF.md`, which has been a 15-line
+signpost since the 2026-08-21 split and has held no state since.
 
 ---
 
@@ -52,10 +57,39 @@ without needing any of the above.
 
 ---
 
+## Splitting a shelf photograph into pieces
+
+**Moved whole out of `TODO.md` on 2026-09-05** (docs audit). It sat in the work
+log as an untitled `##` section with no ☐, reading like queued work; it is a
+measurement that killed an idea, which is what this file is for. Original text,
+verbatim:
+
+> Raised alongside the enrichment stall, and **would not have fixed it** — worth
+> recording so nobody spends a day on it for the wrong reason.
+>
+> Vision reads a wide shelf perfectly well: production job 5 produced all 73
+> titles and stored them. What ran out of budget was the per-title *enrichment*
+> afterwards, which is now chunked. Splitting the image would have made vision
+> cost more and changed nothing about the failure.
+>
+> It may still be worth doing later for **accuracy** on a very wide shelf, where
+> spines at the edges are small and skewed. That is a different argument and needs
+> its own evidence — measure the read rate on a wide shelf before building it.
+
+**The bar for revisiting**, restated as this file's other entries state theirs:
+photograph a genuinely wide shelf, count how many spines the single-image read
+returns against how many are on it, and only then compare a split. A split that
+is not measured against the whole-image read is a cost increase with no number
+behind it.
+
+---
+
 ## Family / grouping model
 
-Design agreed in outline, not built. See the "Decisions waiting on the owner"
-section of [`../HANDOFF.md`](../HANDOFF.md), which holds the full write-up:
-`requires` (nest) versus `related to` (own entry plus a link), the
-`item_relation` sketch, and the ratings decision (per-entry scores plus a derived
-family score).
+Design agreed in outline, not built. ⚠️ **Corrected 2026-09-05:** this pointed
+at a "Decisions waiting on the owner" section of `../HANDOFF.md`, which has been
+a 15-line signpost since 2026-08-21. The full write-up — `requires` (nest)
+versus `related to` (own entry plus a link), the `item_relation` sketch, and the
+ratings decision (per-entry scores plus a derived family score) — is in
+[`design-decisions.md`](design-decisions.md), and the pre-split original is kept
+at [`../archive/HANDOFF.superseded-2026-08-21.md`](../archive/HANDOFF.superseded-2026-08-21.md).
