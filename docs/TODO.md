@@ -574,7 +574,7 @@ row stops the hourly details sweep, silently, for good.
 
 ---
 
-## ☑ BUILT + DEPLOYED 2026-09-05 — the family score, answer (a) — ☐ owner review · ❓ two defaults he can still flip · ☐ no search badge
+## ☑ BUILT + DEPLOYED 2026-09-05 (`62fc5645`) — the family score, answer (a) — ☐ owner review · ❓ two defaults he can still flip · ☐ no search badge
 
 ✅ **The decision is ANSWERED and the section that asked it has moved WHOLE to
 [`DONE.md`](DONE.md)** (owner, 2026-09-05 16:14 Phoenix: **(a) the

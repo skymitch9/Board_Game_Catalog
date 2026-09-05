@@ -19,11 +19,19 @@
 ## ✅ ANSWERED + BUILT + DEPLOYED 2026-09-05 (agent W5-FAMILY) — the family score
 
 **The owner's answer, 2026-09-05 16:14 Phoenix: (a) — the base-weighted mean.**
-Built the same evening, `aef62e8`. **Deployed** — the Cloudflare version id is
-the last line of [`deploys.log`](deploys.log), written by `deploy-done.mjs` and
-committed in the commit that follows this one. **No migration**, exactly as the
+Built the same evening, `aef62e8`; docs `8c5557a`; **deployed 2026-09-05T23:36Z
+as version `62fc5645-7a2e-4866-b38d-5a195b0d5750`** (roll back to
+`7fb197b3-cd74-4b5f-894c-c0e35df4a0d5`). **No migration**, exactly as the
 section below predicted: the roll-up is derived on read over relations and
-ratings that already existed.
+ratings that already existed — so the rollback is a plain version revert with
+nothing to undo underneath it.
+
+✅ **Proved live with the right instrument, not a 200.** `/items/96` answers
+`HTTP/1.1 200` and `/api/health` reads `database: up`, but neither says the new
+code is there. The served bundle does: `/assets/index-CUmNIs2F.js` — the exact
+filename this build produced — **contains the string `This family`**, and the
+served `/assets/index-CAYYfxGn.css` **contains `.rating-family`**. A hashed
+bundle name plus the new string inside it is what makes this a measurement.
 
 **What (a) turned into, in code.** The weights are `FAMILY_KIND_WEIGHTS` in
 [`packages/core/src/family-score.ts`](../packages/core/src/family-score.ts) —
