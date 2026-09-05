@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppBindings } from '../env.js';
 import { requireCapability } from '../middleware/auth.js';
+import { canExportEmails, exportOmissions, userItemQuery } from '../lib/export-fields.js';
 
 /**
  * Full data export.
@@ -9,11 +10,21 @@ import { requireCapability } from '../middleware/auth.js';
  * the answer: one request, everything, in a format you could rebuild from or
  * open in a spreadsheet. No pagination — a household collection is small, and a
  * backup that arrives in pieces isn't a backup.
+ *
+ * ⚠️ **What is in it depends on who asked** — see `lib/export-fields.ts`. The
+ * route is `editCatalog` (contributor+), and until 2026-09-05 the ratings join
+ * handed every one of them every household account's email address. It no
+ * longer does; the decision, the allow-list and the reasoning live in that one
+ * module rather than being spelled out in the SQL here.
  */
 export const exportRoutes = new Hono<AppBindings>()
   .use('*', requireCapability('editCatalog'))
 
   .get('/export.json', async (c) => {
+    // Admin and owner only. A contributor's export carries the ratings and the
+    // user ids, and not the addresses behind them.
+    const withEmail = canExportEmails(c.get('user').role);
+
     // ⚠️ `sleeve_requirement` is NOT read here any more, and the table is dropped
     // by 0025. It held 0 rows against 836 items for the life of the catalog: no
     // code ever wrote it, and this export was its only reader, so the backup
@@ -32,10 +43,11 @@ export const exportRoutes = new Hono<AppBindings>()
       c.env.DB.prepare('SELECT * FROM item ORDER BY id'),
       c.env.DB.prepare('SELECT * FROM edition ORDER BY id'),
       c.env.DB.prepare('SELECT * FROM copy ORDER BY id'),
-      c.env.DB.prepare(
-        `SELECT ui.*, u.email FROM user_item ui
-           JOIN app_user u ON u.id = ui.user_id ORDER BY ui.id`,
-      ),
+      // ⚠️ Default-deny, built from the allow-list in lib/export-fields.ts —
+      // never `ui.*`. This is the one export row that joins another table, so
+      // it is the one where a new column on either side ships to a contributor
+      // without anybody deciding it should.
+      c.env.DB.prepare(userItemQuery(withEmail)),
       /*
         ⚠️ **The copy history has to be in the backup or the feature has a hole
         in the shape of its own purpose.** `copy_event` exists so a record
@@ -54,6 +66,11 @@ export const exportRoutes = new Hono<AppBindings>()
       // It names the last migration whose shape this file knows about, so a
       // restore can tell what it is looking at.
       schemaVersion: '0029_copy_disposal_history',
+      // ⚠️ Says what this copy does NOT contain. Without it a restore reading
+      // an export with no `email` key cannot tell "the accounts had no
+      // addresses" from "whoever exported it was not allowed to see them".
+      // Empty for an admin or the owner.
+      omitted: exportOmissions(withEmail),
       counts: {
         items: items?.results.length ?? 0,
         editions: editions?.results.length ?? 0,
