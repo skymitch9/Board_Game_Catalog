@@ -132,13 +132,40 @@ export interface Env {
   BILLING_POLICY?: string;
 
   /**
+   * WHICH estate consumer this Worker is — `games` (the main instance and the
+   * default when unset) or `games2` (the slot for a second instance). Set in
+   * `[vars]` per wrangler env; it is config of record, never a secret.
+   *
+   * ⚠️ Until 2026-09-05 there was no such var: the id was declared in
+   * `middleware/estate.ts` and the bearer read as a fixed
+   * `ESTATE_APP_TOKEN_GAMES`, so a second instance would have silently asserted
+   * the FIRST one's identity — the bug `library_catalog` shipped and ran with
+   * for months (estate credentials catalog F-5). Resolution, the allowlist and
+   * the build guard live in `lib/estate-app.ts`; nothing else may read a bearer
+   * by name.
+   */
+  ESTATE_APP?: string;
+
+  /**
    * This app's own bearer for POST /api/estate/seen — the same value the auth
-   * Worker holds as its ESTATE_APP_TOKEN_GAMES secret. Set with
+   * Worker holds under the SAME NAME. Set with
    * `npm run secret ESTATE_APP_TOKEN_GAMES`, never in wrangler.toml. Absent
    * (with ESTATE_CHECK=shadow/enforce) the check logs `config unset` and
    * skips — behaving as `off`, visibly.
+   *
+   * ⚠️ Read only through `estateAppToken()` in `lib/estate-app.ts`, which picks
+   * the slot from `ESTATE_APP`. Reading it directly is how one instance ends up
+   * presenting another's badge.
    */
   ESTATE_APP_TOKEN_GAMES?: string;
+
+  /**
+   * The SECOND instance's bearer, paired with `ESTATE_APP = "games2"`. Declared
+   * ahead of the instance existing so the identity is config the day a fork
+   * happens — no Worker holds a value for it today, and a `[env.games2]` block
+   * does not exist yet (`docs/access/second-instance.md`).
+   */
+  ESTATE_APP_TOKEN_GAMES2?: string;
 
   /**
    * Local development only. Ignored unless ENVIRONMENT is exactly

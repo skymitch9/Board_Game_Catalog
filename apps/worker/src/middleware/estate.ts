@@ -57,6 +57,7 @@ import {
 } from '../estate-auth/index.js';
 import type { AppBindings } from '../env.js';
 import { parseCachedDenied } from '../lib/billing-gate.js';
+import { ESTATE_APPS, estateAppToken, resolveEstateApp } from '../lib/estate-app.js';
 
 /**
  * The per-surface posture declaration (owner decision #1): this surface is
@@ -70,6 +71,12 @@ import { parseCachedDenied } from '../lib/billing-gate.js';
  * 0027): `viewer` -> `guest`, same rung, same reasoning, new name. Nothing
  * about *which* rung is granted changed — this is still deliberately the
  * smaller of the two read-capable roles, not `member`.
+ *
+ * ⚠️ `app: 'games'` here is the MAIN instance's identity and the default when
+ * `ESTATE_APP` is unset — it is NOT what a request asserts. Since 2026-09-05
+ * the identity presented to the directory is resolved per wrangler env from
+ * `ESTATE_APP` (`lib/estate-app.ts`), so a second instance can be `games2`
+ * without a code change. Reverting to the constant here re-creates F-5.
  */
 export const AUTH_POSTURE = declareAuthPosture({
   public: false,
@@ -122,14 +129,32 @@ export async function estateGate(
   if (mode === 'off') return null;
 
   try {
+    // WHICH consumer this Worker is, per wrangler env (lib/estate-app.ts). A
+    // value that is set but unrecognised turns the check OFF and says so —
+    // deliberately NOT a fallback to `games`, because falling back is how one
+    // instance ends up asserting another's identity (F-5).
+    const estateApp = resolveEstateApp(c.env.ESTATE_APP);
+    if (estateApp.app === null || estateApp.tokenVar === null) {
+      console.error(
+        `estate ${mode}: ESTATE_APP is '${estateApp.invalid}', which this Worker cannot present ` +
+          `(allowed: ${ESTATE_APPS.join(', ')}) — check skipped, nobody refused`,
+      );
+      return null;
+    }
+
     const baseUrl = c.env.ESTATE_AUTH_URL;
-    const appToken = c.env.ESTATE_APP_TOKEN_GAMES;
+    const appToken = estateAppToken(c.env, estateApp.tokenVar);
     if (!baseUrl || !appToken) {
       // Named loudly IN the shadow log stream: a misconfigured shadow that
       // stayed silent would read as "zero would-denies" — false comfort, the
       // exact lie shadow mode exists to prevent. Behaviour stays `off`.
+      //
+      // ⚠️ The secret NAME is the resolved one, not a constant: on a second
+      // instance this must say ESTATE_APP_TOKEN_GAMES2, or the line sends
+      // whoever reads it to set the wrong secret.
       console.warn(
-        `estate ${mode}: config unset (need ESTATE_AUTH_URL [vars] + ESTATE_APP_TOKEN_GAMES secret) — check skipped`,
+        `estate ${mode}: config unset for app '${estateApp.app}' ` +
+          `(need ESTATE_AUTH_URL [vars] + ${estateApp.tokenVar} secret) — check skipped`,
       );
       return null;
     }
@@ -192,8 +217,11 @@ export async function estateGate(
     });
 
     const { deny, action } = actionFor(verdict);
+    // ⚠️ `app=` is on the line for the reason F-5 went unseen for months: two
+    // instances serve ONE bundle from ONE commit, so a tail line with no app id
+    // cannot answer "which instance is speaking".
     console.log(
-      `estate ${mode}: ${user.email} role=${user.role} estate=${result.status ?? 'none'}` +
+      `estate ${mode}: app=${estateApp.app} ${user.email} role=${user.role} estate=${result.status ?? 'none'}` +
         `${result.stale ? ' (stale cache, auth Worker unreachable)' : ''} verdict=${verdict}` +
         ` ${mode === 'shadow' ? 'would=' : 'action='}${action}` +
         `${deny ? (mode === 'shadow' ? ' WOULD-DENY' : ' DENIED') : ''}` +

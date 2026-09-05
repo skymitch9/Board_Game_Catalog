@@ -34,6 +34,7 @@
 
 import type { Context } from 'hono';
 import type { AppBindings, Env } from '../env.js';
+import { estateAppToken, resolveEstateApp } from './estate-app.js';
 
 export const BILLING_POSTURES = ['off', 'shadow', 'enforce'] as const;
 export type BillingPosture = (typeof BILLING_POSTURES)[number];
@@ -54,7 +55,17 @@ export function billingPosture(raw: string | undefined): BillingPosture {
   return 'off';
 }
 
-/** The estate's site id for this Worker. One deploy, one site. */
+/**
+ * The estate's site id for this Worker.
+ *
+ * ⚠️ STILL A CONSTANT, and that is a KNOWN GAP rather than a settled decision —
+ * unlike `ESTATE_APP`, which was lifted into wrangler config on 2026-09-05. A
+ * second games instance would report and be billed as the `games` site while
+ * correctly identifying as `games2` at the directory. It is inert today
+ * (`BILLING_POLICY = "off"`, nothing has ever resolved) and there is no second
+ * instance, so nothing is wrong yet; it must be lifted before one bills.
+ * Tracked in `docs/access/second-instance.md` and `docs/TODO.md` (phase 9).
+ */
 export const BILLING_SITE = 'games';
 
 /** The registry ids this Worker checks. */
@@ -201,7 +212,8 @@ export function billingRefusal(
  * household off, which is the opposite of what the owner would mean — so the
  * estate carries a fourth principal, `system`, and its own door:
  *
- *     GET /api/estate/billing/policy   Authorization: Bearer ESTATE_APP_TOKEN_GAMES
+ *     GET /api/estate/billing/policy   Authorization: Bearer <this instance's
+ *                                      ESTATE_APP_TOKEN_*, per ESTATE_APP>
  *     → { site, system_denied: string[], cache_seconds: 600 }
  *
  * ⚠️ THREE CALLERS, ONE RESOLVER (§3.4). This is not a second implementation of
@@ -219,14 +231,21 @@ export async function fetchSystemDenied(
   opts: { fetchImpl?: typeof fetch } = {},
 ): Promise<string[] | null> {
   const baseUrl = (env.ESTATE_AUTH_URL ?? '').trim();
-  const token = (env.ESTATE_APP_TOKEN_GAMES ?? '').trim();
+  // ⚠️ The bearer follows THIS instance's `ESTATE_APP`, resolved in one place
+  // (`lib/estate-app.ts`). It used to be a hard-coded `ESTATE_APP_TOKEN_GAMES`
+  // read, which would have made a second instance's cron present the FIRST
+  // instance's badge at the system door — the same F-5 shape as the gate's.
+  const identity = resolveEstateApp(env.ESTATE_APP);
+  const token = estateAppToken(env, identity.tokenVar);
   if (!baseUrl || !token) {
     // Named rather than silent, for the same reason `estateGate` names its own
     // `config unset`: a half-configured gate that said nothing would read as
     // "nothing is denied", which is false comfort of exactly the kind shadow
     // mode exists to prevent.
     console.warn(
-      'billing_policy: system door not configured (need ESTATE_AUTH_URL [vars] + ESTATE_APP_TOKEN_GAMES secret) — treating the policy as unknown',
+      `billing_policy: system door not configured for app '${identity.app ?? identity.invalid}' ` +
+        `(need ESTATE_AUTH_URL [vars] + ${identity.tokenVar ?? 'a recognised ESTATE_APP'} secret) — ` +
+        'treating the policy as unknown',
     );
     return null;
   }

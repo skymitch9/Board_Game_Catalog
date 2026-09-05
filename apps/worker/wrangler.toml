@@ -165,6 +165,29 @@ OWNER_EMAILS = "nbaslamking@gmail.com"
 ESTATE_CHECK = "enforce"
 ESTATE_AUTH_URL = "https://auth.heygabi.ai"
 
+# ── WHICH estate consumer this Worker is (2026-09-05) ────────────────────────
+#
+# The identity presented to the estate directory, and the thing that picks the
+# paired secret's NAME: ESTATE_APP_TOKEN_<UPPER(ESTATE_APP)>. Config, not a
+# secret; committed on purpose.
+#
+# ⚠️ It was DECLARED IN SOURCE until today (`middleware/estate.ts`'s posture
+# plus a fixed `ESTATE_APP_TOKEN_GAMES` read), which is the exact state
+# `library_catalog` shipped and ran with for months: its second instance
+# knocked on the directory wearing the MAIN library's badge, its own
+# ESTATE_APP_TOKEN_LIBRARY2 was an orphan nothing presented, and NOTHING went
+# red (estate credentials catalog F-5). A hard-coded identity is
+# indistinguishable from a correct one until you ask which instance is speaking.
+#
+# ⚠️ A second instance restates this with its OWN id under [env.<name>.vars] —
+# see the commented template at the foot of this file. Two envs declaring the
+# SAME id FAILS `apps/worker/src/lib/estate-app.test.ts`, at build time, before
+# a deploy can misidentify anyone.
+#
+# ⚠️ An unrecognised value turns the estate check OFF and says so — it does NOT
+# fall back to "games". Falling back is the bug.
+ESTATE_APP = "games"
+
 # ── SPENDING POLICY (lib/billing-gate.ts, phase 3, 2026-09-02) ───────────────
 #
 # ⚠️ BILLING_POLICY IS "off" — see the value at the foot of this block.
