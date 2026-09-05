@@ -3,12 +3,22 @@
 **Phase 0 is deployed and live.** This document records what was configured and
 what's left.
 
-> 🔶 **The auth half of this document is being replaced.** As of 2026-08-10 the
-> code verifies **Firebase ID tokens**; Cloudflare Access is still deployed and
-> is still what lets you in, until step 4 of
-> [`access/firebase-auth.md`](access/firebase-auth.md) §3. Everything below
-> about Access describes the live system and remains accurate until then —
-> except the Google SSO swap, which is now work on a gate that is going away.
+> 🛑 **The auth half of this document is HISTORY, not "being replaced".** Sign-in
+> is **Firebase ID tokens** — [`firebase-auth.md`](firebase-auth.md).
+>
+> ⚠️ **Corrected 2026-09-05 (docs audit), two things in one banner.** It read
+> *"Cloudflare Access is still deployed and is still what lets you in, until
+> step 4 of `access/firebase-auth.md` §3"*, and **that has been false since
+> 2026-08-10**: [`login.md`](login.md)'s own banner records the Access
+> application as **deleted** that day, and `firebase-auth.md` §3.1 records the
+> single deliberate survivor (the `*-board-game-catalog.bgc-worker.workers.dev`
+> preview wildcard). The link was also broken — written `access/firebase-auth.md`
+> from *inside* `access/`, which resolves to `docs/access/access/…`. So did the
+> one at the foot of this page (`access/login.md`); both are fixed.
+>
+> Everything below about Access describes a gate that **no longer stands in
+> front of this app**. Read it for how the setup was built, not for how anyone
+> signs in today.
 
 ## Live
 
@@ -108,8 +118,10 @@ and ratings — the app keys users on the email claim, which Google returns
 unchanged.
 
 Full procedure, costs, the exact redirect URI, how to skip the login-method
-chooser, the rollback path, and the gotchas: **[`access/login.md`](access/login.md)**.
-Not repeated here.
+chooser, the rollback path, and the gotchas: **[`login.md`](login.md)** — 🛑 a
+HISTORY document; do not follow its procedures. Not repeated here.
+(⚠️ Corrected 2026-09-05: this link read `access/login.md` from inside
+`access/` and resolved to nothing.)
 
 ---
 

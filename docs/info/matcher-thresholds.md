@@ -217,7 +217,16 @@ Worth knowing before deciding:
   measured instead.
 - `MIN_SPINE_SIMILARITY = 0.7` (the lookup-result floor, barcode.ts) was not
   re-swept against lookup candidates — this file measured the ownership
-  matcher only. The 0.7 floor's own calibration story is in `HANDOFF.md`
-  ("two thresholds on purpose").
+  matcher only. ⚠️ **Corrected 2026-09-05 (docs audit).** This said the 0.7
+  floor's calibration story was in `HANDOFF.md` under *"two thresholds on
+  purpose"*. `HANDOFF.md` has been a 15-line signpost since the 2026-08-21
+  split, and **that phrase does not appear anywhere in the archived original
+  either** — grepped. What genuinely exists, in
+  [`../archive/HANDOFF.superseded-2026-08-21.md`](../archive/HANDOFF.superseded-2026-08-21.md):
+  the reasoning at **:1230** and **:1347** (*"`MIN_SPINE_SIMILARITY` is still
+  0.7"*) and the threshold table row at **:2092** (`MIN_SPINE_SIMILARITY | 0.7 |
+  Unattended matching of text read off a photograph`). Treat the "calibration
+  story" as **never having been written** rather than as living somewhere
+  findable — it is a rationale, not a sweep.
 - What the UI does downstream of a false accept (how "already owned" renders,
   whether a wrongly-filed game is recoverable) was not exercised.

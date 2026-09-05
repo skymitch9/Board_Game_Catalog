@@ -167,8 +167,12 @@ app on a settings page rather than in the Cloudflare dashboard.
 > matrix, the `canGrantRole` escalation limit) lives in
 > `packages/core/src/capabilities.ts` and `packages/core/src/constants.ts`; the
 > current auth mechanism is `docs/access/firebase-auth.md`. Left as historical
-> context for *why* a role table exists at all rather than rewritten, per
-> `docs/HANDOFF.md`'s 2026-08-16 entry.
+> context for *why* a role table exists at all rather than rewritten, per the
+> 2026-08-16 entry in
+> [`../archive/HANDOFF.superseded-2026-08-21.md`](../archive/HANDOFF.superseded-2026-08-21.md).
+> ⚠️ **Corrected 2026-09-05:** that read `docs/HANDOFF.md`, which has held no
+> entries since the 2026-08-21 split — it is a 15-line signpost. The dated entry
+> is in the archived original.
 
 | Role | Can | Assigned to |
 |---|---|---|

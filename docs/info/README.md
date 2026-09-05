@@ -1,7 +1,12 @@
 # Information — Index
 
-> **Audience:** Claude/Kiro sessions. **Status:** TRACKED.
-> Last verified: **2026-08-21** (three files added from HANDOFF.md split).
+> **Audience:** Claude/Kiro sessions. **Status:** TRACKED (public repo — see
+> [`../README.md`](../README.md)).
+> Last verified: **2026-09-05** — the docs audit checked one thing here: that
+> **every `.md` in this folder has a row and every row's file exists**. It found
+> `DESIGN.md` had no row and was linked at a path that does not resolve; both
+> are fixed below. ⚠️ **The one-line descriptions themselves were NOT re-read
+> against their files** and still carry their original dates.
 
 How and why things work. Stable design facts only — current state and work in
 flight live in [`../TODO.md`](../TODO.md); finished work in
@@ -10,6 +15,7 @@ flight live in [`../TODO.md`](../TODO.md); finished work in
 
 | File | Covers |
 |---|---|
+| [`DESIGN.md`](DESIGN.md) | The overall architecture and the phase plan — the longest document in the tree. ⚠️ **Added to this index 2026-09-05**; it was the one `.md` in this folder with no row, while the closing line of this page linked it as `../DESIGN.md`, a path that has never resolved. ⚠️ Its §on roles **predates the role-ladder redesign** and says so in its own banner: the current picture is `packages/core/src/capabilities.ts` |
 | [`completeness.md`](completeness.md) | "What am I missing" — how the official/third-party split is decided, why a BoardGameGeek id is the only proof of ownership, and the 20-id ceiling that answers 400 |
 | [`barcode-ladder.md`](barcode-ladder.md) | Why barcode resolution is tiered, what each rung buys, measured hit rates |
 | [`scan-queue.md`](scan-queue.md) | What a scan job stores and what it refuses to store — ownership is computed on every read, so two photos of one shelf stop arguing |
@@ -26,5 +32,9 @@ flight live in [`../TODO.md`](../TODO.md); finished work in
 | [`instance-model.md`](instance-model.md) | 🆕 **The instance model (2026-09-05)** — what is SHARED vs PER-INSTANCE in this repo now that the second-instance machinery exists, why the estate identity had to become config before it could differ, the gaps a second instance would inherit — and 🔴 the **MEASURED** `RATE_LIMITER` `namespace_id` answer (per ACCOUNT, quoted from Cloudflare's docs with its URL). Operating a second instance: [`../access/second-instance.md`](../access/second-instance.md) |
 | [`multi-catalog-strategy.md`](multi-catalog-strategy.md) | ⚠️ **PARTLY SUPERSEDED 2026-09-05** — see its banner. Its §1 (how `library_catalog` runs two instances, the `[env.friend]` pattern) is still the best reference; its §2–§4 gap analysis described a repo that no longer exists, and its §5 `RATE_LIMITER` open question is now answered in [`instance-model.md`](instance-model.md) §3 |
 
-The overall architecture and phase plan are in [`../DESIGN.md`](../DESIGN.md);
+The overall architecture and phase plan are in [`DESIGN.md`](DESIGN.md);
 the repo map is in [`system-reference.md`](system-reference.md).
+
+⚠️ **Corrected 2026-09-05:** that first link read `../DESIGN.md` and resolved to
+`docs/DESIGN.md`, which does not exist — the file has been `docs/info/DESIGN.md`
+since the 2026-08-21 restructure. It is now also a row in the table above.

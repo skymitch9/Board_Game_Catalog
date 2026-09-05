@@ -428,6 +428,39 @@ with a clock icon rather than a person icon.
 
 ---
 
+## ❓ OWNER DECISION — how should a game family's rating be computed?
+
+**Options, from the write-up.** (a) **base-weighted mean** — the base game
+counts for more than its expansions, the write-up's own recommendation, derived
+not stored, no schema change; (b) **`base` + `expansion` only**, ignoring
+accessories and promos; (c) **an explicit family rating** people give by hand
+("how good is Catan *as a whole*"). Two smaller questions ride with it: does the
+**duplicates filter** treat a family as one thing or per-entry, and does
+**search** surface the family or the individual entries?
+
+⚠️ **Surfaced here 2026-09-05 (docs audit); it is not new.** It was raised by
+the owner on **2026-08-05** and has sat in
+[`info/design-decisions.md`](info/design-decisions.md) — *outside* the work log
+— ever since, which is why no `TODO.md` has ever carried it. **The full write-up
+stays there and is not repeated here** (one fact, one home): the requirement,
+the per-entry-ratings decision that was already settled on 2026-08-05, and the
+argument against a plain mean.
+
+🔬 **What changed while nobody was looking, measured 2026-09-05.** That section
+described one undecided design; **half of it has since been built**, and the
+page did not know. `item_relation` carries `same_family` / `works_with` /
+`reimplements` / `integrates_with` (`packages/core/src/constants.ts:264–284`),
+family is traversed **transitively** (`packages/db/src/relations.ts:22–63`), and
+`/retag` asks the nest-vs-link question per game. **Only the SCORE is left** —
+grepped, there is no `familyScore` or `family_score` anywhere in `packages/`,
+`apps/worker/src` or `apps/web/src`.
+
+**Blocked on:** the owner's answer. Nothing else. Once (a), (b) or (c) is
+chosen, the build is a derived roll-up over relations that already exist and
+ratings that are already per-item — no migration.
+
+---
+
 ## 📓 Notes from the 2026-08-09 session — a RECORD, not a queue
 
 ⚠️ **Corrected 2026-09-05 (docs audit).** The heading was a bare

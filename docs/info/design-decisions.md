@@ -47,8 +47,14 @@ blank would be waste.
 ## Blocked, waiting on you
 
 > **Current list of what actually needs a person lives in
-> [`open-questions.md`](open-questions.md).** This section is the older
-> setup-level backlog; item 1 below is done.
+> [`../TODO.md`](../TODO.md) — the *What still wants a person* table.** This
+> section is the older setup-level backlog; item 1 below is done.
+>
+> ⚠️ **Corrected 2026-09-05 (docs audit):** this pointed at
+> `open-questions.md`, which was **archived on 2026-08-21** and now lives at
+> [`../archive/open-questions.md`](../archive/open-questions.md) behind its own
+> "do not act on anything here without re-measuring" banner. The link resolved
+> to nothing from this directory.
 
 ### 1. BoardGameGeek token — ✅ DONE
 
@@ -144,9 +150,27 @@ npm run secrets:push -- --dry # names and fingerprints only, sends nothing
 
 ---
 
-## âš ï¸ Decisions waiting on the owner
+## ⚠️ Decisions waiting on the owner
 
-### Grouping / family model — owner wants to discuss before catalog UI work
+(⚠️ This heading carried mojibake — `âš` + the round-tripped variation selector
+— from the 2026-08-21 split. Repaired 2026-09-05; see `KNOWN_ISSUES.md` KI-3.)
+
+### Grouping / family model — ⚠️ HALF OF THIS SHIPPED; only the family SCORE is still open
+
+🔴 **Corrected 2026-09-05 (docs audit).** This read as one undecided question.
+It is two, and one of them is **built and live**:
+
+| The half | State, measured 2026-09-05 |
+|---|---|
+| **nest vs. link** — the `requires` / `related to` split, the `item_relation` sketch, the *"can you play it without the base game?"* discriminator | ✅ **BUILT.** `item_relation` carries `same_family`, `works_with`, `reimplements`, `integrates_with` (`packages/core/src/constants.ts:264–284`); family is traversed **transitively** in `packages/db/src/relations.ts:22–63`; `/retag` asks the discriminator question per game and writes the relation — see *Related games* at the top of this file. The proposed `standalone` flag was **not** needed and was never added |
+| **the family SCORE** — *"three numbers: base game, expansion, family"* | ☐ **NOT BUILT.** Grepped `packages/`, `apps/worker/src` and `apps/web/src` on 2026-09-05: no `familyScore`, no `family_score`, nothing that rolls ratings up. The three questions under *Still open for that conversation* below have never been answered, and nothing has been built against them |
+
+⚠️ **The consequence worth naming:** this section sat in `info/` — *outside* the
+work log — for a month, so `TODO.md` never carried the one live question in it,
+and half of it got built without this page noticing. It is now surfaced in
+`TODO.md` as an `❓ OWNER DECISION` item that links back here. **This file stays
+the write-up** (one fact, one home); `TODO.md` carries only the question and the
+options.
 
 Raised 2026-08-05. The requirement:
 

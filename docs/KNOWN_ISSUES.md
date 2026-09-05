@@ -1,9 +1,17 @@
 # Board_Game_Catalog — Known Issues, Waivers & Exceptions
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last verified: **2026-09-02** — KI-4 added that day and measured against live
-> D1; KI-5 added the same day and measured against the live site's response
-> headers. ⚠️ KI-2 and KI-3 were **not** re-checked and still carry 2026-08-21.
+> Last verified: **2026-09-05** — the docs audit re-measured **KI-3, KI-4 and
+> KI-5**: KI-3's "what would change it" (a pre-commit check) has **not**
+> happened and `.git/hooks/` holds nothing but samples, but the audit found the
+> 2026-08-21 corruption had **survived in `TODO.md` for 15 days** and repaired
+> it (see the note added to KI-3); KI-4's number is **still 0** disposed copies,
+> re-read from live D1; KI-5's headers are **unchanged**, re-read from the live
+> site. ⚠️ **KI-2 was NOT re-checked** and still carries 2026-08-15 — nobody
+> listed the `bgc-photos` bucket on this pass.
+>
+> ⚠️ Nothing here was resolved or removed on 2026-09-05. All four live entries
+> stand.
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
@@ -79,6 +87,25 @@ it recurred:
    into *"`·` came back as `·`"* and destroys the example. It happened, and the
    line had to be restored verbatim from the original.
 
+🔴 **Measured 2026-09-05 (docs audit): the 2026-08-21 repair was INCOMPLETE, and
+nobody noticed for 15 days.** `docs/TODO.md` still carried **9** corrupt
+sequences from that day — 8 × `⚠` followed by the cp1252 round-trip of the
+variation selector (bytes `c3af c2b8 c28f` where `efb8 8f` belonged), and 1 ×
+`⏳` as `c3a2 c28f c2b3`. They are repaired now, byte-for-byte, in the same pass
+that wrote this note. **Why they survived:** the corruption ate only the
+*invisible half* of an emoji — the rendered text still showed a warning sign, so
+every reading of that file since 2026-08-21 looked fine. ⚠️ **This is a fourth
+danger to add to the three above: a whole-file eyeball does NOT find this.**
+Grep for the byte sequences, not for wrong-looking words. The repair here was
+run **once**, against a byte pattern, and deliberately did not touch this file
+or `info/gotchas.md`, both of which contain mojibake on purpose (danger 3).
+
+**What would change it, restated with a number:** a pre-commit check. Measured
+2026-09-05 — `.git/hooks/` contains **nothing but the stock `.sample` files**,
+so no such check exists in this repo and none of the three occurrences was
+caught mechanically. Three occurrences, three hand repairs, one of them
+incomplete for two weeks, is the argument.
+
 ---
 
 ## KI-4 · A copy that was GIVEN AWAY is stored as `status = 'sold'` — `ACCEPTED`
@@ -109,13 +136,24 @@ through `copyStateLabel()`. If a second consumer of the raw `copy` table appears
 
 **Not a candidate for change:** the count of disposed copies. It was **0** on
 2026-09-02, and even at 500 the storage shape would be no more wrong than it is
-at 1.
+at 1. ✅ **Re-measured 2026-09-05 (docs audit), read-only against live D1: still
+0.** `copy` holds **839** rows, **0** with `status = 'sold'`, **0** with a
+non-null `disposal`, and `copy_event` holds **0** rows — so three weeks after
+migration 0029 shipped, the feature has still never been used on a real copy.
+That is the entry standing, not weakening: the number to watch was never this
+one.
 
 ---
 
 ## KI-5 · The theme assets ship `immutable` **and** `no-cache` in the same header — `WATCHING`
 
-**Symptom.** Measured against the live site on **2026-09-02**:
+**Symptom.** Measured against the live site on **2026-09-02**, and ✅
+**re-measured unchanged on 2026-09-05** (docs audit, `curl -s -D -`): all three
+rows below still come back exactly as written — `/assets/estate-theme.css` and
+`/assets/theme.js` still serve `public, max-age=31536000, immutable, no-cache`,
+and `/estate/estate-search.js` still serves a clean `no-cache`. The `WATCHING`
+status is unchanged; still nobody has reported a stale skin, and still no
+browser has been observed revalidating.
 
 | Path | `Cache-Control` served |
 |---|---|

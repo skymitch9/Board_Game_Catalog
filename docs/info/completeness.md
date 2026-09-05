@@ -7,8 +7,12 @@ Accessory and expansion completeness: *seven expansions exist, you have four,
 here are the three you do not*. The last clause is a shopping list, and it is
 the only reason this exists.
 
-Current state and what was deployed live in [`../HANDOFF.md`](../HANDOFF.md).
-This file holds the design facts that will still be true in six months.
+Current state lives in [`../TODO.md`](../TODO.md) and what was deployed in
+[`../DONE.md`](../DONE.md). This file holds the design facts that will still be
+true in six months. ⚠️ **Corrected 2026-09-05:** this sentence pointed at
+`../HANDOFF.md`, which has been a 15-line signpost since the 2026-08-21 split;
+the pre-split original is kept whole at
+[`../archive/HANDOFF.superseded-2026-08-21.md`](../archive/HANDOFF.superseded-2026-08-21.md).
 
 ---
 

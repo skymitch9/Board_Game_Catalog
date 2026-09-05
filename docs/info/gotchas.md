@@ -21,7 +21,9 @@
   enforced by triggers (migration 0002).
 - **PowerShell mangles strings containing double quotes** when passing them to
   native executables, and rewriting files through it corrupts UTF-8. Use
-  `git commit -F <file>` and edit files directly — see [`CLAUDE.md`](../CLAUDE.md),
+  `git commit -F <file>` and edit files directly — see [`CLAUDE.md`](../../CLAUDE.md)
+  (⚠️ corrected 2026-09-05: written `../CLAUDE.md`, which resolves to
+  `docs/CLAUDE.md`; the file is at the repo root, two levels up),
   which now states this as a rule because it has bitten twice. The second time,
   `git commit -m "..." && npm run deploy` had its commit rejected for quoting
   while the deploy went ahead anyway, putting live code ahead of the repo.

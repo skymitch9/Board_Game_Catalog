@@ -16,8 +16,11 @@
 > **Audience:** Claude sessions. **Status:** TRACKED. Last verified: **2026-08-08**.
 
 How this app authenticates people, and how to swap the annoying email one-time
-PIN for **Google SSO** without locking anybody out. Current live state lives in
-[`../HANDOFF.md`](../HANDOFF.md); this file holds the stable facts.
+PIN for **Google SSO** without locking anybody out. ⚠️ **Corrected 2026-09-05:**
+this sentence sent readers to `../HANDOFF.md` for "current live state" — a
+15-line signpost since the 2026-08-21 split, and doubly wrong here because the
+current live state of sign-in is [`firebase-auth.md`](firebase-auth.md), per the
+🛑 banner at the top of this page. Open work is in [`../TODO.md`](../TODO.md).
 
 ---
 

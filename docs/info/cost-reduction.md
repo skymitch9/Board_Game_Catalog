@@ -25,7 +25,12 @@ and none of them inherit: an expansion's year is usually different, and
 game's player count is not an expansion's.
 
 The reasoning per field lives in `packages/core/src/details.ts`; the numbers and
-what was verified are in [`../HANDOFF.md`](../HANDOFF.md#children-inherit-from-their-parent--built-2026-08-08).
+what was verified are in
+[`../archive/HANDOFF.superseded-2026-08-21.md`](../archive/HANDOFF.superseded-2026-08-21.md#children-inherit-from-their-parent--built-2026-08-08).
+⚠️ **Corrected 2026-09-05:** this was an anchor into `../HANDOFF.md`, which has
+been a 15-line signpost since the 2026-08-21 split — the anchor had nothing to
+land on. The section it names is intact in the archived original, so the link
+now goes there rather than being dropped.
 
 **The general lesson, worth applying to the next queue.** The expensive question
 was not "what does this row not know" but "what is worth *buying* for this row".

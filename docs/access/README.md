@@ -5,21 +5,25 @@
 > Updated **2026-09-05** — one row added for
 > [`provision-catalog.md`](provision-catalog.md) (phase 9). Nothing else on this
 > page was re-checked that day.
-> Last verified: **2026-08-31** — only the pointers were fixed that day
-> (`HANDOFF.md` was retired to a signpost on 2026-08-21, and this index still
+> Last verified: **2026-09-05** — the docs audit checked one thing here: that
+> **every `.md` in this folder has a row and every row's file exists**. All ten
+> files resolve; `SETUP.md` had no row and now does. ⚠️ **The row descriptions
+> and the secret-name table below were NOT re-checked** — the rows still carry
+> **2026-08-05** and the pointer fixes below still carry **2026-08-31**
+> (`HANDOFF.md` was retired to a signpost on 2026-08-21 and this index still
 > sent readers there for "current state"; `SETUP.md` lives in this directory,
-> not at `../SETUP.md`). ⚠️ The rows and secret names below were NOT re-checked
-> and still carry **2026-08-05**.
+> not at `../SETUP.md`).
 
 How to reach and operate everything this project depends on. Stable facts only —
 current state and work in flight live in [`../TODO.md`](../TODO.md).
 
 | File | Covers |
 |---|---|
+| [`SETUP.md`](SETUP.md) | Cloudflare, D1 and Access details — how the project is stood up locally and in production. ⚠️ **Added to this table 2026-09-05**: it was the one `.md` in this folder with no row, named only in prose at the foot of the page, so a reader scanning the index did not see it exists |
 | [`RECOVERY.md`](RECOVERY.md) | 🔴 **REBUILD FROM NOTHING (new 2026-08-18)** — *from a git clone and the blob backups, how do I rebuild this app?* Full inventory, the rebuild order, every secret by NAME with custody and re-mint console, what a rebuild CANNOT recover, and a **drilled-vs-inference** table. ⚠️ **This app's D1 dump does NOT replay raw** — it dies at `no such table: main.app_user` after 2 of 18 tables and leaves a half-populated database that looks imported; reordering is mandatory. Restore *mechanics* live in `catalog-platform/docs/access/RECOVERY.md` |
 | [`external-apis.md`](external-apis.md) | Every third-party service: endpoints, key names, quotas, what breaks without them |
 | [`firebase-auth.md`](firebase-auth.md) | 🔶 **The auth model as of 2026-08-10** — Firebase ID tokens, the cutover off Cloudflare Access and why its order is a safety property, what edge protection is given up. **Read before `login.md`** |
-| [`login.md`](login.md) | Cloudflare Access: how sign-in works **today**, until the cutover's step 4. Being replaced |
+| [`login.md`](login.md) | 🛑 **HISTORY, not current** — the Cloudflare Access application was **deleted 2026-08-10** and sign-in is Firebase; the file's own banner says so. Kept for how the Access setup was built and what its audiences were, i.e. what you would need to put it back. ⚠️ **Corrected 2026-09-05:** this row read *"how sign-in works **today**, until the cutover's step 4. Being replaced"*, which its own file has contradicted since 2026-08-10 |
 | [`covers-r2.md`](covers-r2.md) | The `game-covers` R2 bucket, `gamecovers.heygabi.ai`, the migration script and its gotchas |
 | [`deploys.md`](deploys.md) | 🆕 **How to ship (2026-09-02)** — the check-clean / deploy-guard / deploy-done chain, `docs/deploys.log` as the 3am rollback source of truth, every escape hatch, and the gotchas (a failed test leaves the lock; `version-unknown` is a failure, not a value) |
 | [`provision-catalog.md`](provision-catalog.md) | 🆕 **STANDING ONE UP (2026-09-05)** — the runbook for `scripts/provision-catalog.mjs`, the owner-run games provisioner: flags and exit codes, the names it derives and the split behind them, the twelve steps, the four ways it differs from the books twin (⚠️ **it does not deploy** — step 11 prints the owner's command), the `ANTHROPIC_API_KEY` ladder, and 🔴 **why "no key" here means NO AI LOOKUPS AT ALL** — there is no donor. ⚠️ Nothing has ever run past `--dry` |
