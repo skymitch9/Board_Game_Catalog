@@ -16,6 +16,108 @@
 
 ---
 
+## ✅ ANSWERED + BUILT + DEPLOYED 2026-09-05 (agent W5-FAMILY) — the family score
+
+**The owner's answer, 2026-09-05 16:14 Phoenix: (a) — the base-weighted mean.**
+Built the same evening, `aef62e8`. **Deployed** — the Cloudflare version id is
+the last line of [`deploys.log`](deploys.log), written by `deploy-done.mjs` and
+committed in the commit that follows this one. **No migration**, exactly as the
+section below predicted: the roll-up is derived on read over relations and
+ratings that already existed.
+
+**What (a) turned into, in code.** The weights are `FAMILY_KIND_WEIGHTS` in
+[`packages/core/src/family-score.ts`](../packages/core/src/family-score.ts) —
+**base 6 : expansion 2 : upgrade/accessory/promo 1** — and that file is the only
+place the ratio exists. The mean is two-stage: each item averages its own raters
+first, then the family averages the *items* by kind weight, so a box two people
+rated does not count twice as hard as one only the owner rated. Which rows *are*
+the family is the other half, and it lives in
+[`packages/db/src/family-score.ts`](../packages/db/src/family-score.ts): the
+`same_family` closure walked over **roots**, then every row of every tree in it —
+containment (`root_game_id`) and relations unioned, because the catalog says
+"belongs together" in both of those ways and using one would answer half the
+question.
+
+**The write-up's requirement, as arithmetic.** *"A plain mean lets one poor
+accessory drag a great game down, which is wrong."* A 0.5-star playmat costs a
+5-star base **0.64 of a star** (4.36) where a plain mean costs it **2.25**
+(2.75). Five bad promos still take it to 2.95 — the tail is quiet, not silent.
+Both numbers are assertions in the test file, not prose.
+
+⚠️ **The one thing that went red for real, and would have shipped silently.**
+The first version of the query walked the `same_family` links row-by-row from
+the item you clicked and folded up to roots afterwards. That returns **half the
+family** whenever a link hangs off a nested expansion rather than off the base
+game — which `/retag` writes routinely, because it asks about the row in front
+of you. It looks like a working number, on a page, with fewer members in it.
+Caught by `packages/db/test/family-score.test.ts` running the real SQL against a
+real SQLite with every migration applied; the case is now a named test.
+
+**Tests 319 → 348** (+29, 47 → 59 suites), typecheck clean across seven
+workspaces. The arithmetic half sits in `apps/worker/src/lib/` so it is inside
+the deploy gate, and was **proven RED**: setting `base: 1` fails four of them.
+
+✅ **The query was run against PRODUCTION D1** (read-only, 2026-09-05): the
+shipped CTE returns **12 trees / 148 rows** for the Dice Throne family from item
+96. The collection page's *Dice Throne* series group counts 11 lines / 147 rows,
+and the one-tree difference is the point — a `same_family` link reaching outside
+the series name is a family member that a name-based grouping cannot see.
+
+🔴 **And the feature is invisible today, measured the same way: `user_item`
+holds ZERO rows.** Nobody has ever rated anything in this catalog (838 items, 92
+`same_family` links, 0 ratings), so every page returns `score: null, rated: 0`
+and correctly prints nothing. The code is live; the data to show it does not
+exist yet. ⚠️ This is worth knowing before anyone reports the line as missing.
+
+⚠️ **NOT verified: anything rendered.** No browser and no signed-in session —
+`/api/items/:id` needs a Firebase ID token. The live check was `curl -s -D -` on
+the item page, which proves the app serves and the deploy landed, and proves
+nothing about what the Ratings card looks like. **The owner review is the
+verification**, and it is a TODO row, not a DONE one.
+
+**Two riders the owner did not rule on — DEFAULTS TAKEN, both reversible**, and
+both recorded as `❓ default taken` lines in [`TODO.md`](TODO.md) where he can
+still flip them: the **duplicates filter stays per-entry** (a duplicate is a
+physical copy, not a family) and **search surfaces individual entries** carrying
+their family score rather than a family row. ⚠️ The second half of that second
+default — a family badge **on a search row** — is **NOT BUILT**; the score is on
+the item page only. That gap is a `☐` in `TODO.md`.
+
+**The section as it stood in `TODO.md`, moved whole and unedited:**
+
+### ❓ OWNER DECISION — how should a game family's rating be computed?
+
+**Options, from the write-up.** (a) **base-weighted mean** — the base game
+counts for more than its expansions, the write-up's own recommendation, derived
+not stored, no schema change; (b) **`base` + `expansion` only**, ignoring
+accessories and promos; (c) **an explicit family rating** people give by hand
+("how good is Catan *as a whole*"). Two smaller questions ride with it: does the
+**duplicates filter** treat a family as one thing or per-entry, and does
+**search** surface the family or the individual entries?
+
+⚠️ **Surfaced here 2026-09-05 (docs audit); it is not new.** It was raised by
+the owner on **2026-08-05** and has sat in
+[`info/design-decisions.md`](info/design-decisions.md) — *outside* the work log
+— ever since, which is why no `TODO.md` has ever carried it. **The full write-up
+stays there and is not repeated here** (one fact, one home): the requirement,
+the per-entry-ratings decision that was already settled on 2026-08-05, and the
+argument against a plain mean.
+
+🔬 **What changed while nobody was looking, measured 2026-09-05.** That section
+described one undecided design; **half of it has since been built**, and the
+page did not know. `item_relation` carries `same_family` / `works_with` /
+`reimplements` / `integrates_with` (`packages/core/src/constants.ts:264–284`),
+family is traversed **transitively** (`packages/db/src/relations.ts:22–63`), and
+`/retag` asks the nest-vs-link question per game. **Only the SCORE is left** —
+grepped, there is no `familyScore` or `family_score` anywhere in `packages/`,
+`apps/worker/src` or `apps/web/src`.
+
+**Blocked on:** the owner's answer. Nothing else. Once (a), (b) or (c) is
+chosen, the build is a derived roll-up over relations that already exist and
+ratings that are already per-item — no migration.
+
+---
+
 ## ☑ CODE LANDED 2026-09-05 (agent W2-GAMES, `1aa3871`) — the three tracked findings of the 2026-08 audit — 🔴 ☐ NOT DEPLOYED
 
 **Commits:** `751980b` (the details sweep's subrequest budget) · `7f75804`

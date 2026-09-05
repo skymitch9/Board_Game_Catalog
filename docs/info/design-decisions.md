@@ -155,7 +155,19 @@ npm run secrets:push -- --dry # names and fingerprints only, sends nothing
 (⚠️ This heading carried mojibake — `âš` + the round-tripped variation selector
 — from the 2026-08-21 split. Repaired 2026-09-05; see `KNOWN_ISSUES.md` KI-3.)
 
-### Grouping / family model — ⚠️ HALF OF THIS SHIPPED; only the family SCORE is still open
+### Grouping / family model — ✅ DECIDED AND SHIPPED 2026-09-05
+
+✅ **DECIDED 2026-09-05 16:14 Phoenix: (a), the base-weighted mean. BUILT the
+same evening in `aef62e8` and deployed.** The argument below is kept whole and
+deliberately unedited — it is *why* (a) won, and deleting it would leave a
+weight table nobody could explain. What (a) became: `FAMILY_KIND_WEIGHTS` in
+`packages/core/src/family-score.ts` (**base 6 : expansion 2 :
+upgrade/accessory/promo 1**, so option (b)'s "ignore accessories and promos" was
+not taken — the tail counts, quietly), rolled up over the family gathered by
+`packages/db/src/family-score.ts`. Derived on read, no migration, no column,
+exactly as predicted below. The full entry, the numbers and the bug that went
+red are in [`../DONE.md`](../DONE.md); the two riders were **not** ruled on and
+carry reversible defaults recorded in [`../TODO.md`](../TODO.md).
 
 🔴 **Corrected 2026-09-05 (docs audit).** This read as one undecided question.
 It is two, and one of them is **built and live**:
@@ -163,7 +175,7 @@ It is two, and one of them is **built and live**:
 | The half | State, measured 2026-09-05 |
 |---|---|
 | **nest vs. link** — the `requires` / `related to` split, the `item_relation` sketch, the *"can you play it without the base game?"* discriminator | ✅ **BUILT.** `item_relation` carries `same_family`, `works_with`, `reimplements`, `integrates_with` (`packages/core/src/constants.ts:264–284`); family is traversed **transitively** in `packages/db/src/relations.ts:22–63`; `/retag` asks the discriminator question per game and writes the relation — see *Related games* at the top of this file. The proposed `standalone` flag was **not** needed and was never added |
-| **the family SCORE** — *"three numbers: base game, expansion, family"* | ☐ **NOT BUILT.** Grepped `packages/`, `apps/worker/src` and `apps/web/src` on 2026-09-05: no `familyScore`, no `family_score`, nothing that rolls ratings up. The three questions under *Still open for that conversation* below have never been answered, and nothing has been built against them |
+| **the family SCORE** — *"three numbers: base game, expansion, family"* | ✅ **BUILT 2026-09-05** (`aef62e8`) — see the note above this table. ⚠️ The row as it stood that morning, kept because it dates the gap: ☐ **NOT BUILT.** Grepped `packages/`, `apps/worker/src` and `apps/web/src` on 2026-09-05: no `familyScore`, no `family_score`, nothing that rolls ratings up. The three questions under *Still open for that conversation* below have never been answered, and nothing has been built against them |
 
 ⚠️ **The consequence worth naming:** this section sat in `info/` — *outside* the
 work log — for a month, so `TODO.md` never carried the one live question in it,
@@ -216,9 +228,15 @@ Per-person ratings already work this way (`rating` is keyed on item + user), so
 the per-entry half needs no schema change — only the family roll-up is new, and
 it is derived, not stored.
 
-Still open for that conversation:
+~~Still open for that conversation:~~ ✅ **All three answered 2026-09-05** — the
+first by the owner, the other two by a **reversible default** the agent took and
+recorded for him in [`../TODO.md`](../TODO.md) as `❓ default taken` lines. The
+answers, in order: **(a)**; the duplicates filter stays **per-entry** (a
+duplicate is a physical copy, not a family); search surfaces **individual
+entries** carrying their family score, not a family row. The questions are kept
+below as they were asked.
 
-- **How is the family score computed?** A plain mean lets one poor accessory drag
+- **How is the family score computed?** ✅ **(a).** A plain mean lets one poor accessory drag
   a great game down, which is wrong. Options: weight the base game heavier;
   average only `base` + `expansion` and ignore accessories/promos; or treat it as
   its own rating people give explicitly ("how good is Catan *as a whole*").

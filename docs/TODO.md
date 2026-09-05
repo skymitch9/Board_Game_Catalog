@@ -43,6 +43,17 @@ W2-GAMES was denied every edit to `apps/worker/wrangler.toml` and denied
 `npm run deploy`, stopped rather than working around either, and left both
 written out to the keystroke.
 
+✅ **Superseded again the same evening, 2026-09-05 (agent W5-FAMILY).** The
+line above says *"What is open now: ❓ **one owner decision** (the family
+score)"*. **The owner answered it at 16:14 Phoenix — (a), the base-weighted
+mean — and it is built (`aef62e8`) and deployed.** The section that asked the
+question has moved WHOLE to [`DONE.md`](DONE.md); what is left in this file is
+an owner review, two reversible defaults he did not rule on, and one thing
+deliberately not built. **No owner decision is outstanding here now.** The
+billing shadow flip is still an owner step and is untouched — `wrangler.toml`
+and `BILLING_POLICY` were off-limits to that agent too, and it did not go near
+them.
+
 ~~**What is genuinely open, in full:** ❓ one owner decision (the family score),
 the billing soak (which needs the owner to write a deny rule before anything can
 be measured), two audit findings, three person-errands in *What still wants a
@@ -563,36 +574,62 @@ row stops the hourly details sweep, silently, for good.
 
 ---
 
-## ❓ OWNER DECISION — how should a game family's rating be computed?
+## ☑ BUILT + DEPLOYED 2026-09-05 — the family score, answer (a) — ☐ owner review · ❓ two defaults he can still flip · ☐ no search badge
 
-**Options, from the write-up.** (a) **base-weighted mean** — the base game
-counts for more than its expansions, the write-up's own recommendation, derived
-not stored, no schema change; (b) **`base` + `expansion` only**, ignoring
-accessories and promos; (c) **an explicit family rating** people give by hand
-("how good is Catan *as a whole*"). Two smaller questions ride with it: does the
-**duplicates filter** treat a family as one thing or per-entry, and does
-**search** surface the family or the individual entries?
+✅ **The decision is ANSWERED and the section that asked it has moved WHOLE to
+[`DONE.md`](DONE.md)** (owner, 2026-09-05 16:14 Phoenix: **(a) the
+base-weighted mean**; built `aef62e8`, agent W5-FAMILY). What is left here is
+the part that is still open, and only that: one review, two defaults, one thing
+not built. The reasoning, the weights and the bug that went red live in the
+`DONE.md` entry and in
+[`info/design-decisions.md`](info/design-decisions.md) — not repeated here.
 
-⚠️ **Surfaced here 2026-09-05 (docs audit); it is not new.** It was raised by
-the owner on **2026-08-05** and has sat in
-[`info/design-decisions.md`](info/design-decisions.md) — *outside* the work log
-— ever since, which is why no `TODO.md` has ever carried it. **The full write-up
-stays there and is not repeated here** (one fact, one home): the requirement,
-the per-entry-ratings decision that was already settled on 2026-08-05, and the
-argument against a plain mean.
+🔴 **MEASURED 2026-09-05, read-only against live D1: `user_item` holds ZERO
+rows.** Nobody has ever rated anything in this catalog, so **the family score is
+live and currently invisible on every page** — `score: null`, `rated: 0`, and
+`isFamilyScoreWorthShowing` correctly declines to print it. That is the feature
+behaving, not a fault, but it means **the review has to create its own
+evidence.** (Same D1 read: **838** items, **92** `same_family` links.)
 
-🔬 **What changed while nobody was looking, measured 2026-09-05.** That section
-described one undecided design; **half of it has since been built**, and the
-page did not know. `item_relation` carries `same_family` / `works_with` /
-`reimplements` / `integrates_with` (`packages/core/src/constants.ts:264–284`),
-family is traversed **transitively** (`packages/db/src/relations.ts:22–63`), and
-`/retag` asks the nest-vs-link question per game. **Only the SCORE is left** —
-grepped, there is no `familyScore` or `family_score` anywhere in `packages/`,
-`apps/worker/src` or `apps/web/src`.
+🔗 **The owner review, ~2 minutes on the phone.**
+<https://boardgames.heygabi.ai/items/96> — **Dice Throne: X-Men**, whose family
+is the biggest in the catalog: the shipped query was run against **production
+D1** on 2026-09-05 and returns **12 trees / 148 rows** for it (the collection
+page's *Dice Throne* series group counts 11 lines / 147 rows — the extra tree is
+a `same_family` link reaching outside the series name, which is exactly the
+difference between "same series" and "same family").
 
-**Blocked on:** the owner's answer. Nothing else. Once (a), (b) or (c) is
-chosen, the build is a derived roll-up over relations that already exist and
-ratings that are already per-item — no migration.
+1. On that page, **Ratings** → give it a score. Nothing new appears yet: one
+   rated row is not a roll-up, and the line stays hidden on purpose.
+2. Open any second row of that family — an expansion under it, or another Dice
+   Throne hero — and rate that too.
+3. Reload either page. A boxed line should now sit at the top of the Ratings
+   card reading **This family**, stars, a number, and *across 2 rated of 148 in
+   the family*. Both pages must show the **same number**: it is a fact about the
+   family, not about the row you opened.
+
+❓ **DEFAULT TAKEN — the duplicates filter stays PER-ENTRY.** The owner ruled on
+the score and not on this. A duplicate is a **physical copy**, not a family: two
+copies of Catan is a duplicate, Catan and Starfarers is not, and treating a
+family as one thing here would hide the second box of a game he actually owns
+twice. **Reversible** — it is a filter, no data moves. Say the word and it flips.
+
+❓ **DEFAULT TAKEN — search surfaces INDIVIDUAL entries, each carrying its
+family score, not a family row.** A search for "catan" should still return the
+Catan rows, not one folded "Catan family" card that has to be opened before you
+can tell what is in it. This is also what search does today, so the default is
+"no change to the shape of results". **Reversible.**
+
+☐ **NOT BUILT: the family badge on a search row.** The second default above says
+each entry *carries its family score*; today the score is on the **item detail
+page only**. Putting it on a search/collection row means computing a family
+score per row of a page, which is a recursive CTE per root — a real cost
+question, not a five-minute add. Deliberately left for the owner to ask for.
+
+⚠️ **NOT VERIFIED: anything rendered.** The deploy was proved live with
+`curl -s -D -` on the item page (200, the app's HTML shell). No browser, no
+signed-in session — `/api/items/:id` needs a Firebase ID token — so **nobody has
+seen the new line**. That is what the review above is for.
 
 ---
 
