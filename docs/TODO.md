@@ -16,9 +16,15 @@ backfill, the Excursion Tiles edge, the three orphaned rows and the Excursion
 Tiles year — all struck with the live number that settled them. One stale
 `file:line` in the audit section would have sent a fixer to a file that no
 longer holds the code. **Nothing was built and nothing was deployed on this
-pass; only claims changed.** What is genuinely open now: the billing soak
-(needs the owner first), two audit findings, three person-errands, and two
-owner reviews on his phone. Before that:
+pass; only claims changed.** The audit also **surfaced one owner decision that
+had never reached this file** — the family-rating question he raised on
+2026-08-05, which had lived in `info/design-decisions.md` for a month while half
+of the section around it was quietly built.
+
+**What is genuinely open, in full:** ❓ one owner decision (the family score),
+the billing soak (which needs the owner to write a deny rule before anything can
+be measured), two audit findings, three person-errands in *What still wants a
+person*, and two owner reviews on his phone. Before that:
 2026-09-05 — phase 9 landed (the games provisioner + the
 `BILLING_SITE` lift) and both items moved WHOLE to [`DONE.md`](DONE.md); the
 one owner question it left (the naming split) was answered the same morning:
