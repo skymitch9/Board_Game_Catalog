@@ -21,10 +21,21 @@ had never reached this file** — the family-rating question he raised on
 2026-08-05, which had lived in `info/design-decisions.md` for a month while half
 of the section around it was quietly built.
 
-**What is genuinely open, in full:** ❓ one owner decision (the family score),
+⚠️ **Superseded the same evening, 2026-09-05 (agent W2-GAMES).** The line below
+read *"two audit findings"* and *"the billing soak, which needs the owner to
+write a deny rule before anything can be measured"*. **Both are now wrong, in
+opposite directions:** the two audit findings — and the export exposure beside
+them — were BUILT and moved to [`DONE.md`](DONE.md) (`751980b`, `7f75804`,
+`6394cca`), and the owner had **already written the deny rule** on 2026-09-02;
+the billing section's "no row for `games`" claim was stale and is corrected
+in place. What is open now: ❓ **one owner decision** (the family score), the
+**billing soak**, which is RUNNING, three person-errands in *What still wants a
+person*, and three owner reviews on his phone.
+
+~~**What is genuinely open, in full:** ❓ one owner decision (the family score),
 the billing soak (which needs the owner to write a deny rule before anything can
 be measured), two audit findings, three person-errands in *What still wants a
-person*, and two owner reviews on his phone. Before that:
+person*, and two owner reviews on his phone.~~ Before that:
 2026-09-05 — phase 9 landed (the games provisioner + the
 `BILLING_SITE` lift) and both items moved WHOLE to [`DONE.md`](DONE.md); the
 one owner question it left (the naming split) was answered the same morning:
@@ -814,49 +825,18 @@ this.**
 
 ---
 
-## 🔍 AUDIT 2026-08 — confirmed findings
+## ✅ 2026-08 AUDIT — the three tracked findings are FIXED, moved to [`DONE.md`](DONE.md)
 
-From the estate-wide code audit (2026-08-23). Full severity-ranked table,
-evidence and fix notes: [`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md).
+Closed 2026-09-05 by `751980b` (the sweep's subrequest budget), `7f75804` (the
+batch-parent link) and `6394cca` (the `/api/export.json` email exposure). The
+section moved **whole** to [`DONE.md`](DONE.md); this pointer stays only
+because the billing section above and `info/README.md` link to the audit by
+name.
 
-**24 confirmed findings: 0 critical · 0 high · 13 medium · 11 low.** No finding
-survived verification at critical or high severity — the two the reviewers
-rated **high were both adjusted to medium** in refutation. They are the top of
-the ranking and are tracked here; all remaining medium/low findings live in the
-findings doc, not as checkboxes.
-
-- ☐ **Details sweep exceeds the 50-subrequest cron cap and terminates
-  silently** — `apps/worker/src/lib/details-sweep.ts:58`. `SWEEP_LIMIT=8` runs
-  ~80–88 subrequests in one invocation; once a backlog exists the sweep dies
-  mid-run and the tail never enriches (Claude calls for the items that *did*
-  complete are already paid for). Drop the limit to ~4 or chunk across
-  invocations. (Reviewed high → medium.) ✅ **Re-verified 2026-09-05 (docs
-  audit): still exactly true** — `apps/worker/src/lib/details-sweep.ts:58`
-  still reads `export const SWEEP_LIMIT = 8;`, and the only test guarding it
-  (`details-sweep.test.ts:120`) asserts `SWEEP_LIMIT <= 10`, so it would not
-  notice. **Genuinely unbuilt.**
-- ☐ **Batch parent link silently dropped on Whole-shelf add** —
-  ⚠️ **Corrected 2026-09-05 (docs audit): the file:line moved and this entry
-  would have sent the fixer to a page that no longer contains the code.** It
-  read `apps/web/src/pages/ScanPage.tsx:713`; that file is **75 lines** since
-  the 2026-09-04 extraction (`5572fe8`). The defect is intact and now lives at
-  **`apps/web/src/components/ScanPanel.tsx:1029`** (`addSelected`), read today:
-  `const [batchIds, setBatchIds] = useState(...)` at :1011, the loop reads
-  `batchIds[batchIdx]` at :1051 and `batchIds[parentIdx]` at :1056–1057, and
-  writes `setBatchIds(...)` at :1074 — React state, so nothing it writes is
-  visible to a later iteration of the same loop. A base game added earlier is
-  invisible to its expansion; a manually-chosen sibling parent is dropped and
-  the expansion is stranded root-less. Mirror the canonical local-object
-  pattern in `ScanJobsPage.addSelected` — still there and still correct, a
-  plain `const batchIds: Record<number, number> = {}` at
-  `apps/web/src/pages/ScanJobsPage.tsx:866` written at :960. **The extraction
-  moved the bug into a component BOTH doors now render**, which widens it from
-  `/scan` to `/wishlist` as well. (Reviewed high → medium.)
-
-⚠️ One present-tense exposure worth a look even though it verified **medium**,
-not high: `/api/export.json` returns **every account's email** to any
-`editCatalog` (contributor+) user — see finding #4. ⚠️ **Corrected 2026-09-05:**
-the line reference read `apps/worker/src/routes/export.ts:31`; the
-`SELECT ui.*, u.email FROM user_item ui JOIN app_user u …` is at **:36** today,
-and the `requireCapability('editCatalog')` that gates the whole router is at
-**:14**. Both were re-read, and the exposure is unchanged.
+⚠️ **The other 21 findings were never checkboxes and are still open** — they
+live in [`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md),
+which now carries a dated ✅ FIXED line on rows 1, 2 and 4. 🔴 **Finding 5 is
+the same class of defect as the one just fixed** — `COVER_BATCH = 20` budgets
+only its fetches and ignores 22 D1 calls, ~62 against the same 50-subrequest
+ceiling — and it is untouched. It was out of this item's scope, not judged
+harmless.

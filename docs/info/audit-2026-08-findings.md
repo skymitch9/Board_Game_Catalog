@@ -1,15 +1,24 @@
 # Estate code audit — Board_Game_Catalog findings (2026-08)
 
 > **Audience:** the owner (decides fixes) and future Claude/Kiro sessions.
-> **Status:** TRACKED. **Last verified:** 2026-08-23 — every row below was
-> adversarially verified against the code at that commit. Severities are the
-> **post-verification** values; where the reviewer's severity was adjusted by
-> the refuter, the original is shown in parentheses.
+> **Status:** TRACKED. **Last verified:** 2026-08-23 for the 21 open rows —
+> every row below was adversarially verified against the code at that commit.
+> Severities are the **post-verification** values; where the reviewer's severity
+> was adjusted by the refuter, the original is shown in parentheses.
+> ⚠️ **Re-measured 2026-09-05 for rows 1, 2 and 4 ONLY** — those three were
+> fixed that day and their status column says so with the commit. **The other
+> 21 rows were NOT re-read against today's code** and still carry 2026-08-23;
+> row 2's experience says that matters, because its `file:line` had already
+> moved by then.
 >
 > Part of the estate-wide audit — scope and harness in
 > `catalog-platform/docs/info/estate-audit-2026-08.md`. **No code was changed
 > by the audit;** fixes are separate, owner-decided dispatches. Nothing here is
 > pushed.
+>
+> ✅ **Fixed since: 3 of 24** — rows 1, 2 and 4, on 2026-09-05, whole story in
+> [`../DONE.md`](../DONE.md). 🔴 **Row 5 is the same class of defect as row 1**
+> (a subrequest budget that counts only its fetches) and is still open.
 >
 > ⚠️ **Read `../KNOWN_ISSUES.md` and `gotchas.md` before "fixing" any row** —
 > none of these are accepted defects, but the two files hold the context that
@@ -21,24 +30,29 @@
   adjusted to medium in verification) · **13 medium** · **11 low**.
 - **2 findings were refuted** in verification and are not listed here.
 - **12 units reviewed**; 1 (`migrations`) came back clean.
-- No finding is covered by an existing test, and none is waived in
-  `KNOWN_ISSUES.md`.
+- ~~No finding is covered by an existing test~~, and none is waived in
+  `KNOWN_ISSUES.md`. ⚠️ **Corrected 2026-09-05:** true when written, false now
+  — rows **1, 2 and 4** each gained a test with their fix, and each of those
+  tests would have caught the original defect. The other **21 are still
+  untested**, which is the number that matters here.
 
 The single loudest theme is **stale comments that contradict live behaviour**
 (the estate-check "inert" comment over an `enforce` value; the CSP allowlist a
 comment claims exists in `_headers` but does not; the "Access still in front"
 vars after Access was deleted). None break the running system, but each is a
 trap primed for the next debugger. The one finding with present-tense impact is
-the **`/api/export.json` email leak** to any contributor-role user.
+the **`/api/export.json` email leak** to any contributor-role user — ✅ **closed
+2026-09-05 (`6394cca`): emails are `manageUsers` (admin and owner) only, and
+the ratings query is an explicit allow-list rather than `ui.*`.**
 
 ## Findings — severity-ranked
 
 | # | Sev | Unit | file:line | Claim | Evidence | What would fix it | KI ref |
 |---|-----|------|-----------|-------|----------|-------------------|--------|
-| 1 | med (was high) | worker-lib | `apps/worker/src/lib/details-sweep.ts:58` | Hourly details sweep runs all `SWEEP_LIMIT=8` enrichments in ONE scheduled invocation at ~10–11 subrequests each (~80–88), over the 50-subrequest free-plan cap; once a backlog exists it terminates *silently* mid-sweep — the exact "fill in these N sharing one invocation" path `details-run.ts:42-58` forbade. | `runDetailsSweep` loops over 8 items with no chunking; `index.ts:191-197` returns it as one promise. Per item: `claimDetailsRun` = 4 non-batched D1 + getItem(1) + Claude fetch(1-2) + updateItem(3) + finishRun(1). | Drop `SWEEP_LIMIT` to ~4 (4×11≈44<50), or chunk across invocations. The sweep added the batch path but never redid `details-run.ts`'s subrequest arithmetic. | none |
-| 2 | med (was high) | web-pages | `apps/web/src/pages/ScanPage.tsx:713` | `ShelfResult.addSelected` reads batch-sibling parent ids from React state (`batchIds`) inside its own async loop, but only writes them via async `setBatchIds` — so a base game added earlier in the same batch is invisible to its expansion added later; a manually-chosen sibling parent is silently dropped and the row is stranded as a root-less expansion. | `batchIds` is `useState` (674); reads at 713/718-720; only write is `setBatchIds(...)` at 737, which never mutates the running closure. Canonical sibling `ScanJobsPage.addSelected` uses a LOCAL object mutated synchronously (866,960). | Mirror the canonical pattern: a `const batchIds: Record<number,number> = {}` mutated synchronously inside the loop. (Auto-classified rows are rescued by server name-reunion; the manual-select-without-name subcase is the real loss.) | none |
+| 1 | ✅ **FIXED 2026-09-05** (`751980b`) — med (was high) | worker-lib | `apps/worker/src/lib/details-sweep.ts:58` | Hourly details sweep runs all `SWEEP_LIMIT=8` enrichments in ONE scheduled invocation at ~10–11 subrequests each (~80–88), over the 50-subrequest free-plan cap; once a backlog exists it terminates *silently* mid-sweep — the exact "fill in these N sharing one invocation" path `details-run.ts:42-58` forbade. | `runDetailsSweep` loops over 8 items with no chunking; `index.ts:191-197` returns it as one promise. Per item: `claimDetailsRun` = 4 non-batched D1 + getItem(1) + Claude fetch(1-2) + updateItem(3) + finishRun(1). | Drop `SWEEP_LIMIT` to ~4 (4×11≈44<50), or chunk across invocations. The sweep added the batch path but never redid `details-run.ts`'s subrequest arithmetic. | none |
+| 2 | ✅ **FIXED 2026-09-05** (`7f75804`) — med (was high) | web-pages | ~~`apps/web/src/pages/ScanPage.tsx:713`~~ → `apps/web/src/components/ScanPanel.tsx` (moved by the 2026-09-04 extraction) | `ShelfResult.addSelected` reads batch-sibling parent ids from React state (`batchIds`) inside its own async loop, but only writes them via async `setBatchIds` — so a base game added earlier in the same batch is invisible to its expansion added later; a manually-chosen sibling parent is silently dropped and the row is stranded as a root-less expansion. | `batchIds` is `useState` (674); reads at 713/718-720; only write is `setBatchIds(...)` at 737, which never mutates the running closure. Canonical sibling `ScanJobsPage.addSelected` uses a LOCAL object mutated synchronously (866,960). | Mirror the canonical pattern: a `const batchIds: Record<number,number> = {}` mutated synchronously inside the loop. (Auto-classified rows are rescued by server name-reunion; the manual-select-without-name subcase is the real loss.) | none |
 | 3 | med | worker-routes | `apps/worker/src/routes/lookup.ts:44` | Name-lookup hand-rolls the title cache instead of canonical `cachedResolveAll`, with an inverted predicate: a genuine "no candidates" is NEVER cached (BGG-token config) so every type-ahead for a nonexistent title re-runs the full free ladder; and a FAILED lookup is cached as empty (no BGG token), freezing "no such game" for a week. Also uses a divergent key `q:${title}` so its cache is not shared with scans, contradicting its own docstring. | `lookup.ts:40` calls `resolveTitle()` direct; 44-46 cache `if (hit.bggHydrated \|\| !deps.bggToken)`. `resolve.ts:124` returns empty as `{bggHydrated:false,failed:false}`; `:103/121` returns `failed:true`. Canonical `resolve-title.ts:95-101` guards `if (hit.failed) return` and force-caches empties as null. | Route the lookup through canonical `cachedResolveAll` / the `resolve-title.ts` guards; use the bare `title` key. | gotchas.md ("a lookup that failed is not a lookup that found nothing") |
-| 4 | med | worker-routes | `apps/worker/src/routes/export.ts:31` | Full-data export uses `SELECT *` on item/edition/copy and `SELECT ui.*, u.email` on user_item — the SELECT-\*-minus anti-pattern; any future column ships into the backup silently, and the join means every `editCatalog` (contributor+) user who exports gets **every account's email now**. | `export.ts:32-37`; gate is only `requireCapability('editCatalog')` (14); `capabilities.ts:55` sets editCatalog = owner/admin/moderator/contributor. | Explicit allow-list of exported columns per table (default-deny); drop or gate `u.email`. | none |
+| 4 | ✅ **FIXED 2026-09-05** (`6394cca`) — med | worker-routes | `apps/worker/src/routes/export.ts:31` (the join was at :36 by then) | Full-data export uses `SELECT *` on item/edition/copy and `SELECT ui.*, u.email` on user_item — the SELECT-\*-minus anti-pattern; any future column ships into the backup silently, and the join means every `editCatalog` (contributor+) user who exports gets **every account's email now**. | `export.ts:32-37`; gate is only `requireCapability('editCatalog')` (14); `capabilities.ts:55` sets editCatalog = owner/admin/moderator/contributor. | Explicit allow-list of exported columns per table (default-deny); drop or gate `u.email`. | none |
 | 5 | med | worker-lib | `apps/worker/src/lib/cover-check.ts:31` | `COVER_BATCH=20`'s "leaves headroom for the D1 calls" comment counts only fetches; `runCoverCheck` also issues 22 D1 subrequests (1 list + 20 `recordCoverCheck` + 1 count), so worst case is ~62 (40 fetch + 22 D1), over the 50 cap the module budgets against. | `cover-check.ts:148-165`; `recordCoverCheck` (covers.ts:70) is a single non-batched statement; `probe()` (90-100) can cost 2 fetches/URL. Latent because geekdo URLs answer HEAD 2xx (~42). | Recompute the budget including D1; lower `COVER_BATCH` (~14) or batch the writes. | none |
 | 6 | med | worker-core | `apps/worker/wrangler.toml:139` | The ⚠️ block comment says `ESTATE_CHECK` is "deliberately 'off'… inert until the owner flips it", but line 150 is `ESTATE_CHECK = "enforce"`. A debugger reading a live `estate_revoked` 403 / `estate_unreachable` 503 would wrongly rule out estate enforcement. | 139-149 vs 150; `estate.ts:186-198` shows enforce returns 403/503. Enforce flip landed in `6692c1d`; only the comment was never updated. | Update the comment to describe the live `enforce` state (and its 403/503 behaviour). | none |
 | 7 | med | pkg-db | `packages/db/src/items.ts:1180` | `updateItem` lets `bgg_id` be edited but, unlike `createItem`, does not pre-check the UNIQUE `bgg_id` index — so correcting a scan's wrong match to a `bgg_id` already in the catalog throws a raw `D1_ERROR: UNIQUE constraint failed` (surfaced as a generic 500) instead of the friendly 409 create gives. | `createItem` guards at 1051-1059 (ItemError 409); `updateItem` loop (1294-1309) pushes `bgg_id` with no check; write at 1378 hits `idx_item_bgg`. Route (catalog.ts:288-297) only maps ItemError. | Add the same pre-check-and-409 guard to `updateItem` before the write. | none |

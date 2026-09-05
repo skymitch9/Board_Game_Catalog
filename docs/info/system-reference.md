@@ -73,7 +73,14 @@ free rungs → add it → re-scan returns "already in your collection" instantly
 from the local table. The write-back loop works.
 
 **Exports.** `/api/export.json` (full fidelity) and `/api/export.csv` (one row
-per copy). Owner-only.
+per copy). ⚠️ **Corrected 2026-09-05:** ~~Owner-only.~~ Both are
+`editCatalog` — contributor and up — exactly as the capability table below has
+always said; these two lines contradicted each other. **What IS admin-and-owner
+only, since 2026-09-05 (`6394cca`), is the account EMAIL on `export.json`'s
+ratings rows** (`manageUsers`). A contributor's export carries the ratings and
+the user ids and no addresses, and names what it withheld in its own `omitted`
+array. The gate is one constant — `EMAIL_CAPABILITY` in
+`apps/worker/src/lib/export-fields.ts`.
 
 **Item relations (2026-08-05).** Standalone games that belong together without
 nesting — Dice Throne characters, Unmatched fighters, standalone expansions.
@@ -149,7 +156,7 @@ exactly one implementation of anything that makes a decision.
 | POST | `/api/items/:id/copies` | editCatalog |
 | PATCH/DELETE | `/api/copies/:id` | editCatalog |
 | PUT/DELETE | `/api/items/:id/rating` | rate |
-| GET | `/api/export.json`, `/api/export.csv` | editCatalog |
+| GET | `/api/export.json`, `/api/export.csv` | editCatalog — ⚠️ but the account **emails** inside `export.json` are `manageUsers` (admin+/owner) since 2026-09-05 |
 | GET/POST | `/api/bgg/*` | editCatalog — **needs BGG_API_TOKEN** |
 | GET | `/api/barcode/:code` | read — local + free rungs |
 | POST | `/api/barcode/identify` | runResearch — the paid rung, slow |

@@ -16,6 +16,125 @@
 
 ---
 
+## ✅ 2026-09-05 — the three tracked findings of the 2026-08 audit, all fixed
+
+**Commits:** `751980b` (the details sweep's subrequest budget) · `7f75804`
+(the batch-parent link + one shared decoder) · `6394cca` (the `/api/export.json`
+email exposure). **Deployed** in the same sitting as the billing shadow flip —
+see [`deploys.log`](deploys.log)'s 2026-09-05 lines and `TODO.md`'s billing
+section for the deploy id.
+
+**Tests 298 → 319**, all green, `npm run typecheck` clean across seven
+workspaces. Every one of the three has a test that would have caught the
+original defect: the sweep's asserts the *arithmetic* rather than a literal (the
+old `SWEEP_LIMIT <= 10` was true of the broken value), the batch-parent one
+plays the same batch twice and pins the difference between a synchronous map and
+a React-state one, and the export one reads `migrations/` so a new `user_item`
+column cannot be silently dropped from the backup.
+
+⚠️ **NOT verified: anything rendered or signed in.** No browser, no phone, no
+camera, no export downloaded. This app has no jsdom and every `/api/*` route
+needs a Firebase ID token a session does not have. The batch-parent fix in
+particular is pinned by pure tests and traced through the code, not exercised
+end to end — 🔗 the owner review is one shelf photo on
+<https://boardgames.heygabi.ai/scan> (Whole shelf) with a base game and one of
+its expansions in the same picture: the expansion should land nested under the
+base game rather than as its own root.
+
+**One thing deliberately NOT done, named so nobody thinks it was missed.** The
+other 21 findings (11 medium, 11 low) were never `TODO.md` checkboxes — the
+section below says so itself — and remain in
+[`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md), which now
+carries a dated ✅ FIXED line on rows 1, 2 and 4. Finding 5 (`COVER_BATCH = 20`
+over the same 50-subrequest ceiling) is the *same class of defect* as finding 1
+and is still open; it was left alone because it is not this item.
+
+**Moved whole from `TODO.md`, where it read:**
+
+> ## 🔍 AUDIT 2026-08 — confirmed findings
+>
+> From the estate-wide code audit (2026-08-23). Full severity-ranked table,
+> evidence and fix notes: [`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md).
+>
+> **24 confirmed findings: 0 critical · 0 high · 13 medium · 11 low.** No finding
+> survived verification at critical or high severity — the two the reviewers
+> rated **high were both adjusted to medium** in refutation. They are the top of
+> the ranking and are tracked here; all remaining medium/low findings live in the
+> findings doc, not as checkboxes.
+>
+> - ☐ **Details sweep exceeds the 50-subrequest cron cap and terminates
+>   silently** — `apps/worker/src/lib/details-sweep.ts:58`. `SWEEP_LIMIT=8` runs
+>   ~80–88 subrequests in one invocation; once a backlog exists the sweep dies
+>   mid-run and the tail never enriches (Claude calls for the items that *did*
+>   complete are already paid for). Drop the limit to ~4 or chunk across
+>   invocations. (Reviewed high → medium.) ✅ **Re-verified 2026-09-05 (docs
+>   audit): still exactly true** — `apps/worker/src/lib/details-sweep.ts:58`
+>   still reads `export const SWEEP_LIMIT = 8;`, and the only test guarding it
+>   (`details-sweep.test.ts:120`) asserts `SWEEP_LIMIT <= 10`, so it would not
+>   notice. **Genuinely unbuilt.**
+> - ☐ **Batch parent link silently dropped on Whole-shelf add** —
+>   ⚠️ **Corrected 2026-09-05 (docs audit): the file:line moved and this entry
+>   would have sent the fixer to a page that no longer contains the code.** It
+>   read `apps/web/src/pages/ScanPage.tsx:713`; that file is **75 lines** since
+>   the 2026-09-04 extraction (`5572fe8`). The defect is intact and now lives at
+>   **`apps/web/src/components/ScanPanel.tsx:1029`** (`addSelected`), read today:
+>   `const [batchIds, setBatchIds] = useState(...)` at :1011, the loop reads
+>   `batchIds[batchIdx]` at :1051 and `batchIds[parentIdx]` at :1056–1057, and
+>   writes `setBatchIds(...)` at :1074 — React state, so nothing it writes is
+>   visible to a later iteration of the same loop. A base game added earlier is
+>   invisible to its expansion; a manually-chosen sibling parent is dropped and
+>   the expansion is stranded root-less. Mirror the canonical local-object
+>   pattern in `ScanJobsPage.addSelected` — still there and still correct, a
+>   plain `const batchIds: Record<number, number> = {}` at
+>   `apps/web/src/pages/ScanJobsPage.tsx:866` written at :960. **The extraction
+>   moved the bug into a component BOTH doors now render**, which widens it from
+>   `/scan` to `/wishlist` as well. (Reviewed high → medium.)
+>
+> ⚠️ One present-tense exposure worth a look even though it verified **medium**,
+> not high: `/api/export.json` returns **every account's email** to any
+> `editCatalog` (contributor+) user — see finding #4. ⚠️ **Corrected 2026-09-05:**
+> the line reference read `apps/worker/src/routes/export.ts:31`; the
+> `SELECT ui.*, u.email FROM user_item ui JOIN app_user u …` is at **:36** today,
+> and the `requireCapability('editCatalog')` that gates the whole router is at
+> **:14**. Both were re-read, and the exposure is unchanged.
+
+**What was built, one line each.**
+
+* **Finding 1** — `SWEEP_LIMIT` is now *derived*, not chosen:
+  `floor((SUBREQUEST_CAP 50 − SUBREQUEST_RESERVE 3) / SUBREQUESTS_PER_ITEM 11)`
+  = **4**, so a full tick costs 47 against a ceiling of 50. It stays a constant
+  and not an env var — that is the settled answer to the billing design's §9 Q2
+  and is unchanged. The `limit` parameter is clamped to the same ceiling and
+  says so in `skipped`, because a caller going round it silently is the whole
+  problem. ⚠️ The G7 billing log line's `est_cents` moved `~11/hr` → `~6/hr`
+  with it: four rows an hour, not eight, and the soak is read by counting.
+* **Finding 2** — `ScanPanel.addSelected` mutates a **local** map inside its
+  loop (seeded from state, so a second press of Add sees the first press's ids)
+  and keeps the state map for rendering the parent dropdown. The two screens
+  encoded "a parent inside this batch" differently — a negative pseudo-id in the
+  panel, `batch:<n>` in the jobs page — which is exactly how one copy drifts
+  into a bug the other does not have; both are now decoded once in
+  `apps/web/src/lib/batch-parents.ts` and both screens resolve through it.
+  `ScanJobsPage`'s behaviour is unchanged: it was already correct, and was the
+  canonical pattern the fix copies. Two further bugs surfaced while extracting —
+  `-(ref + 1)` yields `-0` for `-1`, and `Number('')` is `0` so a bare `batch:`
+  resolved to the **first** row of the batch. Both fixed and pinned.
+  ⚠️ **Why this survived so long:** the auto-classified half was masked by the
+  server's `pendingParentName` reunion, so the screen looked right most of the
+  time; the manual-select subcase, which has no name to be rescued by, was the
+  real loss.
+* **Finding 4** — emails are `manageUsers` (admin and owner) only, the same
+  people who already read every address on the People page, so nothing new is
+  handed out. ⚠️ **Access-REDUCING, so it needed nobody's permission — and if
+  the owner wants contributors to see addresses again it is ONE LINE**:
+  `EMAIL_CAPABILITY` in `apps/worker/src/lib/export-fields.ts`. `user_item` is
+  now an explicit allow-list, never `ui.*`. ⚠️ `item` / `edition` / `copy` /
+  `copy_event` deliberately keep `SELECT *`: this file is a BACKUP, and for
+  those four the silent failure runs the *other* way — a migration adds a
+  column, a stale allow-list drops it, and the loss is found on restore day.
+  The payload gained `omitted: []`, because "no email key" would otherwise read
+  as "the accounts had no addresses".
+
 ## ✅ The GAMES provisioner — `scripts/provision-catalog.mjs` (2026-09-05, phase 9)
 
 **Moved whole from `TODO.md`, where it read:**
