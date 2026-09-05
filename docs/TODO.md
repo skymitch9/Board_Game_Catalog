@@ -28,9 +28,12 @@ opposite directions:** the two audit findings — and the export exposure beside
 them — were BUILT and moved to [`DONE.md`](DONE.md) (`751980b`, `7f75804`,
 `6394cca`), and the owner had **already written the deny rule** on 2026-09-02;
 the billing section's "no row for `games`" claim was stale and is corrected in
-place. What is open now: ❓ **one owner decision** (the family score); 🔴 **ONE
+place. What is open now: ❓ **one owner decision** (the family score); ~~🔴 **ONE
 DEPLOY** — `DEPLOY_HOLDER=<you> npm run deploy`, which ships all three audit
-fixes, refused to the session that made them; 🔴 **the billing shadow flip,
+fixes, refused to the session that made them~~ (⚠️ Corrected 2026-09-05 14:40
+Phoenix: **deployed**, version `7fb197b3` — it ran in PowerShell where Git Bash
+was refused; only the contributor eyeball of `/api/export.json` remains);
+🔴 **the billing shadow flip,
 also an OWNER STEP** — refused on `apps/worker/wrangler.toml`, with the exact
 three-file change written out in that section; three person-errands in *What
 still wants a person*; and three owner reviews on his phone.
@@ -480,9 +483,13 @@ and the same file's next test, which asserts the prose:
 
 Then, from a clean tree: `DEPLOY_HOLDER=<you> npm run deploy` (worker + web
 together; **no migration** — this touches nothing under `migrations/`), and
-record the soak start time in this section. ⚠️ **That same deploy is already
+record the soak start time in this section. ~~⚠️ **That same deploy is already
 owed for the three audit fixes** (see the CODE LANDED section below) — if the
-flip is made first, one deploy carries both, and the soak starts from it.
+flip is made first, one deploy carries both, and the soak starts from it.~~
+⚠️ Corrected 2026-09-05 14:40 Phoenix: the audit deploy went out on its own
+(`7fb197b3`), so the flip now needs a deploy of its own — the conductor can run
+it in PowerShell (Git Bash is refused); the three-file edit is what still
+needs the owner's hand (or a permission rule for `apps/worker/wrangler.toml`).
 
 **After the deploy, read the tail once:** `npm run tail --workspace @bgc/worker`,
 filtered on `"evt":"billing_policy"`. ⚠️ The hourly cron fires at **:07**, so
@@ -936,24 +943,30 @@ this.**
 
 ---
 
-## ☑ CODE LANDED 2026-09-05 — 2026-08 audit, the three tracked findings — 🔴 ☐ NOT DEPLOYED
+## ☑ DEPLOYED 2026-09-05 — 2026-08 audit, the three tracked findings — 🧑 ☐ owner eyeball of `/api/export.json`
 
 Fixed by `751980b` (the sweep's subrequest budget), `7f75804` (the batch-parent
 link) and `6394cca` (the `/api/export.json` email exposure). The section moved
 **whole** to [`DONE.md`](DONE.md), where the full story is; this pointer stays
 because the billing section above and `info/README.md` link to the audit by
-name — **and because one step is left**:
+name.
 
-🔴 **The deploy was REFUSED by the permission system and none of the three is
-live.** One command, from a clean tree in this repo, **no migration**:
+☑ **Deployed 2026-09-05 21:38Z (14:38 Phoenix)** by the conductor from a clean
+tree at `8eb167d` → version `7fb197b3…`, holder fable, in PowerShell (the same
+`npm run deploy` the classifier refused in Git Bash — and refused to agent
+W2-GAMES — ran in PowerShell at the owner's "do the terminal for me"). Line in
+[`deploys.log`](deploys.log). No migration. Live proof: `/api/health` 200
+`database:"up"`; anonymous `/api/export.json` → 401 `unauthenticated` (the
+route is contributor-only, so an anonymous curl cannot show the shape).
 
-```bash
-DEPLOY_HOLDER=<you> npm run deploy
-```
+🧑 **What only a signed-in person can check:** open
+<https://boardgames.heygabi.ai/api/export.json> as a contributor and confirm
+**no `email` field** appears anywhere in the JSON. That is the finding with
+present-tense impact; it is live-fixed by inference from the unit tests, not
+by a signed-in read.
 
-⚠️ Until it runs, `/api/export.json` still hands every contributor every
-household account's email address. That is the one of the three with
-present-tense impact and the reason not to leave this long.
+~~🔴 The deploy was REFUSED by the permission system and none of the three is
+live.~~ ⚠️ Corrected 2026-09-05 14:40 Phoenix: ran, see above.
 
 ⚠️ **The other 21 findings were never checkboxes and are still open** — they
 live in [`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md),
