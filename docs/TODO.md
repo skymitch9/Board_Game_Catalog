@@ -4,7 +4,10 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-**Last updated:** 2026-09-02 — billing phase 3 landed INERT; the soak that
+**Last updated:** 2026-09-05 — phase 9 landed (the games provisioner + the
+`BILLING_SITE` lift) and both items moved WHOLE to [`DONE.md`](DONE.md); one
+owner question is left open there (the naming split). Before that:
+2026-09-02 — billing phase 3 landed INERT; the soak that
 flips it is the item directly below. The two 2026-08-13 **"BUILT, NOT
 DEPLOYED"** items left for [`DONE.md`](DONE.md) the same day: both were
 verified **already live** in `2e598a9e` (they rode the 2026-09-02 deploys) and
@@ -266,20 +269,18 @@ open <https://boardgames.heygabi.ai> signed in as yourself and load one page
 — the `app=` field is new. Nothing about who this Worker admits was changed by
 this build.
 
-### ☐ Phase 9 — the GAMES path in the provisioner
+### ✅ Phase 9 — the GAMES path in the provisioner: BUILT 2026-09-05, moved to [`DONE.md`](DONE.md)
 
-The provisioner (`scripts/provision-catalog.mjs`) is being built in
-`library_catalog` for the BOOKS path (design §10 phase 7). The games path comes
-after it and after this phase, and lands **in this repo**. What it must do is the
-12-step checklist in [`access/second-instance.md`](access/second-instance.md) §4,
-of which steps 5 (auth-Worker `CONSUMER_APPS` + `vis_games2`) and 9 (Firebase
-Authorised domains, the estate directory row) are 🔴 **MANUAL, owner-only** —
-no CLI reaches them.
+`scripts/provision-catalog.mjs` exists, with its runbook at
+[`access/provision-catalog.md`](access/provision-catalog.md).
+⚠️ **Nothing has run past `--dry` and no second instance exists** — the first
+real run is the owner's, and it is the test.
 
-⚠️ **The warning worth carrying, from design §8's close:** a games request can be
-*filed and accepted* the day the shared half ships and cannot be *provisioned*
-until this lands. If those moments are far apart, someone has been told yes and
-is waiting.
+**The one open thing it left, and it is the owner's to answer:** ☐ whether the
+naming split should be (a) as built (env/Worker follow the person; D1, bucket,
+covers host and app id ordinal), (b) all ordinal, or (c) all follow the person.
+Both provisioners are built to (a) so the pair agrees, and all of it lives in
+one function (`deriveNames()`), so a flip is one function.
 
 ### ☐ One follow-up this build deliberately did not do
 

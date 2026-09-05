@@ -1,8 +1,9 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-05** — the `BILLING_SITE` lift arrived (phase 9's
-> first commit). Split from `HANDOFF.md` per estate DOCS_STANDARD on 2026-08-21.
+> Last updated: **2026-09-05** — phase 9 arrived: the games provisioner and the
+> `BILLING_SITE` lift. Split from `HANDOFF.md` per estate DOCS_STANDARD on
+> 2026-08-21.
 >
 > ⚠️ **This is an archive, not a living doc. APPEND ONLY.** Nothing here is
 > ever edited, re-summarised or tidied. An item arrives exactly once, at
@@ -12,6 +13,98 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ The GAMES provisioner — `scripts/provision-catalog.mjs` (2026-09-05, phase 9)
+
+**Moved whole from `TODO.md`, where it read:**
+
+> ### ☐ Phase 9 — the GAMES path in the provisioner
+>
+> The provisioner (`scripts/provision-catalog.mjs`) is being built in
+> `library_catalog` for the BOOKS path (design §10 phase 7). The games path comes
+> after it and after this phase, and lands **in this repo**. What it must do is the
+> 12-step checklist in [`access/second-instance.md`](access/second-instance.md) §4,
+> of which steps 5 (auth-Worker `CONSUMER_APPS` + `vis_games2`) and 9 (Firebase
+> Authorised domains, the estate directory row) are 🔴 **MANUAL, owner-only** —
+> no CLI reaches them.
+>
+> ⚠️ **The warning worth carrying, from design §8's close:** a games request can be
+> *filed and accepted* the day the shared half ships and cannot be *provisioned*
+> until this lands. If those moments are far apart, someone has been told yes and
+> is waiting.
+
+**Commits:** `7b6b049` (the `BILLING_SITE` lift below), `b11a373` (the script),
+`ad2258c` (74 tests). Runbook:
+[`access/provision-catalog.md`](access/provision-catalog.md).
+
+**As built.** Twelve idempotent numbered steps, `--request/--dry/--resume/
+--fixture/--instance`, the two PAUSEs, estate-D1 reads run from
+`catalog-platform/apps/auth-worker` — the same shape as the books twin, which
+is a **deliberate near-duplicate and NOT interchangeable** (different repos,
+ledgers, secret sets, and this one has no donor). The script's header carries
+that argument in full. Nothing SHARED is a decision: the refusal lists are
+imported from `push-secrets.mjs`, the env block is rendered from the committed
+template, the identity allowlist is read out of `estate-app.ts`.
+
+**Four things it does differently from the books twin, each for a stated reason.**
+🔴 It does **not** deploy — step 11 prints `DEPLOY_HOLDER=<you> npm run
+deploy:<i>` and stops, because the deploy carries the owner's name into
+`deploys.log` and uploads the working-tree dist; `--resume` sees the
+`env=<i>` line and carries on. The env block is **rendered from the commented
+template** rather than hand-written, so the drift guard that already protects
+that template protects the provisioner too. 🔴 The block is inserted **above**
+the template, never at EOF — the guard slices from the banner to end-of-file and
+requires every line there to be commented, so an appended block would fail it
+and the message would blame the template. And the covers custom domain is a real
+CLI step here (`r2 bucket domain add --zone-id`, required non-interactively),
+with an **ordinal** hostname (`gamecovers2.`) because `cover-storage.ts` writes
+`COVERS_BASE_URL` into `thumbnail_url` rows — renaming it later is a data
+migration.
+
+**The key ladder** is design §6.4: sealed reader key → sealed owner key → the
+owner's own (standing decision 2026-09-05, logged). The sealed half is a
+dynamic import of `catalog-platform/scripts/lib/catalog-seal.mjs` through the
+`platform-repo.mjs` locator; absent and `source:'none'` are the same outcome and
+different facts, printed differently, and a THROWING inject stops the run rather
+than falling through to the owner's money. 🔴 **"No key" on a games instance
+means NO AI LOOKUPS AT ALL** — there is no `DONOR_URL`, no `PEERS`, no donor
+route — so the run says that instead of the books sentence, and refuses to
+finish a real provision with no key.
+
+**Two steps for PAUSE #2 that the books runbook does not have**, found while
+lifting `BILLING_SITE`: a `siteForApp()` arm and a `BILLING_SITES` entry in the
+auth Worker. Without them that repo does not compile.
+
+**Measured.** Suite **298 pass / 0 fail** (220 before phase 9; 74 of the new
+ones are this script's), typecheck clean. `--dry` against the LIVE `estate_auth`
+D1: row **#3** `boardgames` refused as already live at
+`https://boardgames.heygabi.ai`, row **#1** `library` refused as a BOOKS request
+pointing at the other repo — **exit 2** both, so the D1 read path, the column
+mapping and both refusals are exercised against production data. A
+`--dry --fixture` run printed all twelve steps, both pauses and a 109-line block
+at **exit 0**, with the Firebase authorised-domain list read live (13 domains).
+
+🔴 **FOUR DEFECTS FOUND BY RUNNING IT, not by reading it**, each of which would
+have failed quietly: a key-only TOML substitution rewrote
+`name = "RATE_LIMITER"` inside the unsafe binding to the Worker's name (TOML
+reuses short keys across tables, so a key is not an address — every substitution
+now names its table); `Number(null)` is `0`, so an absent `--request` read as
+request #0; `--resume` threw a refusal about `games3` because it asked for the
+"next free" id even when one was pinned; and the secret plan's last-moment guard
+was unreachable because it re-used the classifier the loop had already filtered
+with.
+
+⚠️ **NOT verified, and it is the headline:** **no real instance has ever been
+provisioned.** Nothing has run past `--dry`. No D1, no bucket, no covers
+hostname, no secret, no deploy. Every AUTO step is written and unexercised, no
+envelope has been decrypted from this side (the seal library was exercised
+through stubs), and nobody has signed in anywhere.
+
+**Left open for the owner:** ☐ the naming split — (a) as built, (b) all ordinal,
+(c) all follow the person. Both provisioners are built to (a) so the pair agrees,
+and it is all one function.
 
 ---
 

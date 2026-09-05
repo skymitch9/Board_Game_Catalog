@@ -35,10 +35,17 @@ request is accepted (request-a-catalog design §7.6, phase 9) — not by hand, a
 not by a session that finds this page. Nothing here should be executed until the
 owner names a concrete second instance: a household, a hostname.
 
-⚠️ **A games request can be *accepted* before it can be *provisioned*.** The
-platform half (this page's machinery) landed 2026-09-05; the provisioner's games
-path has not. If those two moments are far apart, someone has been told yes and
-is waiting — design §8's closing warning.
+✅ **The provisioner's games path landed the same day** —
+[`provision-catalog.md`](provision-catalog.md) is its runbook, and it executes
+the checklist in §4 below rather than replacing it: read that page before
+running anything here by hand. ⚠️ **It has never run past `--dry`**, so §4 is
+still the authority on what the steps ARE; the script is the authority on the
+order and the pauses.
+
+⚠️ **A games request can still be *accepted* before it can be *provisioned*** —
+now because the manual steps (Firebase, the auth Worker) are the owner's, not
+because the machinery is missing. If those two moments are far apart, someone
+has been told yes and is waiting — design §8's closing warning.
 
 ---
 
@@ -83,6 +90,14 @@ Values live in `wrangler secret` (production) and `apps/worker/.dev.vars`
 ---
 
 ## 4. Standing one up — the checklist
+
+⚠️ **`scripts/provision-catalog.mjs` now DOES all of this** (steps 1–4, 6–8, 10
+automatically; 5 and 9 as printed PAUSEs; the deploy as a printed command).
+Start at [`provision-catalog.md`](provision-catalog.md); this list is the
+inventory it works from, kept because a script's steps and a person's checklist
+should be checkable against each other. Two additions the script found and this
+list does not carry: step 5 also needs a `siteForApp()` arm and a
+`BILLING_SITES` entry, or `catalog-platform` does not compile.
 
 Assumes the phase-8 machinery (this page) is landed, which it is.
 
