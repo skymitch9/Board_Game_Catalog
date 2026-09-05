@@ -11,8 +11,8 @@ import { sweepOrphanAdoptions } from '@bgc/db';
 import type { AppBindings, Env } from './env.js';
 import {
   BILLING_FEATURES,
-  BILLING_SITE,
   billingPosture,
+  billingSite,
   decideBilling,
   fetchSystemDenied,
 } from './lib/billing-gate.js';
@@ -178,7 +178,10 @@ async function sweepIfPolicyAllows(env: Env) {
         evt: 'billing_policy',
         posture,
         feature: BILLING_FEATURES.sweep,
-        site: BILLING_SITE,
+        // ⚠️ `env`, not a constant: the site id follows this instance's
+        // ESTATE_APP (lib/billing-gate.ts). A second instance's cron must not
+        // report its spend under the main catalog's site.
+        site: billingSite(env),
         // ⚠️ `system`, not `person`. A soak that could not tell the cron's
         // decisions from a household member's could not answer §4.2's flip
         // criterion for either of them.

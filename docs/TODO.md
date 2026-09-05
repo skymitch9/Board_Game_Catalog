@@ -281,14 +281,11 @@ no CLI reaches them.
 until this lands. If those moments are far apart, someone has been told yes and
 is waiting.
 
-### ☐ Two follow-ups this build deliberately did not do
+### ☐ One follow-up this build deliberately did not do
 
-* **`BILLING_SITE` is still the constant `'games'`**
-  (`apps/worker/src/lib/billing-gate.ts`, and it now says so in its own comment).
-  A second instance would identify correctly at the estate directory and still
-  report and be billed as the `games` site. Inert today — `BILLING_POLICY =
-  "off"`, nothing has ever resolved — but it must be lifted the way `ESTATE_APP`
-  was **before a second instance bills**.
+(The other, `BILLING_SITE`, was lifted on 2026-09-05 as phase 9's first commit —
+the item moved **whole** to [`DONE.md`](DONE.md).)
+
 * **No donor, no peers.** There is no `DONOR_URL`, no `PEERS`, no donor route
   here. For the libraries, "no Claude key on either side" still leaves a free
   donor sweep healing against the main library; for games, **no key means no

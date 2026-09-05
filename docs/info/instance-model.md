@@ -3,6 +3,13 @@
 > **Audience:** Claude sessions and the owner. **Status:** TRACKED.
 > **Last verified: 2026-09-05.**
 >
+> ⚠️ **Updated 2026-09-05 (phase 9):** §4's `BILLING_SITE` row is CLOSED — the
+> constant became `billingSite(env)`, measured by `npm test` (223 pass / 0 fail,
+> up from 220) and `npm run typecheck` clean. ⚠️ **Not deployed and it did not
+> need to be:** `BILLING_POLICY = "off"` on main means the only two call sites
+> never run, and with `ESTATE_APP = "games"` the function returns the same
+> string the constant did — a provable no-op for the live Worker.
+>
 > ⚠️ **What was measured today:** the `RATE_LIMITER` `namespace_id` question (§3)
 > — read from Cloudflare's own docs, quoted verbatim with its URL — and every
 > row of §2, read out of this repo's `apps/worker/wrangler.toml`,
@@ -151,9 +158,21 @@ Recorded here rather than in `KNOWN_ISSUES.md` because none of them is *wrong*
 today — they are consequences of there being one instance, and each becomes real
 the day there are two.
 
+✅ **One gap listed here on 2026-09-05 was CLOSED the same day** — the
+`BILLING_SITE` constant. It is now `billingSite(env)`
+(`apps/worker/src/lib/billing-gate.ts`), resolved from `ESTATE_APP` through the
+same `resolveEstateApp()` the gate uses, because the site id and the app id are
+one identity: the auth Worker's `siteForApp()` maps `games → games` and the
+system door answers for the consumer whose bearer was presented. An
+unrecognised `ESTATE_APP` gives `null`, not `games` — the failure direction of
+`estate-app.ts`, not of `billingPosture`. Main's value is unchanged and pinned
+against `wrangler.toml` by `billing-gate.test.ts`.
+⚠️ **Consequence for the auth Worker:** adding `games2` to `CONSUMER_APPS` also
+needs a `games2` arm in `siteForApp()` and a `games2` entry in `BILLING_SITES`
+there, or that repo does not compile. The provisioner prints both.
+
 | Gap | Consequence | What it needs |
 |---|---|---|
-| `BILLING_SITE` is still the constant `'games'` (`apps/worker/src/lib/billing-gate.ts`) | A second instance would identify correctly at the directory but report and be billed as the `games` site | Lift it the way `ESTATE_APP` was lifted. Inert today: `BILLING_POLICY = "off"`, nothing has ever resolved |
 | Adding an id is a **three-line code change** (`ESTATE_APPS` + `APP_TOKEN_VAR`, the bearer switch, the `Env` field) | The provisioner cannot stand up an arbitrarily-named instance from config alone | Deliberate: the `Env` field is unavoidable in TypeScript, and the allowlist is what stops one var edit letting this catalog impersonate the library's consumer. `games2` is pre-declared so the common case needs no code edit |
 | 🔴 **No donor, no peers.** There is no `DONOR_URL`, no `PEERS`, no donor route | For the libraries, "no Claude key on either side" still leaves a **free donor sweep** healing against the main library. For games, **no key means no self-healing at all** | New product surface (a migration, a route pair, a cron change) — not a prerequisite for an instance to work. ⚠️ The Accept panel must not reuse the books sentence on a games row (design §7.6) |
 | No `db:migrate:local:<instance>` | Cannot inspect a second instance's data locally | Deliberate. miniflare keeps one local D1 per **binding name** and every instance binds `DB`, so such a command would read the MAIN local database and report confidently on the wrong catalog. `library_catalog` paid for that: 47 of 369 books on its second instance needed a backfill no sweep could reach |

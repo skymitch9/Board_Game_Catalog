@@ -28,9 +28,9 @@ import { test } from 'node:test';
 import {
   BILLING_FEATURES,
   BILLING_POSTURES,
-  BILLING_SITE,
   billingPosture,
   billingRefusalBody,
+  billingSite,
   decideBilling,
   fetchSystemDenied,
   parseCachedDenied,
@@ -57,8 +57,45 @@ test('⚠️ unset, empty and typo’d all fall to off — the inert direction',
   assert.equal(billingPosture('ON'), 'off');
 });
 
-test('the site is this app’s estate id', () => {
-  assert.equal(BILLING_SITE, 'games');
+// ---------------------------------------------------------------------------
+// The site id — config since 2026-09-05 (phase 9), and it follows ESTATE_APP.
+// ---------------------------------------------------------------------------
+
+test('the site is this app’s estate id, and the MAIN instance is still exactly "games"', () => {
+  // 🔴 The pin. `wrangler.toml`'s live [vars] is what the main Worker runs on,
+  // so this reads the file rather than trusting the default: if the var is ever
+  // edited, the site id every billing log line carries moves with it, and this
+  // is the test that makes that a deliberate commit rather than a surprise.
+  const toml = readFileSync(
+    fileURLToPath(new URL('../../wrangler.toml', import.meta.url).href),
+    'utf8',
+  );
+  const declared = [...toml.matchAll(/^ESTATE_APP\s*=\s*"([^"]*)"/gm)].map((m) => m[1]);
+  assert.deepEqual(declared, ['games'], 'the live [vars] ESTATE_APP moved — read billing-gate.ts first');
+  assert.equal(billingSite({ ESTATE_APP: declared[0] }), 'games');
+});
+
+test('unset resolves to the main instance — the lift is a NO-OP for `games`', () => {
+  // Every existing caller passed a constant `'games'`; with the var unset (local
+  // dev, `wrangler dev`, every test that hands in a bare object) the function
+  // answers the same string, so nothing about the main instance's behaviour
+  // changed when the constant became config.
+  assert.equal(billingSite({}), 'games');
+  assert.equal(billingSite({ ESTATE_APP: '' }), 'games');
+  assert.equal(billingSite({ ESTATE_APP: '  games  ' }), 'games');
+});
+
+test('🔴 a SECOND instance reports its own site, which is the whole point of the lift', () => {
+  assert.equal(billingSite({ ESTATE_APP: 'games2' }), 'games2');
+});
+
+test('🔴 an unrecognised ESTATE_APP is null — it does NOT fall back to "games"', () => {
+  // The failure direction is `estate-app.ts`'s, not `billingPosture`'s. Falling
+  // back would file a second household's spend under the main catalog's site in
+  // the one record anybody would later count, and the gate is already OFF for
+  // the same typo — the log and the behaviour must agree.
+  assert.equal(billingSite({ ESTATE_APP: 'gmaes' }), null);
+  assert.equal(billingSite({ ESTATE_APP: 'library' }), null);
 });
 
 // ---------------------------------------------------------------------------

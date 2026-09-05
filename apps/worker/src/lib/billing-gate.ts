@@ -34,7 +34,7 @@
 
 import type { Context } from 'hono';
 import type { AppBindings, Env } from '../env.js';
-import { estateAppToken, resolveEstateApp } from './estate-app.js';
+import { type EstateApp, type EstateAppEnv, estateAppToken, resolveEstateApp } from './estate-app.js';
 
 export const BILLING_POSTURES = ['off', 'shadow', 'enforce'] as const;
 export type BillingPosture = (typeof BILLING_POSTURES)[number];
@@ -56,17 +56,45 @@ export function billingPosture(raw: string | undefined): BillingPosture {
 }
 
 /**
- * The estate's site id for this Worker.
+ * The estate's site id for this Worker — CONFIG, as of 2026-09-05 (phase 9).
  *
- * ⚠️ STILL A CONSTANT, and that is a KNOWN GAP rather than a settled decision —
- * unlike `ESTATE_APP`, which was lifted into wrangler config on 2026-09-05. A
- * second games instance would report and be billed as the `games` site while
- * correctly identifying as `games2` at the directory. It is inert today
- * (`BILLING_POLICY = "off"`, nothing has ever resolved) and there is no second
- * instance, so nothing is wrong yet; it must be lifted before one bills.
- * Tracked in `docs/access/second-instance.md` and `docs/TODO.md` (phase 9).
+ * ⚠️ It was `export const BILLING_SITE = 'games'` until today, and that was the
+ * last hard-coded identity left in this Worker: a second instance would have
+ * identified correctly at the directory (`ESTATE_APP = "games2"`) and still
+ * reported and been billed as the `games` site. Inert while
+ * `BILLING_POLICY = "off"`, and wrong the first hour it was not.
+ *
+ * ## Why it FOLLOWS `ESTATE_APP` rather than getting a var of its own
+ *
+ * 🔴 The site id and the app id are the SAME identity, resolved on the other
+ * side by one function: `catalog-platform/apps/auth-worker/src/estate.ts`'s
+ * `siteForApp()` maps `games → games`, `library2 → library2`, and the system
+ * door (`fetchSystemDenied` below) presents the bearer `ESTATE_APP` selects and
+ * is answered `{ site, system_denied }` for THAT consumer. A second var could
+ * disagree with the token actually presented — which is the F-5 shape one level
+ * down: a Worker spending under one name and reporting under another, with
+ * nothing going red. One identity, one source, no second knob to drift.
+ *
+ * ⚠️ Adding `games2` as a CONSUMER_APP therefore also needs a `games2` arm in
+ * `siteForApp()` and a `games2` entry in the auth Worker's `BILLING_SITES`, or
+ * that repo does not compile (`siteForApp` is exhaustive over `ConsumerApp`).
+ * `scripts/provision-catalog.mjs` prints both in its PAUSE #2 runbook.
+ *
+ * 🔴 The failure direction is `estate-app.ts`'s, deliberately, NOT
+ * `billingPosture`'s: an unrecognised `ESTATE_APP` resolves to `null` here and
+ * does **not** fall back to `'games'`. Falling back would attribute a second
+ * household's spend to the main catalog's site in the one record anybody would
+ * later count. A `null` site is an honest "this Worker cannot say which site it
+ * is" — and it travels with a gate that is already OFF for the same typo, so
+ * the log line and the behaviour agree.
+ *
+ * ⚠️ Unset resolves to `games` (via `DEFAULT_ESTATE_APP`), so the main
+ * instance's value is `games` with the var set, without it, and in every test —
+ * `billing-gate.test.ts` pins that against the live `wrangler.toml`.
  */
-export const BILLING_SITE = 'games';
+export function billingSite(env: EstateAppEnv): EstateApp | null {
+  return resolveEstateApp(env.ESTATE_APP).app;
+}
 
 /** The registry ids this Worker checks. */
 export const BILLING_FEATURES = {
@@ -188,7 +216,7 @@ export function billingRefusal(
         evt: 'billing_policy',
         posture,
         feature,
-        site: BILLING_SITE,
+        site: billingSite(c.env),
         principal_kind: 'person',
         principal_value: c.get('user')?.email ?? null,
         would_deny: wouldDeny,

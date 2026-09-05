@@ -1,9 +1,8 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-02** — the two 2026-08-13 "BUILT, NOT DEPLOYED" items
-> arrived, both already live. Split from `HANDOFF.md` per estate DOCS_STANDARD
-> on 2026-08-21.
+> Last updated: **2026-09-05** — the `BILLING_SITE` lift arrived (phase 9's
+> first commit). Split from `HANDOFF.md` per estate DOCS_STANDARD on 2026-08-21.
 >
 > ⚠️ **This is an archive, not a living doc. APPEND ONLY.** Nothing here is
 > ever edited, re-summarised or tidied. An item arrives exactly once, at
@@ -13,6 +12,61 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ `BILLING_SITE` lifted out of source — the last hard-coded identity (2026-09-05, phase 9)
+
+**Moved whole from `TODO.md`, where it read:**
+
+> * **`BILLING_SITE` is still the constant `'games'`**
+>   (`apps/worker/src/lib/billing-gate.ts`, and it now says so in its own comment).
+>   A second instance would identify correctly at the estate directory and still
+>   report and be billed as the `games` site. Inert today — `BILLING_POLICY =
+>   "off"`, nothing has ever resolved — but it must be lifted the way `ESTATE_APP`
+>   was **before a second instance bills**.
+
+**As built.** `export const BILLING_SITE = 'games'` became
+`export function billingSite(env): EstateApp | null`, resolving through the same
+`resolveEstateApp()` the estate gate uses. Two call sites moved with it
+(`billing-gate.ts`'s `person` line, `index.ts`'s `system` line for the hourly
+sweep) and both now pass `env`.
+
+**Why it follows `ESTATE_APP` rather than getting a var of its own.** The site
+id and the app id are ONE identity, and the other side proves it: the auth
+Worker's `siteForApp()` (`catalog-platform/apps/auth-worker/src/estate.ts:118`)
+maps `games → games`, `library2 → library2`, and the system door answers
+`{site, system_denied}` for the consumer whose bearer was presented — the bearer
+`ESTATE_APP` selects. A second var could disagree with the token actually sent,
+which is F-5 one level down: spending under one name and reporting under
+another, with nothing going red.
+
+⚠️ **A consequence for the OTHER repo, found while doing this and not written
+down anywhere before:** adding `games2` to `CONSUMER_APPS` also needs a `games2`
+arm in `siteForApp()` and a `games2` entry in `BILLING_SITES`
+(`catalog-platform/apps/auth-worker/src/billing-registry.ts:38`), or that repo
+does not compile — `siteForApp` is exhaustive over `ConsumerApp`.
+`scripts/provision-catalog.mjs` prints both in its PAUSE #2 runbook.
+
+🔴 **The failure direction is deliberately `estate-app.ts`'s, not
+`billingPosture`'s.** An unrecognised `ESTATE_APP` gives `null` and does NOT
+fall back to `games`: falling back would file a second household's spend under
+the main catalog's site in the one record anybody would later count, and the
+estate gate is already OFF for the same typo — the log line and the behaviour
+must agree.
+
+**Measured:** `npm run typecheck` clean in every workspace; `npm test`
+**223 pass / 0 fail** (220 before — one assertion replaced by four). The main
+instance's value is pinned by reading the live `wrangler.toml`, so an edit to
+`[vars] ESTATE_APP` fails the suite rather than silently moving the `site` field
+of every billing log line.
+
+⚠️ **NOT deployed, and it did not need to be** — stated rather than assumed.
+`BILLING_POLICY = "off"` on main, so `decideBilling` answers `log: false` and
+`sweepIfPolicyAllows` returns before its log block: neither call site executes.
+And if one did, `ESTATE_APP = "games"` makes the function return the identical
+string the constant did. A provable no-op for the live Worker, so no deploy and
+no `deploys.log` line.
 
 ---
 
