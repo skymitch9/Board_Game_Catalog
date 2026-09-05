@@ -83,11 +83,12 @@
  * | estate app id, its token NAME, its `vis_` column | **ordinal** (`games2`) | it is a CONTRACT with another repo (`CONSUMER_APPS`, `appTokenFor()`, `siteForApp()`, a migration), pinned per catalog, never per person or host |
  * | hostname | `<desired_subdomain>.heygabi.ai` | design §7.1 — the only identity-bearing name |
  *
- * 🔴 **The owner has not chosen between (a) this split, (b) all-ordinal and (c)
- * all-follow-the-person.** He was asked and has not answered. Everything above
- * is decided in ONE function — `deriveNames()` — so a later flip is one
- * function, not a rewrite: (b) is `instance: ordinal`, (c) is the D1/bucket/app
- * lines. `--instance <name>` already overrides the env name for a single run.
+ * ✅ **DECIDED by the owner, 2026-09-05 08:35 Phoenix: (a), this split** — over
+ * (b) all-ordinal and (c) all-follow-the-person. The rule and the reasons are
+ * recorded once, in the design doc §7.1 (`catalog-platform/docs/info/
+ * request-a-catalog-design.md`). Everything above is decided in ONE function —
+ * `deriveNames()` — so a later change would be one function, not a rewrite.
+ * `--instance <name>` overrides the env name for a single run.
  *
  * ### The sanitiser, stated as a rule
  *

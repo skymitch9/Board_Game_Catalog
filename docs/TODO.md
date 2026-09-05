@@ -5,8 +5,9 @@ Work that is agreed but not built/deployed. Finished work lives in
 and [`info/`](info/README.md).
 
 **Last updated:** 2026-09-05 — phase 9 landed (the games provisioner + the
-`BILLING_SITE` lift) and both items moved WHOLE to [`DONE.md`](DONE.md); one
-owner question is left open there (the naming split). Before that:
+`BILLING_SITE` lift) and both items moved WHOLE to [`DONE.md`](DONE.md); the
+one owner question it left (the naming split) was answered the same morning:
+(a), as built. Before that:
 2026-09-02 — billing phase 3 landed INERT; the soak that
 flips it is the item directly below. The two 2026-08-13 **"BUILT, NOT
 DEPLOYED"** items left for [`DONE.md`](DONE.md) the same day: both were
@@ -276,11 +277,10 @@ this build.
 ⚠️ **Nothing has run past `--dry` and no second instance exists** — the first
 real run is the owner's, and it is the test.
 
-**The one open thing it left, and it is the owner's to answer:** ☐ whether the
-naming split should be (a) as built (env/Worker follow the person; D1, bucket,
-covers host and app id ordinal), (b) all ordinal, or (c) all follow the person.
-Both provisioners are built to (a) so the pair agrees, and all of it lives in
-one function (`deriveNames()`), so a flip is one function.
+✅ **The naming split is DECIDED — (a), as built** (owner, 2026-09-05 08:35
+Phoenix). The rule and the rejected alternatives are recorded once, in
+`catalog-platform/docs/info/request-a-catalog-design.md` §7.1; nothing in this
+repo changed but the header comment of `scripts/provision-catalog.mjs`.
 
 ### ☐ One follow-up this build deliberately did not do
 
