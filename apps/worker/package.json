@@ -7,9 +7,12 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "deploy:games2": "wrangler deploy --env games2",
     "db:migrate:local": "wrangler d1 migrations apply board-game-catalog --local",
     "db:migrate": "wrangler d1 migrations apply board-game-catalog --remote",
+    "db:migrate:games2": "wrangler d1 migrations apply board-game-catalog-2nd --remote --env games2",
     "tail": "wrangler tail",
+    "tail:games2": "wrangler tail --env games2",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

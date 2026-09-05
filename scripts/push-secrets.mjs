@@ -16,6 +16,41 @@
  * Usage note: this only ever *sets* secrets. Removing one from `.dev.vars` does
  * not delete it in production — use `wrangler secret delete` for that, so a
  * typo here can never quietly strip a live credential.
+ *
+ * ## `--env <name>` — a SECOND instance (2026-09-05)
+ *
+ *   npm run secrets:push -- --env games2 --dry
+ *
+ * ⚠️ There is no second instance today. This is the machinery landing before it
+ * (request-a-catalog design §8 item 2), and the important half is what it
+ * REFUSES, not what it sends.
+ *
+ * The library learned this the expensive way and its `push-secrets.mjs` header
+ * records the reasoning: the risk of a bulk push to another instance is not the
+ * FILE it reads, it is pushing the keys that are THEIRS. So the answer is two
+ * explicit lists rather than a second `.dev.vars`:
+ *
+ * | List | Meaning | A `--env <name>` run |
+ * |---|---|---|
+ * | `PRODUCTION_SECRETS` minus the two below | one value, every instance | pushed |
+ * | `PER_INSTANCE_SECRETS` | each instance has its OWN value | **refused, always** |
+ * | `PER_INSTANCE_PREFIXES` | ditto, matched by prefix | **refused, always** |
+ * | anything else | not classified | skipped with a sentence, as today |
+ *
+ * 🔴 `ANTHROPIC_API_KEY` and every `ESTATE_APP_TOKEN_*` are on the refusal side
+ * and can never be reached by a bulk run at another instance. The key is that
+ * household's spend on their own billing; the bearer is *which consumer is
+ * speaking to the estate directory*, and two instances are two consumers. A
+ * "cleanup" push that overwrote either would be silent: the second instance's
+ * estate check would start answering `estate_unreachable` and its bills would
+ * land on the owner, with nothing going red.
+ *
+ * ⚠️ **`.dev.vars.<instance>` does not exist and must not be created.** It is
+ * not read here for any flag. Creating one would be a custody change, not a
+ * missing file to fill in.
+ *
+ * ⚠️ The no-flag path is UNCHANGED, deliberately and byte-for-byte: it pushes
+ * the main instance exactly as it did before this flag existed.
  */
 
 import { readFileSync } from 'node:fs';
@@ -33,6 +68,34 @@ const CONFIG = join(root, 'apps', 'worker', 'wrangler.toml');
  * remembered to exclude it.
  */
 const PRODUCTION_SECRETS = ['ANTHROPIC_API_KEY', 'BGG_API_TOKEN', 'GAMEUPC_API_KEY'];
+
+/**
+ * Keys each instance must hold its OWN value of. A `--env <name>` run refuses
+ * these outright; the no-flag (main) run is untouched by them.
+ *
+ * - `ANTHROPIC_API_KEY` — a second household's research spend is on THEIR
+ *   billing with THEIR cap. ⚠️ The one documented exception is a provisioning
+ *   decision the owner made on the record for v1 (request-a-catalog design §9
+ *   Q3: *"Have it fall back to my Claude key for now"*), and even then it is set
+ *   deliberately, one key at a time, by the provisioner — never swept in by a
+ *   bulk run that was aimed at something else.
+ * - `INDEX_PUSH_TOKEN` — per-SOURCE on the index Worker: it tells its machine
+ *   callers apart BY THE VALUE, so a second games instance is a second source.
+ */
+const PER_INSTANCE_SECRETS = ['ANTHROPIC_API_KEY', 'INDEX_PUSH_TOKEN'];
+
+/**
+ * Prefix rule, so a consumer nobody has thought of yet is refused by DEFAULT
+ * rather than by memory. `ESTATE_APP_TOKEN_*` asserts *which consumer is
+ * speaking to the estate directory* (see `apps/worker/src/lib/estate-app.ts`),
+ * and no two instances may ever present the same one.
+ */
+const PER_INSTANCE_PREFIXES = ['ESTATE_APP_TOKEN_'];
+
+/** True for a key each instance must hold its own copy of. */
+function isPerInstance(name) {
+  return PER_INSTANCE_SECRETS.includes(name) || PER_INSTANCE_PREFIXES.some((p) => name.startsWith(p));
+}
 
 /**
  * Local-only by design. Listed so the script can say *why* it skipped them.
@@ -79,7 +142,63 @@ const LOCAL_ONLY = {
   INDEX_URL: 'set in wrangler.toml for production; the value here points at local dev',
   ESTATE_AUTH_URL: 'set in wrangler.toml for production; the value here points at a local mock',
   ESTATE_CHECK: 'set in wrangler.toml for production (`off` locally keeps dev quiet)',
+  ESTATE_APP:
+    'set in wrangler.toml per env — the instance identity is config of record, not a secret (apps/worker/src/lib/estate-app.ts)',
+  // The SECOND instance's estate bearer, named here so a bulk run says WHY it
+  // skipped it rather than reporting an unclassified key. It is ALSO per-
+  // instance by the ESTATE_APP_TOKEN_ prefix rule, so a `--env` run refuses it
+  // twice over. No instance holds a value for it today.
+  ESTATE_APP_TOKEN_GAMES2:
+    'the SECOND instance’s estate bearer — set with `npm run secret:games2 -- ESTATE_APP_TOKEN_GAMES2`, never pushed from here',
 };
+
+/**
+ * ⚠️ A refusal list that names nothing is not a refusal list.
+ *
+ * `PER_INSTANCE_SECRETS` only bites on keys a run could otherwise send, so a key
+ * renamed in `PRODUCTION_SECRETS` (or dropped from `LOCAL_ONLY`) without being
+ * renamed here leaves the refusal silently inert — the exact silent-failure
+ * shape the whole design exists to prevent. Fails at startup, before anything
+ * can be pushed, rather than at the moment it would have mattered.
+ */
+function assertRefusalListIsLive() {
+  const known = new Set([...PRODUCTION_SECRETS, ...Object.keys(LOCAL_ONLY)]);
+  const orphans = PER_INSTANCE_SECRETS.filter((name) => !known.has(name));
+  if (orphans.length) {
+    console.error(
+      `push-secrets: PER_INSTANCE_SECRETS names ${orphans.join(', ')}, which appear in neither ` +
+        'PRODUCTION_SECRETS nor LOCAL_ONLY. A refusal for a key nothing would send is inert — ' +
+        'either the key was renamed and this list was not, or it no longer belongs here.',
+    );
+    process.exit(1);
+  }
+}
+assertRefusalListIsLive();
+
+/**
+ * `--env <name>` / `--instance <name>`: target a second instance. Absent = the
+ * main instance, and that path must stay exactly what it was.
+ */
+function parseInstance(argv) {
+  for (const flag of ['--env', '--instance']) {
+    const i = argv.indexOf(flag);
+    if (i === -1) continue;
+    const value = argv[i + 1];
+    if (!value || value.startsWith('-')) {
+      console.error(`push-secrets: ${flag} needs an instance name, e.g. \`${flag} games2\`.`);
+      process.exit(1);
+    }
+    // This reaches a child process argument list; keep it to a wrangler env name.
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(value)) {
+      console.error(`push-secrets: "${value}" is not a usable wrangler environment name.`);
+      process.exit(1);
+    }
+    return value;
+  }
+  return null;
+}
+
+const instance = parseInstance(process.argv);
 
 function parseDevVars(text) {
   const out = {};
@@ -114,6 +233,16 @@ const payload = {};
 const skipped = [];
 
 for (const key of PRODUCTION_SECRETS) {
+  // 🔴 The refusal, and it comes BEFORE "is it set locally" on purpose: a key
+  // that happens to be absent from .dev.vars today must still report as refused,
+  // or the reason it was not sent looks like an accident that a later edit fixes.
+  if (instance && isPerInstance(key)) {
+    skipped.push(
+      `${key} — REFUSED for instance "${instance}": each instance holds its own value. ` +
+        `Set it one at a time with \`npm run secret:${instance} -- ${key}\`.`,
+    );
+    continue;
+  }
   if (vars[key]) payload[key] = vars[key];
   else skipped.push(`${key} — not set locally`);
 }
@@ -127,6 +256,30 @@ for (const key of Object.keys(vars)) {
 }
 
 const names = Object.keys(payload);
+
+// 🔴 THE GUARD THAT DOES NOT DEPEND ON THE LOOPS ABOVE BEING RIGHT. A list edit,
+// a reordered branch or a future flag could all put a per-instance key back into
+// the payload; this refuses the WHOLE run at the last moment before anything is
+// sent, naming the key and never the value.
+if (instance) {
+  const leaked = names.filter(isPerInstance);
+  if (leaked.length) {
+    console.error(
+      `\npush-secrets: refusing the whole run — ${leaked.join(', ')} would have been sent to ` +
+        `instance "${instance}", and each instance must hold its own value. This is a bug in ` +
+        'the lists above, not something to work around: fix PER_INSTANCE_SECRETS / ' +
+        'PER_INSTANCE_PREFIXES, or set the key one at a time with ' +
+        `\`npm run secret:${instance} -- <NAME>\`.`,
+    );
+    process.exit(1);
+  }
+}
+
+console.log(
+  instance
+    ? `push-secrets: target = instance "${instance}" (wrangler --env ${instance})`
+    : 'push-secrets: target = the MAIN instance',
+);
 // Show a last-4 fingerprint so you can confirm *which* value went up without
 // ever printing the secret.
 for (const name of names) {
@@ -151,9 +304,11 @@ if (process.argv.includes('--dry')) {
 // command line, a process listing, or shell history.
 const WRANGLER = join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 
-const child = spawn(process.execPath, [WRANGLER, 'secret', 'bulk', '--config', CONFIG], {
-  stdio: ['pipe', 'inherit', 'inherit'],
-});
+const child = spawn(
+  process.execPath,
+  [WRANGLER, 'secret', 'bulk', '--config', CONFIG, ...(instance ? ['--env', instance] : [])],
+  { stdio: ['pipe', 'inherit', 'inherit'] },
+);
 
 child.stdin.end(JSON.stringify(payload));
 child.on('exit', (code) => {
