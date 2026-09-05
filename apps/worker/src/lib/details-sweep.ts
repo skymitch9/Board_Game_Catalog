@@ -31,6 +31,15 @@
  * `SWEEP_LIMIT` caps each tick; the queue converges over hours instead of in
  * one go, which for a household catalog is the same outcome without the cliff.
  *
+ * ⚠️ **And the cap is NOT only about money — it is the subrequest budget.**
+ * See `SUBREQUEST_*` below. The 2026-08 audit's finding 1 was that this loop
+ * shared ONE scheduled invocation between eight lookups at ~11 subrequests
+ * each, ~88 against a ceiling of 50: the invocation is *terminated* rather than
+ * throwing, so the tail of the sweep died in silence while the rows it had
+ * already paid Claude for looked like the whole tick. The cap is now derived
+ * from that arithmetic instead of chosen, so raising it means changing the
+ * arithmetic in front of you.
+ *
  * ⚠️ **It does not retry errors.** A run that ends `error` (network, model
  * outage) leaves the item's fields unanswered, so the queue offers it again
  * naturally on a later tick — no retry bookkeeping here, and no tight loop
@@ -47,15 +56,62 @@ import { listItemsNeedingDetails } from '@bgc/db';
 import type { Env } from '../env.js';
 
 /**
- * Items per tick. Hourly, so this is also the per-hour ceiling: 8 rows is
- * ~11¢/hour at the very worst, and only while a backlog exists — the queue
- * empties and the cost goes to zero on its own.
- *
- * Deliberately a constant rather than an env var: a knob nobody tunes is a
- * knob that hides its value, and the number that matters (what an hour can
- * cost) should be readable here.
+ * A Worker gets 50 subrequests per invocation on the free plan, and every D1
+ * call counts alongside every fetch. ⚠️ **Exceeding it TERMINATES the
+ * invocation rather than throwing** — no exception, no `catch`, no log line —
+ * which is why this number is written down rather than assumed.
  */
-export const SWEEP_LIMIT = 8;
+export const SUBREQUEST_CAP = 50;
+
+/**
+ * What one row of this sweep costs, counted call by call (2026-08 audit
+ * finding 1, re-counted against the code 2026-09-05):
+ *
+ * | Step | Subrequests |
+ * |---|---|
+ * | `claimDetailsRun` — `closeStaleDetailsRuns`, `activeDetailsRun`, `detailsRunInputs`, `createRun` | 4 |
+ * | `runDetailsLookup` — `getItem` | 1 |
+ * | the Claude call (one stream; server-side search runs on Anthropic's side) | 1–2 |
+ * | `updateItem` — read, write, read back | 3 |
+ * | `finishRun` | 1 |
+ * | **total, worst case** | **11** |
+ *
+ * ⚠️ None of these is batched. `details-run.ts`'s own header budgets **~8** for
+ * one run and it is right about the half it counts — it does not count
+ * `claimDetailsRun`, which the *route* pays for separately. This constant is
+ * the whole per-row cost as the sweep pays it, which is the number that
+ * matters when rows share an invocation.
+ */
+export const SUBREQUESTS_PER_ITEM = 11;
+
+/**
+ * What the tick spends outside the loop: `listItemsNeedingDetails` (1 D1) and
+ * `fetchSystemDenied`'s door fetch (1, whenever `BILLING_POLICY` is not `off`).
+ * Two are real; the third is slack, because a miscount here is silent.
+ */
+export const SUBREQUEST_RESERVE = 3;
+
+/**
+ * Items per tick — **derived, not chosen**.
+ *
+ * Hourly, so this is also the per-hour ceiling: 4 rows is ~6¢/hour at the very
+ * worst, and only while a backlog exists — the queue empties and the cost goes
+ * to zero on its own. It was 8 until 2026-09-05, which was over the subrequest
+ * ceiling above (8 × 11 + 3 = 91) and died silently mid-tick once a backlog
+ * existed; 4 × 11 + 3 = 47 fits.
+ *
+ * ⚠️ **Still a constant rather than an env var**, and that is unchanged: *a
+ * knob nobody tunes is a knob that hides its value*, and the settled answer to
+ * the billing design's §9 Q2 (`docs/DONE.md`) is that this number is a
+ * ceiling, not a lever. What changed is that it is now computed from the two
+ * facts that bound it, so raising it is a lie you have to write down.
+ *
+ * ⚠️ **If you want more rows per hour, the fix is not this number** — it is
+ * batching the D1 calls in `claimDetailsRun`/`updateItem` so
+ * `SUBREQUESTS_PER_ITEM` genuinely falls, or a second cron so the rows do not
+ * share an invocation. The queue converging over hours is the design.
+ */
+export const SWEEP_LIMIT = Math.floor((SUBREQUEST_CAP - SUBREQUEST_RESERVE) / SUBREQUESTS_PER_ITEM);
 
 /**
  * ⚠️ Must match `wrangler.toml`'s `crons` entry EXACTLY — `scheduled()`
@@ -78,6 +134,16 @@ export async function runDetailsSweep(env: Env, limit = SWEEP_LIMIT): Promise<Sw
     queued: 0, attempted: 0, filled: 0, notFound: 0, errored: 0, skipped: [],
   };
 
+  // ⚠️ The parameter is a convenience for tests and for a smaller tick; it is
+  // NOT a way past the subrequest ceiling. A caller asking for more rows than
+  // one invocation can pay for gets the ceiling and a line saying so, because
+  // the alternative is an invocation terminated mid-row with nothing logged
+  // anywhere — the audit's finding 1, which was invisible for months.
+  const capped = Math.min(limit, SWEEP_LIMIT);
+  if (capped < limit) {
+    result.skipped.push(`limit ${limit} capped to ${capped} by the subrequest budget`);
+  }
+
   // No key, no sweep — and say so once, rather than failing eight times.
   if (!env.ANTHROPIC_API_KEY) {
     result.skipped.push('no ANTHROPIC_API_KEY');
@@ -86,7 +152,7 @@ export async function runDetailsSweep(env: Env, limit = SWEEP_LIMIT): Promise<Sw
 
   let items;
   try {
-    items = await listItemsNeedingDetails(env.DB, limit);
+    items = await listItemsNeedingDetails(env.DB, capped);
   } catch (err) {
     result.skipped.push(`queue read failed: ${(err as Error).message}`);
     return result;

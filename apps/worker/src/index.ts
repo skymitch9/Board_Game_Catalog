@@ -138,7 +138,7 @@ app.onError((err, c) => {
 /**
  * G7 — the hourly details sweep, behind the `system` spending switch.
  *
- * 🔴 THE SWEEP IS THE ONLY UNATTENDED BILLER IN THIS REPO — ~11¢/hour while a
+ * 🔴 THE SWEEP IS THE ONLY UNATTENDED BILLER IN THIS REPO — ~6¢/hour while a
  * backlog exists, with no user anywhere in it. A per-person rule cannot reach
  * it, so it resolves through the estate's fourth principal, `system`, and its
  * own door (`lib/billing-gate.ts`'s `fetchSystemDenied`). Switching
@@ -159,7 +159,10 @@ app.onError((err, c) => {
  *
  * 🔴 An unknown policy (directory down, door unconfigured, garbage body)
  * SWEEPS — §3.5 row 3's fail-open, chosen out loud. The wallet is bounded by
- * `SWEEP_LIMIT = 8`, not by this switch.
+ * `SWEEP_LIMIT`, not by this switch. ⚠️ That number is no longer written out
+ * here: since 2026-09-05 it is DERIVED from the subrequest budget in
+ * `lib/details-sweep.ts`, and a second copy of it in prose is exactly the
+ * stale-comment defect this file's §6.1 tripwires exist to catch.
  */
 async function sweepIfPolicyAllows(env: Env) {
   const posture = billingPosture(env.BILLING_POLICY);
@@ -189,7 +192,10 @@ async function sweepIfPolicyAllows(env: Env) {
         principal_value: null,
         would_deny: wouldDeny,
         proceeded,
-        est_cents: '~11/hr',
+        // ⚠️ Halved on 2026-09-05 with SWEEP_LIMIT (8 → 4, the subrequest
+        // budget). A soak line that reports the old ceiling would overstate
+        // this cron's spend by 2×, and the soak is read by counting.
+        est_cents: '~6/hr',
       }),
     );
   }

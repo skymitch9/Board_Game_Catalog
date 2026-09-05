@@ -145,7 +145,7 @@ export function parseCachedDenied(raw: string | null): string[] | null {
  * reason. The two never collapse into one another.
  *
  * The exposure of that fail-open choice is bounded by the ceilings that already
- * exist here (`SWEEP_LIMIT = 8`, the model's own token caps, the timeouts), not
+ * exist here (`SWEEP_LIMIT`, the model's own token caps, the timeouts), not
  * by this switch. *A policy that can only deny cannot be depended on to fail
  * closed; the ceilings are what bound the wallet.*
  */
@@ -251,7 +251,7 @@ export function billingRefusal(
  * 🔴 EVERY FAILURE IS `null`, AND `null` SWEEPS — §3.5 row 3's fail-open, the
  * same direction every other consumer takes. An unreachable directory must not
  * silently halt a pipeline nobody is watching; the wallet is bounded by
- * `SWEEP_LIMIT = 8`, not by this switch. Never throws: a scheduled invocation
+ * `SWEEP_LIMIT`, not by this switch. Never throws: a scheduled invocation
  * has no response to put an error in.
  */
 export async function fetchSystemDenied(

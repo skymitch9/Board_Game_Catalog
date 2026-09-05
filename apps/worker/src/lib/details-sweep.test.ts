@@ -120,6 +120,43 @@ test('the cap is the per-hour cost ceiling, and it is small', async () => {
   assert.ok(SWEEP_LIMIT <= 10, `SWEEP_LIMIT is ${SWEEP_LIMIT}; each row costs real money`);
 });
 
+test('🔴 one tick FITS IN ONE INVOCATION — the subrequest budget, not a taste', async () => {
+  // The 2026-08 audit's finding 1: eight rows at ~11 subrequests each shared
+  // ONE scheduled invocation, ~91 against a ceiling of 50. Going over does not
+  // throw — it TERMINATES the invocation, so the tail of the sweep died in
+  // silence while the rows Claude had already been paid for looked like the
+  // whole tick.
+  //
+  // ⚠️ The assertion is the arithmetic, not the number. `SWEEP_LIMIT <= 10`
+  // above was true of the broken value and would not have caught this; a test
+  // that only pins a literal moves with whoever edits the literal.
+  const { SWEEP_LIMIT, SUBREQUEST_CAP, SUBREQUESTS_PER_ITEM, SUBREQUEST_RESERVE } =
+    await import('./details-sweep.js');
+  const worstCase = SWEEP_LIMIT * SUBREQUESTS_PER_ITEM + SUBREQUEST_RESERVE;
+  assert.ok(
+    worstCase <= SUBREQUEST_CAP,
+    `a full tick costs ${worstCase} subrequests against a ceiling of ${SUBREQUEST_CAP}; ` +
+      'over it the invocation is terminated mid-sweep and nothing is logged',
+  );
+  assert.ok(SWEEP_LIMIT >= 1, 'a sweep that can never attempt a row is not a sweep');
+});
+
+test('⚠️ a caller asking for more rows than the budget allows gets the budget, and is told', async () => {
+  // The `limit` parameter is a convenience, not an escape hatch. Silently
+  // honouring it would reintroduce finding 1 through the back door — and
+  // silently is the operative word: the failure it causes writes nothing
+  // anywhere.
+  const { runDetailsSweep, SWEEP_LIMIT } = await import('./details-sweep.js');
+  // A stub DB, so `listItemsNeedingDetails` throws, the sweep records that and
+  // returns — enough to read the cap line without a database anywhere near it.
+  const env = { ANTHROPIC_API_KEY: 'not-a-real-key', DB: {} } as never;
+  const result = await runDetailsSweep(env, 40);
+  assert.ok(
+    result.skipped.some((s) => s.includes(`capped to ${SWEEP_LIMIT}`)),
+    `expected a cap line, got ${JSON.stringify(result.skipped)}`,
+  );
+});
+
 test('the cron string the handler dispatches on matches wrangler.toml', async () => {
   // These are two separate files and the match is by string. A rename in one
   // stops the sweep firing and reports nothing at all.

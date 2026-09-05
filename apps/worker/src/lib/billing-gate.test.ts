@@ -153,7 +153,7 @@ test('enforce refuses a denied feature and nothing else', () => {
 test('🔴 null is UNKNOWN and UNKNOWN PROCEEDS, even in enforce', () => {
   // §3.5 row 3, chosen out loud: denying every paid feature when the directory
   // is unreachable turns an auth outage into a household-wide "everything is
-  // broken". The wallet is bounded by SWEEP_LIMIT = 8 and the timeouts.
+  // broken". The wallet is bounded by SWEEP_LIMIT and the timeouts.
   assert.deepEqual(
     decideBilling({ posture: 'enforce', feature: BILLING_FEATURES.tier, denied: null }),
     { wouldDeny: false, proceeded: true, log: false },
