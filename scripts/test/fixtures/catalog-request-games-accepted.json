@@ -1,0 +1,14 @@
+{
+  "id": 7,
+  "kind": "games",
+  "requester_email": "someone@example.com",
+  "requester_display_name": "Example Person",
+  "desired_subdomain": "quarry",
+  "display_name": "The Quarry Game Shelf",
+  "status": "accepted",
+  "provisioned_instance": null,
+  "provisioned_host": null,
+  "reader_key_set": 0,
+  "owner_key_set": 0,
+  "created_at": "2026-09-05 12:00:00"
+}

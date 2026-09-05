@@ -51,12 +51,25 @@
  *
  * ⚠️ The no-flag path is UNCHANGED, deliberately and byte-for-byte: it pushes
  * the main instance exactly as it did before this flag existed.
+ *
+ * ## Importable since 2026-09-05 (phase 9) — the lists have ONE home
+ *
+ * `scripts/provision-catalog.mjs` classifies a new instance's secrets and must
+ * make exactly the decisions this file makes. So the lists, the classifier and
+ * the `.dev.vars` parser are EXPORTED and imported there rather than restated:
+ * a second copy of a refusal list is a second copy that drifts, and the drifted
+ * one is always the check that mattered. `library_catalog`'s provisioner imports
+ * its own repo's lists for the same reason.
+ *
+ * ⚠️ The program half therefore runs only when this file IS the entrypoint. The
+ * behaviour of `node scripts/push-secrets.mjs …` is unchanged; importing it no
+ * longer runs it.
  */
 
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEV_VARS = join(root, 'apps', 'worker', '.dev.vars');
@@ -67,7 +80,7 @@ const CONFIG = join(root, 'apps', 'worker', 'wrangler.toml');
  * added to .dev.vars should never reach production just because nobody
  * remembered to exclude it.
  */
-const PRODUCTION_SECRETS = ['ANTHROPIC_API_KEY', 'BGG_API_TOKEN', 'GAMEUPC_API_KEY'];
+export const PRODUCTION_SECRETS = ['ANTHROPIC_API_KEY', 'BGG_API_TOKEN', 'GAMEUPC_API_KEY'];
 
 /**
  * Keys each instance must hold its OWN value of. A `--env <name>` run refuses
@@ -82,7 +95,7 @@ const PRODUCTION_SECRETS = ['ANTHROPIC_API_KEY', 'BGG_API_TOKEN', 'GAMEUPC_API_K
  * - `INDEX_PUSH_TOKEN` — per-SOURCE on the index Worker: it tells its machine
  *   callers apart BY THE VALUE, so a second games instance is a second source.
  */
-const PER_INSTANCE_SECRETS = ['ANTHROPIC_API_KEY', 'INDEX_PUSH_TOKEN'];
+export const PER_INSTANCE_SECRETS = ['ANTHROPIC_API_KEY', 'INDEX_PUSH_TOKEN'];
 
 /**
  * Prefix rule, so a consumer nobody has thought of yet is refused by DEFAULT
@@ -90,11 +103,31 @@ const PER_INSTANCE_SECRETS = ['ANTHROPIC_API_KEY', 'INDEX_PUSH_TOKEN'];
  * speaking to the estate directory* (see `apps/worker/src/lib/estate-app.ts`),
  * and no two instances may ever present the same one.
  */
-const PER_INSTANCE_PREFIXES = ['ESTATE_APP_TOKEN_'];
+export const PER_INSTANCE_PREFIXES = ['ESTATE_APP_TOKEN_'];
 
 /** True for a key each instance must hold its own copy of. */
-function isPerInstance(name) {
+export function isPerInstance(name) {
   return PER_INSTANCE_SECRETS.includes(name) || PER_INSTANCE_PREFIXES.some((p) => name.startsWith(p));
+}
+
+/**
+ * WHY a key is per-instance, in one sentence, for a caller that has to explain
+ * itself to a person (`provision-catalog.mjs` prints these beside its plan).
+ *
+ * ⚠️ Reasons, never rules: `isPerInstance()` above is the decision. A name with
+ * no sentence here gets the generic one rather than slipping through.
+ */
+export function perInstanceReason(name) {
+  if (name === 'ANTHROPIC_API_KEY') {
+    return "that household's research spend, on their own billing and their own cap — the one documented exception is the owner's standing v1 decision, set deliberately, one key at a time, by the provisioner";
+  }
+  if (name === 'INDEX_PUSH_TOKEN') {
+    return 'the index Worker tells its machine callers apart BY THE VALUE, so a second games instance is a second source';
+  }
+  if (name.startsWith('ESTATE_APP_TOKEN_')) {
+    return 'it asserts WHICH consumer is speaking to the estate directory, and two instances are two consumers';
+  }
+  return 'each instance holds its own value';
 }
 
 /**
@@ -125,7 +158,7 @@ function isPerInstance(name) {
  * about these names and says out loud that `.dev.vars` is not their source of
  * truth: `wrangler secret put` is, on both sides, in one sitting.
  */
-const LOCAL_ONLY = {
+export const LOCAL_ONLY = {
   ENVIRONMENT: 'set in wrangler.toml for production',
   DEV_EMAIL: 'local auth bypass — must never exist in production',
   GAMEUPC_STAGE: 'defaults correctly from whether a key is set',
@@ -161,19 +194,38 @@ const LOCAL_ONLY = {
  * shape the whole design exists to prevent. Fails at startup, before anything
  * can be pushed, rather than at the moment it would have mattered.
  */
-function assertRefusalListIsLive() {
+export function assertRefusalListIsLive() {
   const known = new Set([...PRODUCTION_SECRETS, ...Object.keys(LOCAL_ONLY)]);
   const orphans = PER_INSTANCE_SECRETS.filter((name) => !known.has(name));
   if (orphans.length) {
-    console.error(
+    throw new Error(
       `push-secrets: PER_INSTANCE_SECRETS names ${orphans.join(', ')}, which appear in neither ` +
         'PRODUCTION_SECRETS nor LOCAL_ONLY. A refusal for a key nothing would send is inert — ' +
         'either the key was renamed and this list was not, or it no longer belongs here.',
     );
-    process.exit(1);
   }
 }
-assertRefusalListIsLive();
+
+/**
+ * Is this file the program being run, or a module somebody imported?
+ *
+ * ⚠️ Everything below the guard is the PROGRAM and must not run on import —
+ * `provision-catalog.mjs` imports the lists above and would otherwise push
+ * secrets by the act of loading them.
+ */
+const isEntrypoint =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+
+// Still at load, still before anything can be pushed — but a THROW rather than
+// an exit, so an importer sees the failure instead of the process vanishing.
+try {
+  assertRefusalListIsLive();
+} catch (err) {
+  if (!isEntrypoint) throw err;
+  console.error(err.message);
+  process.exit(1);
+}
 
 /**
  * `--env <name>` / `--instance <name>`: target a second instance. Absent = the
@@ -198,9 +250,14 @@ function parseInstance(argv) {
   return null;
 }
 
-const instance = parseInstance(process.argv);
-
-function parseDevVars(text) {
+/**
+ * `.dev.vars` → `{ NAME: value }`. Exported because `provision-catalog.mjs`
+ * reads the same file for the same reason and must parse it identically; a
+ * second parser is a second set of quoting bugs.
+ *
+ * ⚠️ A caller holds VALUES after this. Nothing may print, log or write one.
+ */
+export function parseDevVars(text) {
   const out = {};
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -219,6 +276,14 @@ function parseDevVars(text) {
   }
   return out;
 }
+
+// ─── the PROGRAM ────────────────────────────────────────────────────────────
+// Everything from here down runs only when this file is the entrypoint.
+
+if (isEntrypoint) main();
+
+function main() {
+const instance = parseInstance(process.argv);
 
 let raw;
 try {
@@ -321,3 +386,4 @@ child.on('exit', (code) => {
   );
   process.exit(0);
 });
+}

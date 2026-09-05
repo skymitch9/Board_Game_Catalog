@@ -169,12 +169,38 @@ describe('the template is inert', () => {
   });
 
   it('it declares no ESTATE_APP the guard can see, and no [env.*] the tooling can see', () => {
-    assert.equal(declaredEstateApps(WRANGLER).filter((d) => d.env !== 'default').length, 0);
+    // ⚠️ Scoped to the TEMPLATE BLOCK, not the whole file, and that scoping is
+    // the point rather than a loosening. This test owns one claim — *the
+    // template is inert* — and a REAL second instance, the day one exists, is a
+    // live `[env.<name>]` block written ABOVE this banner by
+    // `scripts/provision-catalog.mjs`. Reading the whole file here would make
+    // the drift guard fail on a correct provision, which reads as "the
+    // provisioner broke the template" and is the wrong diagnosis entirely.
+    // (Whether TWO envs collide on one id is `estate-app.test.ts`'s job, over
+    // the whole file, and it is untouched by this.)
+    const template = templateBlock();
+    assert.deepEqual(declaredEstateApps(template), []);
     // The same rule `scripts/instance-guard.mjs` applies: a commented table is
     // not an instance, so `npm run deploy:games2` still refuses in words.
-    const realEnvTables = WRANGLER.split(/\r?\n/)
+    const realEnvTables = template
+      .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => !l.startsWith('#') && /^\[\[?env\./.test(l));
     assert.deepEqual(realEnvTables, []);
+  });
+
+  it('🔴 the template is the LAST thing in the file, so a rendered block lands above it', () => {
+    // `provision-catalog.mjs`'s `insertEnvBlock()` puts a real block immediately
+    // BEFORE this banner, because everything from the banner to EOF must stay
+    // commented (the test above). If anything live were ever appended after the
+    // template, that test would fail and the message would blame the template.
+    // This assertion says the shape out loud so the next reader knows why.
+    const after = WRANGLER.slice(templateStart());
+    assert.ok(after.includes(`# [env.games2]`), 'the template body is not in the tail of the file');
+    assert.equal(
+      WRANGLER.indexOf(MARKER, WRANGLER.indexOf(MARKER) + MARKER.length),
+      -1,
+      'two template banners — one of them is a copy, and a copy is the thing this file exists to prevent',
+    );
   });
 });
