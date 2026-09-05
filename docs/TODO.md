@@ -243,6 +243,29 @@ the measured `RATE_LIMITER` answer.
 🔴 **NO SECOND INSTANCE EXISTS**, and nothing here creates one — no D1, no R2
 bucket, no hostname, no second deploy. That is phase 9's job.
 
+### ☑ Deployed, and the lifted identity proved live
+
+☑ deploy of the MAIN instance from a clean tree 07:36 Phoenix (`9c1dba6f` →
+version `a349aee1…`, holder fable, 220/220 tests in predeploy, line in
+[`deploys.log`](deploys.log)). **No migration** — my four commits touch no file
+under `migrations/`, checked with `git diff --name-only b4afbee..HEAD --
+migrations/` (empty). → ☑ live proof 07:36:
+`curl -s -D - -o /dev/null https://boardgames.heygabi.ai/api/health?cb=<ts>`
+answered **200**, and the body's new `estate` block reads
+`{"mode":"enforce","app":"games","tokenVar":"ESTATE_APP_TOKEN_GAMES","configured":true}`
+— the identity resolved from `ESTATE_APP` is the same one the constant used to
+assert, and its paired bearer is present. `wrangler deploy` also printed
+`env.ESTATE_APP ("games")` in the binding list.
+
+⚠️ **NOT verified, and the owner is the only one who can:** nobody signed in.
+`configured:true` says both halves of the config EXIST, not that the directory
+accepts the token — only a real `/seen` proves the value. **What to confirm:**
+open <https://boardgames.heygabi.ai> signed in as yourself and load one page
+(the collection). If a session is watching, `npm run tail --workspace
+@bgc/worker` should show `estate enforce: app=games <your email> role=owner …`
+— the `app=` field is new. Nothing about who this Worker admits was changed by
+this build.
+
 ### ☐ Phase 9 — the GAMES path in the provisioner
 
 The provisioner (`scripts/provision-catalog.mjs`) is being built in
