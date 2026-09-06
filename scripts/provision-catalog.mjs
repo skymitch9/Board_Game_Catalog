@@ -884,12 +884,43 @@ export function deploysLogHasInstance(log, instance) {
     .some((line) => (line.split('\t')[4] ?? '').trim() === `env=${instance}`);
 }
 
-/** The numbered manual runbook — printed by `--dry`, and at each pause. */
+/**
+ * The numbered manual runbook — printed by `--dry`, and at each pause.
+ *
+ * ⚠️ THIS IS THE CHECKLIST, AND ITS COMPLETENESS IS THE WHOLE POINT.
+ * `catalog-platform/docs/info/multi-library-survey-2026-09-05.md` §7 counted
+ * what a new catalog is missing on every estate surface the day it goes live —
+ * **~28 hand-edits across four repos, of which the two provisioners named 3** —
+ * and the ones neither named are not evenly harmless. Two fail OPEN or SILENT:
+ * the index Worker's `entry.source` CHECK migration (a bare 500 on every push,
+ * while `wrangler d1 migrations list` correctly reports nothing pending) and
+ * `UNSCOPED_LOOKUP_EXCLUDED` (an allowlist inverted, so a new private shelf is
+ * enumerable by title until somebody remembers it).
+ *
+ * ⚠️ EVERY LINE HERE IS PRINTED, NEVER APPLIED — half are in another repo, and
+ * `READ_ORIGINS` is access-INCREASING and therefore the owner's line rather
+ * than a script's. The script's job is that nobody has to REMEMBER any of it.
+ *
+ * 🔴 AND THE GAMES SIDE HAS AN EXTRA TRAP THE BOOKS SIDE DOES NOT: the index's
+ * push vocabulary calls this catalog `game`, singular, while the estate's
+ * visibility vocabulary calls it `games`. A second games instance therefore
+ * needs a source id NOBODY HAS CHOSEN yet, and pushing under `game` would
+ * DELETE the main catalog's rows — the index write protocol is a snapshot
+ * replace keyed on source (`index-worker-design.md` §5, §11.1).
+ */
 export function manualRunbook(names, { platformDir = '<catalog-platform>' } = {}) {
   // Forward slashes throughout, so a path is copy-pasteable into either shell on
   // this machine — Git Bash chokes on a backslash, PowerShell accepts both.
   const dir = String(platformDir).replace(/\\/g, '/');
   const authSrc = `${dir}/apps/auth-worker/src`;
+  const indexDir = `${dir}/apps/index-worker`;
+  const repoRoot = String(ROOT).replace(/\\/g, '/');
+  // ⚠️ The index source id for a SECOND games instance. `resolveIndexSource`
+  // (apps/worker/src/lib/index-push.ts) sends the app id itself for anything
+  // but the main `games` → `game` special case, so this is what it WILL push
+  // as — and the index has to be taught the same word or the push is a 404.
+  const pushSource = names.estateApp === 'games' ? 'game' : names.estateApp;
+  const indexPushToken = `INDEX_PUSH_TOKEN_${names.estateApp.toUpperCase()}`;
   return [
     `⏸  PAUSE #1 — Firebase authorised domain  (🔴 MANUAL, checkpoint #1)`,
     ``,
@@ -947,6 +978,34 @@ export function manualRunbook(names, { platformDir = '<catalog-platform>' } = {}
     ``,
     `         +  ${names.visColumn}: number;`,
     ``,
+    `    🔴 f2) THE VISIBILITY VOCABULARY, IN TWO FILES AND FOUR PLACES EACH.`,
+    `       Survey §7 names this row and neither provisioner printed it until`,
+    `       2026-09-06. Miss it and '${names.estateApp}' is not a catalog anyone can be`,
+    `       granted: /seen never answers it and isCatalog() refuses it.`,
+    ``,
+    `         ${authSrc}/visibility.ts                          (the auth Worker's copy)`,
+    `         ${dir}/packages/estate-auth/src/visibility.ts   (the canonical one)`,
+    ``,
+    `       In BOTH files, four edits that must move together:`,
+    `         · CATALOGS            + '${names.estateApp}'`,
+    `         · VisibilityFlags     + ${names.visColumn}: number;`,
+    `         · storedVisibility()  + if (row.${names.visColumn} === 1) out.push('${names.estateApp}');`,
+    `         · visibilityToFlags() + ${names.visColumn}: visibility.includes('${names.estateApp}') ? 1 : 0,`,
+    ``,
+    `       ⚠️ Do NOT hand-edit the GENERATED copies — this repo's own`,
+    `       apps/worker/src/estate-auth/visibility.ts is one of them, and`,
+    `       sync-estate-auth.mjs rewrites it on the next build.`,
+    ``,
+    `    ⚠️ f3) ${authSrc}/env.ts:487 — the CORS allowlist gains the new host`,
+    ``,
+    `         +  'https://${names.host}',`,
+    ``,
+    `       Hosts are enumerated BY HAND here on purpose (survey §3.2) — it is an`,
+    `       origin allowlist, not a name service. Until it lands, the new site's`,
+    `       browser calls to the auth Worker are refused by the preflight, which`,
+    `       reaches the page as a NETWORK ERROR indistinguishable from the Worker`,
+    `       being down. Nobody debugging that guesses CORS.`,
+    ``,
     `    g) a new migration, following 0007_vis_library2.sql — ⚠️ DEFAULT 0, the`,
     `       deliberate opposite of 0002's DEFAULT 1, because it is another`,
     `       household's shelf and is granted by hand:`,
@@ -963,9 +1022,128 @@ export function manualRunbook(names, { platformDir = '<catalog-platform>' } = {}
     `         npx wrangler d1 migrations apply ${ESTATE_DB} --remote`,
     `         npx wrangler deploy`,
     ``,
+    `    ⚠️ i) ${authSrc}/catalog-names.ts:109 — RESERVED_SUBDOMAINS`,
+    ``,
+    `         +  '${names.host.split('.')[0]}',`,
+    `         +  '${names.coversHost.split('.')[0]}',`,
+    ``,
+    `       (This repeats the AFTERWARDS note below on purpose: that file's own`,
+    `       header says every new estate hostname is added "in the same commit`,
+    `       that routes it", and this IS that commit. Both names — the site and`,
+    `       the covers host — or the next person to ask is told one is free.)`,
+    ``,
     `    On --resume this script reads (a), (c), (d), (e) and (g) out of the source`,
     `    and says so. ⚠️ It CANNOT see whether the Worker was migrated and deployed`,
     `    — only a real sign-in tailed with "src":"seen" proves the pairing.`,
+    ``,
+    `🔴 THE ESTATE INDEX — and for a GAMES instance the FIRST question is which`,
+    `   SOURCE it pushes as  (catalog-platform/apps/index-worker)`,
+    ``,
+    `    Not a pause: a new instance ships DARK on index push (INDEX_PUSH_TOKEN is`,
+    `    per-instance and unset), so nothing here blocks the provision. It blocks`,
+    `    '${names.estateApp}' ever appearing in estate search, /universes or /series.`,
+    ``,
+    `    0) 🔴 THE VOCABULARY TRAP, AND IT IS THE ONE THAT DESTROYS DATA.`,
+    `       The index's push vocabulary calls the main catalog 'game' (singular)`,
+    `       while the estate's visibility vocabulary calls it 'games' — the ONE`,
+    `       place the two words differ (index-worker search-route.ts:47`,
+    `       SOURCE_FOR_CATALOG owns it). The write protocol is a SNAPSHOT REPLACE`,
+    `       keyed on source: two instances sharing one source id delete each`,
+    `       other's catalogue on every push, and whichever pushed last is the`,
+    `       whole shelf (index-worker-design.md §5, §11.1).`,
+    ``,
+    `       This repo's resolveIndexSource() (apps/worker/src/lib/index-push.ts,`,
+    `       config-driven since 2026-09-06) will push '${names.estateApp}' as`,
+    `       '${pushSource}' — from ESTATE_APP, with no code change here. Everything`,
+    `       below teaches the index that same word. ⚠️ Do NOT "fix" it by`,
+    `       pointing the new instance at 'game'.`,
+    ``,
+    `    1) 🔴 THE MIGRATION, AND IT IS THE ONE EVERYBODY MISSES.`,
+    `       entry.source carries a CHECK constraint listing the sources by name`,
+    `       (migration 0001, verified against the live remote sqlite_master on`,
+    `       2026-09-05). A Worker that knows '${pushSource}' while the database does`,
+    `       not passes isSource, the bearer, zod and the whole series plan, then`,
+    `       throws inside db.batch — a BARE 500 to the pusher.`,
+    ``,
+    `       ⚠️ "npx wrangler d1 migrations list --remote" will say "No migrations`,
+    `       to apply". That is TRUE and it is not the question: nothing is`,
+    `       PENDING, one is REQUIRED.`,
+    ``,
+    `         ${indexDir}/migrations/00NN_entry_source_${pushSource}.sql`,
+    ``,
+    `       Copy 0006_entry_source_library2.sql verbatim and change ONE line —`,
+    `       it is the standard SQLite table rebuild (SQLite cannot ALTER a CHECK):`,
+    ``,
+    `         -  source TEXT NOT NULL CHECK (source IN ('game','library','audiobook','library2')),`,
+    `         +  source TEXT NOT NULL CHECK (source IN ('game','library','audiobook','library2','${pushSource}')),`,
+    ``,
+    `       ⚠️ Keep the rest of 0006 exactly as it is: the column-NAMED copy (a`,
+    `       SELECT * silently reorders if a column is ever added mid-table) and`,
+    `       all four PARTIAL indexes re-created after the rename. Widen the`,
+    `       constraint, never drop it — it is the fence that makes a typo'd`,
+    `       source loud instead of a table quietly filling with unreadable rows.`,
+    ``,
+    `    2) ${indexDir}/src/rows.ts:33 — SOURCES + '${pushSource}'`,
+    `       ⚠️ Check rows.ts's own game-vs-book branch while you are there: the`,
+    `       only line that reads the value is \`source === 'game'\`, so a second`,
+    `       games source would be folded as a BOOK (creator rules, work_fold)`,
+    `       unless that test becomes a set.`,
+    ``,
+    `    3) ${indexDir}/src/env.ts:187 — a case arm in pushTokenFor(), and the`,
+    `       paired secret. One VALUE, two holders, opposite names:`,
+    ``,
+    `         +    case '${pushSource}':`,
+    `         +      return env.${indexPushToken};`,
+    ``,
+    `         cd ${indexDir} && npx wrangler secret put ${indexPushToken}`,
+    `         cd ${repoRoot} && npx wrangler secret put INDEX_PUSH_TOKEN --config apps/worker/wrangler.toml --env ${names.instance}`,
+    ``,
+    `       ⚠️ A DIFFERENT value from every other instance's. The index resolves`,
+    `       the caller FROM the value, so a shared one makes the source name`,
+    `       meaningless and one leak revokes both catalogs.`,
+    ``,
+    `    4) ${indexDir}/src/search-route.ts:47,111 — SOURCE_FOR_CATALOG gains`,
+    `       '${names.estateApp}' → '${pushSource}' (this is the map that owns the`,
+    `       games↔game difference), and VALID_SOURCE_PARAMS gains '${names.estateApp}'.`,
+    ``,
+    `    5) 🔴 ${indexDir}/src/read.ts:69 — UNSCOPED_LOOKUP_EXCLUDED`,
+    ``,
+    `         +  '${pushSource}',`,
+    ``,
+    `       ⚠️ THIS ONE FAILS OPEN. /api/lookup is membership-gated and`,
+    `       deliberately NOT visibility-scoped, so the list is an allowlist`,
+    `       INVERTED: until '${pushSource}' is named here, every approved member —`,
+    `       and every machine token through /api/machine/lookup — can enumerate`,
+    `       this catalog by title while holding no ${names.visColumn} grant at all.`,
+    `       Owner decision 2026-09-05 16:08 for the equivalent books case:`,
+    `       another household's shelf stays fenced. Add it in the SAME commit as`,
+    `       (2), never later.`,
+    ``,
+    `    6) ${indexDir}/src/machine-route.ts:118 — MACHINE_VISIBILITY is a`,
+    `       deliberate DEFAULT-DENY and must NOT gain the new catalog by reflex.`,
+    `       Being an APP is not being a SHELF.`,
+    ``,
+    `    7) migrate, THEN deploy — the standing order, and (1) is why:`,
+    ``,
+    `         cd ${indexDir}`,
+    `         npx wrangler d1 migrations apply catalog-index --remote`,
+    `         npx wrangler deploy`,
+    ``,
+    `❓ OWNER, ACCESS-INCREASING — the index Worker's browser origin allowlist`,
+    ``,
+    `    This script does NOT apply it and must not. Widening a CORS list is the`,
+    `    owner's line: it decides whether a browser ON THIS HOST may search the`,
+    `    whole estate index. Without it the site still works — <estate-search>`,
+    `    degrades to a worded unknown per shelf plus one line naming the outage —`,
+    `    so this is a decision, not a defect.`,
+    ``,
+    `      ${indexDir}/wrangler.toml:65 — READ_ORIGINS, the line to paste if he says yes:`,
+    ``,
+    `        READ_ORIGINS = "https://heygabi.ai,https://library.heygabi.ai,https://boardgames.heygabi.ai,https://audiobooks.heygabi.ai,https://${names.host}"`,
+    ``,
+    `      (Read the LIVE value off that file first — this line is a template`,
+    `      from 2026-09-06, and pasting a stale list would silently REVOKE an`,
+    `      origin somebody added since.)`,
     ``,
     `📋 AFTERWARDS — follow-ups this script deliberately does not take`,
     ``,
@@ -988,7 +1166,110 @@ export function manualRunbook(names, { platformDir = '<catalog-platform>' } = {}
     `        this is a difference from the LIBRARY's setup, not a missing step.`,
     `      • BILLING_POLICY is "off" on the new instance, like main, and the sweep`,
     `        crons tick hourly. Whichever key ended up on it is what they spend.`,
+    `      • /status will not GRADE this catalog's index freshness. status.js`,
+    `        keeps INDEX_SOURCE_ORDER and INDEX_THRESHOLDS, and a threshold is a`,
+    `        MEASURED push cadence. Its NAME comes from the registry, so no row`,
+    `        spells it wrongly; its age is SHOWN and deliberately not coloured`,
+    `        until somebody has watched real pushes. Guessing a cadence is`,
+    `        exactly what that page is written against.`,
+    ``,
+    `✅ WHAT THE REGISTRY ROW (step 12) ALREADY DOES — do NOT hand-edit these`,
+    ``,
+    `      Survey §7 listed apex search, series, universes and the front-door card`,
+    `      as per-catalog hand edits. They are not, since 2026-09-05: every one of`,
+    `      those surfaces reads GET https://index.heygabi.ai/api/catalogs and takes`,
+    `      the label, the owner and the holding from it. A registry row is what`,
+    `      makes '${names.estateApp}' NAMED on heygabi.ai — nothing else is needed, and a`,
+    `      hand-added label would become a second copy of a fact that has a home.`,
+    ``,
+    `      ⚠️ Allow up to 10 minutes: the index Worker memoises the registry for`,
+    `      that long and two isolates may disagree inside the window. Fine for a`,
+    `      name; it is why nothing about a PERMISSION is fed from there.`,
+    `      ⚠️ /admin's CATALOGS array stays hand-kept ON PURPOSE — it decides which`,
+    `      permission controls render, and an access surface must not fail closed`,
+    `      on a cache miss. It is edit (f2) above, not a registry consumer.`,
   ];
+}
+
+/**
+ * One pause's slice of the runbook, found by its HEADING rather than by index.
+ *
+ * ⚠️ THIS REPLACED `.slice(0, 12)` / `.slice(13)`, and the reason is a bug that
+ * had not fired yet: those numbers were the line offsets of the PAUSE #2
+ * heading on 2026-09-05, so the first person to add a line to PAUSE #1 would
+ * have printed half of one pause and the head of the other — at the exact
+ * moment somebody is standing at a checkpoint reading it. The runbook grew by
+ * ~120 lines on 2026-09-06 (survey §7), which is when it would have happened.
+ *
+ * `which` is 1 for the Firebase pause (everything before PAUSE #2) and 2 for
+ * everything from PAUSE #2 to the end — the checklists after it belong with it,
+ * because they are all "things in the OTHER repo".
+ */
+export function runbookSection(names, platformDir, which) {
+  const lines = manualRunbook(names, { platformDir });
+  const at = lines.findIndex((l) => l.includes('PAUSE #2'));
+  // A heading that cannot be found prints the WHOLE runbook rather than
+  // guessing: too much is a nuisance, the wrong half is a wrong instruction.
+  if (at < 0) return lines;
+  return which === 1 ? lines.slice(0, at) : lines.slice(at);
+}
+
+/**
+ * The registry INSERT — how a new catalog gets a NAME and an OWNER.
+ *
+ * ⚠️ WHY THIS SQL EXISTS WHEN A ROUTE ALREADY DOES IT.
+ * `POST /api/estate/catalogs/requests/:id/live` (auth-worker
+ * `catalog-requests.ts`, migration 0020) writes this row and is the canonical
+ * writer. This script cannot call it: the route is `requireDevops()`, which
+ * needs a Firebase ID token from an estate admin account, and the provisioner
+ * runs on the owner's WRANGLER login with no browser anywhere near it. It
+ * already marks the request live the same way — a direct `d1 execute` against
+ * the directory — so this adds the second half of that same write rather than
+ * a second mechanism.
+ *
+ * 🔴 THEY ARE NEAR-DUPLICATES ON PURPOSE AND ARE **NOT** INTERCHANGEABLE. The
+ * route is what a devops session with a browser uses; this is what the
+ * provisioner uses. If one changes, the other must.
+ *
+ * ⚠️ `push_source` is NOT the id here, and that is the games repo's whole
+ * vocabulary trap: the index calls the main catalog `game`, the estate calls it
+ * `games`. The value written is what `resolveIndexSource` will actually push
+ * as, so the registry cannot disagree with the wire.
+ *
+ * ⚠️ `holding` and `shared` are CONSTANTS, not fields — the owner's settled
+ * model (2026-09-05): a provisioned catalog is "the requester's name,
+ * physical". A board-game shelf is physical in exactly the sense the rule
+ * means, which is why `game` is designated Skylar's and not "shared".
+ *
+ * ⚠️ A REGISTRY ROW IS NOT A GRANT. It publishes a name and an owner; the
+ * `vis_<id>` column is still its own migration and its own code change.
+ */
+export function registryInsertSql(names, row = {}, { now = new Date() } = {}) {
+  // ⚠️ NULL is a real answer and not a bug: `requester_display_name` is a
+  // nullable snapshot from the SSO profile. A row with no owner and shared = 0
+  // renders as an unattributed physical shelf, which is honest — far better
+  // than inventing a name for the estate's front door.
+  const ownerName = String(row.requester_display_name ?? '').trim();
+  const label = String(row.display_name ?? names.displayName ?? names.estateApp).trim();
+  const pushSource = names.estateApp === 'games' ? 'game' : names.estateApp;
+  return (
+    'INSERT INTO estate_catalog (id, push_source, kind, label, owner_name, holding, shared, host, ' +
+    'sort_order, request_id, created_at) VALUES (' +
+    [
+      sqlLit(names.estateApp),
+      sqlLit(pushSource),
+      sqlLit('games'),
+      sqlLit(label),
+      ownerName ? sqlLit(ownerName) : 'NULL',
+      sqlLit('physical'),
+      '0',
+      sqlLit(names.host),
+      '100',
+      String(names.requestId),
+      sqlLit(now.toISOString()),
+    ].join(', ') +
+    ') ON CONFLICT(id) DO NOTHING'
+  );
 }
 
 /**
@@ -1511,7 +1792,7 @@ async function main() {
   } else {
     console.log(`  ❌ measured      ${names.host} is NOT on the ${FIREBASE_PROJECT} authorised list`);
     console.log(`     the list holds: ${domains.join(', ')}`);
-    for (const line of manualRunbook(names, { platformDir: platform.dir }).slice(0, 12)) {
+    for (const line of runbookSection(names, platform.dir, 1)) {
       console.log(`  ${line}`);
     }
     if (!dry) {
@@ -1531,7 +1812,7 @@ async function main() {
   notVerified.push('that the auth Worker was migrated and deployed (source is not production)');
   if (!reg.ok) {
     console.log('');
-    for (const line of manualRunbook(names, { platformDir: platform.dir }).slice(13)) console.log(`  ${line}`);
+    for (const line of runbookSection(names, platform.dir, 2)) console.log(`  ${line}`);
     if (!dry) {
       console.log('');
       console.log(`  Do it, then: npm run provision:catalog -- --request ${requestId} --resume`);
@@ -1718,6 +1999,18 @@ async function main() {
     cwd: ctx.authWorkerDir,
     args: ['d1', 'execute', ESTATE_DB, '--remote', '--json', '--command', update],
   }));
+  // ── The registry row (0020) — the catalog's NAME and OWNER ───────────────
+  // ⚠️ WITHOUT THIS the catalog is live and ANONYMOUS: /api/catalogs never
+  // names it, so every apex surface that now reads the registry (search hit
+  // labels, the series holding line, the universes subtitle, the front-door
+  // card, /status's row name) has nothing to call it. That is the state
+  // catalog-registry.md §7 calls "live, but nothing knows its name yet".
+  const registrySql = registryInsertSql(names, row);
+  printCmd(cmd('registry', {
+    bin: ctx.platformWrangler,
+    cwd: ctx.authWorkerDir,
+    args: ['d1', 'execute', ESTATE_DB, '--remote', '--json', '--command', registrySql],
+  }));
   if (!dry) {
     const health = await healthJson(healthUrl);
     if (!health.ok) {
@@ -1740,6 +2033,33 @@ async function main() {
     estateSql(update, ctx);
     const after = readRequest(names.requestId, ctx);
     console.log(`  row now          status=${after?.status} instance=${after?.provisioned_instance} host=${after?.provisioned_host} reader_key_set=${after?.reader_key_set} owner_key_set=${after?.owner_key_set}`);
+
+    // ⚠️ THE REGISTRY WRITE CANNOT FAIL THE PROVISION, and that is the same
+    // stance the /live route takes: the status change is the answer to "did
+    // the provisioning land". A registry hiccup is housekeeping — reported in
+    // words, with the one idempotent command that repairs it, and it never
+    // sends anybody back to re-run a step that already succeeded.
+    try {
+      estateSql(registrySql, ctx);
+      const named = estateSql(
+        `SELECT id, push_source, label, owner_name FROM estate_catalog WHERE id = ${sqlLit(names.estateApp)}`,
+        ctx,
+      )[0];
+      if (named) {
+        console.log(
+          `  registry row     id=${named.id} push_source=${named.push_source} label=${JSON.stringify(named.label)} ` +
+            `owner=${named.owner_name === null ? 'NULL (unattributed — honest, see the runbook)' : JSON.stringify(named.owner_name)}`,
+        );
+      } else {
+        console.log('  ⚠️ registry row  the INSERT reported no error and the row is not there — read the output above.');
+      }
+    } catch (err) {
+      console.log('  ⚠️ registry row  NOT written. The catalog IS live; nothing knows its NAME yet.');
+      console.log(`     ${String(err.message).split('\n')[0]}`);
+      console.log('     Re-run this one statement when the directory is reachable — it is idempotent:');
+      console.log(`       npx wrangler d1 execute ${ESTATE_DB} --remote --command "${registrySql.replace(/"/g, '\\"')}"`);
+      notVerified.push(`the estate_catalog registry row for ${names.estateApp} (the INSERT failed — see above)`);
+    }
   }
 
   /* ── the tail ──────────────────────────────────────────────────────────── */

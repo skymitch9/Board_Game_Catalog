@@ -47,6 +47,7 @@ import {
   insertEnvBlock,
   insertScripts,
   liveVarNames,
+  manualRunbook,
   missingVars,
   nextEstateApp,
   nextRateLimitNamespace,
@@ -54,8 +55,10 @@ import {
   parseEnvNames,
   parseEstateAppAllowlist,
   parseEstateApps,
+  registryInsertSql,
   renderEnvBlock,
   rootScriptTwins,
+  runbookSection,
   sanitiseInstanceName,
   secretPlan,
   sqlLit,
@@ -840,5 +843,154 @@ describe('--dry against an accepted games fixture prints the WHOLE plan', () => 
     // The one place a value could leak is the bulk payload; it is printed as a
     // list of NAMES and the printer is handed nothing else.
     assert.match(text, /← <stdin>   BGG_API_TOKEN, GAMEUPC_API_KEY/);
+  });
+
+  /* ────────────────────────────────────────────────────────────────────────
+   * ⚠️ THE COMPLETENESS TESTS — survey §7, added 2026-09-06.
+   *
+   * Not "does the string appear" pedantry. §7 measured that a new catalog
+   * needs ~28 hand-edits and that the two provisioners named 3, and each
+   * MISSING line has a specific known failure behind it: a bare 500, a shelf
+   * enumerable by anybody, a page that reads as an outage — and, on the games
+   * side only, a push that DELETES the main catalog's index rows. A test per
+   * item is what stops one being dropped in a later tidy-up, because a
+   * checklist silently losing an entry looks exactly like a shorter one.
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  it('🔴 the GAMES vocabulary trap is named before anything else in the index section', () => {
+    assert.match(text, /THE VOCABULARY TRAP/);
+    assert.match(text, /SNAPSHOT REPLACE/);
+    assert.match(text, /delete each/);
+    // The resolved source for THIS fixture is the app id, not `game`.
+    assert.match(text, /will push 'games2' as/);
+    assert.match(text, /Do NOT "fix" it by/);
+  });
+
+  it('🔴 the index entry.source MIGRATION is named, with the exact widened CHECK line', () => {
+    assert.match(text, /00NN_entry_source_games2\.sql/);
+    assert.match(
+      text,
+      /\+ {2}source TEXT NOT NULL CHECK \(source IN \('game','library','audiobook','library2','games2'\)\),/,
+    );
+    // ⚠️ The whole trap in one sentence: the command an operator would reach
+    // for answers "nothing pending", truthfully.
+    assert.match(text, /No migrations/);
+    assert.match(text, /is TRUE and it is not the question/);
+    assert.match(text, /never drop it/);
+    // rows.ts's game-vs-book branch: a second games source folds as a BOOK.
+    assert.match(text, /folded as a BOOK/);
+  });
+
+  it('🔴 UNSCOPED_LOOKUP_EXCLUDED is named as failing OPEN, not merely as an edit', () => {
+    assert.match(text, /read\.ts:69 — UNSCOPED_LOOKUP_EXCLUDED/);
+    assert.match(text, /FAILS OPEN/);
+    assert.match(text, /can enumerate/);
+    assert.match(text, /vis_games2 grant at all/);
+    // And MACHINE_VISIBILITY must NOT gain it by reflex.
+    assert.match(text, /deliberate DEFAULT-DENY/);
+    assert.match(text, /Being an APP is not being a SHELF/);
+  });
+
+  it('⚠️ READ_ORIGINS is EMITTED for the owner and never applied — access-increasing', () => {
+    assert.match(text, /OWNER, ACCESS-INCREASING/);
+    assert.match(text, /wrangler\.toml:65 — READ_ORIGINS/);
+    assert.match(text, /READ_ORIGINS = "https:\/\/heygabi\.ai,.*,https:\/\/quarry\.heygabi\.ai"/);
+    assert.match(text, /does NOT apply it and must not/);
+    // 🔴 Read the LIVE list first — a template would REVOKE a newer origin.
+    assert.match(text, /silently REVOKE an/);
+  });
+
+  it('the auth Worker items the checklist was missing: visibility ×2 files, CORS, reserved names', () => {
+    assert.match(text, /packages\/estate-auth\/src\/visibility\.ts/);
+    assert.match(text, /storedVisibility\(\) {2}\+ if \(row\.vis_games2 === 1\)/);
+    assert.match(text, /Do NOT hand-edit the GENERATED copies/);
+    assert.match(text, /the CORS allowlist gains the new host/);
+    assert.match(text, /\+ {2}'https:\/\/quarry\.heygabi\.ai',/);
+    assert.match(text, /NETWORK ERROR/);
+    // RESERVED_SUBDOMAINS was already an AFTERWARDS note here; it is now also
+    // an inline edit at the pause, and it must name BOTH hostnames.
+    assert.match(text, /catalog-names\.ts:109 — RESERVED_SUBDOMAINS/);
+    assert.match(text, /\+ {2}'quarry',/);
+    assert.match(text, /\+ {2}'gamecovers2',/);
+  });
+
+  it('✅ it says which §7 rows the REGISTRY now handles, so nobody hand-edits a label', () => {
+    assert.match(text, /WHAT THE REGISTRY ROW \(step 12\) ALREADY DOES/);
+    assert.match(text, /api\/catalogs/);
+    assert.match(text, /10 minutes/);
+    assert.match(text, /admin's CATALOGS array stays hand-kept/);
+    assert.match(text, /will not GRADE this catalog's index freshness/);
+  });
+
+  it('🔴 step 12 prints the estate_catalog INSERT — a live catalog with no NAME is the failure', () => {
+    assert.match(text, /INSERT INTO estate_catalog/);
+    // push_source is the wire word, id is the estate word — the games repo's
+    // whole trap, and the registry must not disagree with the wire.
+    assert.match(
+      text,
+      /VALUES \('games2', 'games2', 'games', 'The Quarry Game Shelf', 'Example Person', 'physical', 0, 'quarry\.heygabi\.ai', 100, 7,/,
+    );
+    assert.match(text, /ON CONFLICT\(id\) DO NOTHING/);
+  });
+});
+
+/* --------------------------------------------------------------------------
+ * registryInsertSql and runbookSection — the two pure functions step 12 and
+ * the pauses stand on. Unit-level, so a failure names the rule rather than a
+ * byte offset in a 900-line dry run.
+ * ------------------------------------------------------------------------ */
+
+describe('registryInsertSql — the catalog registry row (0020)', () => {
+  const n = names();
+  const sql = registryInsertSql(n, row(), { now: new Date('2026-09-06T12:00:00.000Z') });
+
+  it('the id is the ESTATE word and push_source is the WIRE word', () => {
+    // For a second games instance they happen to be equal; for the MAIN one
+    // they are not, and that asymmetry is the thing worth pinning.
+    assert.match(sql, /VALUES \('games2', 'games2', 'games',/);
+    const main = registryInsertSql({ ...n, estateApp: 'games' }, row(), { now: new Date(0) });
+    assert.match(main, /VALUES \('games', 'game', 'games',/);
+  });
+
+  it("the OWNER is the requester and the holding is the owner's settled model", () => {
+    assert.match(sql, /'Example Person', 'physical', 0,/);
+  });
+
+  it('🔴 ON CONFLICT DO NOTHING — a --resume must never rename a live catalog', () => {
+    assert.match(sql, /ON CONFLICT\(id\) DO NOTHING$/);
+  });
+
+  it('a NULL owner is written as NULL, never as an empty string or a guess', () => {
+    const anon = registryInsertSql(n, row({ requester_display_name: null }));
+    assert.match(anon, /'The Quarry Game Shelf', NULL, 'physical'/);
+  });
+
+  it('a label with a quote in it cannot break the statement', () => {
+    assert.match(registryInsertSql(n, row({ display_name: "O'Brien's" })), /'O''Brien''s'/);
+  });
+});
+
+describe('runbookSection — the pauses are found by HEADING, not by line offset', () => {
+  const n = names();
+  const first = runbookSection(n, '/repos/catalog-platform', 1);
+  const second = runbookSection(n, '/repos/catalog-platform', 2);
+
+  it('🔴 pause #1 stops at pause #2 — the old .slice(0, 12) was a line offset', () => {
+    // The bug had not fired yet: one extra line in PAUSE #1 would have printed
+    // half of it plus the head of the next, to somebody standing at a
+    // checkpoint. The runbook grew ~120 lines the day this was written.
+    assert.ok(!first.some((l) => l.includes('PAUSE #2')));
+    assert.match(first.join('\n'), /PAUSE #1 — Firebase authorised domain/);
+  });
+
+  it("pause #2 carries the other repo's work with it", () => {
+    assert.match(second[0], /PAUSE #2/);
+    assert.ok(!second.some((l) => l.includes('PAUSE #1')));
+    assert.match(second.join('\n'), /THE ESTATE INDEX/);
+    assert.match(second.join('\n'), /READ_ORIGINS/);
+  });
+
+  it('the two halves reassemble into the whole runbook, losing nothing', () => {
+    assert.deepEqual([...first, ...second], manualRunbook(n, { platformDir: '/repos/catalog-platform' }));
   });
 });
