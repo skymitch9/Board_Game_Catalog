@@ -75,19 +75,85 @@ const BACKSTOP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
  */
 const ITEM_TOUCHING_PREFIXES = ['/api/items', '/api/bgg', '/api/research', '/api/scan-jobs', '/api/editions'];
 
+/**
+ * The default source, used when `ESTATE_APP` is unset — the MAIN instance's.
+ *
+ * ⚠️ It is `game`, singular, while the estate's visibility vocabulary calls
+ * this catalog `games`. That difference is real, it is the only one in the
+ * estate, and `index-worker/src/search-route.ts:47` `SOURCE_FOR_CATALOG` is
+ * the one place that owns it. It pairs with `DEFAULT_ESTATE_APP`'s `games`
+ * deliberately: the id this Worker asserts to the directory and the source its
+ * rows are filed under are two vocabularies for ONE instance, and they must
+ * not be able to drift apart.
+ */
+const DEFAULT_INDEX_SOURCE = 'game';
+
+/**
+ * Which index source THIS instance pushes as, from `ESTATE_APP`.
+ *
+ * 🔴 THIS WAS A HARD-CODED `game` UNTIL 2026-09-06, AND FOR A SECOND INSTANCE
+ * THAT WAS DESTRUCTIVE RATHER THAN MERELY WRONG. The index's write protocol is
+ * a SNAPSHOT REPLACE keyed on `entry.source` (`index-worker-design.md` §5): a
+ * push under `game` deletes every `game` row and re-inserts the body. So the
+ * `[env.games2]` instance — the slot `estate-app.ts` has pre-declared since
+ * 2026-09-05, and which `scripts/provision-catalog.mjs` exists to fill — would
+ * have DELETED THE MAIN CATALOG'S ENTIRE INDEX SHELF on its first push, and
+ * whichever instance pushed last would be the estate's whole board-game
+ * collection. §11.1 makes exactly this argument for why `library2` got its own
+ * source id instead of sharing `library`'s; the games side had the argument
+ * written down and not the code. Ported from the library's `resolveIndexSource`
+ * (`bookbuddy/library_catalog/apps/worker/src/lib/index-push.ts`), which closed
+ * the same shape on 2026-09-05.
+ *
+ * ⚠️ NOTHING CHANGES FOR THE MAIN INSTANCE. `ESTATE_APP = "games"` and unset
+ * both resolve to `game`, which is the value that was hard-coded — so this
+ * ships inert and the second instance is what it is for.
+ *
+ * Pure, so the decision is unit-testable without a Worker environment — the
+ * same shape as `decidePushForStaleness` below, and for the same reason.
+ *
+ *  - unset/blank → `game`, the main instance's source;
+ *  - `games` → `game`, the ONE known vocabulary difference, written as a case
+ *    rather than as a plural-stripping RULE: a `games2` must NOT silently
+ *    become `game2`, because the index has to be taught the exact word and a
+ *    guess would 404 at best and collide at worst;
+ *  - any other plain lowercase path segment → itself, so a second instance
+ *    federates by setting one var and its own `INDEX_PUSH_TOKEN` with no code
+ *    change here — which is what `scripts/provision-catalog.mjs` now prints;
+ *  - anything else → `null`, and the caller pushes NOTHING and says why.
+ *
+ * ⚠️ The `null` branch is not decoration. This value is interpolated into a
+ * URL path, so an unvalidated var could push a snapshot at some other route
+ * entirely (`../…`), and a typo'd source would create a junk shelf on a surface
+ * other households can see. Refusing loudly is the inert direction, which is
+ * this module's rule everywhere.
+ */
+export function resolveIndexSource(rawEstateApp: string | undefined): string | null {
+  const v = (rawEstateApp ?? '').trim();
+  if (v === '' || v === 'games') return DEFAULT_INDEX_SOURCE;
+  return /^[a-z][a-z0-9]{0,31}$/.test(v) ? v : null;
+}
+
 export async function pushIndexSnapshot(env: Env): Promise<{ pushed: number } | { skipped: string }> {
   if (!env.INDEX_URL || !env.INDEX_PUSH_TOKEN) {
     return { skipped: 'INDEX_URL / INDEX_PUSH_TOKEN not configured' };
+  }
+
+  const source = resolveIndexSource(env.ESTATE_APP);
+  if (source === null) {
+    // ⚠️ The VALUE is named because it is a config typo, not a secret, and the
+    // person reading this log line is the person who mistyped it.
+    return { skipped: `ESTATE_APP ${JSON.stringify(env.ESTATE_APP)} is not a usable index source — not pushing` };
   }
 
   const rows = await buildIndexProjection(env.DB);
   // The index 422s an empty snapshot ("zero rows is a failed export, not an
   // empty catalog") — don't even send one.
   if (rows.length === 0) {
-    return { skipped: 'projection produced zero rows — not pushing an empty snapshot' };
+    return { skipped: `projection produced zero rows — not pushing an empty snapshot (source ${source})` };
   }
 
-  const res = await fetch(`${env.INDEX_URL}/api/push/game`, {
+  const res = await fetch(`${env.INDEX_URL}/api/push/${source}`, {
     method: 'PUT',
     headers: {
       'content-type': 'application/json',
@@ -169,19 +235,32 @@ export async function pushIndexIfStale(env: Env): Promise<{ pushed: number } | {
     return { skipped: 'INDEX_URL / INDEX_PUSH_TOKEN not configured' };
   }
 
+  // ⚠️ THE BACKSTOP MUST ASK ABOUT ITS OWN SOURCE, not about `game`. Reading
+  // the main catalog's row from a second instance would answer "fresh, 838
+  // rows" about somebody else's shelf while this one had never pushed at all —
+  // a staleness check that is confidently wrong is worse than none, because it
+  // is the thing that would otherwise notice.
+  const source = resolveIndexSource(env.ESTATE_APP);
+  if (source === null) {
+    return { skipped: `ESTATE_APP ${JSON.stringify(env.ESTATE_APP)} is not a usable index source — not checking` };
+  }
+
   const res = await fetch(`${env.INDEX_URL}/api/health`);
   if (!res.ok) {
     throw new Error(`index health check failed: ${res.status}`);
   }
   const health = (await res.json()) as {
-    sources?: { game?: { rows?: number; pushed_at?: string | null } };
+    sources?: Record<string, { rows?: number; pushed_at?: string | null } | undefined>;
   };
-  const game = health.sources?.game;
+  // ⚠️ An ABSENT source is `undefined`, which `decidePushForStaleness` reads as
+  // "zero rows" and answers "push" — the right answer for a source the index
+  // has never heard of, and the first push is what teaches it.
+  const mine = health.sources?.[source];
 
   const latestSourceUpdateMs = await getLatestSourceUpdateAt(env.DB);
   const decision = decidePushForStaleness({
-    rows: game?.rows,
-    pushedAtIso: game?.pushed_at,
+    rows: mine?.rows,
+    pushedAtIso: mine?.pushed_at,
     latestSourceUpdateMs,
     nowMs: Date.now(),
     maxAgeMs: BACKSTOP_MAX_AGE_MS,

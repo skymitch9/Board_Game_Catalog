@@ -8,7 +8,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { decidePushForStaleness, type StalenessCheckInput } from './index-push.js';
+import { decidePushForStaleness, resolveIndexSource, type StalenessCheckInput } from './index-push.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -98,4 +98,47 @@ test('does not push when data changed exactly at the push instant (not strictly 
 test('treats a null latestSourceUpdateMs (empty item table) as "nothing to compare" rather than forcing a push', () => {
   const decision = decidePushForStaleness(input({ latestSourceUpdateMs: null }));
   assert.equal(decision.push, false);
+});
+
+/* --------------------------------------------------------------------------
+ * resolveIndexSource — which shelf THIS instance's rows are filed under
+ *
+ * 🔴 THE BUG THIS CLOSES IS DESTRUCTIVE, NOT COSMETIC. The index's write
+ * protocol is a snapshot replace keyed on `entry.source`: a push under `game`
+ * DELETES every `game` row first. Until 2026-09-06 this Worker hard-coded
+ * `game`, so the pre-declared `[env.games2]` instance would have wiped the
+ * main catalog's entire index shelf on its first push — and whichever
+ * instance pushed last would have been the estate's whole board-game
+ * collection. `index-worker-design.md` §11.1 makes exactly this argument for
+ * `library2`; the games side had the argument and not the code.
+ * ------------------------------------------------------------------------ */
+
+test('unset ESTATE_APP is the MAIN instance — `game`, the value that was hard-coded', () => {
+  // ⚠️ This is the "ships inert" assertion. If it ever fails, this change
+  // stopped being a no-op for the live catalog.
+  assert.equal(resolveIndexSource(undefined), 'game');
+  assert.equal(resolveIndexSource(''), 'game');
+  assert.equal(resolveIndexSource('   '), 'game');
+});
+
+test('🔴 `games` → `game` — the ONE vocabulary difference in the estate', () => {
+  // The estate's visibility word is `games`; the index's push word is `game`.
+  // index-worker/src/search-route.ts SOURCE_FOR_CATALOG owns that fact; this
+  // is the same fact on the sending side.
+  assert.equal(resolveIndexSource('games'), 'game');
+});
+
+test('🔴 a SECOND instance pushes as ITSELF — never as `game`, and never plural-stripped', () => {
+  // The whole point: `games2` must not collide with `game`, and must not be
+  // silently rewritten to `game2` either — the index has to be taught the
+  // exact word, and a guess would 404 at best.
+  assert.equal(resolveIndexSource('games2'), 'games2');
+  assert.equal(resolveIndexSource('quarry'), 'quarry');
+});
+
+test('⚠️ a value that is not a plain path segment pushes NOTHING, rather than somewhere else', () => {
+  // The value is interpolated into a URL path. `null` is the inert direction.
+  for (const bad of ['../library', 'Games2', 'games 2', 'games/2', 'games-2', 'g'.repeat(33), '2games']) {
+    assert.equal(resolveIndexSource(bad), null, `${JSON.stringify(bad)} must not become a source`);
+  }
 });
