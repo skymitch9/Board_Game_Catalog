@@ -1,9 +1,10 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-05** — phase 9 arrived: the games provisioner and the
-> `BILLING_SITE` lift. Split from `HANDOFF.md` per estate DOCS_STANDARD on
-> 2026-08-21.
+> Last updated: **2026-09-05** — the repo's first route tests (agent
+> W9-BOARD-ROUTES), which also found two real bugs. Before that the same day:
+> phase 9, the games provisioner and the `BILLING_SITE` lift. Split from
+> `HANDOFF.md` per estate DOCS_STANDARD on 2026-08-21.
 >
 > ⚠️ **This is an archive, not a living doc. APPEND ONLY.** Nothing here is
 > ever edited, re-summarised or tidied. An item arrives exactly once, at
@@ -13,6 +14,116 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ BUILT 2026-09-05 (agent W9-BOARD-ROUTES) — the repo's FIRST route tests: 16 files, 387 cases, and two real bugs
+
+**Not deployed, because nothing shippable changed.** Sixteen new `*.test.ts`
+files under `apps/worker/src/routes/`, one per route file, plus one line in
+`package.json` adding `apps/worker/src/routes/*.test.ts` to the `npm test` glob,
+plus two `KNOWN_ISSUES.md` entries. No route, no schema, no migration and no
+worker code was touched. Commits `231d1da`, `d335ed1`, `47fb45c`, `975386c`,
+`a61a51e`.
+
+**What it closes.** `catalog-platform/docs/info/test-inventory-2026-09-05.md`
+§5.2, verbatim: 🔴 *"`Board_Game_Catalog` has 16 route files and zero route
+tests … `library_catalog` tests its routes with 13 files / 519 cases; the board
+repo tests its `lib/` thoroughly (185 cases) and its routes not at all.
+`users.ts` and `admin.ts` are role-bearing surfaces."* That gap is now closed.
+
+**Measured, 2026-09-05.** `npm test`: **348 → 735 cases** (+387), **59 → 125
+suites**, **2.4 s → 2.6 s** wall, exit 0. `npm run typecheck`: clean across all
+seven workspaces. Per file:
+
+| Route file | Cases | What it proves that nothing else did |
+|---|---:|---|
+| `users.ts` | 27 (2 `.todo`) | the four refusal causes stay four answers; the escalation limit is checked in the ROUTE; the write is `setUserRole`, once |
+| `admin.ts` | 31 (1 `.todo`) | the estate page can never do what the in-app page cannot; CORS is one locked origin; the JSON is a cross-repo contract |
+| `catalog.ts` | 41 | the wishlist split, read from the ROW not the body; the disposal rule on the MERGED state |
+| `export.ts` | 23 | the email allow-list is still reached FROM THE ROUTE — asserted on the SQL handed to D1 |
+| `vision.ts` | 31 | `scanPhoto` by name; the spending gate across all four postures |
+| `scan-jobs.ts` | 26 | three capabilities on one file; a refusal creates no job row |
+| `research.ts` | 30 | two expensive refusals write no run row; a missing key is 503, not 403 |
+| `barcode.ts` | 21 | three capabilities by cost; `barcode.paid` is its own switch |
+| `bgg.ts` | 28 | the blanket gate as a PREFIX; no-token → 502 naming the doc |
+| `aliases.ts` | 28 | a repeat alias is a success, not a 409 |
+| `components.ts` | 25 | `state: null` is the undo on the same PUT, and clears the note |
+| `covers.ts` | 18 | the split gate proved from both sides; `?limit` is capped, not clamped |
+| `cache.ts` | 19 | 🔴 `manageUsers`, not `editCatalog` — a moderator is refused HERE and allowed everywhere else |
+| `editions.ts` | 17 | `/status` and `/campaign` cost no BGG call; a bad query beats the token check |
+| `health.ts` | 13 | unauthenticated; the envelope is additive; 🔴 names and booleans only |
+| `lookup.ts` | 9 | a cached answer costs nothing and says so |
+
+**The method, copied not invented.** The harness is `library_catalog`'s
+(`apps/worker/src/routes/users-role-guard.test.ts`, `audits.test.ts`,
+`scan-jobs.test.ts`): a real `Request` through a bare Hono app, a fake
+`requireAuth` planting a role, `requireCapability` left REAL and imported by the
+route itself, and the refusal read back off the wire. The two repos share
+lineage and the board tests now look like the library's on purpose.
+
+🔴 **Why almost every assertion is on the `capability` NAME rather than the
+status.** Four capability pairs in this repo hold the IDENTICAL role set today —
+`scanPhoto`/`runResearch` (moderator+), `scanBarcode`/`editCatalog`/
+`manageWishlist` (contributor+). A role-only check cannot tell any of them
+apart: the same person is refused either way. The name on the wire is the only
+evidence of which gate actually ran, and a mix-up between two same-shaped
+capabilities is exactly the bug `library_catalog` shipped once.
+
+### 🔴 TWO REAL BUGS FOUND — neither fixed, both pinned and filed
+
+⚠️ **Written as failing `.todo` cases that name their KI number, beside a live
+case pinning today's behaviour.** The `.todo` is what makes the defect visible;
+the live pin is what makes the day it changes visible. Node's runner reports a
+failing `.todo` and still exits 0, so `predeploy` is not blocked.
+
+1. 🔴 **KI-7 — an `admin` can demote the LAST `owner`.** The guard on both
+   role-write routes is keyed on `userId === actor.id`, so it fires only on
+   self-edits; neither route reads the target's current role, and `setUserRole`
+   has no guard. `canGrantRole` lets an `admin` grant every rung beneath
+   `admin`, so an `admin` can demote an `owner` — `countOwners()` reaches 0, and
+   after that **no role in this app can ever mint an `owner` again**. Reachable
+   from BOTH the People page and the cross-origin estate page. ✅
+   `library_catalog` had this exact bug (its 2026-08 audit HIGH), fixed it by
+   moving the guard into `setUserRole` keyed on the TARGET's role, and this repo
+   simply never took the fix. **Left for the conductor: a role-bearing change is
+   not a test agent's call.**
+2. **KI-6 — the 401 leaves as a bare `{"error":"unauthenticated"}`** with no
+   sentence, while every other refusal in this Worker carries words. ⚠️ The
+   library's `auth.ts` has the identical line, so it is an estate-wide shape and
+   a fix should land on both Workers in one pass.
+
+### Three gotchas that cost a red run, written into the files that hit them
+
+1. ⚠️ **A well-formed barcode or title that MISSES the local table falls
+   straight through to GameUPC and UPCitemdb over the real network** — 9.5 s and
+   a third-party request, measured in one draft case. Every such test is now a
+   local/cache HIT or a malformed code. **No test in this repo may phone a third
+   party.**
+2. ⚠️ **A D1 `batch()` stub must carry `meta.changes` as well as `results`.**
+   `updateCopy` reads `meta.changes` off the first result to tell "updated" from
+   "no such row", so a batch stub without it turns every status move into a 500.
+   `cacheStats` and `coverHealth` need the `results` half.
+3. ⚠️ **`npm run typecheck | grep -i "error TS"` chained with `&&` will commit a
+   broken file.** A pipeline's exit code is the last command's, and `grep`
+   FINDING something is a success — which is how `975386c` had to exist. Read
+   the typecheck's own exit code.
+
+### What was NOT verified
+
+- **Nothing was deployed and nothing ran against live D1.** Every case runs
+  against a hand-written stub; no live row, no live role and no live token was
+  read. KI-7's "what would change it" number (how many `admin` accounts exist)
+  is explicitly recorded as UNMEASURED in that entry rather than guessed.
+- **No coverage tool and no mutation run.** The 387 cases are a count, and the
+  estate's own standing advice is that a test count is not evidence. Only two
+  claims here were proved RED by construction — the two `.todo` bugs, which fail
+  today.
+- **The library's own suite was read, not run.** Its 519 route cases are quoted
+  from the inventory doc.
+- **`.dev.vars`, `.env*`, `docs/access/keys/` and `CREDENTIALS.md` were never
+  opened**, and no secret value appears in any new file — `health.test.ts`
+  plants a fake value specifically to assert it does NOT reach the wire.
 
 ---
 

@@ -4,6 +4,13 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
+🔴 **Newest first, 2026-09-05 (evening, agent W9-BOARD-ROUTES):** the repo's
+first route tests landed (16 files, +387 cases, 348 → 735 — see
+[`DONE.md`](DONE.md)) and **found a live privilege bug**. It is the first `##`
+section below: **KI-7, an `admin` can demote the last `owner`.** It was
+deliberately not fixed — a role-bearing change is the conductor's call — and the
+fix already exists in `library_catalog`. Nothing was deployed on that pass.
+
 **Last updated:** 2026-09-05 (afternoon) — **a full docs audit re-measured
 every `##` section in this file against git, the code and live D1**, and the
 headline is that **this file was telling the truth in its bodies and lying in
@@ -68,6 +75,43 @@ DEPLOYED"** items left for [`DONE.md`](DONE.md) the same day: both were
 verified **already live** in `2e598a9e` (they rode the 2026-09-02 deploys) and
 neither needed a deploy of its own. ⚠️ The estate-auth one is at **`enforce`**,
 not shadow, and stays there — the reasoning is in its `DONE.md` entry.
+
+---
+
+## 🔴 ☐ KI-7 — an `admin` can demote the LAST `owner`. THE FIX IS THE CONDUCTOR'S CALL (found 2026-09-05, agent W9-BOARD-ROUTES)
+
+**The only open item this repo gained on 2026-09-05.** It is a live privilege
+bug, it was found by writing the repo's first route tests, and it was
+deliberately **not** fixed by the agent that found it: a role-bearing change is
+the conductor's call.
+
+- **What is wrong, in one line:** the last-owner guard on both role-write routes
+  (`routes/users.ts:69`, `routes/admin.ts:122`) is keyed on
+  `userId === actor.id`, so it fires only on self-edits. Neither route reads the
+  TARGET's role, `setUserRole` has no guard, and `canGrantRole` lets an `admin`
+  grant every rung beneath `admin` — so an `admin` can demote the final `owner`,
+  `countOwners()` reaches **0**, and after that no role in this app can ever mint
+  an `owner` again. Reachable from the People page AND the estate admin page.
+- **The whole story, with the measurement and what would change it:**
+  [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) **KI-7**. Its sibling **KI-6** (the 401
+  leaves as a bare code) is filed there too and needs no work in this repo alone
+  — the library's Worker carries the identical line.
+- ✅ **The fix already exists in a sibling repo and is small.** `library_catalog`
+  hit this as its 2026-08 audit HIGH and moved the guard INTO `setUserRole`,
+  keyed on the target's current role, so both mounts inherit it at once. Its
+  regression test is
+  `bookbuddy/library_catalog/apps/worker/src/routes/users-role-guard.test.ts`.
+  **This repo never took the fix.**
+- **What the port is, to the keystroke:** move the guard into
+  `packages/db/src/users.ts`'s `setUserRole`, key it on the target's current
+  role, delete the two route-level copies, then flip the two `.todo` cases named
+  `🔴 BUG (KI-7)` in `apps/worker/src/routes/users.test.ts` and `admin.test.ts`
+  live and delete the two companion cases that pin today's 200. ⚠️ It is a
+  behaviour change on a persisted role, so it lands with a deploy, not beside
+  one.
+- ⚠️ **One number is missing and must be read, not guessed:**
+  `SELECT COUNT(*) FROM app_user WHERE role = 'admin'`. KI-7's "what would
+  change it" is written as UNMEASURED on purpose.
 
 ---
 
