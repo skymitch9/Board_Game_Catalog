@@ -38,7 +38,7 @@
     "secrets:push:games2": "node scripts/instance-guard.mjs games2 && node scripts/push-secrets.mjs --env games2",
     "provision:catalog": "node scripts/provision-catalog.mjs",
     "pretest": "node scripts/sync-estate-auth.mjs && node scripts/sync-estate-search.mjs && node scripts/sync-estate-theme.mjs",
-    "test": "tsx --test packages/db/test/*.test.ts apps/worker/src/lib/*.test.ts apps/worker/src/routes/*.test.ts apps/web/test/*.test.ts scripts/test/*.test.mjs"
+    "test": "tsx --test packages/db/test/*.test.ts apps/worker/src/lib/*.test.ts apps/worker/src/middleware/*.test.ts apps/worker/src/routes/*.test.ts apps/web/test/*.test.ts scripts/test/*.test.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
