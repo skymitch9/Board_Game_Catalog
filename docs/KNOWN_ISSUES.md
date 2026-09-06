@@ -18,7 +18,13 @@
 > (an `admin` can demote the last `owner`). Both were found by writing the
 > repo's first route tests, both are pinned by `.todo` cases naming the KI
 > number, and neither was fixed — KI-7 is role-bearing and is the conductor's
-> call. Six live entries now stand.
+> call. ~~Six live entries now stand.~~
+>
+> ✅ **KI-7 is RESOLVED (2026-09-06, agent W9-KI7)** — the conductor called it,
+> the guard was ported from `library_catalog` into `setUserRole`, and it is
+> deployed (`c0e55a0` as `e4519a77`). Its `.todo` cases are live tests now.
+> **Five live entries stand: KI-2, KI-3, KI-4, KI-5, KI-6.** KI-6 is untouched
+> and is still the one `.todo` in the suite.
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
@@ -229,10 +235,35 @@ migration.
 
 ---
 
-## KI-7 · An `admin` can demote the LAST `owner`, leaving the catalog with none — `BLOCKED` (owner/conductor call)
+## ~~KI-7~~ · RESOLVED 2026-09-06 — an `admin` can no longer demote the last `owner`
 
-🔴 **This is a live privilege bug, not a cosmetic one.** It is recorded here
-rather than fixed because the fix is role-bearing.
+✅ **Fixed and deployed**, commit `c0e55a0`, worker version
+`e4519a77-f6b6-41f6-9c51-37f8e4450242` (roll back to
+`62fc5645-7a2e-4866-b38d-5a195b0d5750`). The guard moved into `@bgc/db`'s
+`setUserRole` — the one role-write path — keyed on the **target's current
+role**, so both mounts inherit it and the actor's identity stops mattering. The
+two route-level copies are deleted; the two `.todo` tests named KI-7 are live
+and the companion that pinned the 200 is gone. The whole story, the port and
+what was NOT verified live in [`DONE.md`](DONE.md).
+
+🔢 **The number this entry was written UNMEASURED to demand, measured
+2026-09-05 read-only against production D1** — this is its home, and it is what
+took the entry from theoretical to next-in-line:
+
+| Role | Count |
+|---|---|
+| `owner` | **2** |
+| `admin` | **1** |
+| `member` | **1** |
+
+⚠️ **Two owners, not one, and the hole was still fully reachable** — the single
+`admin` could demote the first owner (allowed: one remains) and then the second
+(the bug). "At 1 or more this stops being theoretical" was met.
+
+**What is left below is the entry as it stood**, kept because the *reason* the
+fix is shaped this way is in it. Nothing below describes current behaviour.
+
+---
 
 **Symptom.** Both role-write routes — `routes/users.ts:69` (the People page) and
 `routes/admin.ts:122` (the federated estate surface) — guard the last owner with
@@ -272,14 +303,22 @@ mounts inherit it at once. Its regression test is
 written, reviewed and running in a sibling repo; this repo simply never took
 it.**
 
-**What would change it.** The count to watch is **the number of `admin`
+**What would change it.** ~~The count to watch is **the number of `admin`
 accounts in `app_user`**. ⚠️ **That number was NOT measured when this entry was
 written** — the session that found the bug had no live-D1 read in its brief, and
 filling it with something plausible would be exactly the
 assumption-in-a-measurement's-clothes this tree forbids. Read it with
 `SELECT COUNT(*) FROM app_user WHERE role = 'admin'` and write it here. At **1
 or more** this stops being theoretical and the port becomes the next
-role-bearing task. The
+role-bearing task.~~ ✅ **Measured 2026-09-05: 1 `admin`** (table at the top of
+this entry), and the port shipped the same night. The
 port is: move the guard into `setUserRole`, key it on the target's current role,
 delete the two route-level copies, flip the two `.todo` tests live and delete the
-two "pins the current behaviour" companions.
+two "pins the current behaviour" companions. **That is exactly what was done.**
+
+⚠️ **One behaviour genuinely changed beyond the fix**, recorded so nobody reads
+it as a regression: an `admin` demoting **themselves** while a single `owner`
+existed used to be refused, with a sentence about owners that had nothing to do
+with them (the old guard keyed on `userId === actor.id` and never looked at the
+actor's role). It is now allowed. Pinned by
+`packages/db/test/set-user-role-last-owner.test.ts`.

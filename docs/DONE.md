@@ -1,9 +1,11 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-05** — the repo's first route tests (agent
-> W9-BOARD-ROUTES), which also found two real bugs. Before that the same day:
-> phase 9, the games provisioner and the `BILLING_SITE` lift. Split from
+> Last updated: **2026-09-06** — KI-7 closed (agent W9-KI7): the last-owner
+> guard ported from `library_catalog` into `setUserRole` and deployed. Before
+> that, 2026-09-05: the repo's first route tests (agent W9-BOARD-ROUTES), which
+> are what found KI-7; and earlier the same day phase 9, the games provisioner
+> and the `BILLING_SITE` lift. Split from
 > `HANDOFF.md` per estate DOCS_STANDARD on 2026-08-21.
 >
 > ⚠️ **This is an archive, not a living doc. APPEND ONLY.** Nothing here is
@@ -14,6 +16,126 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ BUILT + DEPLOYED 2026-09-06 (agent W9-KI7) — KI-7 closed: an `admin` can no longer demote the LAST `owner`
+
+| | |
+|---|---|
+| Commit (code + tests) | **`c0e55a0`** |
+| Commit (docs + `deploys.log`) | see the same day's docs commit |
+| Live worker version | **`e4519a77-f6b6-41f6-9c51-37f8e4450242`** |
+| Roll back to | **`62fc5645-7a2e-4866-b38d-5a195b0d5750`** |
+| Migration | **none** — nothing under `migrations/` was touched |
+| Suite | **735 → 746** (732 → 745 pass, 0 fail, **3 → 1 todo**) |
+
+🔢 **The number KI-7 was written UNMEASURED to demand, read 2026-09-05 read-only
+against production D1** (`npx wrangler d1 execute board-game-catalog --remote`):
+**2 `owner`, 1 `admin`, 1 `member`.** Its home is
+[`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) KI-7, which asked for it. ⚠️ Two owners
+rather than one, and the hole was **still fully reachable** — the single `admin`
+could demote the first owner (allowed, one remains) and then the second (the
+bug). The "at 1 or more this stops being theoretical" threshold was met.
+
+**The port, as landed.** The guard moved into `packages/db/src/users.ts`'s
+`setUserRole` — the one role-write path — and is keyed on the **target's current
+role**: if the target is currently an `owner`, the new role is not `owner`, and
+`countOwners() <= 1`, the write is refused whoever asks, from whichever mount.
+`setUserRole` now returns a `SetUserRoleResult` discriminated union so
+`last_owner` is distinguishable from `not_found` (400 vs 404, different words) —
+and it reads the row **before** the write, which also gives `not_found` an
+honest answer instead of inferring it from a re-read afterwards.
+
+**Both route-level copies were DELETED**, not kept beside it. Verified by test
+that the db guard covers the self-edit case the old copies existed for: a last
+owner demoting themselves is a target at `owner`, i.e. a strict subset. The
+refusal sentence is `LAST_OWNER_REFUSAL` in `packages/core/src/capabilities.ts`
+— one string for both mounts, so the two surfaces cannot say different things
+about the same rule, and worded (what happened / what it needs / how to get
+there) rather than a bare 400.
+
+⚠️ **One behaviour genuinely changed beyond the fix.** An `admin` demoting
+**themselves** while a single `owner` existed used to be refused, with a
+sentence about owners that had nothing to do with them — the old guard keyed on
+`userId === actor.id` and never looked at the actor's role. It is now allowed.
+That is a bug fix, but it is a behaviour change and it is pinned by a test so
+nobody reads it as a regression later.
+
+**Files.** `packages/db/src/users.ts` · `packages/core/src/capabilities.ts` ·
+`apps/worker/src/routes/users.ts` (guard deleted) ·
+`apps/worker/src/routes/admin.ts` (guard deleted) ·
+`apps/worker/src/routes/users.test.ts` · `apps/worker/src/routes/admin.test.ts` ·
+`packages/db/test/set-user-role-last-owner.test.ts` (**new**).
+
+**Tests.** The two `.todo` cases named `🔴 BUG (KI-7)` are live and the
+companion that pinned today's 200 is deleted. Six more route cases were added
+around them (two owners remaining → allowed; a write that keeps or creates an
+owner → never blocked; the refused write issues **no** `UPDATE`). The new
+db-level file runs the **real** `setUserRole` and `countOwners` against a real
+SQLite with every migration applied — the route stubs cannot prove the guard's
+own SQL, that the before-read sees the CURRENT role, or that a refused write
+leaves the table untouched. ⚠️ The one remaining `.todo` in the suite is **KI-6**
+(the bare 401), untouched and still open.
+
+⚠️ **NOT VERIFIED.** Nobody exercised a role write against the live Worker —
+that needs a signed-in `owner` and a second account to aim at, and this session
+had neither. What IS evidence: 745/745 green, typecheck clean across seven
+workspaces, a clean-tree guarded deploy, and
+`curl -s -D - "https://boardgames.heygabi.ai/api/health?cb=…"` → **200**,
+`"database":"up"`, `"estate":{"mode":"enforce","app":"games",…,"configured":true}`
+at 2026-09-06 05:48 UTC. Also not verified: anything rendered — the People page
+was not opened, so the refusal sentence has not been seen by a person.
+
+🔗 **Where to look, ~1 minute** (optional — it is a refusal, so proving it means
+trying to break something, and with **two** owners in the table nothing looks
+different until one is demoted). ⚠️ **The role buttons are NOT on this repo's
+People page**: <https://boardgames.heygabi.ai/people> was made **read-only** on
+2026-08-16 (owner: *"remove all people stuff from the individual sites"*) and
+says so on its face. Role changes happen at <https://heygabi.ai/admin>, which is
+the federated surface this fix's `routes/admin.ts` half serves — so **that is
+the door the guard now stands behind**, and the People page's own
+`PATCH /api/users/:id/role` (still live, still load-bearing, reachable by a
+non-browser caller) inherits the same guard from the same place.
+
+---
+
+### The section as it stood in `TODO.md`, moved whole
+
+## 🔴 ☐ KI-7 — an `admin` can demote the LAST `owner`. THE FIX IS THE CONDUCTOR'S CALL (found 2026-09-05, agent W9-BOARD-ROUTES)
+
+**The only open item this repo gained on 2026-09-05.** It is a live privilege
+bug, it was found by writing the repo's first route tests, and it was
+deliberately **not** fixed by the agent that found it: a role-bearing change is
+the conductor's call.
+
+- **What is wrong, in one line:** the last-owner guard on both role-write routes
+  (`routes/users.ts:69`, `routes/admin.ts:122`) is keyed on
+  `userId === actor.id`, so it fires only on self-edits. Neither route reads the
+  TARGET's role, `setUserRole` has no guard, and `canGrantRole` lets an `admin`
+  grant every rung beneath `admin` — so an `admin` can demote the final `owner`,
+  `countOwners()` reaches **0**, and after that no role in this app can ever mint
+  an `owner` again. Reachable from the People page AND the estate admin page.
+- **The whole story, with the measurement and what would change it:**
+  [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) **KI-7**. Its sibling **KI-6** (the 401
+  leaves as a bare code) is filed there too and needs no work in this repo alone
+  — the library's Worker carries the identical line.
+- ✅ **The fix already exists in a sibling repo and is small.** `library_catalog`
+  hit this as its 2026-08 audit HIGH and moved the guard INTO `setUserRole`,
+  keyed on the target's current role, so both mounts inherit it at once. Its
+  regression test is
+  `bookbuddy/library_catalog/apps/worker/src/routes/users-role-guard.test.ts`.
+  **This repo never took the fix.**
+- **What the port is, to the keystroke:** move the guard into
+  `packages/db/src/users.ts`'s `setUserRole`, key it on the target's current
+  role, delete the two route-level copies, then flip the two `.todo` cases named
+  `🔴 BUG (KI-7)` in `apps/worker/src/routes/users.test.ts` and `admin.test.ts`
+  live and delete the two companion cases that pin today's 200. ⚠️ It is a
+  behaviour change on a persisted role, so it lands with a deploy, not beside
+  one.
+- ⚠️ **One number is missing and must be read, not guessed:**
+  `SELECT COUNT(*) FROM app_user WHERE role = 'admin'`. KI-7's "what would
+  change it" is written as UNMEASURED on purpose.
 
 ---
 
