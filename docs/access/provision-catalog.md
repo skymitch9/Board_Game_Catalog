@@ -3,6 +3,24 @@
 > **Audience:** the owner first (he is the only person who can run it), Claude
 > sessions second.
 > **Status:** TRACKED — no secret values here, names only.
+>
+> ✅ **UPDATED 2026-09-06 (multi-library survey dispatch 4, agent W10-FED-PROV).**
+> The manual runbook was measured INCOMPLETE — the survey's §7 counted ~28
+> hand-edits a new catalog needs and found the two provisioners naming **3** —
+> and now names all of them, headed by the GAMES vocabulary trap. Step 12 also
+> writes the `estate_catalog` registry row. Both are in *The twelve steps*
+> below. MEASURED that day: `scripts/test/provision-catalog.test.mjs` **74 → 89
+> cases, 0 fail**; the repo suite **762 → 781** (1 todo, KI-6, unchanged);
+> `node --check`; the `--dry` fixture run exercises every added line, because
+> this file's tests assert against the REAL command's output.
+>
+> 🔴 **And a defect was found while writing the checklist and FIXED:**
+> `apps/worker/src/lib/index-push.ts` hard-coded `PUT /api/push/game`, so a
+> second instance would have DELETED the main catalog's entire index shelf on
+> its first push (snapshot replace, keyed on source). The source now comes from
+> `ESTATE_APP`; deployed `a20b7aed`, verified live in a tail. See
+> [`deploys.md`](deploys.md) and `docs/deploys.log`.
+>
 > **Last verified: 2026-09-05** — the script was written that day.
 >
 > **What was MEASURED:**
@@ -137,7 +155,71 @@ already-exists check is what stops a second use of it.
 | 9 | the paired estate token, both sides | AUTO (stdin) | `secret list --env` by NAME |
 | 10 | per-instance secrets + `ANTHROPIC_API_KEY` | AUTO (stdin) | — |
 | 11 | ⏸ **the guarded deploy — PRINTED, never run** | 🔴 the owner's command | 🟡 an `env=<i>` line in `docs/deploys.log` |
-| 12 | verify `/api/health?cb=` and mark the request `live` | AUTO | the row's `status` |
+| 12 | verify `/api/health?cb=`, mark the request `live`, **write the registry row** | AUTO | the row's `status`; `estate_catalog` by id |
+
+### Step 12's second half — the catalog's NAME (added 2026-09-06)
+
+The same step writes one row into `estate_catalog` (auth-worker migration
+**0020**), which is what every apex surface reads to decide what this catalog
+is called and whose it is. ⚠️ **Without it the catalog is live and ANONYMOUS**
+— `catalog-platform/docs/info/catalog-registry.md` §7 calls that *"live, but
+nothing knows its name yet"*. Nothing looks broken; the shelf just has no name.
+
+🔴 **`id` and `push_source` are DIFFERENT WORDS on this side.** The estate's
+visibility vocabulary says `games`; the index's push vocabulary says `game`.
+The row records what `resolveIndexSource` will actually send, so the registry
+cannot disagree with the wire. `holding`/`shared` are the constants `physical`
+/ `0` (the owner's settled model), `label` and `owner_name` are snapshots off
+the request, `owner_name` may legitimately be **NULL** (an unattributed
+physical shelf is honest; an invented name on the front door is not), and the
+INSERT is `ON CONFLICT(id) DO NOTHING` so a `--resume` cannot rename a live
+catalog. The write cannot fail the provision — a failure prints the idempotent
+command that repairs it.
+
+Why a direct `d1 execute` and not the canonical
+`POST /api/estate/catalogs/requests/:id/live`: that route is `requireDevops()`
+and needs a Firebase ID token, and this script runs on a wrangler login. ⚠️ The
+two are near-duplicates ON PURPOSE and are NOT interchangeable.
+
+### 🔴 The checklist — and the GAMES trap that comes before all of it
+
+Printed by `--dry` and at PAUSE #2. The multi-library survey (§7) counted ~28
+hand-edits a new catalog needs and found the two provisioners naming **3**.
+
+**Read item 0 first, because it is the one that destroys data.** The index's
+write protocol is a snapshot replace keyed on `entry.source`: two instances
+sharing one source id delete each other's catalogue on every push, and the last
+pusher is the whole shelf. `resolveIndexSource` (2026-09-06) sends `game` for
+the main instance and the **app id itself** for any other, so a `games2` pushes
+as `games2` — and the checklist teaches the index that same word. ⚠️ Do not
+"fix" it by pointing a new instance at `game`.
+
+| Item | Where | If it is missed |
+|---|---|---|
+| 🔴 index `entry.source` **migration** | `index-worker/migrations/00NN_entry_source_<src>.sql` | **every push is a bare 500** — and `wrangler d1 migrations list --remote` says *"No migrations to apply"*, which is TRUE and is not the question |
+| 🔴 `UNSCOPED_LOOKUP_EXCLUDED` | `index-worker/src/read.ts:69` | **fails OPEN**: the new shelf is enumerable by title through `/api/lookup` by every member and machine token |
+| `SOURCES` | `index-worker/src/rows.ts:33` | the push is an unknown source. ⚠️ Check `rows.ts`'s `source === 'game'` branch too — a second games source is folded as a BOOK unless that test becomes a set |
+| `pushTokenFor` + `INDEX_PUSH_TOKEN_<APP>` | `index-worker/src/env.ts:187` | a worded 503. A **different value** per instance — the index resolves the caller FROM the value |
+| `SOURCE_FOR_CATALOG` + `VALID_SOURCE_PARAMS` | `index-worker/src/search-route.ts:47,111` | rows land, no scoped search can ask for them. This is the map that owns games↔game |
+| `MACHINE_VISIBILITY` | `index-worker/src/machine-route.ts:118` | ⚠️ a deliberate **default-deny** — must NOT gain the new catalog by reflex |
+| auth CORS origin | `auth-worker/src/env.ts:487` | the new site's calls fail the preflight, which reaches the page as a **network error** nobody debugs as CORS |
+| the visibility vocabulary ×2 files, 4 places each | `auth-worker/src/visibility.ts` and `packages/estate-auth/src/visibility.ts` | 🟡 **silent** — the catalog can never be granted |
+| `RESERVED_SUBDOMAINS`, **both** hostnames | `auth-worker/src/catalog-names.ts:109` | the next person to ask for the site or covers name is told it is free |
+
+❓ **`READ_ORIGINS` is EMITTED, NEVER APPLIED** — widening the index Worker's
+browser origin allowlist is access-increasing and is the owner's line. The run
+prints the exact line and says to read the LIVE value first: pasting a stale
+template would silently **revoke** an origin added since. (Measured: that list
+gained `padhard.heygabi.ai` on 2026-09-06, hours after the template was
+written.)
+
+✅ **What the registry row makes automatic:** apex search labels, the series and
+universes holding lines, the front-door card — they read `/api/catalogs`, so a
+hand-added label would be a second copy of a fact with a home. Allow up to 10
+minutes (its cache). ⚠️ `/admin`'s `CATALOGS` stays hand-kept (a permission
+surface must not fail closed on a cache miss), and `/status` shows the new
+catalog's age but deliberately does not GRADE it until somebody measures a real
+push cadence.
 
 ### The four differences from the books twin, and why
 

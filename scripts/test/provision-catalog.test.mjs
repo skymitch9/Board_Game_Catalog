@@ -893,7 +893,10 @@ describe('--dry against an accepted games fixture prints the WHOLE plan', () => 
 
   it('⚠️ READ_ORIGINS is EMITTED for the owner and never applied — access-increasing', () => {
     assert.match(text, /OWNER, ACCESS-INCREASING/);
-    assert.match(text, /wrangler\.toml:65 — READ_ORIGINS/);
+    // ⚠️ The LINE NUMBER is deliberately not pinned: it moved 65 → 86 within a
+    // day of being written, and a test that fails on somebody else's edit
+    // teaches people to loosen tests. What must be there is the file and the var.
+    assert.match(text, /index-worker\/wrangler\.toml:\d+ — READ_ORIGINS/);
     assert.match(text, /READ_ORIGINS = "https:\/\/heygabi\.ai,.*,https:\/\/quarry\.heygabi\.ai"/);
     assert.match(text, /does NOT apply it and must not/);
     // 🔴 Read the LIVE list first — a template would REVOKE a newer origin.

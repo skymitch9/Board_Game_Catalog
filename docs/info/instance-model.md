@@ -1,7 +1,14 @@
 # The instance model — what is shared, what is per-instance, and the one thing that had to be measured
 
 > **Audience:** Claude sessions and the owner. **Status:** TRACKED.
-> **Last verified: 2026-09-05.**
+> **Last verified: 2026-09-06** — ⚠️ **for §4's new `index-push` row ONLY**,
+> which was measured that day (suite 762 → 781 across the two commits — +4 here, +15 in the
+> provisioner's sibling commit — 0 fail;
+> `typecheck` clean; deploy `a20b7aed`; the backstop's decision read live out of
+> `wrangler tail`). ⚠️ **Nothing else on this page was re-measured on that date**
+> — §1–§3 and the rest of §4 still carry 2026-09-05.
+>
+> **Previously verified: 2026-09-05.**
 >
 > ⚠️ **Updated 2026-09-05 (phase 9):** §4's `BILLING_SITE` row is CLOSED — the
 > constant became `billingSite(env)`, measured by `npm test` (223 pass / 0 fail,
@@ -170,6 +177,35 @@ against `wrangler.toml` by `billing-gate.test.ts`.
 ⚠️ **Consequence for the auth Worker:** adding `games2` to `CONSUMER_APPS` also
 needs a `games2` arm in `siteForApp()` and a `games2` entry in `BILLING_SITES`
 there, or that repo does not compile. The provisioner prints both.
+
+🔴 **A SECOND gap was closed on 2026-09-06, and this one was DESTRUCTIVE rather
+than merely wrong.** `apps/worker/src/lib/index-push.ts` hard-coded
+`PUT /api/push/game`. The index Worker's write protocol is a **snapshot replace
+keyed on `entry.source`** (`catalog-platform/docs/info/index-worker-design.md`
+§5): a push under `game` deletes every `game` row and re-inserts the body. So a
+`games2` instance would have **wiped the main catalog's entire index shelf on
+its first push**, and from then on whichever instance pushed last would have
+been the estate's whole board-game collection — the exact argument §11.1 of
+that document makes for why `library2` got its own source id instead of sharing
+`library`'s. This repo had the argument written down and not the code.
+
+`resolveIndexSource(env.ESTATE_APP)` now decides it, ported from the library's
+twin (which closed the same shape on 2026-09-05):
+
+| `ESTATE_APP` | pushes as | why |
+|---|---|---|
+| unset / `games` | `game` | the estate's ONE vocabulary difference; `search-route.ts` `SOURCE_FOR_CATALOG` owns it. Identical to the hard-coded value, so this shipped INERT — and a test asserts that, because "it ships inert" is exactly the claim worth pinning |
+| `games2`, `quarry`, … | itself | ⚠️ NOT plural-stripped to `game2`: the index has to be taught the exact word (a CHECK migration, a `SOURCES` entry, a token arm), and a guess would 404 at best and collide at worst |
+| anything else | **nothing is pushed**, with the value named in the log | the value is interpolated into a URL path, so refusing is the inert direction |
+
+⚠️ **The staleness backstop asks about its OWN source too.** It read
+`health.sources.game` by name; from a second instance that would have reported
+"fresh, 838 rows" about somebody else's shelf while this one had never pushed —
+a check that is confidently wrong is worse than none, because it is the thing
+that would otherwise notice. Exercised live in a tail on the deploy
+(`a20b7aed`): `index backstop: due` → `index is fresh (838 rows, pushed
+2026-09-05T23:36:27.441Z)`, matching `GET https://index.heygabi.ai/api/health`
+exactly, with `"exceptions": []` on all six requests.
 
 | Gap | Consequence | What it needs |
 |---|---|---|
