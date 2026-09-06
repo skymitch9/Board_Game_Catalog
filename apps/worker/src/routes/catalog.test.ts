@@ -399,13 +399,13 @@ describe('the disposal rule is applied to what the PATCH would LEAVE BEHIND', ()
 // ---------------------------------------------------------------------------
 
 describe('items and relations are editCatalog; ratings are `rate`', () => {
-  const EDITS = [
+  const EDITS: { method: string; path: string; body?: unknown }[] = [
     { method: 'POST', path: '/api/items', body: { name: 'X', kind: 'game' } },
     { method: 'PATCH', path: '/api/items/7', body: { name: 'Y' } },
     { method: 'DELETE', path: '/api/items/7' },
     { method: 'POST', path: '/api/items/7/relations', body: { toItemId: 8, relation: 'related' } },
     { method: 'DELETE', path: '/api/relations/3' },
-  ] as const;
+  ];
 
   for (const { method, path, body } of EDITS) {
     it(`${method} ${path} refuses a member as editCatalog`, async () => {
