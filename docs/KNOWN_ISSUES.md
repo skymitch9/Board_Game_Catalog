@@ -13,6 +13,13 @@
 > ⚠️ Nothing here was resolved or removed on 2026-09-05. All four live entries
 > stand.
 >
+> ➕ **Two entries ADDED later on 2026-09-05** by the route-test pass (agent
+> W9-BOARD-ROUTES): **KI-6** (the 401 leaves as a bare code) and 🔴 **KI-7**
+> (an `admin` can demote the last `owner`). Both were found by writing the
+> repo's first route tests, both are pinned by `.todo` cases naming the KI
+> number, and neither was fixed — KI-7 is role-bearing and is the conductor's
+> call. Six live entries now stand.
+>
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
 >
@@ -184,3 +191,95 @@ to move the two files out of `/assets/` entirely — the same shape
 `sync-estate-search.mjs` already uses for `/estate/`, which is why that path is
 the clean one in the table above. Related durable reference:
 [`info/estate-theme.md`](info/estate-theme.md).
+
+---
+
+## KI-6 · The 401 leaves this Worker as a bare code with no sentence — `ACCEPTED`
+
+**Symptom.** `middleware/auth.ts:64` answers an unauthenticated request with
+`{"error":"unauthenticated"}` and a 401, and nothing else. No `detail`, no
+"sign in", no route back. Every other refusal in this Worker carries words:
+`requireCapability` names the capability and the role,
+`middleware/estate.ts`'s two refusals each carry a `detail` sentence (pinned by
+`lib/estate-refusals.test.ts`), and `lib/billing-gate.ts` returns
+`detail` + `needs` + `how`. This one does not.
+
+Measured 2026-09-05 by `apps/worker/src/routes/users.test.ts` (the `.todo`
+case named KI-6): the body is exactly `{"error":"unauthenticated"}`.
+
+**Why tolerated.** In a browser it is unreachable in practice — `apps/web`
+holds a Firebase session and never issues an unauthenticated `/api/*` call, so
+no person has seen this body. The estate rule it breaks is about the RESPONSE
+rather than about one client being kind enough to make up for it, which is
+exactly the argument `lib/estate-refusals.test.ts`'s header already records for
+`estate_revoked`; the difference is that this one is a 401 and is therefore
+self-describing to a *machine*, where `estate_revoked` was not.
+
+⚠️ **`bookbuddy/library_catalog` has the identical line**
+(`apps/worker/src/middleware/auth.ts:157`), so this is an estate-wide shape, not
+a board-catalog defect. A fix should land on both Workers in one pass or it
+becomes the drift it is trying to remove.
+
+**What would change it.** ⚠️ **One non-browser consumer of `/api/*`** — GABI,
+a script, the index Worker, a second surface, anything holding a curl. Today
+that number is **0**. The moment there is one, this body is the first thing it
+sees when a token expires, and a bare code gives it nothing to print. The fix
+is three lines beside the existing `misconfigured` branch and needs no
+migration.
+
+---
+
+## KI-7 · An `admin` can demote the LAST `owner`, leaving the catalog with none — `BLOCKED` (owner/conductor call)
+
+🔴 **This is a live privilege bug, not a cosmetic one.** It is recorded here
+rather than fixed because the fix is role-bearing.
+
+**Symptom.** Both role-write routes — `routes/users.ts:69` (the People page) and
+`routes/admin.ts:122` (the federated estate surface) — guard the last owner with
+
+```
+if (userId === actor.id && parsed.data.role !== 'owner') { … countOwners() … }
+```
+
+so the guard fires **only when the actor is editing themselves**. Neither route
+reads the TARGET's current role, and `setUserRole` in `packages/db/src/users.ts`
+has no guard at all. `canGrantRole` lets an `admin` grant every rung beneath
+`admin` — `member`, `guest`, `pending` included — so an `admin` can demote
+somebody who is an `owner`. With one owner in the table, `countOwners()` reaches
+**0**, and after that **no role in this app can ever mint an `owner` again**,
+because an `admin` may not grant one. The way back is `OWNER_EMAILS` plus a
+sign-in, or hand-written SQL against live D1.
+
+Measured 2026-09-05 by the `.todo` cases named KI-7 in
+`apps/worker/src/routes/users.test.ts` and `admin.test.ts`: with a target at
+`owner` and `countOwners() == 1`, an `admin`'s PATCH answers **200** on both
+mounts. A companion live test pins that 200 so the day it becomes a 400 is
+visible.
+
+**Why tolerated (for now).** ⚠️ **It is tolerated for one session, not
+accepted.** The catalog holds a small, known set of accounts and no `admin` who
+is not also trusted; the exposure is an accident or a compromised admin session,
+not an open door. The reason it is not fixed in the same pass that found it is
+the estate rule that a role-bearing change is the conductor's call — this is the
+one class of edit where "obviously right" has already been wrong once.
+
+✅ **`bookbuddy/library_catalog` had this exact bug** (its 2026-08 audit HIGH,
+`apps/worker/src/routes/users.ts:90`) **and has already fixed it**: the guard
+moved INTO `setUserRole` and is keyed on the target's current role, so any write
+that would demote the final owner is refused whoever the actor is, and both
+mounts inherit it at once. Its regression test is
+`library_catalog/apps/worker/src/routes/users-role-guard.test.ts`. **The fix is
+written, reviewed and running in a sibling repo; this repo simply never took
+it.**
+
+**What would change it.** The count to watch is **the number of `admin`
+accounts in `app_user`**. ⚠️ **That number was NOT measured when this entry was
+written** — the session that found the bug had no live-D1 read in its brief, and
+filling it with something plausible would be exactly the
+assumption-in-a-measurement's-clothes this tree forbids. Read it with
+`SELECT COUNT(*) FROM app_user WHERE role = 'admin'` and write it here. At **1
+or more** this stops being theoretical and the port becomes the next
+role-bearing task. The
+port is: move the guard into `setUserRole`, key it on the target's current role,
+delete the two route-level copies, flip the two `.todo` tests live and delete the
+two "pins the current behaviour" companions.
