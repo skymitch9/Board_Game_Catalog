@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { canGrantRole, capabilitiesFor, updateRoleSchema } from '@bgc/core';
-import { countOwners, listUsers, setUserRole } from '@bgc/db';
+import { LAST_OWNER_REFUSAL, canGrantRole, capabilitiesFor, updateRoleSchema } from '@bgc/core';
+import { listUsers, setUserRole } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { outstandingChores } from '../lib/chores.js';
 import { requireCapability } from '../middleware/auth.js';
@@ -65,21 +65,23 @@ export const userRoutes = new Hono<AppBindings>()
       );
     }
 
-    // Don't let the last owner demote themselves and lock everyone out.
-    if (userId === actor.id && parsed.data.role !== 'owner') {
-      if ((await countOwners(c.env.DB)) <= 1) {
-        return c.json(
-          { error: 'bad_request', detail: 'you are the only owner — promote someone else first' },
-          400,
-        );
-      }
-    }
-
-    const updated = await setUserRole(c.env.DB, {
+    // ⚠️ The last-owner guard is NOT here. It lives in `@bgc/db`'s
+    // `setUserRole`, keyed on the TARGET's current role, so both this mount and
+    // the federated one inherit it from the single write path (KI-7, fixed
+    // 2026-09-05). The copy that used to sit here was keyed on
+    // `userId === actor.id` and therefore fired only on a self-edit — a strict
+    // subset of what the db guard refuses, which is why it was deleted rather
+    // than kept beside it.
+    const result = await setUserRole(c.env.DB, {
       userId,
       role: parsed.data.role,
       approvedBy: actor.id,
     });
-    if (!updated) return c.json({ error: 'not_found' }, 404);
-    return c.json({ user: updated });
+    if (!result.ok) {
+      if (result.reason === 'last_owner') {
+        return c.json({ error: 'bad_request', detail: LAST_OWNER_REFUSAL }, 400);
+      }
+      return c.json({ error: 'not_found' }, 404);
+    }
+    return c.json({ user: result.user });
   });

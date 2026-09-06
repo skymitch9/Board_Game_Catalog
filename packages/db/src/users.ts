@@ -104,10 +104,55 @@ export async function listUsers(db: D1Database): Promise<AppUser[]> {
   return results.map(toUser);
 }
 
+/**
+ * What a role write can answer with. `last_owner` is distinguishable from
+ * `not_found` on purpose: they are different refusals and the routes turn them
+ * into different words and different statuses (400 vs 404). A bare `null`
+ * could not tell them apart.
+ */
+export type SetUserRoleResult =
+  | { ok: true; user: AppUser }
+  | { ok: false; reason: 'not_found' | 'last_owner' };
+
+/**
+ * Change a person's role — the ONE role-write path. Both mounts land here (the
+ * People page's `PATCH /api/users/:id/role` and the federated estate surface's
+ * `PATCH /api/admin/users/:id/role`), so both inherit the same policy rather
+ * than carrying two copies of it.
+ *
+ * ⚠️ **The last-owner guard lives HERE, keyed on the TARGET's current role**
+ * (KI-7, fixed 2026-09-05; `library_catalog` took the same fix in its 2026-08
+ * audit). It used to live in the two routes, keyed on `userId === actor.id`, so
+ * it fired only on a self-edit: an `admin` — who may grant every rung beneath
+ * `admin` — could demote somebody ELSE who was an `owner`, drive
+ * `countOwners()` to 0, and after that no role in this app could ever mint an
+ * `owner` again (an `admin` may not grant one). The way back was `OWNER_EMAILS`
+ * plus a sign-in, or hand-written SQL against live D1.
+ *
+ * Keying on the target closes it: if the target is currently an `owner`, the
+ * new role is not `owner`, and only one owner is left, that target IS the last
+ * owner and the write is refused — whoever is asking, from whichever mount. The
+ * self-demotion case the old route guard covered is a strict subset of this
+ * one (a last owner demoting themselves is a target at `owner`), which is why
+ * the route copies were deleted rather than kept beside it.
+ *
+ * The read-before-write also gives `not_found` an honest answer *before* the
+ * UPDATE rather than inferring it from a re-read afterwards.
+ */
 export async function setUserRole(
   db: D1Database,
   params: { userId: number; role: Role; approvedBy: number },
-): Promise<AppUser | null> {
+): Promise<SetUserRoleResult> {
+  const before = await db
+    .prepare('SELECT id, email, display_name, role, first_seen_at, approved_at FROM app_user WHERE id = ?')
+    .bind(params.userId)
+    .first<UserRow>();
+  if (!before) return { ok: false, reason: 'not_found' };
+
+  if (before.role === 'owner' && params.role !== 'owner') {
+    if ((await countOwners(db)) <= 1) return { ok: false, reason: 'last_owner' };
+  }
+
   await db
     .prepare('UPDATE app_user SET role = ?, approved_at = ?, approved_by = ? WHERE id = ?')
     .bind(params.role, new Date().toISOString(), params.approvedBy, params.userId)
@@ -117,7 +162,7 @@ export async function setUserRole(
     .prepare('SELECT id, email, display_name, role, first_seen_at, approved_at FROM app_user WHERE id = ?')
     .bind(params.userId)
     .first<UserRow>();
-  return row ? toUser(row) : null;
+  return row ? { ok: true, user: toUser(row) } : { ok: false, reason: 'not_found' };
 }
 
 export async function countOwners(db: D1Database): Promise<number> {

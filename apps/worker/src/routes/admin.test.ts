@@ -315,12 +315,17 @@ describe('federation does not mean a second policy', () => {
   });
 
   /**
-   * 🔴 FAILING ON PURPOSE — KNOWN_ISSUES KI-7, the same hole as
-   * `routes/users.ts`, reachable from the cross-origin surface as well. Left
-   * `.todo`: the fix belongs in `setUserRole` so both mounts inherit it at
-   * once, and that is the conductor's call.
+   * ✅ **KI-7, fixed 2026-09-05.** This was `.todo` and failing on purpose — the
+   * same hole as `routes/users.ts`, reachable from the cross-origin surface as
+   * well.
+   *
+   * ⚠️ **This case is the argument for where the fix went.** The guard is in
+   * `@bgc/db`'s `setUserRole`, keyed on the target's current role, so this
+   * mount inherits it without a line of its own. A route-level fix would have
+   * had to be written twice and would have been the drift the file header
+   * already warns about.
    */
-  it.todo('🔴 BUG (KI-7): an admin can demote the LAST owner from the estate page too', async () => {
+  it('an admin may NOT demote the last owner from the estate page either', async () => {
     const res = await appAs('admin', 1).request(
       '/api/admin/users/2/role',
       {
@@ -331,6 +336,22 @@ describe('federation does not mean a second policy', () => {
       envWith(stubDb({ targetRole: 'owner', ownerCount: 1, newRole: 'member' })),
     );
     assert.equal(res.status, 400);
+    const body = (await res.json()) as { error?: string; detail?: string };
+    assert.equal(body.error, 'bad_request');
+    assert.match(String(body.detail), /only owner — promote someone else first/);
+  });
+
+  it('and MAY demote an owner here while a second owner remains', async () => {
+    const res = await appAs('admin', 1).request(
+      '/api/admin/users/2/role',
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: 'member' }),
+      },
+      envWith(stubDb({ targetRole: 'owner', ownerCount: 2, newRole: 'member' })),
+    );
+    assert.equal(res.status, 200);
   });
 
   it('🔴 the write is `@bgc/db`’s `setUserRole`, byte for byte the People page’s statement', async () => {

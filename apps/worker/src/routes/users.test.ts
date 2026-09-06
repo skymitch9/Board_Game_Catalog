@@ -404,30 +404,55 @@ describe('the last-owner guard', () => {
   });
 
   /**
-   * 🔴 FAILING ON PURPOSE — a real, live privilege bug. See KNOWN_ISSUES KI-7.
+   * ✅ **KI-7, fixed 2026-09-05.** This was `.todo` and failing on purpose, and
+   * a companion test beside it pinned the 200 this used to get.
    *
-   * The guard is keyed on `userId === actor.id`, so it fires only when the
-   * actor is editing themselves. Nothing on either role-write path reads the
+   * The bug: the guard was keyed on `userId === actor.id`, so it fired only
+   * when the actor was editing themselves. Neither role-write path read the
    * TARGET's current role, so an `admin` — who may grant every rung beneath
-   * `admin`, `pending` included — can demote the last remaining `owner`.
-   * `countOwners()` reaches 0, and after that no role in this app can ever
-   * mint an `owner` again, because an `admin` may not grant one.
+   * `admin`, `pending` included — could demote the last remaining `owner`.
+   * `countOwners()` reaches 0, and after that no role in this app can ever mint
+   * an `owner` again, because an `admin` may not grant one.
    *
-   * `library_catalog` had exactly this bug (2026-08 audit HIGH) and fixed it by
-   * moving the guard into `setUserRole` and keying it on the target's current
-   * role. This repo never took that fix. Left `.todo` deliberately: the fix is
-   * role-bearing and is the conductor's call, not a test agent's.
+   * The fix (ported from `library_catalog`'s 2026-08 audit HIGH) moves the
+   * guard into `@bgc/db`'s `setUserRole` and keys it on the target's current
+   * role, so **both** mounts inherit it and the actor's identity stops
+   * mattering. ⚠️ This case is the whole point of the port: the actor here is
+   * an `admin` editing somebody ELSE.
    */
-  it.todo('🔴 BUG (KI-7): an admin can demote the LAST owner — countOwners() reaches 0', async () => {
+  it('an admin may NOT demote the last owner — the guard reads the TARGET, not the actor', async () => {
     const { res } = await patchRole({ role: 'admin', id: 1 }, { id: 2, role: 'owner', ownerCount: 1 }, 'member');
     assert.equal(res.status, 400, 'demoting the final owner must be refused whoever asks');
+    const body = (await res.json()) as { error?: string; detail?: string };
+    // ⚠️ Never a bare status: the refusal says what happened and what to do.
+    assert.equal(body.error, 'bad_request');
+    assert.match(String(body.detail), /only owner — promote someone else first/);
   });
 
-  it('⚠️ the hole is real, and this pins the CURRENT behaviour so the fix is visible', async () => {
-    // Not an endorsement — a measurement. When KI-7 is fixed this test flips to
-    // 400 and the `.todo` above becomes the live one. Two tests, one truth.
-    const { res } = await patchRole({ role: 'admin', id: 1 }, { id: 2, role: 'owner', ownerCount: 1 }, 'member');
-    assert.equal(res.status, 200, 'today the demotion succeeds — see KNOWN_ISSUES KI-7');
+  it('an admin MAY demote an owner while a second owner remains — the guard is not a role freeze', async () => {
+    const { res } = await patchRole({ role: 'admin', id: 1 }, { id: 2, role: 'owner', ownerCount: 2 }, 'member');
+    assert.equal(res.status, 200);
+  });
+
+  it('nothing that keeps or creates an owner is ever blocked', async () => {
+    // Target is a member, new role is owner, one owner in the table: the guard
+    // keys on the TARGET's current role, so it must not fire here.
+    const { res } = await patchRole({ role: 'owner', id: 1 }, { id: 2, role: 'member', ownerCount: 1 }, 'owner');
+    assert.equal(res.status, 200);
+  });
+
+  it('re-approving the only owner AS owner is not a demotion', async () => {
+    const { res } = await patchRole({ role: 'owner', id: 1 }, { id: 2, role: 'owner', ownerCount: 1 }, 'owner');
+    assert.equal(res.status, 200);
+  });
+
+  it('the refused write never reaches the database — no UPDATE is issued', async () => {
+    const { db } = await patchRole({ role: 'admin', id: 1 }, { id: 2, role: 'owner', ownerCount: 1 }, 'member');
+    assert.deepEqual(
+      db._sql.filter((s) => /UPDATE app_user/.test(s)),
+      [],
+      'the guard must refuse BEFORE the role is written, not roll it back after',
+    );
   });
 });
 

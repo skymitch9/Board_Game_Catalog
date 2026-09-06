@@ -37,8 +37,8 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { ROLES, canGrantRole, updateRoleSchema } from '@bgc/core';
-import { countOwners, listUsers, setUserRole } from '@bgc/db';
+import { LAST_OWNER_REFUSAL, ROLES, canGrantRole, updateRoleSchema } from '@bgc/core';
+import { listUsers, setUserRole } from '@bgc/db';
 import type { AppBindings } from '../env.js';
 import { pushIndexSnapshot } from '../lib/index-push.js';
 import { requireCapability } from '../middleware/auth.js';
@@ -118,28 +118,28 @@ export const adminRoutes = new Hono<AppBindings>()
       );
     }
 
-    // Don't let the last owner demote themselves and lock everyone out.
-    if (userId === actor.id && parsed.data.role !== 'owner') {
-      if ((await countOwners(c.env.DB)) <= 1) {
-        return c.json(
-          { error: 'bad_request', detail: 'you are the only owner — promote someone else first' },
-          400,
-        );
-      }
-    }
-
-    const updated = await setUserRole(c.env.DB, {
+    // ⚠️ The last-owner guard is NOT here — same reason as the People page's
+    // twin route: it lives in `@bgc/db`'s `setUserRole`, keyed on the TARGET's
+    // current role, so this federated mount inherits it from the one write path
+    // instead of carrying a second copy (KI-7, fixed 2026-09-05). The copy that
+    // used to sit here fired only on a self-edit.
+    const result = await setUserRole(c.env.DB, {
       userId,
       role: parsed.data.role,
       approvedBy: actor.id,
     });
-    if (!updated) return c.json({ error: 'not_found' }, 404);
+    if (!result.ok) {
+      if (result.reason === 'last_owner') {
+        return c.json({ error: 'bad_request', detail: LAST_OWNER_REFUSAL }, 400);
+      }
+      return c.json({ error: 'not_found' }, 404);
+    }
     return c.json({
       user: {
-        id: updated.id,
-        email: updated.email,
-        displayName: updated.displayName,
-        role: updated.role,
+        id: result.user.id,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        role: result.user.role,
       },
     });
   })

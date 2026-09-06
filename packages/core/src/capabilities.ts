@@ -138,6 +138,31 @@ const LADDER_RANK: ReadonlyMap<LadderRole, number> = new Map(
 );
 
 /**
+ * The sentence a role write is refused with when it would leave the catalog
+ * with no `owner` at all — **one string, two mounts** (the People page's
+ * `PATCH /api/users/:id/role` and the federated
+ * `PATCH /api/admin/users/:id/role`), so the two surfaces cannot drift into
+ * saying different things about the same rule.
+ *
+ * ⚠️ Worded the way every refusal in this app is: **what happened** (the only
+ * owner cannot be removed), **what it needs** (a second owner), **how to get
+ * there** (promote someone else first, then come back). A bare 400 would tell
+ * a person nothing they could act on.
+ *
+ * ⚠️ It no longer says *"you are the only owner"*. Since KI-7 the guard fires
+ * on the TARGET rather than on a self-edit, so the person refused is often not
+ * the owner in question — an `admin` demoting somebody else is the case the
+ * fix exists for.
+ *
+ * The rule itself is enforced in `@bgc/db`'s `setUserRole`, not here; this is
+ * only its wording. See that function for why it is keyed on the target's
+ * current role.
+ */
+export const LAST_OWNER_REFUSAL =
+  'cannot remove the only owner — promote someone else first, then change this role. ' +
+  'The catalog must always have at least one owner.';
+
+/**
  * May `granterRole` set someone's role to `targetRole`?
  *
  * Pure and unit-tested (`apps/worker/src/lib/role-grant.test.ts`) rather than
