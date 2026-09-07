@@ -23,8 +23,15 @@
 > ✅ **KI-7 is RESOLVED (2026-09-06, agent W9-KI7)** — the conductor called it,
 > the guard was ported from `library_catalog` into `setUserRole`, and it is
 > deployed (`c0e55a0` as `e4519a77`). Its `.todo` cases are live tests now.
-> **Five live entries stand: KI-2, KI-3, KI-4, KI-5, KI-6.** KI-6 is untouched
-> and is still the one `.todo` in the suite.
+> ~~**Five live entries stand: KI-2, KI-3, KI-4, KI-5, KI-6.** KI-6 is untouched
+> and is still the one `.todo` in the suite.~~
+>
+> ✅ **KI-6 is RESOLVED TOO (2026-09-06, agent W13-PLAT-SMALL)** — and it was
+> fixed the way the entry itself demanded, ONCE for the estate rather than once
+> per repo. `46212c0`, deployed `c344869a-d215-4773-a67d-91e5914992f0`.
+> **Four live entries stand: KI-2, KI-3, KI-4, KI-5.** ⚠️ **The suite now has
+> ZERO `.todo` cases** (789 pass / 0 fail / 0 todo) — both KI-numbered
+> placeholders written by W9-BOARD-ROUTES are live tests.
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
@@ -200,7 +207,40 @@ the clean one in the table above. Related durable reference:
 
 ---
 
-## KI-6 · The 401 leaves this Worker as a bare code with no sentence — `ACCEPTED`
+## ~~KI-6~~ · RESOLVED 2026-09-06 — the 401 is a sentence, and the sentence is shared
+
+✅ **Fixed and deployed**, commit `46212c0`, worker version
+`c344869a-d215-4773-a67d-91e5914992f0` (roll back to
+`a20b7aed-a865-44ff-b77a-2e61d2c50c67`). ⚠️ **It was fixed the way this entry
+demanded — ONCE for the estate, not once per repo.** The words come from
+`estateSignInRefusal()` in
+`catalog-platform/packages/estate-auth/src/refusals.ts`, materialised into
+`apps/worker/src/estate-auth/` by the existing `scripts/sync-estate-auth.mjs`;
+nothing about the sentence is authored in this repo. The same helper closed
+`library_catalog`'s identical line and catalog-platform's index Worker in the
+same pass — three Workers, one sentence.
+
+🔢 **The number this entry demanded, and it was met the hard way.** It said the
+fix waited on *"ONE non-browser consumer of `/api/*` … Today that number is
+**0**."* That number is **still 0** — nothing was found that consumes it. The
+fix shipped anyway, because the estate rule is about the RESPONSE rather than
+about a client being kind enough to make up for it, and because the shared
+helper made the cost three lines instead of a repo-local sentence that would
+itself become drift. ⚠️ **Recorded plainly so nobody reads this as the trigger
+having fired: it did not. The economics changed, not the evidence.**
+
+**Measured live 2026-09-06** on `https://boardgames.heygabi.ai/api/me` with
+`curl -sS -D <file> -o <file>`: **27 bytes → 501 bytes**, carrying `detail`,
+`what`, `needs` and `how`. The `error` code is **unchanged** at
+`unauthenticated` — `tools/estate-probes` and the apex's
+`assets/estate-search.js` both branch on it, so the fix is purely additive.
+
+⚠️ **NOT VERIFIED:** no signed-in request was made (no agent session holds a
+Firebase ID token), so the measurement is the unauthenticated edge only, and
+**nobody has seen this sentence rendered in a browser.**
+
+**What follows is the entry as it stood, kept because the reasoning is still
+the record of why it waited.**
 
 **Symptom.** `middleware/auth.ts:64` answers an unauthenticated request with
 `{"error":"unauthenticated"}` and a 401, and nothing else. No `detail`, no
