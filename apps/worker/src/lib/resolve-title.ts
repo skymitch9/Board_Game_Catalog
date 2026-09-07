@@ -27,6 +27,35 @@ import { getCachedEntry, putCached } from '@bgc/db';
  */
 const KEEP_CANDIDATES = 5;
 
+/**
+ * Read the stored answer for a title, or `null` if there is not one.
+ *
+ * ⚠️ **A stored `null` is an answer** — "we asked, and this game does not
+ * exist" — and it comes back as `[]`, not as a miss. That is the whole reason
+ * this reads through `getCachedEntry` rather than `getCached`: the latter
+ * cannot tell a stored `null` from an empty cache, and a caller that confuses
+ * them re-runs the full ladder on every keystroke for every title that does not
+ * exist.
+ *
+ * Exported so a caller that must report *whether* it was cached (the
+ * `/api/lookup` route says so in its body) does not have to hand-roll a second
+ * copy of the read and the shape-normalisation below.
+ */
+export async function readCachedTitle(
+  db: D1Database,
+  title: string,
+): Promise<BarcodeCandidate[] | null> {
+  const cached = await getCachedEntry<BarcodeCandidate[] | BarcodeCandidate | null>(
+    db,
+    'title',
+    title,
+  );
+  if (!cached) return null;
+  const value = cached.value;
+  if (value == null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
 /** The best answer, and the runners-up a person may prefer at review. */
 export async function cachedResolve(
   db: D1Database,
@@ -67,16 +96,8 @@ export async function cachedResolveAll(
   options?: { force?: boolean },
 ): Promise<BarcodeCandidate[]> {
   if (!options?.force) {
-    const cached = await getCachedEntry<BarcodeCandidate[] | BarcodeCandidate | null>(
-      db,
-      'title',
-      title,
-    );
-    if (cached) {
-      const value = cached.value;
-      if (value == null) return [];
-      return Array.isArray(value) ? value : [value];
-    }
+    const cached = await readCachedTitle(db, title);
+    if (cached) return cached;
   }
 
   // With no GameUPC config there is no ladder to run, and `resolveTitle` says

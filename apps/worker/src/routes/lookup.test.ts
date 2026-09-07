@@ -48,20 +48,26 @@ function appAs(role: Role) {
  * network — 9.5 s and a third-party request per run, measured while the
  * barcode tests were being written.
  */
-function stubDb(opts: { cached?: boolean } = {}) {
+function stubDb(opts: { cached?: boolean; payload?: string } = {}) {
   const sqlSeen: string[] = [];
+  const bindsSeen: unknown[][] = [];
   const db = {
     prepare(sql: string) {
       sqlSeen.push(sql);
       const stmt = {
-        bind() {
+        bind(...args: unknown[]) {
+          bindsSeen.push(args);
           return stmt;
         },
         async first() {
           if (opts.cached && /lookup_cache/.test(sql)) {
             // `getCachedEntry` reads exactly one column, `payload`, and parses
             // it — a corrupt row behaves as a miss, never as an error.
-            return { payload: JSON.stringify([{ name: 'Catan', bggId: 13, source: 'gameupc' }]) };
+            return {
+              payload:
+                opts.payload ??
+                JSON.stringify([{ name: 'Catan', bggId: 13, source: 'gameupc' }]),
+            };
           }
           return null;
         },
@@ -78,8 +84,9 @@ function stubDb(opts: { cached?: boolean } = {}) {
       return stmts.map(() => ({ results: [], meta: { changes: 0 } }));
     },
     _sql: sqlSeen,
+    _binds: bindsSeen,
   };
-  return db as unknown as D1Database & { _sql: string[] };
+  return db as unknown as D1Database & { _sql: string[]; _binds: unknown[][] };
 }
 
 const envWith = (db: D1Database) => ({ DB: db }) as unknown as Env;
@@ -156,5 +163,47 @@ describe('🔴 a cached answer costs nothing, and SAYS it was cached', () => {
   it('a whitespace-padded query is trimmed before the key is built', async () => {
     const { res } = await get('owner', '/api/lookup?q=%20%20catan%20%20', stubDb({ cached: true }));
     assert.equal(res.status, 200);
+  });
+});
+
+describe('🔴 finding 3 — a NEGATIVE is an answer, and it is shared with the scan path', () => {
+  it('a stored `null` answers "nothing found" from cache instead of re-running the ladder', async () => {
+    // The audit's finding 3, and the half with teeth. This route's own
+    // predicate was `hit.bggHydrated || !deps.bggToken`, and a genuine
+    // no-candidates result is neither — so a real negative was NEVER written,
+    // and every keystroke of every nonexistent title re-ran the whole free
+    // ladder against a quota that is 100/day for the entire Worker.
+    //
+    // ⚠️ Reading it back is the half a test can prove without a network: a
+    // stored `null` must come back as a HIT with no candidates, not as a miss.
+    // `getCached` cannot tell those apart, which is why the code reads through
+    // `getCachedEntry`.
+    const { res, db } = await get(
+      'owner',
+      '/api/lookup?q=notagamethatexists',
+      stubDb({ cached: true, payload: 'null' }),
+    );
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { candidates?: unknown[]; cached?: boolean };
+    assert.equal(body.cached, true, 'a stored negative is a cache HIT');
+    assert.deepEqual(body.candidates, []);
+    // ⚠️ Exactly one statement — the read. Two would mean the ladder ran and
+    // re-cached, which is the defect wearing a different hat.
+    assert.equal(db._sql.length, 1);
+  });
+
+  it('the key is the BARE title, not this route\'s old `q:` prefix', async () => {
+    // The divergent key meant the type-ahead and the scan path each paid for
+    // the same answer, while this file's docstring claimed they shared one.
+    // `cacheKey` folds through `normaliseTitle`, so `q:catan` and `catan` are
+    // two different rows, not two spellings of one.
+    const { db } = await get('owner', '/api/lookup?q=Catan', stubDb({ cached: true }));
+    const bound = db._binds[0] ?? [];
+    assert.equal(bound[0], 'title', 'the cache KIND');
+    assert.equal(
+      bound[1],
+      'catan',
+      `the key is the normalised title; got ${JSON.stringify(bound[1])}`,
+    );
   });
 });
