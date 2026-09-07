@@ -888,21 +888,17 @@ function LookupDetails({
           {gaps.length > 0 ? (
             <>
               <strong>No {inWords(gaps)} recorded</strong>
+              {/* The single home of the fill-only-blanks fact as of 2026-09-07
+                  (audit item 141). The two copies that restated it — the
+                  paragraph under "Nothing more is expected of this one" just
+                  below, and `DetailsQueuePage.tsx:200` — were cut with it. */}
               <p className="muted small">
-                Only blanks are filled — anything already written down stays as it is.
-                The free lookup uses the same sources as the scanner; searching the web
-                costs a few cents and is the only thing that finds a publisher.
+                Only blanks are filled. The paid web search is the only thing that finds
+                a publisher.
               </p>
             </>
           ) : (
-            <>
-              <strong>Nothing more is expected of this one</strong>
-              <p className="muted small">
-                Anything filed under a game takes that game&rsquo;s publisher, and is not
-                asked for a year, a player count or a description of its own. Look it up
-                anyway if you want the extra detail — only blanks are filled.
-              </p>
-            </>
+            <strong>Nothing more is expected of this one</strong>
           )}
         </div>
         <div className="lookup-fill__actions">
@@ -967,10 +963,9 @@ function LinkEditor({
   return (
     <section className="card">
       <h2>Linked games</h2>
-      {/* Trimmed 2026-08-17 (owner's estate-wide order). Where links are ADDED
-          is discoverable by going there; where they come OFF is not, which is
-          why that is the half that stayed. */}
-      <p className="muted small">This is where links come off.</p>
+      {/* Trimmed to nothing 2026-09-07 (audit item 153). The surviving half of
+          the 2026-08-17 trim — "this is where links come off" — went too: every
+          row below carries an Unlink button that says it. */}
 
       {error != null && <ErrorBox error={error} what="Could not unlink" />}
 

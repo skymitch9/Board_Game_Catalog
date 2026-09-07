@@ -192,15 +192,14 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
             Looks each game up on the web and fills only the blanks — anything already
             recorded is left alone.
           </p>
-          {/* Said here rather than left to be inferred from a short list: the
-              queue went from 694 rows to 78 when children stopped being asked,
-              and a page that quietly dropped 616 games would look broken. That
-              is why the sentence survives the trim at all — it is the reason a
-              short list is not a broken one. */}
-          <p className="muted small">
-            Only games are listed. Anything filed under one takes its publisher from the
-            game, so there is nothing there to look up.
-          </p>
+          {/* "Only games are listed. Anything filed under one takes its
+              publisher from the game…" stood here until 2026-09-07 (audit item
+              138). It was the FIRST of three copies of the same fact — the
+              others were `ItemPage.tsx` :891 and :900 — and the audit cut this
+              one and :900, leaving the shortened :891 as the single home. The
+              reason it was ever written down: the queue went from 694 rows to
+              78 when children stopped being asked, and a page that quietly
+              dropped 616 games looks broken. */}
           {/* This paragraph used to promise that closing the tab cost nothing.
               It was not true: the server got about thirty seconds to finish
               after answering, and half of these lookups take longer, so they
@@ -283,12 +282,9 @@ export function DetailsQueuePage({ me }: { me: MeResponse }) {
 
         {/* A finished game stays listed until the list is re-fetched, so what a
             lookup found is readable rather than flashing past as the row it
-            describes disappears. */}
-        {items.some((i) => runs[i.id] != null) && (
-          <p className="muted small">
-            Filled-in games stay listed until you press Refresh list.
-          </p>
-        )}
+            describes disappears. That behaviour used to be stated in a grey
+            line here; cut 2026-09-07 (audit item 140) — the Refresh list button
+            is adjacent and says it. */}
       </section>
     </div>
   );

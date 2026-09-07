@@ -232,11 +232,9 @@ export function WishlistPage({ me }: { me: MeResponse }) {
 
       {state.state === 'ok' && entries.length === 0 && (
         <EmptyState title="Nothing wanted yet">
-          <p className="muted">
-            A game lands here when one of its copies has the status{' '}
-            <strong>wanted</strong> — set that when adding it, or change an existing
-            copy&rsquo;s status on the game&rsquo;s page.
-          </p>
+          {/* The "a game lands here when one of its copies has the status
+              wanted…" paragraph was cut 2026-09-07 (audit item 148) — the data
+              model explained to the reader. The button below is the answer. */}
           {/* The page's own door, not a link to `/scan`. Sending somebody to
               the scanner to record something they do not have yet was always
               the wrong direction — that page is for boxes in your hand. */}

@@ -754,10 +754,9 @@ function PhotoFallback({
   if (mode === 'barcode' || mode === 'manual') return null;
   return (
     <label className="scan-fallback">
-      <span className="muted">
-        Camera not working? Take a photo or choose one you already have — nothing
-        taken here is saved to your library.
-      </span>
+      {/* The "camera not working?" line that lived here is cut (audit item
+          114, 2026-09-07): the same sentence is on `BarcodeQueue`, which is
+          the copy the audit kept. One fact, one home. */}
       <input
         type="file"
         accept="image/*"
@@ -814,9 +813,6 @@ function BarcodeResult({
         */}
         {target === 'wishlist' && (
           <>
-            <p className="muted small">
-              Adding it here records that you want <strong>another</strong> one.
-            </p>
             <div className="form-actions">
               <button
                 type="button"

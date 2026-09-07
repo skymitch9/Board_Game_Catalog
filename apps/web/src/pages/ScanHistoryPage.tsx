@@ -144,12 +144,9 @@ export function ScanHistoryPage({ me, page }: { me: MeResponse; page: number }) 
       {hist.state === 'error' && <ErrorBox error={hist.error} what="Could not load history" />}
 
       {hist.state === 'ok' && hist.data.total === 0 && (
-        <EmptyState title="No scans yet">
-          <p className="muted">
-            Scan a barcode or photograph a shelf on the{' '}
-            <Link to="/scan-jobs">Add games</Link> page and it will be recorded here.
-          </p>
-        </EmptyState>
+        // First-run advice cut 2026-09-07 (audit item 147); the header's
+        // "Back to the queue" link is the way to the Add games page.
+        <EmptyState title="No scans yet" />
       )}
 
       {hist.state === 'ok' && hist.data.total > 0 && (

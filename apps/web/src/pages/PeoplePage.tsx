@@ -83,9 +83,9 @@ export function PeoplePage({
       <header className="page-head">
         <div>
           <h1>People</h1>
-          <p className="subtitle">
-            Anyone can sign in, but only people you approve here can see the collection.
-          </p>
+          {/* Subtitle cut 2026-09-07 (audit item 143): "anyone can sign in, but
+              only people you approve here can see the collection" is
+              demonstrated by the Pending section immediately below it. */}
         </div>
       </header>
 

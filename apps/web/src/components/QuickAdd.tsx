@@ -247,11 +247,12 @@ export function QuickAdd({
         <button className="btn btn-primary" disabled={busy || !name.trim()}>
           {busy ? 'Adding…' : 'Add and keep going'}
         </button>
-        <span className="muted small">
-          {added.length > 0
-            ? `${added.length} added this session`
-            : 'The form stays open so you can work along a shelf.'}
-        </span>
+        {/* The empty-state half of this counter said "the form stays open so
+            you can work along a shelf"; cut 2026-09-07 (audit item 151) — the
+            form visibly stays open. The count itself is a fact, not prose. */}
+        {added.length > 0 && (
+          <span className="muted small">{added.length} added this session</span>
+        )}
       </div>
 
       {added.length > 0 && (

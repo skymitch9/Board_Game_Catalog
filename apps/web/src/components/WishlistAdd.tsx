@@ -476,17 +476,24 @@ export function WishlistAddForm({
       </div>
 
       <div className="form-actions">
-        <button className="btn btn-primary" disabled={busy || !canSubmit}>
+        {/* The "an expansion needs a base game" sentence was a standing grey
+            line beside these buttons until 2026-09-07 (audit item 152). It now
+            rides ON the disabled button, which is the control it is about —
+            a refusal that says what it wants, where the refusal happens. */}
+        <button
+          className="btn btn-primary"
+          disabled={busy || !canSubmit}
+          title={
+            needsParent && !parentAnswered
+              ? 'An expansion needs a base game — pick one, or name the one to wait for.'
+              : undefined
+          }
+        >
           {busy ? 'Adding…' : 'Add to wishlist'}
         </button>
         <button type="button" className="btn btn-quiet" onClick={onClose} disabled={busy}>
           Cancel
         </button>
-        {needsParent && !parentAnswered && (
-          <span className="muted small">
-            An expansion needs a base game — pick one, or name the one to wait for.
-          </span>
-        )}
       </div>
         </>
       )}

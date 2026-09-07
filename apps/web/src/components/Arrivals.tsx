@@ -240,12 +240,9 @@ export function Arrivals({
             </button>
           </div>
 
-          {chosen.length === 0 && (
-            <p className="muted small">
-              Nothing is ticked, so there is nothing to mark. Close this and it is as
-              though you never opened it.
-            </p>
-          )}
+          {/* "Nothing is ticked, so there is nothing to mark…" stood here
+              until 2026-09-07 (audit item 150, the duplicate of the paragraph
+              above the list). The disabled Mark button says it. */}
         </>
       )}
     </section>

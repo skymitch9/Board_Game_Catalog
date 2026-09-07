@@ -128,9 +128,8 @@ export function WishlistExpansions({
     return (
       <p className="muted small">
         {report.bggId == null
-          ? 'Not matched to BoardGameGeek, so there is no expansion list to offer. '
-          : 'No expansions outstanding for this one. '}
-        <Link to={`/items/${itemId}`}>Open the game</Link> to see everything filed under it.
+          ? 'Not matched to BoardGameGeek, so there is no expansion list to offer.'
+          : 'No expansions outstanding for this one.'}
       </p>
     );
   }

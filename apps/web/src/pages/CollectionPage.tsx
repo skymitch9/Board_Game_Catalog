@@ -339,12 +339,10 @@ export function CollectionPage({ me, filters }: { me: MeResponse; filters: Colle
 
       {items.state === 'ok' && items.data.entries.length === 0 && (
         <EmptyState title={filtersActive ? 'Nothing matches' : 'The catalog is empty'}>
+          {/* The `canEdit` arm used to carry first-run advice ("start with a
+              base game…"); cut 2026-09-07, audit item 136. */}
           {filtersActive ? (
             <p className="muted">Try loosening the filters.</p>
-          ) : canEdit ? (
-            <p className="muted">
-              Start with a base game — expansions and accessories file underneath it.
-            </p>
           ) : (
             <p className="muted">Nothing has been added yet.</p>
           )}
