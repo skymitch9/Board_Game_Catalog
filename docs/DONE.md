@@ -1,7 +1,12 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-07** — the family chip on a search/collection row
+> Last updated: **2026-09-07** — the estate testing audit's two board findings,
+> §4.1 and §4.3 (commits `8cbb041`, `31c77db`): the public projection's
+> allow-list is pinned by a test that was **proved red**, and this repo has a CI
+> test lane again after three weeks without one — first run `34157231459`,
+> green, **1m53s**. Nothing deployed. Earlier the same day, the family chip on a
+> search/collection row
 > (agent `W18-FAM-BADGE`, deployed `a0cd1d63`): a row that is one of several
 > lines in a family now says which, and links into the rest of it, on the
 > group card's own membership rule. Earlier the same day, the two Here to Slay
@@ -33,6 +38,131 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ☑ BUILT 2026-09-07 (`8cbb041`, `31c77db`) — the estate testing audit's two board findings: the projection allow-list is pinned, and CI runs again
+
+⚠️ **No TODO item existed for either of these.** They come from
+`catalog-platform/docs/archive/2026-09-07-testing-audit.md` §4.1 and §4.3, which
+audited all four repos' suites; nothing was ever filed in this repo's
+[`TODO.md`](TODO.md), so there was nothing to move whole. This entry cites the
+audit sections instead, per the docs standard.
+
+**Nothing was deployed.** Both changes are test/CI only — no `wrangler deploy`,
+no D1 write, no `deploys.log` line.
+
+---
+
+### 🔴 §4.1 — the public projection allow-list had no test (`8cbb041`)
+
+`packages/db/src/index-projection.ts` builds the rows this catalog pushes to the
+**shared, public** index Worker, under the rule its own header states at line 6:
+
+> ⚠️ DEFAULT-DENY, BY EXPLICIT ALLOW-LIST — never `SELECT *` minus exclusions.
+> […] NEVER exported: prices, vendors, conditions, locations, `lent_to`,
+> completeness notes, per-person ratings, emails, acquisition dates.
+
+**Nothing enforced that sentence.** The module was named in no test in the repo,
+and its only consumer's `index-push.test.ts` (144 lines) carries zero references
+to `projection`, `source_id`, `SELECT`, `price` or `lent_to`. The audit ranked
+it 🔴 for a specific reason: *it is a gate that passes while wrong.* Adding one
+column to the `SELECT` at line 63 shipped private household data to a public
+surface with the whole suite green — there was no red anywhere. This repo was
+the only one of the three catalogs without such a test
+(`library_catalog`'s `index-projection-origin.test.ts`,
+`audiobook_catalog`'s `tests/test_index_push.py`).
+
+**Built:** `packages/db/test/index-projection-allowlist.test.ts` — 10 cases in
+three groups, in the library test's idiom:
+
+| Group | What it pins |
+|---|---|
+| QUERY | the `SELECT` is exactly the eight allowed columns **in order**; no `*` or `table.*`; no never-exported name appears anywhere in the statement; `item` is read alone, so no `JOIN` onto `copy` / `user_item` / `app_user` |
+| MAPPED ROW | the emitted keys are exactly the index's push contract; a deliberately **over-wide** source row carrying every private column leaks neither key nor VALUE, so a `...row` spread cannot pass a narrow-looking `SELECT`; ownership status still does not travel |
+| DRIFT | every allowed column still exists on `item` in `migrations/`, and no never-exported name has been quietly allow-listed |
+
+⚠️ **Two doors, because the leak has two.** The query is the obvious one; the
+mapping is the one that bit `/api/export.json` in the 2026-08 audit's finding 4,
+where a private column arrived as a convenience on a join nobody re-read.
+
+✅ **PROVED RED, not assumed.** Adding `price_paid_cents` to the `SELECT` at
+`index-projection.ts:63` failed 2 of the 10:
+
+```
+✖ 🔴 selects EXACTLY the allow-list, in order
+✖ 🔴 names no never-exported column, anywhere in the statement
+  AssertionError: the projection statement mentions `price_paid_cents` —
+  the module header forbids it
+```
+
+Reverted immediately with `git checkout --` on that one file; the tree was
+confirmed clean before the commit.
+
+⚠️ **A gotcha this cost time on** is in [`info/gotchas.md`](info/gotchas.md), not
+here: parsing `migrations/*.sql` for a column list must strip `--` comments
+**before** splitting on commas, because `parent_item_id`'s comment contains one.
+The same latent bug is still in `export-fields.test.ts`.
+
+**NOT verified:** nothing was pushed to the live index Worker and no D1 was
+touched. The fake records SQL and hands back rows, so this pins the projection's
+*contract*, not D1's driver semantics.
+
+---
+
+### 🔴 §4.3 — no test had run on a CI runner since 2026-08-17 (`31c77db`)
+
+The only workflow here was `deploy.yml`, trigger `workflow_dispatch:` alone —
+the owner's decision, because there is no dev lane and a deploy goes straight to
+the live custom domain. The unpriced consequence: **there was no way to get CI
+feedback without shipping a deploy.** `gh run list` measured the cost — the last
+run of any kind was `32071175391` on **2026-08-17**, three weeks in which every
+green tick came from a developer's own machine. Both sibling repos already had a
+test lane, which is what made this a gap rather than a policy.
+
+**Built:** `.github/workflows/tests.yml` — catalog-platform's workflow adapted.
+Push + PR on `main`, `workflow_call:`, `permissions: contents: read`, **no
+secrets**, and typecheck + the whole suite (the pair `predeploy` runs).
+
+🔑 **The finding that made "no secrets" possible.** This repo cannot run its
+suite from one checkout: `pretest` runs `sync-estate-auth.mjs`, which fails the
+build without the sibling `catalog-platform` tree *by design*, and the suite
+would fail anyway because `middleware/auth.ts` and `middleware/estate.ts` import
+the gitignored `apps/worker/src/estate-auth/` that script materialises. That
+looks like it needs `deploy.yml`'s `CATALOG_PLATFORM_TOKEN` PAT — and it does
+not, because **skymitch9/catalog-platform is now PUBLIC** (measured 2026-09-07:
+`gh repo view … --json visibility` → `PUBLIC`). `actions/checkout` carries no
+`token:`, and the green `Checkout catalog-platform` step is the proof.
+
+⚠️ **`deploy.yml`'s header still says that repo is PRIVATE, "verified
+2026-08-14".** True then, stale now. Left untouched deliberately — its trigger
+and secrets were out of scope — and recorded in
+[`access/ci-tests.md`](access/ci-tests.md) §2 so the two workflows do not
+disagree silently.
+
+**`deploy.yml` was NOT wired to `needs:` the test job**, and the reasoning is in
+`ci-tests.md` §3: it has a single `deploy` job, so gating it is a new job block
+plus a `needs:` line rather than the one-line change that was authorised — and
+`predeploy` already runs the identical typecheck + suite before
+`wrangler deploy`, so a `needs:` job would run the suite twice for a gate that
+already exists. `workflow_call:` is present so the wiring stays one line away.
+
+✅ **Measured, first run:**
+[`34157231459`](https://github.com/skymitch9/Board_Game_Catalog/actions/runs/34157231459)
+(push, `31c77db`) — **success in 1m53s**, all twelve steps green.
+
+⚠️ **And it immediately found something local runs hide: 922 tests, 918 pass, 0
+fail, 4 SKIPPED.** Four cases in `scripts/test/push-secrets-instance.test.mjs`
+cannot execute on a runner (`# SKIP no apps/worker/.dev.vars on this machine`),
+so the guards they pin are gated only by somebody running the suite locally.
+Filed as **KI-12** in [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) rather than left as a
+number nobody reads. Local run the same hour: **922 / 922 pass**, typecheck
+clean.
+
+**NOT verified:** the `pull_request` trigger (no PR has been opened — only the
+`push` lane has executed), the `workflow_call` trigger (nothing calls it), and
+the failure path when `catalog-platform` is unreachable (reasoned from
+`platform-repo.mjs`, not exercised).
 
 ---
 

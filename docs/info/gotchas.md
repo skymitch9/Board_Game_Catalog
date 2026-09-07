@@ -1,5 +1,13 @@
 # Gotchas found the hard way
 
+> **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
+> Last verified: **2026-09-07** — for the LAST entry only (the migrations
+> comma/comment trap), which was measured the hour it was written: it is the
+> failure the projection allow-list test hit on its first run, and the same
+> parser in `export-fields.test.ts` was re-read that day to confirm the latent
+> half. ⚠️ **No other entry on this page was re-checked**; each carries its own
+> date in its text.
+>
 > Extracted from `HANDOFF.md` on 2026-08-21. These are traps you fall INTO
 > while working on this repo — things that look right and are not, or that
 > fail silently. See also [`../KNOWN_ISSUES.md`](../KNOWN_ISSUES.md) for
@@ -126,5 +134,22 @@
 - **A quoted heredoc (`<<'EOF'`) still ate backslashes** in this Git Bash,
   corrupting regexes in throwaway scripts. Write scratch files with the editor,
   not the shell.
+- 🔴 **Parsing `migrations/*.sql` for a column list: strip `--` comments BEFORE
+  splitting on commas, never after.** Two tests read the schema out of the
+  migrations to pin an allow-list against it —
+  `apps/worker/src/lib/export-fields.test.ts` (`user_item`) and
+  `packages/db/test/index-projection-allowlist.test.ts` (`item`) — and both walk
+  the `CREATE TABLE` body splitting on top-level commas. ⚠️ **A comma inside a
+  `--` comment is a top-level comma.** `item`'s reads *"an accessory may belong
+  to an expansion, not just a base game."*, which split `parent_item_id`'s
+  definition in half and made the test report that `migrations/` no longer
+  defines a column that is plainly there. Cost the first run of the projection
+  test on 2026-09-07; the fix is three lines
+  (`.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n')`) applied to the
+  body before the comma walk. ⚠️ **The same latent bug is still in
+  `export-fields.test.ts`** — it survives only because `user_item`'s comments
+  happen to carry no commas, so it is one prose edit away from a false failure.
+  Depth-tracking parentheses is not enough: everybody remembers the `CHECK (…)`
+  list and nobody remembers the English.
 
 ---

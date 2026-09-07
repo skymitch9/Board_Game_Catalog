@@ -1,7 +1,10 @@
 # Board_Game_Catalog — Known Issues, Waivers & Exceptions
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last verified: **2026-09-07** for **KI-11 only** — measured as it was written
+> Last verified: **2026-09-07** for **KI-11 and KI-12 only** — KI-12 measured
+> from CI run `34157231459`'s own log the hour it was written (922 / 918 pass /
+> 4 skipped, and the four skip lines quoted in the entry). KI-11 measured as it
+> was written
 > (6 of 6 high-confidence sweep rows false positives; 175 → 162 `MISSING`; 0
 > unsettled subjects named by two or more accessories), and **re-measured later
 > the same day** by agent `W20-DEDUPE` after two duplicate item rows were
@@ -75,8 +78,19 @@
 > positives. It is the first entry in this file whose "what would change it"
 > number is currently **0 by construction** rather than by luck.
 >
-> **Eight live entries stand: KI-2, KI-3, KI-4, KI-5, KI-8, KI-9, KI-10,
-> KI-11.**
+> ~~**Eight live entries stand: KI-2, KI-3, KI-4, KI-5, KI-8, KI-9, KI-10,
+> KI-11.**~~
+>
+> ➕ **KI-12 ADDED 2026-09-07**, by the pass that built
+> `.github/workflows/tests.yml` (estate testing audit §4.3). It exists because
+> the first CI run this repo has had since 2026-08-17 came back green carrying a
+> number local runs do not produce: **922 tests, 918 pass, 4 SKIPPED**. Four
+> cases pinning `push-secrets.mjs`'s refusals cannot execute on a runner, and a
+> green tick that hides them is exactly the class of thing this file is for.
+> Measured as it was written, from run `34157231459`'s own log.
+>
+> **Nine live entries stand: KI-2, KI-3, KI-4, KI-5, KI-8, KI-9, KI-10, KI-11,
+> KI-12.**
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
@@ -623,3 +637,45 @@ exposure is bounded by what the app is: one origin, a Firebase session, no user
 nosniff` and `x-frame-options: DENY` in `_headers`, which cost two lines, cannot
 white-screen the site, and are the two this read found missing. A CSP after
 that, `img-src` last.
+
+---
+
+## KI-12 · Four secret-push tests SKIP on the CI runner — `ACCEPTED`
+
+**Symptom.** Local `npm test` reports **922 / 922 pass**. The same suite on the
+GitHub runner reports **922 tests, 918 pass, 0 fail, 4 skipped** — measured
+2026-09-07 from run
+[`34157231459`](https://github.com/skymitch9/Board_Game_Catalog/actions/runs/34157231459)'s
+own log, the first CI run of any kind this repo has had since 2026-08-17. All
+four are in `scripts/test/push-secrets-instance.test.mjs` and they say why:
+
+```
+# SKIP no apps/worker/.dev.vars on this machine — nothing to push from
+```
+
+The four:
+
+| Case | What it pins |
+|---|---|
+| 🔴 REFUSES `ANTHROPIC_API_KEY` for a second instance, and says how to set it | a bulk push cannot hand instance 2 the main key |
+| 🔴 no `ESTATE_APP_TOKEN_*` is ever in a second instance's payload | the per-instance token never crosses instances |
+| names the instance it is targeting, so a mis-aimed run is visible before it sends | a mis-aimed push is loud, not silent |
+| the MAIN path still pushes the keys it always did | the guard did not narrow the main path |
+
+**Why tolerated.** `apps/worker/.dev.vars` holds secret VALUES and is gitignored
+— correctly, and permanently. There is no version of this that puts it on a
+runner, and the alternative (a fixture `.dev.vars` full of fake keys) buys back
+the coverage at the cost of a file that looks exactly like the real one sitting
+in a **public** repo. ⚠️ The skip is also *loud*: it prints its reason on every
+run rather than the test quietly passing, which is the failure mode the estate
+testing audit was written about. The exposure is bounded by what these four
+guard — an owner-run operator script (`npm run secrets:push:games2`) that is
+never in the deploy path, run by a person watching it, and 🔴 **no second
+instance exists** (`access/second-instance.md`).
+
+**What would change it.** ⚠️ **The number to watch is `skipped` on a CI run —
+4 today.** If it grows, something else has quietly stopped executing and the
+green tick is covering more than this. The other trigger is a second instance
+actually being stood up: the day `games2` is live, these four stop being a
+hypothetical and want a fixture-based rewrite that needs no real `.dev.vars`.
+Operating detail and the command to re-measure: `access/ci-tests.md` §4.1.

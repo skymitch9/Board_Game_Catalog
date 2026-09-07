@@ -4,7 +4,10 @@
 > **Status:** 🔴 **TRACKED, AND THE REPO IS PUBLIC** — every file under `docs/`
 > is committed to <https://github.com/skymitch9/Board_Game_Catalog> and readable
 > by anyone. Names of secrets only, never values.
-> Last verified: **2026-09-05** — the tracking status, the file list and every
+> Last verified: **2026-09-07** for the ONE row added that day
+> ([`access/ci-tests.md`](access/ci-tests.md), written the same hour). ⚠️
+> **Nothing else on this page was re-checked on 2026-09-07.**
+> Before that, **2026-09-05** — the tracking status, the file list and every
 > link on this page were re-measured that day (docs audit). ⚠️ The *contents* of
 > the files linked below were NOT re-read except `TODO.md`, `access/README.md`
 > and `info/README.md`.
@@ -60,6 +63,7 @@ graph TD
 | **How do I operate / deploy / reach it** | [`access/README.md`](access/README.md) — the index |
 | **How do I set it up / sign in / reach the APIs** | [`access/SETUP.md`](access/SETUP.md) · [`access/login.md`](access/login.md) · [`access/external-apis.md`](access/external-apis.md) |
 | **How do I ship, and what shipped last?** | [`access/deploys.md`](access/deploys.md) · [`deploys.log`](deploys.log) — the 3am rollback source of truth (tooling writes it) |
+| **What does CI run, and why is the deploy still manual?** | [`access/ci-tests.md`](access/ci-tests.md) — 🆕 2026-09-07, the `tests.yml` push/PR lane |
 | **🔴 Rebuild from nothing** | [`access/RECOVERY.md`](access/RECOVERY.md) |
 | **How and why it works** | [`info/README.md`](info/README.md) — the index |
 | **The design, scan queue, thresholds** | [`info/DESIGN.md`](info/DESIGN.md) · [`info/scan-queue.md`](info/scan-queue.md) · [`info/matcher-thresholds.md`](info/matcher-thresholds.md) |

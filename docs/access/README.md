@@ -2,7 +2,10 @@
 
 > **Audience:** Claude sessions. **Status:** TRACKED (committed — no secret
 > values here, only names and how to obtain them).
-> Updated **2026-09-05** — one row added for
+> Updated **2026-09-07** — one row added for [`ci-tests.md`](ci-tests.md), the
+> `tests.yml` lane built that day (estate testing audit §4.3). ⚠️ Nothing else
+> on this page was re-checked; the header below still carries 2026-09-05.
+> Before that, updated **2026-09-05** — one row added for
 > [`provision-catalog.md`](provision-catalog.md) (phase 9). Nothing else on this
 > page was re-checked that day.
 > Last verified: **2026-09-05** — the docs audit checked one thing here: that
@@ -26,6 +29,7 @@ current state and work in flight live in [`../TODO.md`](../TODO.md).
 | [`login.md`](login.md) | 🛑 **HISTORY, not current** — the Cloudflare Access application was **deleted 2026-08-10** and sign-in is Firebase; the file's own banner says so. Kept for how the Access setup was built and what its audiences were, i.e. what you would need to put it back. ⚠️ **Corrected 2026-09-05:** this row read *"how sign-in works **today**, until the cutover's step 4. Being replaced"*, which its own file has contradicted since 2026-08-10 |
 | [`covers-r2.md`](covers-r2.md) | The `game-covers` R2 bucket, `gamecovers.heygabi.ai`, the migration script and its gotchas |
 | [`deploys.md`](deploys.md) | 🆕 **How to ship (2026-09-02)** — the check-clean / deploy-guard / deploy-done chain, `docs/deploys.log` as the 3am rollback source of truth, every escape hatch, and the gotchas (a failed test leaves the lock; `version-unknown` is a failure, not a value) |
+| [`ci-tests.md`](ci-tests.md) | 🆕 **CI — THE TEST LANE (2026-09-07)** — `.github/workflows/tests.yml`: push + PR + `workflow_call`, typecheck and the full suite, **no secrets**. Why the sibling `catalog-platform` checkout is not optional and 🔑 why it needs no token (that repo is **PUBLIC** — `deploy.yml`'s header still says PRIVATE and is stale), why `deploy.yml` was NOT wired to `needs:` it, and ⚠️ §4.1 — **four cases pass locally and SKIP on the runner** (`KI-12`) |
 | [`provision-catalog.md`](provision-catalog.md) | 🆕 **STANDING ONE UP (2026-09-05)** — the runbook for `scripts/provision-catalog.mjs`, the owner-run games provisioner: flags and exit codes, the names it derives and the split behind them, the twelve steps, the four ways it differs from the books twin (⚠️ **it does not deploy** — step 11 prints the owner's command), the `ANTHROPIC_API_KEY` ladder, and 🔴 **why "no key" here means NO AI LOOKUPS AT ALL** — there is no donor. ⚠️ Nothing has ever run past `--dry` |
 | [`second-instance.md`](second-instance.md) | 🆕 **A SECOND games instance (2026-09-05)** — 🔴 none exists; this is the machinery that landed and the runbook for using it. The `:games2` command twins, which secrets are per-instance and which are shared, the 12-step checklist (including the owner-only Firebase and auth-Worker steps), what a bulk secret push REFUSES and why, and the three ways it goes wrong silently. Why the model looks like this: [`../info/instance-model.md`](../info/instance-model.md) |
 
