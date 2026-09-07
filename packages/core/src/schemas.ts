@@ -148,7 +148,7 @@ const itemFields = z.object({
  * the collection as a root and threw away what it actually was. Naming what it
  * is waiting for keeps the record honest until the base game turns up.
  */
-export const createItemSchema = itemFields.refine(
+export const createItemSchema = itemFields.strict().refine(
   (d) =>
     d.kind === 'base' ||
     (d.parentItemId != null && d.parentItemId > 0) ||
@@ -160,8 +160,23 @@ export const createItemSchema = itemFields.refine(
   },
 );
 
+/**
+ * 🔴 **`.strict()` on both, and the PATCH one is the half that matters.**
+ *
+ * zod's default is `strip`: an unknown key is silently discarded and the parse
+ * SUCCEEDS. So `PATCH {"yearPublish": 2019}` — one letter short — passed
+ * validation, updated nothing, and answered **200**. The caller is told the
+ * edit was saved; the field still holds the old value; nothing anywhere logs a
+ * word. The `refine(len > 0)` below only catches the case where EVERY key is
+ * unknown, which is the rare one. 2026-08 audit, finding 18.
+ *
+ * ⚠️ This repo's standing rule, learned from a validator that stripped instead
+ * of rejecting: **validators REJECT.** A silent strip is indistinguishable from
+ * success to everyone who can see it.
+ */
 export const updateItemSchema = itemFields
   .partial()
+  .strict()
   .refine((d) => Object.keys(d).length > 0, { message: 'no fields to update' });
 
 export type CreateItemInput = z.infer<typeof createItemSchema>;
@@ -229,7 +244,7 @@ export function disposalConflict(
   return null;
 }
 
-export const createCopySchema = copyFields.superRefine((d, ctx) => {
+export const createCopySchema = copyFields.strict().superRefine((d, ctx) => {
   const message = disposalConflict(d.status, d.disposal ?? null);
   if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ['disposal'] });
 });
@@ -262,6 +277,7 @@ export const updateCopySchema = copyFields
      */
     disposalDetails: disposalDetailsSchema.optional(),
   })
+  .strict()
   .refine((d) => Object.keys(d).length > 0, { message: 'no fields to update' });
 
 export type CreateCopyInput = z.infer<typeof createCopySchema>;
@@ -294,10 +310,12 @@ export type UpsertRatingInput = z.infer<typeof upsertRatingSchema>;
 
 export const relationTypeSchema = z.enum(RELATION_TYPES);
 
-export const createRelationSchema = z.object({
-  toItemId: z.number().int().positive(),
-  relation: relationTypeSchema,
-});
+export const createRelationSchema = z
+  .object({
+    toItemId: z.number().int().positive(),
+    relation: relationTypeSchema,
+  })
+  .strict();
 
 export type CreateRelationInput = z.infer<typeof createRelationSchema>;
 

@@ -33,7 +33,14 @@ import {
   SOURCE_TIERS,
   type CopyStatus,
 } from '../src/constants.js';
-import { createItemSchema, ownedCount, updateItemSchema } from '../src/schemas.js';
+import {
+  createCopySchema,
+  createItemSchema,
+  createRelationSchema,
+  ownedCount,
+  updateCopySchema,
+  updateItemSchema,
+} from '../src/schemas.js';
 import { outranks, tierRank } from '../src/index.js';
 
 /** One copy of `status`, with a quantity worth noticing. */
@@ -192,5 +199,74 @@ describe('finding 19 — a stored URL cannot carry a code-execution scheme', () 
       false,
     );
     assert.equal(updateItemSchema.safeParse({ publisherUrl: 'https://ok.example' }).success, true);
+  });
+});
+
+/**
+ * ⚠️ Same file, same reason as the block above: a rule that must hold at the one
+ * door every write comes through.
+ */
+describe('finding 18 — a mistyped field is REFUSED, not silently dropped', () => {
+  it('🔴 PATCH with a one-letter typo is a 400, not a 200 that changed nothing', () => {
+    // The whole finding. zod's default is `strip`: the unknown key is discarded
+    // and the parse SUCCEEDS, so this returned 200 while updating nothing. The
+    // caller is told the edit was saved and the field still holds the old
+    // value.
+    const typo = updateItemSchema.safeParse({ yearPublish: 2019 });
+    assert.equal(typo.success, false, 'a mistyped PATCH must not succeed');
+  });
+
+  it('a typo ALONGSIDE a real field is refused too — the dangerous shape', () => {
+    // Worse than the all-unknown case and the one `refine(len > 0)` never
+    // caught: part of the edit lands, part vanishes, and the response is 200.
+    assert.equal(
+      updateItemSchema.safeParse({ name: 'Catan', yearPublish: 2019 }).success,
+      false,
+    );
+  });
+
+  it('and the create schema is strict as well', () => {
+    assert.equal(
+      createItemSchema.safeParse({ name: 'Catan', kind: 'base', pubisher: 'Kosmos' }).success,
+      false,
+    );
+  });
+
+  it('every write schema in this file is strict — including copies and relations', () => {
+    assert.equal(
+      createCopySchema.safeParse({ status: 'owned', quantitiy: 2 }).success,
+      false,
+      'createCopySchema',
+    );
+    assert.equal(
+      updateCopySchema.safeParse({ statuss: 'lent' }).success,
+      false,
+      'updateCopySchema',
+    );
+    assert.equal(
+      createRelationSchema.safeParse({ toItemId: 2, relation: 'same_family', extra: 1 }).success,
+      false,
+      'createRelationSchema',
+    );
+  });
+
+  it('⚠️ and a legitimate write still passes — strictness must not cost the feature', () => {
+    assert.equal(createItemSchema.safeParse({ name: 'Catan', kind: 'base' }).success, true);
+    assert.equal(updateItemSchema.safeParse({ yearPublished: 2019 }).success, true);
+    assert.equal(createCopySchema.safeParse({ status: 'owned', quantity: 2 }).success, true);
+    assert.equal(
+      createRelationSchema.safeParse({ toItemId: 2, relation: 'same_family' }).success,
+      true,
+    );
+  });
+
+  it('the ride-along `disposalDetails` is still allowed on a copy PATCH', () => {
+    // It is not a column — `updateCopy` writes it into `copy_event` — so a
+    // blanket .strict() applied in the wrong place would have refused it.
+    assert.equal(
+      updateCopySchema.safeParse({ status: 'sold', disposal: 'given_away', disposalDetails: {} })
+        .success,
+      true,
+    );
   });
 });
