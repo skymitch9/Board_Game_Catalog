@@ -48,6 +48,25 @@
 > `scripts/` is type-checked), **KI-9** (the dead Access vars), **KI-10** (no CSP,
 > now measured at the edge as well as in the repo).
 >
+> ☑ **DEPLOYED 2026-09-06 21:11 Phoenix** — commit `46c606a`, version
+> `393a9b4f-cf9d-4274-bd9a-9f8969fbdd3d`, holder `W13-GAMES`, no migration
+> (`migrations list --remote` said "No migrations to apply", measured first).
+> Rollback: `c344869a-d215-4773-a67d-91e5914992f0`. Line in
+> [`../deploys.log`](../deploys.log).
+>
+> 🔬 **Live proof, with the right instrument.** A 200 on `/` proves nothing about
+> a white-screening bundle, so the bundle itself was fetched:
+> `/assets/index-BB8CpqDk.js` comes back **200, 600,294 bytes, byte-identical to
+> the local build** (`cmp`), and contains finding 19's refusal sentence *"a link
+> must start with https://"* and finding 12's fallback card (*"record is
+> damaged"*, *"Photograph the shelf again"*). `/api/health` is 200 with
+> `database:"up"` and `estate.mode:"enforce"`.
+>
+> ⚠️ **NOT verified live: everything behind auth.** No agent session holds a
+> Firebase ID token, so `/api/covers/check`'s new cap, the lookup cache, the
+> strict-schema 400s and `updateItem`'s 409 are proved by **860 unit tests** and
+> by nothing a signed-in browser has done.
+>
 > ⚠️ **Read `../KNOWN_ISSUES.md` and `gotchas.md` before "fixing" any row** —
 > none of these are accepted defects, but the two files hold the context that
 > stops a fix from re-breaking something on purpose.

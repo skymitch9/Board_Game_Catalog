@@ -989,3 +989,21 @@ rest recorded** (17, 20), **1 recorded as KI-9** (14 — blocked on the owner's
 `wrangler.toml`) and **1 skipped** (15 — a `.dev.vars.example` reword this agent
 may not open the file to make). Tests **348 → 860**. Three new
 `KNOWN_ISSUES` entries: **KI-8**, **KI-9**, **KI-10**.
+
+☑ **Deployed 2026-09-06 21:11 Phoenix** from a clean tree at `46c606a` →
+version `393a9b4f`, holder `W13-GAMES`, in PowerShell. No migration
+(`migrations list --remote`: "No migrations to apply", measured first).
+Rollback `c344869a`. Live proof used the right instrument rather than a
+status code: the bundle `/assets/index-BB8CpqDk.js` is 200 and
+**byte-identical to the local build**, and carries today's strings
+(finding 19's *"a link must start with https://"*, finding 12's *"record is
+damaged"*). `/api/health` 200, `database:"up"`, `estate.mode:"enforce"`.
+⚠️ **Everything behind auth is unverified live** — no agent session holds a
+Firebase ID token.
+
+🧑 **The one thing worth a minute of the owner's time here:**
+<https://boardgames.heygabi.ai/scan> → the **Barcode** tab. Scan a box, let
+it fail (airplane mode works), then scan the same box again: there should be
+**one** row, not two — the retry replaces its own failed attempt now
+(finding 16). Everything else in this pass is either invisible when working
+or needs a damaged record to see.
