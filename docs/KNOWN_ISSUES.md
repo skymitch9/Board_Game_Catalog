@@ -1,7 +1,15 @@
 # Board_Game_Catalog — Known Issues, Waivers & Exceptions
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last verified: **2026-09-05** — the docs audit re-measured **KI-3, KI-4 and
+> Last verified: **2026-09-06** for KI-8, KI-9 and KI-10 — the three added that
+> day, each measured as it was written: **0** unattended `scripts/*.ts`, **0**
+> code sites reading the Access vars (and their deletion measured as a
+> **three**-file change, not the two the audit said), and a live edge read of
+> `https://boardgames.heygabi.ai/` returning **no** `content-security-policy`,
+> `x-frame-options` or `x-content-type-options`. ⚠️ **KI-2, KI-3, KI-4 and KI-5
+> were NOT re-checked on 2026-09-06** and carry the dates below.
+>
+> Before that — **2026-09-05** — the docs audit re-measured **KI-3, KI-4 and
 > KI-5**: KI-3's "what would change it" (a pre-commit check) has **not**
 > happened and `.git/hooks/` holds nothing but samples, but the audit found the
 > 2026-08-21 corruption had **survived in `TODO.md` for 15 days** and repaired
@@ -29,9 +37,23 @@
 > ✅ **KI-6 is RESOLVED TOO (2026-09-06, agent W13-PLAT-SMALL)** — and it was
 > fixed the way the entry itself demanded, ONCE for the estate rather than once
 > per repo. `46212c0`, deployed `c344869a-d215-4773-a67d-91e5914992f0`.
-> **Four live entries stand: KI-2, KI-3, KI-4, KI-5.** ⚠️ **The suite now has
-> ZERO `.todo` cases** (789 pass / 0 fail / 0 todo) — both KI-numbered
-> placeholders written by W9-BOARD-ROUTES are live tests.
+> ~~**Four live entries stand: KI-2, KI-3, KI-4, KI-5.**~~ ⚠️ **The suite now
+> has ZERO `.todo` cases** — both KI-numbered placeholders written by
+> W9-BOARD-ROUTES are live tests. (The count there was 789; it is **860** as of
+> the same evening.)
+>
+> ➕ **THREE ENTRIES ADDED 2026-09-06 (agent W13-GAMES)**, by the pass that
+> triaged all 24 rows of the 2026-08 code audit. They exist because this is
+> where a row that is *not* going to be fixed has to go — otherwise closing the
+> audit would mean quietly dropping it:
+>
+> | | Symptom in one line | Status | The number to watch |
+> |---|---|---|---|
+> | **KI-8** | Nothing in `scripts/` is ever type-checked | `ACCEPTED` | `scripts/*.ts` run UNATTENDED — **0** today |
+> | **KI-9** | The dead Cloudflare Access vars are still declared | `BLOCKED` — the owner's `wrangler.toml` | code sites reading either var — **0** since 2026-08-10 |
+> | **KI-10** | The app ships no CSP, and its own comment used to claim one | `WATCHING` | `SHOW_ESTATE_SEARCH` turning true |
+>
+> **Seven live entries stand: KI-2, KI-3, KI-4, KI-5, KI-8, KI-9, KI-10.**
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
