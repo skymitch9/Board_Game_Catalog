@@ -21,7 +21,8 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import {
   sweep, subjectOf, words, containsRun, sharedPrefixLength,
-  PACKAGING, NAMES_A_PRODUCT, PRESENT, MISSING, AMBIGUOUS,
+  PACKAGING, NAMES_A_PRODUCT, VERIFIED_NOT_MISSING,
+  PRESENT, MISSING, AMBIGUOUS, SETTLED,
 } from '../lib/implied-product.mjs';
 
 /** Real rows, real names — item ids as they are in production. */
@@ -255,6 +256,130 @@ describe('sweep — the statuses that are not PRESENT/MISSING', () => {
     const { findings: f } = sweep({ items: ACC, relations: [] });
     assert.equal(find(f, 2).implied_status, MISSING);
     assert.equal(find(f, 2).subject_rows, 2, 'they still count each other for CONFIDENCE');
+  });
+});
+
+describe('SETTLED — the six subjects a person checked on 2026-09-07', () => {
+  /**
+   * 🔴 The whole shortlist the first live run produced — every subject named by
+   * two or more accessories — and every one of them a FALSE POSITIVE. Four name
+   * no product at all; two name a product already held under a different name.
+   * The fixtures below are the real rows, with the real subjects the sweep
+   * extracts from them: note `magic` (not `black magic` — `black` is a colour in
+   * PACKAGING) and `minimalist flaming` (not `minimalist` — `die` is packaging
+   * and `flaming` is not).
+   */
+  const SETTLED_CASES = [
+    {
+      key: '105::rivals', root: { id: 105, name: 'Deep Rock Galactic: The Board Game' },
+      rows: [
+        [168, 'Deep Rock Galactic: Rivals Neoprene Mat'],
+        [171, 'Deep Rock Galactic: Rivals Card Sleeves'],
+        [494, 'Deep Rock Galactic: Rivals Exclusive Gift Box'],
+      ],
+      subject: 'rivals',
+    },
+    {
+      key: '511::yokai dawn', root: { id: 511, name: "Ryoko's Guide to the Yokai Realms" },
+      rows: [
+        [516, "Ryoko's Guide: Yokai Dawn Dice Mini Set"],
+        [517, "Ryoko's Guide: Yokai Dawn Resin Dice Set"],
+      ],
+      subject: 'yokai dawn',
+    },
+    {
+      key: '107::dragon class', root: { id: 107, name: 'Here to Slay' },
+      rows: [
+        [460, 'Here to Slay: Dragon Class Dice'],
+        [462, 'Here to Slay: Dragon Class Meeple Set'],
+      ],
+      subject: 'dragon class',
+    },
+    {
+      key: '428::3dition', root: { id: 428, name: 'Ark Nova' },
+      rows: [
+        [409, 'Ark Nova 3Dition: Premium Metal Coins'],
+        [412, 'Ark Nova 3Dition: Premium Custom Sleeves'],
+      ],
+      subject: '3dition',
+    },
+    {
+      key: '53::magic', root: { id: 53, name: 'Fractured Sky' },
+      rows: [
+        [251, 'Fractured Sky: Black Magic Custom Organizer'],
+        [252, 'Fractured Sky: Black Magic Custom Trays'],
+      ],
+      subject: 'magic',
+    },
+    {
+      key: '92::minimalist flaming', root: { id: 92, name: 'Dice Throne: Outcasts' },
+      rows: [
+        [561, 'Dice Throne: Card Sleeves - Minimalist (Flaming Die)'],
+        [568, 'Dice Throne: Playmat - Minimalist (Flaming Die)'],
+      ],
+      subject: 'minimalist flaming',
+    },
+  ];
+
+  for (const c of SETTLED_CASES) {
+    it(`${c.key} — reports SETTLED, not MISSING, and carries its reason`, () => {
+      const items = [
+        { id: c.root.id, kind: 'base', parent_item_id: null, root_game_id: c.root.id, name: c.root.name },
+        ...c.rows.map(([id, name]) => ({
+          id, kind: 'accessory', parent_item_id: c.root.id, root_game_id: c.root.id, name,
+        })),
+      ];
+      const { findings, counts } = sweep({ items, relations: [] });
+      for (const [id] of c.rows) {
+        const f = find(findings, id);
+        assert.equal(f.subject, c.subject, `id ${id} — the subject the registry is keyed on`);
+        assert.equal(f.implied_status, SETTLED, `id ${id}`);
+        assert.match(f.matched_by, /\[verified \d{4}-\d{2}-\d{2}\]$/, `id ${id} — the date travels with the verdict`);
+      }
+      assert.equal(counts.implied.MISSING, 0, 'nothing in this family is still a gap');
+      assert.equal(counts.implied.SETTLED, c.rows.length);
+    });
+  }
+
+  it('🔴 an UNLISTED subject under a settled root is still MISSING — the entry is per-subject', () => {
+    // The registry must not amount to "stop asking about this game". Deep Rock
+    // Galactic has `rivals` settled; a different subject under the same root has
+    // been checked by nobody and must still be reported.
+    const items = [
+      { id: 105, kind: 'base', parent_item_id: null, root_game_id: 105, name: 'Deep Rock Galactic: The Board Game' },
+      { id: 168, kind: 'accessory', parent_item_id: 105, root_game_id: 105, name: 'Deep Rock Galactic: Rivals Neoprene Mat' },
+      { id: 900, kind: 'accessory', parent_item_id: 105, root_game_id: 105, name: 'Deep Rock Galactic: Glyphid Swarm Neoprene Mat' },
+    ];
+    const { findings } = sweep({ items, relations: [] });
+    assert.equal(find(findings, 168).implied_status, SETTLED);
+    assert.equal(find(findings, 900).subject, 'glyphid swarm');
+    assert.equal(find(findings, 900).implied_status, MISSING);
+  });
+
+  it('🔴 SETTLED never masks a live PRESENT — a real match still wins', () => {
+    // If the owner ever adds a row actually named "Rivals", the sweep must say
+    // PRESENT rather than keep quoting a 2026-09-07 verdict about its absence.
+    const items = [
+      { id: 105, kind: 'base', parent_item_id: null, root_game_id: 105, name: 'Deep Rock Galactic: The Board Game' },
+      { id: 168, kind: 'accessory', parent_item_id: 105, root_game_id: 105, name: 'Deep Rock Galactic: Rivals Neoprene Mat' },
+      { id: 901, kind: 'expansion', parent_item_id: 105, root_game_id: 105, name: 'Deep Rock Galactic: Rivals Expansion' },
+    ];
+    const { findings } = sweep({ items, relations: [] });
+    assert.equal(find(findings, 168).implied_status, PRESENT);
+    assert.equal(find(findings, 168).matched_by, 'Deep Rock Galactic: Rivals Expansion');
+  });
+
+  it('every registry entry carries a verdict, the evidence and the date it was checked', () => {
+    // ⚠️ An entry with no source is a guess wearing a measurement's clothes,
+    // which is exactly what this file is here to stop.
+    assert.equal(VERIFIED_NOT_MISSING.size, 6);
+    for (const [key, e] of VERIFIED_NOT_MISSING) {
+      assert.match(key, /^\d+::.+$/, `key shape: ${key}`);
+      assert.match(e.verifiedOn, /^\d{4}-\d{2}-\d{2}$/, key);
+      assert.ok(e.verdict && e.verdict.length > 20, `${key} needs a verdict`);
+      assert.ok(e.evidence && e.evidence.length > 40, `${key} needs its source named`);
+      assert.ok(e.root && e.root.length > 0, `${key} needs its root game named`);
+    }
   });
 });
 

@@ -44,7 +44,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { sweep, PRESENT, MISSING, AMBIGUOUS } from './lib/implied-product.mjs';
+import { sweep, PRESENT, MISSING, AMBIGUOUS, SETTLED } from './lib/implied-product.mjs';
 
 const REPO_ROOT = process.cwd(); // invoked from the repo root, like every script here
 const WORKER_DIR = path.join(REPO_ROOT, 'apps', 'worker');
@@ -221,18 +221,44 @@ function main() {
     ));
   }
 
+  const settled = named.filter((f) => f.implied_status === SETTLED);
+
   console.log(`\n=== question 2 — the implied PRODUCT, read out of the row's own name ===`);
   console.log(table(
     [
       [PRESENT, named.filter((f) => f.implied_status === PRESENT).length],
       [MISSING, missing.length],
       [AMBIGUOUS, named.filter((f) => f.implied_status === AMBIGUOUS).length],
+      [SETTLED, settled.length],
     ],
     ['status', 'rows'],
   ));
   console.log(`\n${named.length} of ${counts.rows} rows name a product beyond their base game;`);
   console.log(`the other ${counts.rows - named.length} are packaging only (\"Central Play Mat\") or are expansions,`);
   console.log('which are the product and so imply none.');
+
+  // ⚠️ SETTLED rows are printed, not hidden. A suppressed row a person cannot
+  // see is indistinguishable from a rule that stopped working; the whole value
+  // of the registry is that it shows its reasoning.
+  if (settled.length > 0) {
+    const bySubject = new Map();
+    for (const f of settled) {
+      const key = `${f.root_id}::${f.subject}`;
+      if (!bySubject.has(key)) bySubject.set(key, { base: f.base_game, subject: f.subject, why: f.matched_by, rows: [] });
+      bySubject.get(key).rows.push(f.id);
+    }
+    console.log(`\n--- ${bySubject.size} subjects a person has ALREADY checked and settled (${settled.length} rows) ---`);
+    console.log('⚠️ These are not PRESENT. They reported MISSING, were looked up against a source');
+    console.log('   outside this repo, and are not gaps. The reason travels with each row in the CSV.\n');
+    console.log(table(
+      [...bySubject.values()].map((g) => [
+        g.rows.join(' '),
+        `${g.base} — ${g.subject}`.slice(0, 46),
+        g.why.slice(0, 96),
+      ]),
+      ['rows', 'subject', 'why it is not a gap'],
+    ));
+  }
 
   // Grouped, because three sleeves for one missing expansion is ONE errand.
   const groups = new Map();

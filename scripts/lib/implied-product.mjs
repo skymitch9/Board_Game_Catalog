@@ -61,6 +61,15 @@
  * *Icy-themed Neoprene Town Mat* because "town" is not in `PACKAGING` — appears
  * on two and is a false positive. A subject seen once is usually description.
  *
+ * **Step 6 — has a person already settled it?** A subject in
+ * `VERIFIED_NOT_MISSING` reports `SETTLED` instead of `MISSING`, carrying the
+ * verdict and the date. ⚠️ **Measured 2026-09-07: all six of the shortlist the
+ * first run produced — every subject named by two or more accessories — turned
+ * out to be a false positive**, four naming no product at all and two naming a
+ * product already held under a different name. That is the whole reason this
+ * step exists: without it the same six come back every run, and the report
+ * teaches its reader to ignore it.
+ *
  * ⚠️ **The precision of step 2 is a VOCABULARY, so it is wrong at the edges by
  * construction, and the report says so rather than pretending otherwise.** A
  * word nobody has written down yet survives into the subject and produces a
@@ -192,6 +201,87 @@ export const NAMES_A_PRODUCT = new Set(['accessory', 'promo', 'upgrade']);
 export const PRESENT = 'PRESENT';
 export const MISSING = 'MISSING';
 export const AMBIGUOUS = 'AMBIGUOUS';
+export const SETTLED = 'SETTLED';
+
+/**
+ * Subjects that a PERSON has already looked up and settled — the answer to
+ * "this reported MISSING, and it was checked, and it is not a gap."
+ *
+ * 🔴 **This is the only mechanism in the sweep that suppresses a row, so it
+ * carries the evidence rather than just the verdict.** Each entry says what was
+ * checked and on what date, because the alternative — quietly adding the words
+ * to `PACKAGING` — silences the row and destroys the reason at the same time.
+ * A stripped word is invisible; a `SETTLED` row still appears in the CSV with
+ * its explanation, and can be re-argued.
+ *
+ * ⚠️ **`SETTLED` is not `PRESENT`.** Two of these six ARE held under another
+ * name and four name no product at all; collapsing that into "present" would
+ * claim a match the collection does not contain. They are their own status so
+ * the report can say *"checked, and not a gap"* without lying about which.
+ *
+ * The key is `<rootId>::<subject>` — the same key `subjectCount` uses. Root id
+ * rather than root name, because a rename must not silently un-settle a row
+ * somebody spent an evening verifying.
+ *
+ * ⚠️ **Never add an entry from reasoning.** Every one below was checked against
+ * a source outside this repo (a publisher's store, a Kickstarter add-on list,
+ * BGG's own component rows in `game_component`) and names it.
+ */
+export const VERIFIED_NOT_MISSING = new Map([
+  ['105::rivals', {
+    root: 'Deep Rock Galactic: The Board Game',
+    verifiedOn: '2026-09-07',
+    verdict: 'HELD as Rival Incursion (item 90) — "Rivals" is the campaign wave, '
+      + 'and MOOD Publishing\'s own store spells the expansion "Rivals Incursion"',
+    evidence: 'MOOD Publishing store (26 products) and the Kickstarter '
+      + '"Rival Incursion and Horrors of Hoxxes" (38 add-ons) both list NO product '
+      + 'called Rivals; BGG lists only Rival Incursion (450336). Both of the wave\'s '
+      + 'expansions are held: 90 and 809.',
+  }],
+  ['511::yokai dawn', {
+    root: "Ryoko's Guide to the Yokai Realms",
+    verifiedOn: '2026-09-07',
+    verdict: 'NOT A PRODUCT — "Yokai Dawn" is a dice colourway, not a book or expansion',
+    evidence: 'loottavern.com/product/yokai-dawn-resin-dice — SKU LTP-RG1-DiceBlueOrng, '
+      + 'categories Dice / Physical / Ryoko´s Guide, described as "an opalescent '
+      + 'sunrise". No Yokai Dawn title exists in the publisher\'s catalogue.',
+  }],
+  ['107::dragon class', {
+    root: 'Here to Slay',
+    verifiedOn: '2026-09-07',
+    verdict: 'HELD as the Dragon Sorcerer Expansion (items 863 and 295) — '
+      + '"Dragon Class" is the class that expansion adds, not a separate product',
+    evidence: 'BGG lists Dragon Class Meeple Set (369124, 2020) beside Dragon Sorcerer '
+      + 'Expansion (308525, 2020); the publisher\'s copy says the meeples "represent the '
+      + 'Sorcerer class". Same shape as the 6-Class Meeple Set (369123) for the base game.',
+  }],
+  ['428::3dition', {
+    root: 'Ark Nova',
+    verifiedOn: '2026-09-07',
+    verdict: 'NOT AN EXPANSION — 3Dition is a third-party 3D upgrade line, and the eight '
+      + 'rows 405-412 ARE that line; there is no ninth box to own',
+    evidence: 'game_component holds Ark Nova: 3Dition (450126) typed expansion by BGG but '
+      + 'classified official=0 by this repo\'s publisher-id rule. docs/info/completeness.md '
+      + 'names the case: "Kekpop Spiele\'s 3D upgrades are typed boardgameexpansion by BGG".',
+  }],
+  ['53::magic', {
+    root: 'Fractured Sky',
+    verifiedOn: '2026-09-07',
+    verdict: 'NOT A PRODUCT — Black Magic Craft is an insert maker, not an expansion',
+    evidence: 'game_component for item 53 (checked ok 2026-08-30) holds nothing named '
+      + 'Black Magic, and a component-wide search for %Black Magic% returns 0 rows. '
+      + '⚠ the subject is `magic`, not `black magic`: `black` is a colour in PACKAGING.',
+  }],
+  ['92::minimalist flaming', {
+    root: 'Dice Throne: Outcasts',
+    verifiedOn: '2026-09-07',
+    verdict: 'NOT A PRODUCT — "Minimalist (Flaming Die)" is a sleeve art style, one of the '
+      + 'nineteen per-hero sleeve arts in this collection',
+    evidence: 'game_component holds Dice Throne: Minimalist Premium Sleeves (476488) linked '
+      + 'from nine Dice Throne items. Our catalogue holds 19 Dice Throne sleeve rows, one per '
+      + 'art (- Wolverine, - Storm, - Pale Lady...).',
+  }],
+]);
 
 /**
  * The whole sweep.
@@ -343,7 +433,16 @@ export function sweep({ items, relations = [] }) {
       impliedName = `${root ? root.name : '?'} — ${subject.join(' ')}`;
       const matchedRoots = new Set(matches.map((m) => m.root_game_id));
       if (matches.length === 0) {
-        impliedStatus = MISSING;
+        // ⚠️ Settled BEFORE MISSING, and only where nothing matched: an entry in
+        // the registry is an answer to "this row reported MISSING and was then
+        // checked", so it can never mask a live PRESENT or AMBIGUOUS verdict.
+        const settled = VERIFIED_NOT_MISSING.get(`${r.root_game_id}::${subject.join(' ')}`);
+        if (settled) {
+          impliedStatus = SETTLED;
+          matchedIn = `${settled.verdict} [verified ${settled.verifiedOn}]`;
+        } else {
+          impliedStatus = MISSING;
+        }
       } else if (matchedRoots.size > 1) {
         impliedStatus = AMBIGUOUS;
         matchedIn = matches.map((m) => m.name).join(' / ');
@@ -375,7 +474,10 @@ export function sweep({ items, relations = [] }) {
   }
 
   const tally = (key) => {
-    const out = { PRESENT: 0, MISSING: 0, AMBIGUOUS: 0 };
+    // ⚠️ Every status is seeded to 0 so a status that never occurs reads as a
+    // zero rather than a missing key — and so an unseeded one would throw here
+    // instead of silently tallying NaN.
+    const out = { PRESENT: 0, MISSING: 0, AMBIGUOUS: 0, SETTLED: 0 };
     for (const f of findings) out[f[key]] += 1;
     return out;
   };

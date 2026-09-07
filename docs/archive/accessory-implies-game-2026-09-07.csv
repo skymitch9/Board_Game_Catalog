@@ -65,10 +65,10 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 165,Deep Rock Galactic: KS Exclusive Swarm Tracker,promo,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,swarm tracker,1,Deep Rock Galactic: The Board Game — swarm tracker,MISSING,
 166,Deep Rock Galactic: Steeve Mini,promo,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,steeve,1,Deep Rock Galactic: The Board Game — steeve,MISSING,
 167,Deep Rock Galactic: Premium Dice in Metal Box,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,,0,Deep Rock Galactic: The Board Game,PRESENT,105
-168,Deep Rock Galactic: Rivals Neoprene Mat,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,rivals,3,Deep Rock Galactic: The Board Game — rivals,MISSING,
+168,Deep Rock Galactic: Rivals Neoprene Mat,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,rivals,3,Deep Rock Galactic: The Board Game — rivals,SETTLED,"HELD as Rival Incursion (item 90) — ""Rivals"" is the campaign wave, and MOOD Publishing's own store spells the expansion ""Rivals Incursion"" [verified 2026-09-07]"
 169,Deep Rock Galactic: Horrors of Hoxxes Acrylic Tokens,accessory,,474536,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,horrors of hoxxes,1,Deep Rock Galactic: The Board Game — horrors of hoxxes,PRESENT,Deep Rock Galactic: Horrors of Hoxxes
 170,Deep Rock Galactic: Rival Incursion Acrylic Tokens,accessory,,474537,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,rival incursion,1,Deep Rock Galactic: The Board Game — rival incursion,PRESENT,Deep Rock Galactic: Rival Incursion
-171,Deep Rock Galactic: Rivals Card Sleeves,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,rivals,3,Deep Rock Galactic: The Board Game — rivals,MISSING,
+171,Deep Rock Galactic: Rivals Card Sleeves,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,rivals,3,Deep Rock Galactic: The Board Game — rivals,SETTLED,"HELD as Rival Incursion (item 90) — ""Rivals"" is the campaign wave, and MOOD Publishing's own store spells the expansion ""Rivals Incursion"" [verified 2026-09-07]"
 172,Deep Rock Galactic: Upgrade Kit Deluxe,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,,0,Deep Rock Galactic: The Board Game,PRESENT,105
 173,Scales of Fate: Community Card Pack,promo,,,1,0,91,Scales of Fate,PRESENT,yes,,community,1,Scales of Fate — community,MISSING,
 174,Scales of Fate: Make it Metal,accessory,,,1,0,91,Scales of Fate,PRESENT,yes,,make it,1,Scales of Fate — make it,MISSING,
@@ -143,8 +143,8 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 248,Fractured Sky: Magnetic Airships & Troop Power Tokens,accessory,,,1,0,53,Fractured Sky,PRESENT,yes,,airships & troop power,1,Fractured Sky — airships & troop power,MISSING,
 249,Fractured Sky: Holofoil Objective Cards,promo,,,1,0,53,Fractured Sky,PRESENT,yes,,objective,1,Fractured Sky — objective,MISSING,
 250,Fractured Sky: Holofoil Box,accessory,,,1,0,53,Fractured Sky,PRESENT,yes,,,0,Fractured Sky,PRESENT,53
-251,Fractured Sky: Black Magic Custom Organizer,accessory,,,1,0,53,Fractured Sky,PRESENT,yes,,magic,2,Fractured Sky — magic,MISSING,
-252,Fractured Sky: Black Magic Custom Trays,accessory,,,1,0,53,Fractured Sky,PRESENT,yes,,magic,2,Fractured Sky — magic,MISSING,
+251,Fractured Sky: Black Magic Custom Organizer,accessory,,,1,0,53,Fractured Sky,PRESENT,yes,,magic,2,Fractured Sky — magic,SETTLED,"NOT A PRODUCT — Black Magic Craft is an insert maker, not an expansion [verified 2026-09-07]"
+252,Fractured Sky: Black Magic Custom Trays,accessory,,,1,0,53,Fractured Sky,PRESENT,yes,,magic,2,Fractured Sky — magic,SETTLED,"NOT A PRODUCT — Black Magic Craft is an insert maker, not an expansion [verified 2026-09-07]"
 253,Fractured Sky: Lenticular Starfall Cards (KS Exclusive),promo,,,1,0,53,Fractured Sky,PRESENT,yes,,lenticular starfall,1,Fractured Sky — lenticular starfall,MISSING,
 254,Slay the Spire: Character Playmats,accessory,,440472,1,0,46,Slay the Spire: The Board Game,PRESENT,yes,,,0,Slay the Spire: The Board Game,PRESENT,46
 255,Slay the Spire: Metal Coins & Merchant Bag,accessory,,440471,1,0,46,Slay the Spire: The Board Game,PRESENT,yes,,merchant,1,Slay the Spire: The Board Game — merchant,MISSING,
@@ -283,10 +283,10 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 406,"Ark Nova 3Dition: Box 2 (Basic Enclosures, Fences, Kiosks, Pavillions)",accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition box 2 basic enclosures fences kiosks pavillions,1,Ark Nova — 3dition box 2 basic enclosures fences kiosks pavillions,MISSING,
 407,Ark Nova 3Dition: Premium Acryl Tiles Set,accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition premium acryl,1,Ark Nova — 3dition premium acryl,MISSING,
 408,Ark Nova 3Dition: Deluxe Player Boards (4x) with Action Tiles,accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition deluxe player boards 4x with action,1,Ark Nova — 3dition deluxe player boards 4x with action,MISSING,
-409,Ark Nova 3Dition: Premium Metal Coins,accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition,2,Ark Nova — 3dition,MISSING,
+409,Ark Nova 3Dition: Premium Metal Coins,accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition,2,Ark Nova — 3dition,SETTLED,"NOT AN EXPANSION — 3Dition is a third-party 3D upgrade line, and the eight rows 405-412 ARE that line; there is no ninth box to own [verified 2026-09-07]"
 410,Ark Nova 3Dition: Premium Neoprene Playmats (2x),accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition premium neoprene playmats 2x,1,Ark Nova — 3dition premium neoprene playmats 2x,MISSING,
 411,Ark Nova 3Dition: Board Game Arena Maps (4x),accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition board game arena maps 4x,1,Ark Nova — 3dition board game arena maps 4x,MISSING,
-412,Ark Nova 3Dition: Premium Custom Sleeves,accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition,2,Ark Nova — 3dition,MISSING,
+412,Ark Nova 3Dition: Premium Custom Sleeves,accessory,,,1,0,428,Ark Nova,PRESENT,yes,,3dition,2,Ark Nova — 3dition,SETTLED,"NOT AN EXPANSION — 3Dition is a third-party 3D upgrade line, and the eight rows 405-412 ARE that line; there is no ninth box to own [verified 2026-09-07]"
 414,HELLDIVERS 2: Mystery Expansions,expansion,,,1,0,413,HELLDIVERS 2: The Board Game,PRESENT,yes,,,0,HELLDIVERS 2: The Board Game,PRESENT,413
 415,HELLDIVERS 2: Patriot Exosuit Expansion (Exclusive),expansion,,,1,0,413,HELLDIVERS 2: The Board Game,PRESENT,yes,,,0,HELLDIVERS 2: The Board Game,PRESENT,413
 416,HELLDIVERS 2: Automatons Expansion,expansion,,,1,0,413,HELLDIVERS 2: The Board Game,PRESENT,yes,,,0,HELLDIVERS 2: The Board Game,PRESENT,413
@@ -331,9 +331,9 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 457,The Binding of Isaac: Four Souls - Corrupted Data Promo Card,promo,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,corrupted data,1,The Binding of Isaac: Four Souls — corrupted data,MISSING,
 458,The Binding of Isaac: Four Souls - Ultra Pride Promo Card,promo,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,ultra pride,1,The Binding of Isaac: Four Souls — ultra pride,MISSING,
 459,Here to Slay: 6-Class Dice Set,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,6 - class,1,Here to Slay — 6 - class,MISSING,
-460,Here to Slay: Dragon Class Dice,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,MISSING,
+460,Here to Slay: Dragon Class Dice,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,SETTLED,"HELD as the Dragon Sorcerer Expansion (items 863 and 295) — ""Dragon Class"" is the class that expansion adds, not a separate product [verified 2026-09-07]"
 461,Here to Slay: Oversized Card Sleeves Set,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
-462,Here to Slay: Dragon Class Meeple Set,accessory,Here to Slay,369124,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,MISSING,
+462,Here to Slay: Dragon Class Meeple Set,accessory,Here to Slay,369124,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,SETTLED,"HELD as the Dragon Sorcerer Expansion (items 863 and 295) — ""Dragon Class"" is the class that expansion adds, not a separate product [verified 2026-09-07]"
 464,Auroboros: Ability and Item Card Deck,accessory,D&D,,1,0,463,Auroboros: Coils of the Serpent,PRESENT,yes,,ability and item,1,Auroboros: Coils of the Serpent — ability and item,MISSING,
 465,Auroboros: Dice Set,accessory,D&D,,1,0,463,Auroboros: Coils of the Serpent,PRESENT,yes,,,0,Auroboros: Coils of the Serpent,PRESENT,463
 466,Auroboros: City Map Poster Pack,accessory,D&D,,1,0,463,Auroboros: Coils of the Serpent,PRESENT,yes,,city map,1,Auroboros: Coils of the Serpent — city map,MISSING,
@@ -357,7 +357,7 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 490,Ark Nova: Zoo Map Pack 1,expansion,,368158,0,1,428,Ark Nova,PRESENT,yes,,,0,Ark Nova,PRESENT,428
 491,Ark Nova: Zoo Map Pack 2,expansion,,426978,0,1,428,Ark Nova,PRESENT,yes,,,0,Ark Nova,PRESENT,428
 493,Lewd Dungeon Adventures: Character Sheet,accessory,,,1,0,470,Lewd Dungeon Adventures: Core Rulebook and Starter Adventure,PRESENT,yes,,,0,Lewd Dungeon Adventures: Core Rulebook and Starter Adventure,PRESENT,470
-494,Deep Rock Galactic: Rivals Exclusive Gift Box,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,rivals,3,Deep Rock Galactic: The Board Game — rivals,MISSING,
+494,Deep Rock Galactic: Rivals Exclusive Gift Box,accessory,,,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,rivals,3,Deep Rock Galactic: The Board Game — rivals,SETTLED,"HELD as Rival Incursion (item 90) — ""Rivals"" is the campaign wave, and MOOD Publishing's own store spells the expansion ""Rivals Incursion"" [verified 2026-09-07]"
 495,Deep Rock Galactic: Hidden Cave Segment Randomizers,promo,,474551,1,0,105,Deep Rock Galactic: The Board Game,PRESENT,yes,,hidden cave segment randomizers,1,Deep Rock Galactic: The Board Game — hidden cave segment randomizers,MISSING,
 496,Yeti or Not: Exclusive Edition Expansion,expansion,,449715,1,0,94,Twisted Cryptids,PRESENT,no,,,0,Twisted Cryptids,PRESENT,94
 497,Twisted Cryptids: Nostalgic Wilderness Board,accessory,,430245,1,0,94,Twisted Cryptids,PRESENT,yes,,nostalgic wilderness,1,Twisted Cryptids — nostalgic wilderness,MISSING,
@@ -376,8 +376,8 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 513,Ryoko's Guide: Wrath of the Kaiju,expansion,D&D,,1,0,511,Ryoko's Guide to the Yokai Realms,PRESENT,yes,,,0,Ryoko's Guide to the Yokai Realms,PRESENT,511
 514,Ryoko's Guide: Deluxe Book Bundle Slipcase,accessory,D&D,,1,0,511,Ryoko's Guide to the Yokai Realms,PRESENT,yes,,slipcase,1,Ryoko's Guide to the Yokai Realms — slipcase,MISSING,
 515,Ryoko's Guide: Deluxe Accessory Box,accessory,D&D,,1,0,511,Ryoko's Guide to the Yokai Realms,PRESENT,yes,,,0,Ryoko's Guide to the Yokai Realms,PRESENT,511
-516,Ryoko's Guide: Yokai Dawn Dice Mini Set,accessory,D&D,,1,0,511,Ryoko's Guide to the Yokai Realms,PRESENT,yes,,yokai dawn,2,Ryoko's Guide to the Yokai Realms — yokai dawn,MISSING,
-517,Ryoko's Guide: Yokai Dawn Resin Dice Set,accessory,D&D,,1,0,511,Ryoko's Guide to the Yokai Realms,PRESENT,yes,,yokai dawn,2,Ryoko's Guide to the Yokai Realms — yokai dawn,MISSING,
+516,Ryoko's Guide: Yokai Dawn Dice Mini Set,accessory,D&D,,1,0,511,Ryoko's Guide to the Yokai Realms,PRESENT,yes,,yokai dawn,2,Ryoko's Guide to the Yokai Realms — yokai dawn,SETTLED,"NOT A PRODUCT — ""Yokai Dawn"" is a dice colourway, not a book or expansion [verified 2026-09-07]"
+517,Ryoko's Guide: Yokai Dawn Resin Dice Set,accessory,D&D,,1,0,511,Ryoko's Guide to the Yokai Realms,PRESENT,yes,,yokai dawn,2,Ryoko's Guide to the Yokai Realms — yokai dawn,SETTLED,"NOT A PRODUCT — ""Yokai Dawn"" is a dice colourway, not a book or expansion [verified 2026-09-07]"
 519,Cosmere RPG: Stormlight World Guide,expansion,,,1,0,518,Cosmere RPG: Stormlight Handbook,PRESENT,yes,,,0,Cosmere RPG: Stormlight Handbook,PRESENT,518
 520,Cosmere RPG: Stonewalkers Adventure,expansion,,,1,0,518,Cosmere RPG: Stormlight Handbook,PRESENT,yes,,,0,Cosmere RPG: Stormlight Handbook,PRESENT,518
 521,Cosmere RPG: Level Zero Adventure,expansion,,,1,0,518,Cosmere RPG: Stormlight Handbook,PRESENT,yes,,,0,Cosmere RPG: Stormlight Handbook,PRESENT,518
@@ -415,14 +415,14 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 558,Super Boss Monster: Cross Promo Pack,promo,Boss Monster,,1,0,95,Super Boss Monster,PRESENT,yes,,cross,1,Super Boss Monster — cross,MISSING,
 559,Super Boss Monster: Level Up Coins,accessory,Boss Monster,,1,0,95,Super Boss Monster,PRESENT,yes,,level up,1,Super Boss Monster — level up,MISSING,
 560,Super Boss Monster: Ultimate Starter Set Card Sleeve Bundle,accessory,Boss Monster,,1,0,95,Super Boss Monster,PRESENT,yes,,,0,Super Boss Monster,PRESENT,95
-561,Dice Throne: Card Sleeves - Minimalist (Flaming Die),accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,minimalist flaming,2,Dice Throne: Outcasts — minimalist flaming,MISSING,
+561,Dice Throne: Card Sleeves - Minimalist (Flaming Die),accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,minimalist flaming,2,Dice Throne: Outcasts — minimalist flaming,SETTLED,"NOT A PRODUCT — ""Minimalist (Flaming Die)"" is a sleeve art style, one of the nineteen per-hero sleeve arts in this collection [verified 2026-09-07]"
 562,Dice Throne Adventures: Card Sleeves - Boss Decks,accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,adventures,1,Dice Throne: Outcasts — adventures,AMBIGUOUS,Dice Throne: Adventures – Unchained / Dice Throne: Adventures
 563,Dice Throne Outcasts: Playmat - Headless Horseman,accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,headless horseman,3,Dice Throne: Outcasts — headless horseman,PRESENT,Dice Throne Hero: Headless Horseman
 564,Dice Throne Adventures Unchained: Playmat - Vault Witch,accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,adventures unchained playmat - vault witch,1,Dice Throne: Outcasts — adventures unchained playmat - vault witch,MISSING,
 565,Dice Throne Outcasts: Playmat - Raveness,accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,raveness,3,Dice Throne: Outcasts — raveness,PRESENT,Dice Throne Hero: Raveness
 566,Dice Throne Outcasts: Playmat - Pale Lady,accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,pale lady,3,Dice Throne: Outcasts — pale lady,PRESENT,Dice Throne Hero: Pale Lady
 567,Dice Throne Outcasts: Playmat - Necromancer,accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,necromancer,3,Dice Throne: Outcasts — necromancer,PRESENT,Dice Throne Hero: Necromancer
-568,Dice Throne: Playmat - Minimalist (Flaming Die),accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,minimalist flaming,2,Dice Throne: Outcasts — minimalist flaming,MISSING,
+568,Dice Throne: Playmat - Minimalist (Flaming Die),accessory,Dice Throne,,1,0,92,Dice Throne: Outcasts,PRESENT,yes,,minimalist flaming,2,Dice Throne: Outcasts — minimalist flaming,SETTLED,"NOT A PRODUCT — ""Minimalist (Flaming Die)"" is a sleeve art style, one of the nineteen per-hero sleeve arts in this collection [verified 2026-09-07]"
 569,Savage: Kickstarter Promo Cards,promo,,,1,0,68,Savage,PRESENT,yes,,,0,Savage,PRESENT,68
 572,Dungeon Crawler Carl RPG: GM Screen and Tokens,accessory,Dungeon Crawler Carl,,1,0,570,Dungeon Crawler Carl Roleplaying Game Core Book,PRESENT,yes,,rpg gm,1,Dungeon Crawler Carl Roleplaying Game Core Book — rpg gm,MISSING,
 573,Dungeon Crawler Carl RPG: Carl's Enchanted Big Boi Boxers Dice Set,accessory,Dungeon Crawler Carl,,1,0,570,Dungeon Crawler Carl Roleplaying Game Core Book,PRESENT,yes,,rpg carl's enchanted big boi boxers,1,Dungeon Crawler Carl Roleplaying Game Core Book — rpg carl's enchanted big boi boxers,MISSING,
