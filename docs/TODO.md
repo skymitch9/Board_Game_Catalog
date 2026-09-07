@@ -4,7 +4,7 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-**Last updated: 2026-09-07** (agent `W20-DEDUPE`; previously `W19-ACC-FIX`,
+**Last updated: 2026-09-07** (agent `W18-FAM-BADGE`; previously `W20-DEDUPE`, `W19-ACC-FIX`,
 `W18-ACC`, `W14-DOCS` and `W13-GAMES`). ⚠️ **This paragraph is the only status line in this
 file.** What is open, in full:
 
@@ -14,6 +14,7 @@ file.** What is open, in full:
 | 🧑 One eyeball of `/api/export.json` as a contributor — confirm no `email` field | owner |
 | 🧑 **One eyeball of the estate search box** at <https://boardgames.heygabi.ai/> — the shared `<estate-search>` component lost its default hint line and four other explainers on 2026-09-07 (agent W17-ES-GREY, deploy `79360f3a`; the whole entry is in [`DONE.md`](DONE.md)). ⚠️ **Nothing rendered was measured** — no agent session has a browser, so a layout leaning on a removed line for spacing would not have been caught. Type two letters and look at the box, then at a result list | owner |
 | 🧑 Three owner reviews on his phone — the three `☐ owner review` headings below: the scan target, the second-instance machinery, the family score | owner |
+| 🧑 **One eyeball of the family chip**, shipped 2026-09-07 (agent `W18-FAM-BADGE`, deploy `a0cd1d63`; the entry is in [`DONE.md`](DONE.md)). Open <https://boardgames.heygabi.ai/?q=catan> — each Catan row should carry a *Catan · 5 lines* chip, and pressing it should filter the collection to those five lines. ⚠️ **Nothing rendered was measured** — a `curl` cannot run the SPA, so the proof is the shipped bundle and nobody has SEEN a chip: its placement, its wrapping on a phone and its focus ring are unmeasured | owner |
 | 🧑 **TWO** rows still open in ***What still wants a person***, the first section below — the Dice Throne playmat count and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file**. ✅ **Two rows closed on 2026-09-07 and both moved WHOLE to [`DONE.md`](DONE.md):** the accessory-implies-the-game sweep (all six shortlisted products verified false positives, zero D1 writes, agent `W19-ACC-FIX`), and the **two Here to Slay duplicate expansion pairs** it left behind — verified as one product held twice and dropped (agent `W20-DEDUPE`): **294** and **295**, the Kickstarter rows, kept and given the BGG ids; **862** and **863** deleted with their duplicate `owned` copies. Rollback SQL is in the `DONE.md` entry | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
 | 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
@@ -599,7 +600,7 @@ row stops the hourly details sweep, silently, for good.
 
 ---
 
-## ☑ BUILT + DEPLOYED 2026-09-05 (`62fc5645`) — the family score, answer (a) — ☐ owner review · ❓ two defaults he can still flip · ☐ no search badge
+## ☑ BUILT + DEPLOYED 2026-09-05 (`62fc5645`) — the family score, answer (a) — ☐ owner review · ❓ two defaults he can still flip · ☐ no score on a row (the CHIP shipped 2026-09-07)
 
 ✅ **The decision is ANSWERED and the section that asked it has moved WHOLE to
 [`DONE.md`](DONE.md)** (owner, 2026-09-05 16:14 Phoenix: **(a) the
@@ -645,11 +646,19 @@ Catan rows, not one folded "Catan family" card that has to be opened before you
 can tell what is in it. This is also what search does today, so the default is
 "no change to the shape of results". **Reversible.**
 
-☐ **NOT BUILT: the family badge on a search row.** The second default above says
-each entry *carries its family score*; today the score is on the **item detail
-page only**. Putting it on a search/collection row means computing a family
-score per row of a page, which is a recursive CTE per root — a real cost
-question, not a five-minute add. Deliberately left for the owner to ask for.
+✅ **THE FAMILY CHIP IS BUILT AND LIVE** — owner, 2026-09-07 12:00 Phoenix:
+***"Sure do it"***. Deployed `a0cd1d63` (agent `W18-FAM-BADGE`, commit
+`35af36d`); the paragraph that asked for it moved **whole** to
+[`DONE.md`](DONE.md), which holds the rule it reuses, the production numbers
+and the review links. A row that is one of several lines in a family now reads
+*Dice Throne · 12 lines* and links into the rest of them.
+
+☐ **STILL NOT BUILT, and still priced: the family SCORE on a row.** The chip
+says which family and how big; it does not carry the number. That remains one
+**recursive CTE per root of the page**, which is the cost question the moved
+paragraph raised and the chip deliberately did not answer — the chip rides on
+the collection's existing grouping, which is one flat query for a whole page.
+Left for the owner to ask for, at that price.
 
 ⚠️ **NOT VERIFIED: anything rendered.** The deploy was proved live with
 `curl -s -D -` on the item page (200, the app's HTML shell). No browser, no

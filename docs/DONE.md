@@ -1,7 +1,11 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-07** — the two Here to Slay duplicate expansion pairs
+> Last updated: **2026-09-07** — the family chip on a search/collection row
+> (agent `W18-FAM-BADGE`, deployed `a0cd1d63`): a row that is one of several
+> lines in a family now says which, and links into the rest of it, on the
+> group card's own membership rule. Earlier the same day, the two Here to Slay
+> duplicate expansion pairs
 > verified and dropped (agent `W20-DEDUPE`): **294** and **295** kept, **862**
 > and **863** deleted with their duplicate `owned` copies, four write statements
 > against production D1, rollback SQL inside the entry. Earlier the same day,
@@ -29,6 +33,103 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ☑ BUILT + DEPLOYED 2026-09-07 (`a0cd1d63`, agent `W18-FAM-BADGE`) — the family chip on a search/collection row
+
+Owner, 2026-09-07 12:00 Phoenix, asked for the thing the family-score work had
+deliberately left alone: ***"Sure do it"***.
+
+**The item this closes, moved WHOLE out of [`TODO.md`](TODO.md), unedited:**
+
+> ☐ **NOT BUILT: the family badge on a search row.** The second default above says
+> each entry *carries its family score*; today the score is on the **item detail
+> page only**. Putting it on a search/collection row means computing a family
+> score per row of a page, which is a recursive CTE per root — a real cost
+> question, not a five-minute add. Deliberately left for the owner to ask for.
+
+🔴 **What was built is the chip, NOT the score — and that is the whole reason it
+was affordable.** The paragraph above prices *the family score per row*, which
+is one recursive CTE per root and is still unbuilt. What a row actually needed
+in order to stop being a dead end was **which family it is in, how big that
+family is, and a way into the rest of it** — and that is the collection page's
+existing grouping, which is one flat query for a whole page. The score on a row
+remains open, at the price the paragraph names.
+
+### The one rule, reused rather than restated
+
+`familiesForRoots()` in `packages/db/src/items.ts` is a **second read of
+`ROOT_GROUP_CTE`** — the same SQL `GroupCard` folds on — so a row can never
+claim a family the collection page would refuse to fold. It inherits every
+clause, including the one a hand-rolled *"does it have a series?"* check gets
+wrong: **a grouping of one line is not a grouping**.
+
+| Measured 2026-09-07, read-only against production D1 | |
+|---|---|
+| Items / top-level lines | **836** / **174** |
+| Lines carrying a series or system label | **76** |
+| …of those, in a family spanning **more than one** line | **75**, across **17** families |
+| So labels correctly left silent | **1** |
+| The three biggest | *Dice Throne* **12 lines / 148 items** · *D&D* **15 / 109** · *Catan* **5 / 8** |
+
+### What it looks like, and the choices inside it
+
+- **"Dice Throne · 12 lines"**, wearing `.badge` — the same ink border and
+  caption face as its neighbours — and linking to `/?group=series:Dice Throne`,
+  the same destination the group card's *"Show these on their own"* reaches.
+- **Outside the card's head, not among the badges beside the name.** That is
+  structural, not aesthetic: the head is itself a link to the game, and an
+  anchor cannot hold a second one.
+- **The inert series badge is dropped when the chip carries the same word.** It
+  was the same string with no destination and no size; one fact, one badge.
+- **Silent while the collection is already filtered to that family** — eleven
+  rows each linking to the page you are standing on is the filter read back to
+  you eleven times. `familyToShow()` in `apps/web/src/lib/row-family.ts`.
+- **Silent on a grouped page, and it costs nothing there**: a root still
+  standing as its own tree on a grouped page is one `root_group` never matched,
+  so the read is skipped rather than run and discarded.
+- **A row with no family renders exactly as it did before this existed.**
+
+### Files
+
+| File | What |
+|---|---|
+| `packages/db/src/items.ts` | `ROW_FAMILY_SQL` + `familiesForRoots()`; attached to each root in `listItemTrees` |
+| `packages/core/src/schemas.ts` | `ItemFamilyRef`, and `family?` on `ItemNode` |
+| `apps/web/src/lib/row-family.ts` | `familyToShow()` — the *is it worth saying here* half, and nothing else |
+| `apps/web/src/components/ItemTree.tsx` | the chip on `ItemCard`, and the now-redundant series badge |
+| `apps/web/src/pages/CollectionPage.tsx` | passes the active group so the chip can stay quiet |
+| `apps/web/src/router.tsx` | `groupPath()`, and an optional `ariaLabel` on `Link` |
+| `apps/web/src/styles.css` | `.row-family`, and the chip's own focus ring |
+| `packages/db/test/row-family.test.ts` · `apps/web/test/row-family.test.ts` | 15 tests |
+
+**Tests 897 → 912 pass / 0 fail**, typecheck clean across every workspace.
+`packages/db/test/row-family.test.ts` runs the SQL against a real SQLite with
+every migration applied and was **proven to go red**: pointed at `picked_group`
+instead of `root_group`, the one-line clause fails and nothing else does.
+**No migration** — `wrangler d1 migrations list --remote` said so first.
+
+Deployed as **`a0cd1d63-cd0e-4e7c-a0f2-c0a4022e0d05`** from commit `35af36d`,
+out of a throwaway worktree because this tree was shared with another writer.
+Rollback `79360f3a-3057-42ea-ae3b-0f501b9af26d`. The full line, with the
+numbers and the method, is in [`deploys.log`](deploys.log).
+
+🔗 **Review, one minute:**
+<https://boardgames.heygabi.ai/?q=catan> — the **Catan** rows should each carry
+a *Catan · 5 lines* chip; press it and the collection filters to the five Catan
+lines. <https://boardgames.heygabi.ai/?q=dice+throne> is the big one
+(*Dice Throne · 12 lines*), and <https://boardgames.heygabi.ai/?collapse=0>
+unfolds the whole collection so the chips show on an ordinary browse rather
+than only in a search.
+
+⚠️ **NOT VERIFIED: anything rendered.** A `curl` cannot run the SPA and no agent
+session holds a Firebase ID token, so the live proof is the *shipped bundle*,
+not a page: `assets/index-s6SRsI6g.js` carries `row-family__chip` and the aria
+template ``Show the ${d.lines} lines of ${d.name}``, `assets/index-BNvKb09D.css`
+carries all four `.row-family` rules, the front door and `/api/health` are 200.
+**Nobody has seen a chip on a row** — its placement, how it wraps on a phone,
+and the focus ring are unmeasured.
 
 ---
 

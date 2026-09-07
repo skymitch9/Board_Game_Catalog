@@ -169,6 +169,30 @@ exactly as predicted below. The full entry, the numbers and the bug that went
 red are in [`../DONE.md`](../DONE.md); the two riders were **not** ruled on and
 carry reversible defaults recorded in [`../TODO.md`](../TODO.md).
 
+✅ **And the row got a CHIP, 2026-09-07 — which is not the score.** The owner
+asked for the thing the paragraph above had left alone (*"Sure do it"*, 12:00
+Phoenix), and what shipped is **the family a row is in, its size, and a way into
+it** — *Dice Throne · 12 lines*, linking to `/?group=series:Dice Throne` — built
+as `a0cd1d63`, agent `W18-FAM-BADGE`. The distinction is the whole design:
+
+| | The chip, shipped | The score on a row, still open |
+|---|---|---|
+| Answers | *which family is this in, and how big* | *how good is the family* |
+| Costs | ONE flat query per page, skipped entirely on a grouped page | a **recursive CTE per root** of the page |
+| Rides on | the collection's existing grouping (`ROOT_GROUP_CTE`) | `getFamilyScore`, per row |
+
+⚠️ **The chip reuses `ROOT_GROUP_CTE` rather than restating it** — the same SQL
+`GroupCard` folds on — so a row can never claim a family the collection page
+would refuse to fold, including the clause that is easy to lose: *a grouping of
+one line is not a grouping*. `familiesForRoots()` in
+`packages/db/src/items.ts`; the only thing the web decides is whether saying it
+helps on the screen you are on (`apps/web/src/lib/row-family.ts`), and it does
+not, while the collection is already filtered to that same family. Measured
+against production D1 on 2026-09-07: **836** items, **174** top-level lines,
+**76** carrying a series or system label, **75** of those in a family spanning
+more than one line, across **17** families. The full entry — files, tests, the
+review links and what was NOT verified — is in [`../DONE.md`](../DONE.md).
+
 🔴 **Corrected 2026-09-05 (docs audit).** This read as one undecided question.
 It is two, and one of them is **built and live**:
 
