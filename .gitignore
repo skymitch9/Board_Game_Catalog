@@ -45,6 +45,23 @@ apps/web/public/assets/
 .env.*
 .dev.vars.*
 
+# ⚠️ …EXCEPT the TEMPLATES, which carry names and no values.
+#
+# 🔴 **Last matching pattern wins, and these have to sit AFTER the block above.**
+# There is already a `!.env.example` at line 24 and it does nothing: the
+# `.env.*` on line 45 is later, so it wins, and `git check-ignore -v
+# .env.example` names line 45 as the reason. 2026-08 audit, finding 23 — which
+# blamed a `.env.*` at line 33 that has since moved, so the negation was never
+# in the wrong place, the second copy of the pattern was added below it.
+#
+# ⚠️ Measured 2026-09-06: BOTH templates were ignored, and neither is tracked —
+# so a fresh clone of this repo has no setup template at all, which is worse
+# than the audit's version of the finding. Un-ignoring them is all this can do;
+# committing them is a person's call, because it publishes a file to a PUBLIC
+# repo. Names only, never values — check before adding either.
+!.env.example
+!.dev.vars.example
+
 # Agent worktrees. ⚠️ This rule was LOCAL-ONLY in .git/info/exclude until
 # 2026-08-21 — which is not shared, so a fresh clone on another machine had no
 # protection at all. It matters because these worktrees hold
