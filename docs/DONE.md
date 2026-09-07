@@ -1,7 +1,10 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-06** — KI-7 closed (agent W9-KI7): the last-owner
+> Last updated: **2026-09-07** — the fewer-grey-paragraphs pass (agent
+> W15-GREY): 41 audit items applied across `apps/web/src`, deployed as
+> `70dca408`. Before that, 2026-09-06: KI-7 closed (agent W9-KI7), the
+> last-owner
 > guard ported from `library_catalog` into `setUserRole` and deployed. Before
 > that, 2026-09-05: the repo's first route tests (agent W9-BOARD-ROUTES), which
 > are what found KI-7; and earlier the same day phase 9, the games provisioner
@@ -16,6 +19,100 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ BUILT + DEPLOYED 2026-09-07 (agent W15-GREY) — fewer grey paragraphs, audit items 113–153
+
+> **Moved whole from [`TODO.md`](TODO.md)**, where it read as follows while it
+> was in flight. Everything below the second rule is what was added on
+> completion.
+
+> **The owner's order, 2026-09-07:** no helper/grey paragraph by default; a
+> feature that explains itself by the way it works gets none. He answered
+> *"Yes apply"* to every CUT and SHORTEN recommendation in the estate audit.
+
+The audit itself lives in the **library** repo and is not copied here — one
+fact, one home:
+`bookbuddy/library_catalog/docs/archive/2026-09-07-grey-paragraph-audit.md`.
+**Items 113–153 are this repo's section** (`apps/web/src`); 1–112 are the
+library's, 154–175 the audiobook/ebook site's.
+
+| | |
+|---|---|
+| Scope | 41 numbered items — the SITE 2 block of the audit |
+| KEEP items | untouched, by instruction |
+| Duplicates settled by the audit | 114 keep `BarcodeQueue`, cut `ScanPanel`; 150 keep `Arrivals.tsx:163`, cut `:244`; 138 + 142 cut, 141 shortened as the survivor |
+| Started | 2026-09-07 |
+
+⚠️ Two items are **control changes, not deletions** — the audit says where the
+sentence belongs, not only that it goes: **131** ("don't render the picker")
+and **152** ("belongs on the disabled Save button").
+
+---
+
+**Outcome — all 41 items applied, nothing skipped, nothing not-found.**
+
+| | |
+|---|---|
+| CUT | **23** — 116, 119, 120, 121, 123, 125, 126, 130, 131, 133, 134, 136, 138, 140, 142, 143, 147, 148, 150 (`:244` only), 151, 152, 153, plus the `ScanPanel` half of duplicate **114** |
+| SHORTEN | **5** — 113, 117, 124, 129, 141 |
+| KEEP | **14** — untouched, and each spot-checked still present after the pass |
+| Not found / skipped | **none** |
+| Commits | **`31a360e`** (113–131) · **`17e8c94`** (133–153) · **`a20d403`** (the TODO entry) · plus this docs commit |
+| Live worker version | **`70dca408-e0ef-4d2b-9ac1-ff51d0c01f1d`** |
+| Roll back to | **`393a9b4f-cf9d-4274-bd9a-9f8969fbdd3d`** (W13-GAMES, the line above it in `deploys.log`) |
+| Migration | **none** — nothing under `migrations/` was touched |
+| Tests | **862 pass / 0 fail / 0 todo**; typecheck clean across all seven workspaces |
+
+⚠️ **Every line number in the audit was treated as a hint, not an address** —
+each string was found by its text, because the audit says its numbers were
+spot-checked rather than all verified. All 41 resolved, so no item is reported
+missing.
+
+**Three helpers died with their only caller**, which is the part a later
+session will trip over if it is not written down:
+
+| Helper | Lived in | Went with |
+|---|---|---|
+| `needsRelookupToAccept` | `pages/ScanJobsPage.tsx` | item 123 — it existed only to decide whether to print the migration-artefact note |
+| `outstanding` (the review body's copy) | `pages/ScanJobsPage.tsx` | item 121 — its only reader was the "everything is dealt with" sentence |
+| the `canEdit` empty-state arm | `pages/CollectionPage.tsx` | item 136 — an editor and a viewer now see the same empty state |
+
+**Why item 131 is not a plain deletion.** The audit said *don't render the
+picker*, and rendering nothing whenever there is one candidate would have been
+a regression: a single candidate the form is **not** already using is still a
+choice — a game with no cover and one BoardGameGeek image would have lost the
+only control that could set it. The grid now renders on
+`candidates.length > 1 || (one candidate whose url !== value)`, which is
+"there is something to pick" stated exactly.
+
+**Why item 152's string is still in the bundle, and should be.** *An expansion
+needs a base game — pick one, or name the one to wait for* moved from a
+standing grey line beside the buttons onto the disabled **Add to wishlist**
+button's `title`. The refusal now happens at the control that refuses. A grep
+for that sentence finding **1** is the correct result, not a missed cut.
+
+**🔬 Verified live**, `2026-09-07`, against `https://boardgames.heygabi.ai/`
+with `curl -sS -D <hdr> -o <body>` (never `-I`, never `-o /dev/null` — this
+estate has measured those returning 000 on live hosts):
+
+- front door **200**; the served bundle is `assets/index-BK71geEe.js`, the same
+  filename this deploy uploaded, so the bytes grepped are the bytes shipped;
+- **23 removed strings: 0 occurrences each**, including all of the
+  duplicate-resolution cuts;
+- every shortened replacement present exactly once — *"Signing in puts you in
+  the queue"*, *"Nothing is added until you review it"*, *"Not matched to BGG"*,
+  *"Stops counting as held"*, *"Only blanks are filled. The paid web search…"*;
+- 🔴 **`"Camera not working"` is down to ONE occurrence** — the de-duplication
+  of item 114 measured, not assumed.
+
+⚠️ **NOT verified: anything behind auth, in a browser, by a human.** No agent
+session holds a Firebase ID token, so `/details`, `/wishlist`, `/scan` and the
+item page were proved by string presence/absence in the JS bundle and by unit
+tests, **not by a signed-in render**. The two control changes above (131's
+one-candidate cover picker, 152's hover title on a disabled button) are the two
+that most want one human glance.
 
 ---
 

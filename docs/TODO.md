@@ -35,29 +35,6 @@ status paragraph is the bug, not the fix.
 
 ---
 
-## ☐ IN FLIGHT 2026-09-07 (agent W15-GREY) — fewer grey paragraphs, audit items 113–153
-
-> **The owner's order, 2026-09-07:** no helper/grey paragraph by default; a
-> feature that explains itself by the way it works gets none. He answered
-> *"Yes apply"* to every CUT and SHORTEN recommendation in the estate audit.
-
-The audit itself lives in the **library** repo and is not copied here — one
-fact, one home:
-`bookbuddy/library_catalog/docs/archive/2026-09-07-grey-paragraph-audit.md`.
-**Items 113–153 are this repo's section** (`apps/web/src`); 1–112 are the
-library's, 154–175 the audiobook/ebook site's.
-
-| | |
-|---|---|
-| Scope | 41 numbered items — the SITE 2 block of the audit |
-| KEEP items | untouched, by instruction |
-| Duplicates settled by the audit | 114 keep `BarcodeQueue`, cut `ScanPanel`; 150 keep `Arrivals.tsx:163`, cut `:244`; 138 + 142 cut, 141 shortened as the survivor |
-| Started | 2026-09-07 |
-
-⚠️ Two items are **control changes, not deletions** — the audit says where the
-sentence belongs, not only that it goes: **131** ("don't render the picker")
-and **152** ("belongs on the disabled Save button").
-
 ## ☐ 🧑 What still wants a person — THREE open rows for the owner, and a settled record beside them
 
 > ⚠️ **Moved here whole 2026-09-06 (W14-DOCS), and retitled.** This table sat
