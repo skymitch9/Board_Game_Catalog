@@ -26,6 +26,41 @@ const STAGES = {
 
 export type GameUpcStage = keyof typeof STAGES;
 
+/**
+ * The only host this module will ever send its API key to.
+ *
+ * 🔴 **Derived from `STAGES`, never typed out** — a second copy of a hostname
+ * is how an allow-list drifts away from the thing it is supposed to allow.
+ * All three stages are paths on one host; `gameupc-host.test.ts` pins that.
+ */
+export const GAMEUPC_HOST = new URL(STAGES.v1).hostname;
+
+/**
+ * May we send the GameUPC API key to this URL?
+ *
+ * 🔴 **The threat is CREDENTIAL FORWARDING, not SSRF alone.**
+ * `contributeGameUpc` POSTs to a URL that arrives, ultimately, from a client —
+ * `/api/barcode/link` accepts an `updateUrl` that was validated as *a URL* and
+ * nothing more — and it attaches the `x-api-key` header on the way. Without a
+ * host check, any `editCatalog` user could name a listener of their own and be
+ * handed the Worker's `GAMEUPC_API_KEY`. 2026-08 audit, finding 11.
+ *
+ * ⚠️ **https only.** A plaintext `http:` URL on the right host still puts the
+ * key on the wire.
+ *
+ * ⚠️ **Exact host, never a suffix.** `api.gameupc.com.evil.test` ends with the
+ * right string, and an `endsWith` check is the classic way to wave it through.
+ */
+export function isGameUpcUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return parsed.protocol === 'https:' && parsed.hostname === GAMEUPC_HOST;
+}
+
 /** Published in GameUPC's own demo; fine for the `test` stage, useless for `v1`. */
 export const GAMEUPC_DEMO_KEY = 'test_test_test_test_test';
 
@@ -214,6 +249,26 @@ export async function contributeGameUpc(
   userId: string,
 ): Promise<boolean> {
   if (userId.length < 8) return false;
+
+  // 🔴 The choke point. Whatever the route did or did not check, the key is
+  // attached HERE, so this is where the host has to be right. Best-effort means
+  // a refusal returns false like any other miss — it must not fail a scan whose
+  // catalog write has already succeeded — but it is logged, because "the
+  // contribution did not go through" and "somebody aimed this Worker's
+  // credential at their own server" must not look the same in a tail.
+  if (!isGameUpcUrl(updateUrl)) {
+    console.warn(
+      JSON.stringify({
+        event: 'gameupc_contribute_refused',
+        reason: 'update_url_off_host',
+        expected_host: GAMEUPC_HOST,
+        // The URL, not the key. Enough to see what was attempted.
+        attempted: updateUrl.slice(0, 200),
+      }),
+    );
+    return false;
+  }
+
   try {
     const res = await fetch(updateUrl, {
       method: 'POST',

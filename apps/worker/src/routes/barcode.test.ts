@@ -374,6 +374,63 @@ describe('POST /link — the only route here that writes', () => {
     assert.deepEqual(db._sql, []);
   });
 
+  it("🔴 an updateUrl on somebody else's host is refused BEFORE the write, in words", async () => {
+    // 2026-08 audit finding 11. `contributeGameUpc` attaches this Worker's
+    // GAMEUPC_API_KEY to whatever URL it is given, and this field reached it
+    // from the client validated as a URL and nothing more — so an
+    // `editCatalog` user could name a listener of their own and be sent the
+    // key. The library refuses it too, at the point the key is attached; this
+    // is the half that says so in a sentence, before anything is written.
+    const db = stubDb();
+    const res = await call(
+      appAs('owner'),
+      'POST',
+      '/api/barcode/link',
+      { itemId: 4, barcode: GOOD_BARCODE, updateUrl: 'https://evil.test/collect' },
+      envWith(db),
+    );
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { error?: string; detail?: string };
+    assert.equal(body.error, 'bad_request');
+    assert.match(body.detail ?? '', /api\.gameupc\.com/, 'names the host it must be on');
+    assert.match(body.detail ?? '', /will not be sent anything/);
+    assert.deepEqual(db._sql, [], 'and the barcode link never happened');
+  });
+
+  it('a legitimate GameUPC updateUrl still links, and the key goes THERE and nowhere else', async () => {
+    // The guard must not cost the feature it protects — and this is the one
+    // case that reaches `contributeGameUpc`, so ⚠️ the network is stubbed. Run
+    // unstubbed it would POST to api.gameupc.com for real, which no test in
+    // this repo may do.
+    const seen: { url: string; apiKey: string | null }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      seen.push({ url: String(input), apiKey: headers.get('x-api-key') });
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const res = await call(
+        appAs('owner'),
+        'POST',
+        '/api/barcode/link',
+        {
+          itemId: 4,
+          barcode: GOOD_BARCODE,
+          updateUrl: 'https://api.gameupc.com/v1/barcode/0123456789012/update',
+        },
+        envWith(stubDb({ owned: 'yes' })),
+      );
+      assert.equal(res.status, 200);
+      assert.equal(seen.length, 1, 'exactly one outbound call — the contribution');
+      assert.match(seen[0]!.url, /^https:\/\/api\.gameupc\.com\//);
+      assert.ok(seen[0]!.apiKey, 'and it carried the key, which is why the host matters');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   it('⚠️ linking is never billing-gated — a catalog write costs nothing', async () => {
     const res = await call(
       appAs('owner', ['barcode.paid', 'scan.photo', 'research.tier']),

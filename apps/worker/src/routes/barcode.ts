@@ -2,8 +2,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { BarcodeCandidate } from '@bgc/core';
 import {
+  GAMEUPC_HOST,
   contributeGameUpc,
   gameUpcConfig,
+  isGameUpcUrl,
   lookupGameUpc,
   resolveBarcode,
   type GameUpcConfig,
@@ -38,7 +40,26 @@ const linkSchema = z.object({
   editionName: z.string().trim().max(200).nullable().optional(),
   /** BGG id of the candidate the user picked, so we can thank GameUPC for it. */
   bggId: z.number().int().positive().nullable().optional(),
-  updateUrl: z.string().url().nullable().optional(),
+  /**
+   * GameUPC's own write-back endpoint for this barcode, as GameUPC handed it
+   * to us in the lookup the scan screen already made.
+   *
+   * 🔴 **Host-checked, not merely URL-shaped.** `contributeGameUpc` attaches
+   * the Worker's `GAMEUPC_API_KEY` to whatever it is given, so a bare
+   * `z.string().url()` here let any `editCatalog` user name a listener of their
+   * own and be sent the key — credential forwarding, 2026-08 audit finding 11.
+   * The library refuses it too (that is the real choke point, since the key is
+   * attached there); this is the half that says so IN WORDS, before anything
+   * is written.
+   */
+  updateUrl: z
+    .string()
+    .url()
+    .refine((u) => isGameUpcUrl(u), {
+      message: `a write-back endpoint must be an https URL on ${GAMEUPC_HOST} — this one is not, and it will not be sent anything. It comes from the lookup that found the game; if you are building this request by hand, leave it out and pass "contribute": true instead`,
+    })
+    .nullable()
+    .optional(),
   /**
    * Ask GameUPC for a write-back endpoint when the caller has none.
    *
@@ -188,7 +209,17 @@ export const barcodeRoutes = new Hono<AppBindings>()
   .post('/link', requireCapability('editCatalog'), async (c) => {
     const parsed = linkSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
-      return c.json({ error: 'bad_request', detail: parsed.error.issues }, 400);
+      // ⚠️ A sentence first, the machine's version beside it. A zod `issues`
+      // array is not something a person can act on, and this route now carries
+      // a refusal (the `updateUrl` host check) whose whole value is the words.
+      return c.json(
+        {
+          error: 'bad_request',
+          detail: parsed.error.issues.map((i) => i.message).join(' '),
+          issues: parsed.error.issues,
+        },
+        400,
+      );
     }
     const checked = validateBarcode(parsed.data.barcode);
     if (!checked.ok) return c.json({ error: 'bad_request', detail: checked.detail }, 400);
