@@ -183,15 +183,15 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 291,The Binding of Isaac: Four Souls - Coin Bag,accessory,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,,0,The Binding of Isaac: Four Souls,PRESENT,108
 292,The Binding of Isaac: Four Souls - Winged Isaac Figure (KS Exclusive),accessory,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,winged isaac,1,The Binding of Isaac: Four Souls — winged isaac,MISSING,
 293,The Binding of Isaac: Four Souls - Warp Zone & Alt Art Cards,promo,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,warp zone,1,The Binding of Isaac: Four Souls — warp zone,MISSING,
-294,Here to Slay: KS Exclusive Monster Expansion Pack,expansion,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
-295,Here to Slay: KS Exclusive Dragon Sorcerers Expansion Pack,expansion,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
+294,Here to Slay: KS Exclusive Monster Expansion Pack,expansion,Here to Slay,308526,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
+295,Here to Slay: KS Exclusive Dragon Sorcerers Expansion Pack,expansion,Here to Slay,308525,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
 296,Here to Slay: KS Exclusive Individual Player Play Mats,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
 297,Here to Slay: KS Exclusive Central Play Mat,accessory,Here to Slay,369040,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
-298,Here to Slay: KS Exclusive Dragon Individual Player Play Mat,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon,2,Here to Slay — dragon,PRESENT,Here to Slay: KS Exclusive Dragon Sorcerers Expansion Pack / Here to Slay: Dragon Sorcerer Expansion
+298,Here to Slay: KS Exclusive Dragon Individual Player Play Mat,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon,2,Here to Slay — dragon,PRESENT,Here to Slay: KS Exclusive Dragon Sorcerers Expansion Pack
 299,Here to Slay: Base Game Card Sleeves,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
 300,Here to Slay: Hero Meeples,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
 301,Here to Slay: KS Exclusive Party Leader Acrylic Standees,accessory,Here to Slay,369501,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
-302,Here to Slay: KS Exclusive Dragon Party Leader Acrylic Standee,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon,2,Here to Slay — dragon,PRESENT,Here to Slay: KS Exclusive Dragon Sorcerers Expansion Pack / Here to Slay: Dragon Sorcerer Expansion
+302,Here to Slay: KS Exclusive Dragon Party Leader Acrylic Standee,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon,2,Here to Slay — dragon,PRESENT,Here to Slay: KS Exclusive Dragon Sorcerers Expansion Pack
 303,The Binding of Isaac: Four Souls - Gold Box Expansion,expansion,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,,0,The Binding of Isaac: Four Souls,PRESENT,108
 304,Aeon's End: Return to Gravehold,expansion,,318951,1,0,60,Aeon's End: Outcasts,AMBIGUOUS,yes,"root is kind='expansion', not a base game",,0,Aeon's End: Outcasts,AMBIGUOUS,
 305,Realm of Reckoning: New Foundations Expansion,expansion,,471458,1,0,110,Realm of Reckoning,PRESENT,yes,,,0,Realm of Reckoning,PRESENT,110
@@ -331,9 +331,9 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 457,The Binding of Isaac: Four Souls - Corrupted Data Promo Card,promo,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,corrupted data,1,The Binding of Isaac: Four Souls — corrupted data,MISSING,
 458,The Binding of Isaac: Four Souls - Ultra Pride Promo Card,promo,,,1,0,108,The Binding of Isaac: Four Souls,PRESENT,yes,,ultra pride,1,The Binding of Isaac: Four Souls — ultra pride,MISSING,
 459,Here to Slay: 6-Class Dice Set,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,6 - class,1,Here to Slay — 6 - class,MISSING,
-460,Here to Slay: Dragon Class Dice,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,SETTLED,"HELD as the Dragon Sorcerer Expansion (items 863 and 295) — ""Dragon Class"" is the class that expansion adds, not a separate product [verified 2026-09-07]"
+460,Here to Slay: Dragon Class Dice,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,SETTLED,"HELD as item 295, KS Exclusive Dragon Sorcerers Expansion Pack (bgg 308525) — ""Dragon Class"" is the class that expansion adds, not a separate product [verified 2026-09-07]"
 461,Here to Slay: Oversized Card Sleeves Set,accessory,Here to Slay,,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
-462,Here to Slay: Dragon Class Meeple Set,accessory,Here to Slay,369124,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,SETTLED,"HELD as the Dragon Sorcerer Expansion (items 863 and 295) — ""Dragon Class"" is the class that expansion adds, not a separate product [verified 2026-09-07]"
+462,Here to Slay: Dragon Class Meeple Set,accessory,Here to Slay,369124,1,0,107,Here to Slay,PRESENT,yes,,dragon class,2,Here to Slay — dragon class,SETTLED,"HELD as item 295, KS Exclusive Dragon Sorcerers Expansion Pack (bgg 308525) — ""Dragon Class"" is the class that expansion adds, not a separate product [verified 2026-09-07]"
 464,Auroboros: Ability and Item Card Deck,accessory,D&D,,1,0,463,Auroboros: Coils of the Serpent,PRESENT,yes,,ability and item,1,Auroboros: Coils of the Serpent — ability and item,MISSING,
 465,Auroboros: Dice Set,accessory,D&D,,1,0,463,Auroboros: Coils of the Serpent,PRESENT,yes,,,0,Auroboros: Coils of the Serpent,PRESENT,463
 466,Auroboros: City Map Poster Pack,accessory,D&D,,1,0,463,Auroboros: Coils of the Serpent,PRESENT,yes,,city map,1,Auroboros: Coils of the Serpent — city map,MISSING,
@@ -643,8 +643,6 @@ id,name,kind,series,bgg_id,held,wanted,root_id,base_game,base_status,name_matche
 859,Here to Slay: Berserkers & Necromancers Expansion,expansion,Here to Slay,349286,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
 860,Happy Little Dinosaurs: 5–6 Player Expansion Pack,expansion,,325451,1,0,793,Happy Little Dinosaurs,PRESENT,yes,,,0,Happy Little Dinosaurs,PRESENT,793
 861,Here to Slay: Sorcerers & Squires,expansion,,468270,0,1,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
-862,Here to Slay: Monsters Expansion,expansion,,308526,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
-863,Here to Slay: Dragon Sorcerer Expansion,expansion,,308525,1,0,107,Here to Slay,PRESENT,yes,,,0,Here to Slay,PRESENT,107
 864,Happy Little Dinosaurs: Perils of Puberty Expansion Pack,expansion,,340638,1,0,793,Happy Little Dinosaurs,PRESENT,yes,,,0,Happy Little Dinosaurs,PRESENT,793
 865,Happy Little Dinosaurs: Dating Disasters Expansion Pack,expansion,,357888,1,0,793,Happy Little Dinosaurs,PRESENT,yes,,,0,Happy Little Dinosaurs,PRESENT,793
 866,Terraria: The Board Game – Developer Promo Pack,expansion,,468163,1,0,109,Terraria: The Board Game,PRESENT,yes,,,0,Terraria: The Board Game,PRESENT,109

@@ -1,7 +1,11 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-07** — the accessory shortlist closed (agent
+> Last updated: **2026-09-07** — the two Here to Slay duplicate expansion pairs
+> verified and dropped (agent `W20-DEDUPE`): **294** and **295** kept, **862**
+> and **863** deleted with their duplicate `owned` copies, four write statements
+> against production D1, rollback SQL inside the entry. Earlier the same day,
+> the accessory shortlist closed (agent
 > `W19-ACC-FIX`, commit `530c11b`): all six verified FALSE POSITIVES, **zero**
 > writes to D1, the sweep taught a `SETTLED` status instead. Earlier the same
 > day, the fewer-grey-paragraphs pass, part two
@@ -25,6 +29,253 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ VERIFIED + DROPPED 2026-09-07 (agent `W20-DEDUPE`) — the two Here to Slay duplicate expansion pairs: one product held twice, twice over, and now once each
+
+Owner's call, verbatim (2026-09-07 12:00 Phoenix, given for the 863/295 pair
+before the second pair surfaced, and applied to both): ***"Verify then drop
+duplicates"***.
+
+**The row this closes, moved WHOLE out of [`TODO.md`](TODO.md)'s *What still
+wants a person* table, unedited:**
+
+| | |
+|---|---|
+| 🧑 **TWO duplicate pairs under Here to Slay — one product held twice, twice over** | **295** *KS Exclusive Dragon Sorcerers Expansion Pack* vs **863** *Dragon Sorcerer Expansion* (`bgg_id` 308525), **and** **294** *KS Exclusive Monster Expansion Pack* vs **862** *Monsters Expansion* (308526). 🔴 **Each BGG row points at the KS row's own cover file**, so the 2026-08-08 session that made 861/862/863 had the KS row in hand. All four carry an `owned` copy, so the catalogue says both expansions are owned twice. **Deliberately not touched — which row survives is a shelf call.** Full evidence table in [`DONE.md`](DONE.md). Review: [295](https://boardgames.heygabi.ai/items/295) · [863](https://boardgames.heygabi.ai/items/863) · [294](https://boardgames.heygabi.ai/items/294) · [862](https://boardgames.heygabi.ai/items/862) |
+
+🔴 **The headline: both pairs were genuinely one product held twice, and the
+row that survived is the KICKSTARTER one in both cases — the newer BGG-named
+row carried NOTHING the older lacked except three scalar fields.** Those three
+were carried across before the drop. **Items 838 → 836, copies 839 → 837.**
+
+### The evidence table — every one of the four rows, read from production D1
+
+| id | name | bgg_id | year | publisher | thumbnail_url | source_url | series | created_at |
+|---|---|---|---|---|---|---|---|---|
+| **294** ✅ KEEPER | Here to Slay: KS Exclusive **Monster** Expansion Pack | was NULL | was NULL | was NULL | `covers/item-294-3f22…jpg` | the Kickstarter campaign | `Here to Slay` | 2026-08-05 21:36:26 |
+| **862** ❌ dropped | Here to Slay: **Monsters** Expansion | 308526 | 2020 | Unstable Games | 🔴 `covers/item-294-3f22…jpg` | NULL | NULL | 2026-08-08 22:54:13 |
+| **295** ✅ KEEPER | Here to Slay: KS Exclusive **Dragon Sorcerers** Expansion Pack | was NULL | was NULL | was NULL | `covers/item-295-06b2…jpg` | the Kickstarter campaign | `Here to Slay` | 2026-08-05 21:36:26 |
+| **863** ❌ dropped | Here to Slay: **Dragon Sorcerer** Expansion | 308525 | 2020 | Unstable Games | 🔴 `covers/item-295-06b2…jpg` | NULL | NULL | 2026-08-08 22:54:55 |
+
+**Every child row, across every table that references `item(id)`** — `copy`,
+`copy_event`, `edition`, `item_relation` (both directions), `item` (as
+`parent_item_id` **and** as `root_game_id`), `game_component`,
+`component_check`, `item_alias`, `alias_check`, `user_item`, `play`,
+`research_run`, `research_finding`. Read from the live schema, not assumed:
+
+| table | 294 | 295 | 862 | 863 |
+|---|---|---|---|---|
+| `copy` | **289** owned, qty 1, rich KS note | **290** owned, qty 1, rich KS note | **836** owned, qty 1, no note | **837** owned, qty 1, no note |
+| `edition` | **1063** *Borrowed cover (approved exception)* | **1064** *Borrowed cover (approved exception)* | — | — |
+| the other twelve tables | 0 | 0 | **0** | **0** |
+
+The note on copies 289/290, identical on both and the reason the KS rows win:
+
+> *Kickstarter pledge: Ultimate Collector's Set. Estimated delivery Sep 2020.
+> Also on BackerKit: Here to Slay (Kickstarter Exclusive Everything Bundle).
+> Cover borrowed from the retail printing; the Kickstarter-exclusive edition is
+> not pictured anywhere. Owner approved 2026-08-06.*
+
+### That each pair is ONE product, proved twice over
+
+**Instrument 1 — BGG's own component list, read out of `game_component`**, the
+table that needs no token (the XML API answers **401** to an agent session —
+[`info/gotchas.md`](info/gotchas.md)). For item 107 it holds 36 rows, and among
+them **exactly one** Monsters expansion and **exactly one** Dragon Sorcerer
+expansion: `938 · 308526 · Here to Slay: Monsters Expansion · 2020 · Unstable
+Games` and `935 · 308525 · Here to Slay: Dragon Sorcerer Expansion · 2020 ·
+Unstable Games`. **There is no second BGG id for a "Kickstarter" printing of
+either**, so the KS row and the BGG row could not be two different boxes.
+
+**Instrument 2 — sources outside this repo**, fetched 2026-09-07:
+
+* Noble Knight Games, ***"Here to Slay Expansions (Kickstarter Exclusive)"***,
+  TeeTurtle, **2020** — one listing covering both packs: *"13 oversized
+  Kickstarter Exclusive Monster cards"* and *"a new class of characters (Dragon
+  Sorcerers), a new Monster card, and additional Item, Magic, Challenge, and
+  Modifier cards"*. Both identified as Kickstarter exclusives.
+  <https://www.nobleknight.com/P/2147833113/Here-to-Slay-Expansions-Kickstarter-Exclusive>
+* The Game Steward's exclusives bundle names them ***"KS Exclusive Monster
+  Expansion"*** and ***"KS Exclusive Dragon Sorcerer Expansion"*** — the
+  Kickstarter wording and the BGG wording on the same two boxes, in one
+  sentence.
+
+⚠️ **BGG's own web pages could NOT be read.** `boardgamegeek.com` answered
+**403** to `curl` with a full Chrome UA on both `/boardgameexpansion/308525`
+and `/308526` — that is the WAF, a *different* failure from the 401 the XML API
+gives, and the browser-UA trick that works on Kickstarter does not work here.
+Worth adding to the pair already in `info/gotchas.md`: **three** different
+BGG-shaped refusals now, with three different fixes.
+
+### The cause, confirmed rather than assumed
+
+The 2026-08-08 sweep inserted 861/862/863 by hand from BGG's expansion list for
+Here to Slay and **matched on the BGG name only** — 294 and 295 were already
+there under the Kickstarter names and were not looked for. 🔴 **The proof is the
+cover: both new rows were given the OLD row's `thumbnail_url`**, and those file
+names carry the item id that minted them (`item-294-…`, `item-295-…`). The
+session had the duplicate on screen and copied a field off it. The durable
+lesson is in [`info/completeness.md`](info/completeness.md) §*Inserting a row
+from BGG's component list*.
+
+### 🔴 The cascade, and why the children were deleted by hand first
+
+`PRAGMA foreign_keys` reads **1** on production D1, and **every** table
+referencing `item(id)` does so `ON DELETE CASCADE` except `copy_event`
+(`SET NULL`). `DELETE FROM item WHERE id = 862` would have taken copy 836 with
+it, silently. The copies were deleted **first, by id**, so the row that
+disappeared is one this entry names rather than one the engine chose. No
+trigger fires on a `copy` DELETE (the two `copy` triggers are `BEFORE INSERT`
+and `BEFORE UPDATE OF quantity`); no `copy.applies_to_copy_id` referenced any
+of the four copies.
+
+⚠️ **`idx_item_bgg` is UNIQUE on `item(bgg_id) WHERE bgg_id IS NOT NULL`**, so
+the keeper's id could not be set while the loser still held it. **The DELETE
+has to precede the UPDATE, and the rollback has to undo them in the opposite
+order.** That ordering is the one thing in this entry that is not optional.
+
+### The SQL applied, 2026-09-07 ~19:25 UTC
+
+```sql
+-- 1. the two duplicate owned copies. The box is owned ONCE, so the extra copy
+--    is deleted rather than re-pointed. (changes: 2)
+DELETE FROM copy WHERE id IN (836, 837);
+
+-- 2. the two loser items. MUST precede step 3 — idx_item_bgg is UNIQUE. (2)
+DELETE FROM item WHERE id IN (862, 863);
+
+-- 3. carry across the only three fields the losers had and the keepers did not
+UPDATE item SET bgg_id = 308526, publisher = 'Unstable Games',
+       year_published = 2020, updated_at = datetime('now')
+ WHERE id = 294 AND bgg_id IS NULL;                              -- (1)
+
+UPDATE item SET bgg_id = 308525, publisher = 'Unstable Games',
+       year_published = 2020, updated_at = datetime('now')
+ WHERE id = 295 AND bgg_id IS NULL;                              -- (1)
+```
+
+Nothing else was carried: `thumbnail_url` was already the same file on both
+rows of each pair, `description` was NULL on all four, `publisher_url` NULL on
+all four, and the keepers' `source_url` and `series` are strictly better than
+the losers' NULLs.
+
+### 🔴 The rollback SQL — run the three blocks IN THIS ORDER
+
+R1 must precede R2 or the UNIQUE `bgg_id` index refuses the INSERT.
+
+```sql
+-- R1. give the ids back
+UPDATE item
+   SET bgg_id = NULL, publisher = NULL, year_published = NULL,
+       updated_at = '2026-08-08 15:44:33'
+ WHERE id IN (294, 295);
+
+-- R2. recreate the two dropped items, as read from production D1 2026-09-07
+INSERT INTO item
+  (id, bgg_id, kind, parent_item_id, root_game_id, name, sort_name,
+   year_published, publisher, publisher_url, designers, min_players,
+   max_players, playtime_min, weight, thumbnail_url, description,
+   created_at, updated_at, pending_parent_name, source_url, game_system, series)
+VALUES
+  (862, 308526, 'expansion', 107, 107,
+   'Here to Slay: Monsters Expansion', 'here to slay: monsters expansion',
+   2020, 'Unstable Games', NULL, NULL, NULL, NULL, NULL, NULL,
+   'https://gamecovers.heygabi.ai/covers/item-294-3f228606bc1c578c.jpg', NULL,
+   '2026-08-08 22:54:13', '2026-08-08 22:54:13', NULL, NULL, NULL, NULL),
+  (863, 308525, 'expansion', 107, 107,
+   'Here to Slay: Dragon Sorcerer Expansion', 'here to slay: dragon sorcerer expansion',
+   2020, 'Unstable Games', NULL, NULL, NULL, NULL, NULL, NULL,
+   'https://gamecovers.heygabi.ai/covers/item-295-06b2fc38c468a3be.jpg', NULL,
+   '2026-08-08 22:54:55', '2026-08-08 22:54:55', NULL, NULL, NULL, NULL);
+
+-- R3. recreate the two dropped copies
+INSERT INTO copy
+  (id, item_id, edition_id, applies_to_copy_id, status, is_sleeved, is_punched,
+   completeness_notes, lent_to, notes, created_at, updated_at, quantity,
+   format, disposal)
+VALUES
+  (836, 862, NULL, NULL, 'owned', 0, 0, NULL, NULL, NULL,
+   '2026-08-08 22:54:13', '2026-08-08 22:54:13', 1, 'physical', NULL),
+  (837, 863, NULL, NULL, 'owned', 0, 0, NULL, NULL, NULL,
+   '2026-08-08 22:54:55', '2026-08-08 22:54:55', 1, 'physical', NULL);
+```
+
+The same SQL, with the full working, is also at
+`scratchpad/games-dedupe-plan.md`. ⚠️ The rollback restores 294/295's
+`updated_at` to the literal `2026-08-08 15:44:33` they carried before this
+change; nothing else about those two rows was touched.
+
+### What was re-measured afterwards
+
+| Check | Result |
+|---|---|
+| Keepers | 294 → `bgg_id` **308526**, 2020, Unstable Games; 295 → **308525**, 2020, Unstable Games. Both still `expansion`, parent **107**, root **107**, KS `source_url`, `series` *Here to Slay*, own cover file |
+| Losers | `SELECT id FROM item WHERE id IN (862,863)` → **0 rows** |
+| Keeper copies | **289** and **290**, one `owned` each, qty 1 — the catalogue now says each expansion is owned **once** |
+| Keeper editions | **1063** and **1064**, untouched |
+| Dangling | children **0**, roots **0**, copies **0**, editions **0**, relations **0**, components **0**, component_checks **0**, aliases **0**, alias_checks **0**, ratings **0**, plays **0**, research_runs **0**, findings **0**, copy_events **0** |
+| Totals | `item` 838 → **836**; `copy` 839 → **837**; the Here to Slay family (root 107) 28 → **26** |
+| `bgg_id` uniqueness | 308525 → 295 only; 308526 → 294 only |
+| Test suite | **907 / 907 pass, 0 fail, 0 todo** (`npm test`). It was 897 before; the +10 are another agent's `packages/db/test/row-family.test.ts`, landing concurrently — **this work added no tests and changed none** |
+
+### The sweep, before and after — one code change, and it was a stale reference
+
+`node scripts/accessory-implies-game.mjs`, read-only, no writes:
+
+| | before | after |
+|---|---|---|
+| items / relations read | 838 / 111 | **836** / 111 |
+| non-base rows swept | 667 | **665** |
+| Q1 implied base game | PRESENT 644 · MISSING 0 · AMBIGUOUS 23 | PRESENT **642** · MISSING **0** · AMBIGUOUS 23 |
+| Q2 implied product | PRESENT 93 · MISSING **162** · AMBIGUOUS 4 · SETTLED 13 | PRESENT 93 · MISSING **162** · AMBIGUOUS 4 · SETTLED 13 |
+
+✅ **`MISSING` did not move, which is the result that matters** — dropping the
+duplicates did not open a gap. The two removed rows named no product beyond
+their base game, so they were never in the 272 named rows; they were among the
+395 that imply none. Both keepers still report **PRESENT**, and rows **298**
+(*KS Exclusive Dragon Individual Player Play Mat*) and **302** (*KS Exclusive
+Dragon Party Leader Acrylic Standee*), which used to match *both* rows of the
+pair, now resolve cleanly to **295** alone.
+
+⚠️ **One code change was needed and it is the kind that would have rotted
+silently:** `VERIFIED_NOT_MISSING['107::dragon class']` in
+`scripts/lib/implied-product.mjs` said *"HELD as the Dragon Sorcerer Expansion
+(items 863 and 295)"* — a `SETTLED` verdict printed in the report and in the
+CSV, naming a row that no longer exists. It now names item **295** and its
+`bgg_id`, and records that 863 was the duplicate. The tests key on
+`'107::dragon class'`, not on the prose, so nothing broke; **that is exactly
+why nothing would have caught it either.**
+
+### R2: nothing orphaned, nothing deleted
+
+Both losers' `thumbnail_url` was the KEEPER's own cover object
+(`item-294-3f228606bc1c578c.jpg`, `item-295-06b2fc38c468a3be.jpg`), which the
+keeper still uses. 862 and 863 never had a cover object of their own. **No R2
+object is left unreferenced by this drop and none was deleted.**
+
+### ⚠️ NOT VERIFIED
+
+* **Nothing was rendered.** `curl -sS -D` on
+  <https://boardgames.heygabi.ai/items/294>, `/items/295` and `/items/107` each
+  returned **200** with the identical **3,009-byte** SPA shell. 🔴 **`curl`
+  cannot render this app** — the item page is client-side and needs a Firebase
+  ID token, which no agent session holds, so the 200 proves the shell is served
+  and **nothing at all** about what the page shows. `/items/862` and
+  `/items/863` also return 200 with the same 3,009 bytes, because the shell is
+  served for any path — **that is not evidence the dropped rows still exist**;
+  the D1 read above is.
+* **Nobody has looked at the shelf.** Both pairs were proved to be one PRODUCT
+  from BGG's data and two retailers. That the owner physically holds **one** box
+  of each rather than two is the assumption the drop rests on, and it is the
+  assumption the KS copy note supports (a single *Ultimate Collector's Set*
+  pledge) rather than proves.
+* **No deploy.** This is data and docs only; nothing was shipped, and the live
+  Worker is unchanged.
+* **BGG's own pages were never read** (403, above); the BGG facts come from
+  `game_component`, which is BGG's data as of the **2026-08-30 05:42 UTC**
+  `component_check` — 8 days old at the time of this work.
 
 ---
 

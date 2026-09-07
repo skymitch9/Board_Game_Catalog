@@ -249,11 +249,13 @@ export const VERIFIED_NOT_MISSING = new Map([
   ['107::dragon class', {
     root: 'Here to Slay',
     verifiedOn: '2026-09-07',
-    verdict: 'HELD as the Dragon Sorcerer Expansion (items 863 and 295) — '
+    verdict: 'HELD as item 295, KS Exclusive Dragon Sorcerers Expansion Pack (bgg 308525) — '
       + '"Dragon Class" is the class that expansion adds, not a separate product',
     evidence: 'BGG lists Dragon Class Meeple Set (369124, 2020) beside Dragon Sorcerer '
       + 'Expansion (308525, 2020); the publisher\'s copy says the meeples "represent the '
-      + 'Sorcerer class". Same shape as the 6-Class Meeple Set (369123) for the base game.',
+      + 'Sorcerer class". Same shape as the 6-Class Meeple Set (369123) for the base game. '
+      + '⚠ this read "items 863 and 295" until 2026-09-07: 863 was a DUPLICATE of 295 and '
+      + 'was dropped that day, and 295 took its bgg_id. One product, one row.',
   }],
   ['428::3dition', {
     root: 'Ark Nova',

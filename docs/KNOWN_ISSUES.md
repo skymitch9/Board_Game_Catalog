@@ -3,8 +3,16 @@
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
 > Last verified: **2026-09-07** for **KI-11 only** — measured as it was written
 > (6 of 6 high-confidence sweep rows false positives; 175 → 162 `MISSING`; 0
-> unsettled subjects named by two or more accessories). ⚠️ **Nothing else in
-> this file was re-checked on 2026-09-07**; KI-2, KI-3, KI-4, KI-5, KI-8, KI-9
+> unsettled subjects named by two or more accessories), and **re-measured later
+> the same day** by agent `W20-DEDUPE` after two duplicate item rows were
+> dropped: `MISSING` still **162**, unsettled ≥2 subjects still **0**, and one
+> `SETTLED` verdict corrected because it named a deleted item id (the note is
+> at the foot of KI-11). ➕ **KI-3 was also re-measured that day** by the same
+> agent and it got WORSE, not better: the 2026-08-21 double-encoding survives on
+> **71 lines of `docs/DONE.md`** and on **0** lines of every other tracked
+> `docs/*.md` — the 2026-09-05 sweep only ever looked at `TODO.md`. Not
+> repaired; the reason and the number are in KI-3. ⚠️ **Nothing else in
+> this file was re-checked on 2026-09-07**; KI-2, KI-4, KI-5, KI-8, KI-9
 > and KI-10 all carry the dates below.
 >
 > Before that — **2026-09-06** for KI-8, KI-9 and KI-10 — the three added that
@@ -156,6 +164,28 @@ danger to add to the three above: a whole-file eyeball does NOT find this.**
 Grep for the byte sequences, not for wrong-looking words. The repair here was
 run **once**, against a byte pattern, and deliberately did not touch this file
 or `info/gotchas.md`, both of which contain mojibake on purpose (danger 3).
+
+🔴 **AND IT SURVIVED IN A SECOND FILE, found 2026-09-07 (agent `W20-DEDUPE`).**
+The 2026-09-05 repair above swept `docs/TODO.md` for the byte pattern and
+repaired 9 sequences there. **Nobody ran the same grep over the rest of the
+tree.** Measured today across every `.md` tracked under `docs/`, at `HEAD`:
+
+| File | Lines carrying `c3af c2b8 c28f` |
+|---|---|
+| `docs/DONE.md` | **71** |
+| every other tracked `docs/*.md` | **0** |
+
+Same signature, same day of origin — `⚠` followed by the cp1252 round-trip of
+the variation selector, rendering as `⚠ï¸`. It is **visible** in `DONE.md`
+(the stray `ï¸` prints), unlike the TODO.md case, which is presumably why 15
+days of readers did not report it: it looks like a typo rather than an encoding
+fault. ⚠️ **NOT repaired, deliberately, and not because it is hard.**
+`DONE.md` is an append-only archive whose rule is that nothing in it is ever
+edited, and danger 2 above says the exact fix is to restore the
+pre-corruption bytes from a commit — which means a targeted, byte-pattern
+repair by whoever owns that call, not a drive-by `sed` from a session that came
+to do something else. **The number for whoever takes it: 71 lines, one file,
+one byte sequence.**
 
 **What would change it, restated with a number:** a pre-commit check. Measured
 2026-09-05 — `.git/hooks/` contains **nothing but the stock `.sample` files**,
@@ -528,6 +558,28 @@ checked precisely so it can be re-argued rather than trusted forever.
 ⚠️ **Not a candidate for change: the 162 itself.** It was 175 before the six
 were settled and it will drift with the catalogue. A big `MISSING` count is
 this report working as designed, not evidence against it.
+
+✅ **Re-measured later the same day, 2026-09-07 (agent `W20-DEDUPE`), after two
+duplicate item rows were dropped from the catalogue: `MISSING` is still 162.**
+Items went 838 → 836 and non-base rows 667 → 665 (the Here to Slay duplicate
+pairs; the whole story is in [`DONE.md`](DONE.md)), Q1 `PRESENT` fell 644 →
+642, and **the number this entry is about did not move at all** — the dropped
+rows named no product beyond their base game, so they were never among the
+named rows. `SETTLED` is still **13** rows over **6** subjects, and the count
+this entry says to watch — subjects named by two or more accessories and not
+already settled — is **still 0**.
+
+⚠️ **One `SETTLED` entry had to be CORRECTED, and it is the failure mode this
+entry's own "what would change it" predicted.** `107::dragon class` read *"HELD
+as the Dragon Sorcerer Expansion (items 863 and 295)"*. Item **863 was one of
+the two duplicates and no longer exists**, so a verdict printed in every run of
+the report and in every CSV named a row that is gone. It now names item **295**
+and its `bgg_id`, and records what happened to 863. 🔴 **Nothing caught this and
+nothing would have:** the tests key on the map key `'107::dragon class'`, never
+on the verdict prose, and the sweep has no way to check that an item id in a
+hand-written sentence still resolves. **An `id` inside a `VERIFIED_NOT_MISSING`
+verdict is an unenforced foreign key — prefer the name and the `bgg_id` beside
+it, as the corrected entry now does.**
 
 ---
 

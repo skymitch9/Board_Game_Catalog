@@ -4,8 +4,8 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-**Last updated: 2026-09-07** (agent `W19-ACC-FIX`; previously `W18-ACC`,
-`W14-DOCS` and `W13-GAMES`). ⚠️ **This paragraph is the only status line in this
+**Last updated: 2026-09-07** (agent `W20-DEDUPE`; previously `W19-ACC-FIX`,
+`W18-ACC`, `W14-DOCS` and `W13-GAMES`). ⚠️ **This paragraph is the only status line in this
 file.** What is open, in full:
 
 | Open | Who |
@@ -14,7 +14,7 @@ file.** What is open, in full:
 | 🧑 One eyeball of `/api/export.json` as a contributor — confirm no `email` field | owner |
 | 🧑 **One eyeball of the estate search box** at <https://boardgames.heygabi.ai/> — the shared `<estate-search>` component lost its default hint line and four other explainers on 2026-09-07 (agent W17-ES-GREY, deploy `79360f3a`; the whole entry is in [`DONE.md`](DONE.md)). ⚠️ **Nothing rendered was measured** — no agent session has a browser, so a layout leaning on a removed line for spacing would not have been caught. Type two letters and look at the box, then at a result list | owner |
 | 🧑 Three owner reviews on his phone — the three `☐ owner review` headings below: the scan target, the second-instance machinery, the family score | owner |
-| 🧑 Three rows still open in ***What still wants a person***, the first section below — the two Here to Slay **duplicate expansion pairs**, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file**. ✅ **The accessory-implies-the-game sweep CLOSED 2026-09-07** — all six shortlisted products verified false positives, zero D1 writes, moved whole to [`DONE.md`](DONE.md). It left the duplicate-pairs row in its place, which is a shelf call: 295/863 and 294/862 each look like one product held twice | owner |
+| 🧑 **TWO** rows still open in ***What still wants a person***, the first section below — the Dice Throne playmat count and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file**. ✅ **Two rows closed on 2026-09-07 and both moved WHOLE to [`DONE.md`](DONE.md):** the accessory-implies-the-game sweep (all six shortlisted products verified false positives, zero D1 writes, agent `W19-ACC-FIX`), and the **two Here to Slay duplicate expansion pairs** it left behind — verified as one product held twice and dropped (agent `W20-DEDUPE`): **294** and **295**, the Kickstarter rows, kept and given the BGG ids; **862** and **863** deleted with their duplicate `owned` copies. Rollback SQL is in the `DONE.md` entry | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
 | 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
 
@@ -36,7 +36,7 @@ status paragraph is the bug, not the fix.
 
 ---
 
-## ☐ 🧑 What still wants a person — THREE open rows for the owner, and a settled record beside them
+## ☐ 🧑 What still wants a person — TWO open rows for the owner, and a settled record beside them
 
 > ⚠️ **Moved here whole 2026-09-06 (W14-DOCS), and retitled.** This table sat
 > as a `###` sub-section INSIDE ***📓 Notes from the 2026-08-09 session — a
@@ -62,6 +62,16 @@ status paragraph is the bug, not the fix.
 > two — the HELLDIVERS rename and the Dice Throne playmat count — still carry
 > 2026-09-05 and were not re-read**; neither has an instrument here anyway (one
 > waits on a pledge, one on a shelf).
+>
+> ✅ **And the row it left behind is CLOSED TOO, later the same day** (agent
+> `W20-DEDUPE`, on the owner's *"Verify then drop duplicates"*): both pairs were
+> verified against BGG's own component rows and two retailers as **one product
+> held twice**, the Kickstarter rows **294** and **295** were kept and given the
+> BGG ids, and **862**/**863** were dropped with their duplicate `owned` copies.
+> Items 838 → **836**. The row moved whole into [`DONE.md`](DONE.md), which
+> carries the evidence table, the SQL and the rollback. ⚠️ **Nobody looked at
+> the shelf** — the drop rests on BGG holding exactly one id per box.
+> **So this section is down to TWO rows**, and neither is measurable from here.
 
 🔬 **Re-measured against live D1 on 2026-09-05** (docs audit; read-only
 `wrangler d1 execute --remote`, no writes). **Four of these rows had already
@@ -75,7 +85,6 @@ already correct and are untouched.
 |---|---|
 | ~~⏳ **`game_component` is filling — finish it**~~ ✅ **FINISHED — the cron did it unattended** | ⚠️ **Corrected 2026-09-05:** measured live — **1,462 components**, **142 of 143 eligible games checked**, **0** components still awaiting the second pass (`details_at IS NULL AND stale_at IS NULL`), last `component_check` written **2026-08-30 05:42 UTC** — i.e. the Sunday 05:41 UTC cron is alive and did exactly what this row said it would. The completeness page has had something to show for weeks. ~~Original: "Was 0 all day; the owner started the backfill 2026-08-08 and it is at **1,217 components / 100 games checked**. Roughly 7 more runs of `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, or the Sunday 05:41 UTC cron does the rest unattended. **Until it finishes, the completeness page reads 'Not checked yet' and the collapsible sections built today are invisible** — they are not broken, they have nothing to show"~~ |
 | ~~🧑 **Accessory implies the game — WHICH ROWS TO CHANGE is the owner's**~~ ✅ **CLOSED 2026-09-07 — all six were FALSE POSITIVES** | The owner called it (*"Dry run verify then fix"*), the dry run checked all six against sources outside this repo, and **not one was a missing box**: four name a product that does not exist, two name one already held under another name. **Zero writes to D1.** The fix landed in the rule instead — a `SETTLED` status (`MISSING` **175 → 162**), commit `530c11b`. This row and the whole sub-section moved WHOLE into [`DONE.md`](DONE.md), which also carries the ⚠️ *BGG's XML API answers **401** to an agent session* gotcha |
-| 🧑 **TWO duplicate pairs under Here to Slay — one product held twice, twice over** | **295** *KS Exclusive Dragon Sorcerers Expansion Pack* vs **863** *Dragon Sorcerer Expansion* (`bgg_id` 308525), **and** **294** *KS Exclusive Monster Expansion Pack* vs **862** *Monsters Expansion* (308526). 🔴 **Each BGG row points at the KS row's own cover file**, so the 2026-08-08 session that made 861/862/863 had the KS row in hand. All four carry an `owned` copy, so the catalogue says both expansions are owned twice. **Deliberately not touched — which row survives is a shelf call.** Full evidence table in [`DONE.md`](DONE.md). Review: [295](https://boardgames.heygabi.ai/items/295) · [863](https://boardgames.heygabi.ai/items/863) · [294](https://boardgames.heygabi.ai/items/294) · [862](https://boardgames.heygabi.ai/items/862) |
 | ✅ **The BGG audit is CLOSED** | All 806 rows audited and resolved. **`bgg_id` coverage went 197 → 232.** Every remaining row without one has a *recorded reason*, not a gap. The map is `scratchpad/bgg-audit-2026-08-08.tsv`; the decision sheet `scratchpad/bgg-audit-review.md` is **spent** — its "nothing has been applied" line is historical. Both are safe to delete once you trust the result |
 | ✅ **All five SUSPECT rows resolved** | 114 Deadpool (id is right; see [`archive/dice-throne-shape.md`](archive/dice-throne-shape.md) — the box owns the id; ⚠️ **corrected 2026-09-05**, this link read `dice-throne-shape.md` and pointed at `docs/dice-throne-shape.md`, which has not existed since the 2026-08-21 restructure) · 496 Yeti or Not (id is the game, our name says which version) · 801 Go Fish (the `Traditional` marker) · 56 and 68 (publisher-spelling noise). **Do not re-open these** |
 | ✅ **`copy.edition_id` stays null — settled, not a gap** | The owner, 2026-08-08: *"that'll probably be null forever, it's a hard thing to find and I don't super care to track it down."* 1,063 edition rows exist with 768 BGG version ids, so the catalog knows which printings **exist** and deliberately does not record which one is on the shelf. **Do not re-flag this as missing data.** Consequences, all fine: the cover picker is unaffected (it sets `thumbnail_url`, not `edition_id`), and it independently kills the "grab the closest edition" half of any BoardGameGeek sync — you cannot match a printing you never recorded. Under 1% of BGG users populate that field either |

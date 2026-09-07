@@ -1,7 +1,11 @@
 # What am I missing — Information Reference
 
 > **Audience:** Claude sessions. **Status:** TRACKED.
-> Last verified: **2026-08-08**.
+> Last verified: **2026-08-08**, except **§*Inserting a row from BGG's component
+> list*** (new 2026-09-07, agent `W20-DEDUPE`), whose numbers — 504 rehosted
+> covers, 1 row flagged by the mismatch query — were measured against production
+> D1 that day. ⚠️ **Nothing else on this page was re-checked on 2026-09-07** and
+> the rest still carries 2026-08-08.
 
 Accessory and expansion completeness: *seven expansions exist, you have four,
 here are the three you do not*. The last clause is a shopping list, and it is
@@ -323,6 +327,68 @@ part of a title that says *which* product this is comes after the game's name.
 many rows clear it, list order decided the winner — which is how "Dragon Class
 Meeple Set" got hinted against "6-Class Dice Set" while an identically named row
 sat further down. Ranked by `titleSimilarity` now.
+
+### 🔴 Inserting a row from BGG's component list — search the KICKSTARTER name first
+
+⚠️ **Everything above is about matching *by hand or by matcher* before deciding
+a component is missing. The step that has actually gone wrong is the one after
+it: writing the INSERT.** A component that reports `missing` is not evidence
+that the box is absent — it is evidence that **no row in the collection carries
+that `bgg_id`**, and this catalogue is full of rows that carry the box under the
+name the *campaign* used rather than the name BGG settled on. Those two names
+often share almost no words, so no similarity floor will rescue you.
+
+**Measured, 2026-09-07** (the full evidence is in [`../DONE.md`](../DONE.md)):
+the 2026-08-08 sweep inserted **862** *Here to Slay: Monsters Expansion*
+(bgg 308526) and **863** *Here to Slay: Dragon Sorcerer Expansion* (bgg 308525)
+from BGG's component list for Here to Slay. Both boxes were **already held**, as
+**294** *KS Exclusive Monster Expansion Pack* and **295** *KS Exclusive Dragon
+Sorcerers Expansion Pack*, inserted three days earlier from the Kickstarter.
+Each new row also got an `owned` copy, so **the catalogue said each expansion was
+owned twice for a month**, and neither duplicate reported as anything: a
+duplicate is invisible to a report whose whole question is *"what is absent"*.
+
+🔴 **The tell was in the data the whole time — the new rows were given the OLD
+rows' `thumbnail_url`.** Cover objects are named `item-<id>-<hash>.jpg`, so
+862's cover read `item-294-…` and 863's read `item-295-…`. **A `thumbnail_url`
+whose embedded id is not the row's own id means somebody had another row on
+screen and copied a field off it.** That is a cheap, general duplicate detector
+and it costs one query:
+
+```sql
+SELECT id, name, thumbnail_url FROM item
+ WHERE thumbnail_url LIKE '%/covers/item-%'
+   AND thumbnail_url NOT LIKE '%/covers/item-' || id || '-%';
+```
+
+🔬 **Measured 2026-09-07 against production D1: 504 rows hold a rehosted cover,
+and this query returns exactly ONE of them** — item **118** *Excursion Tiles 2*,
+on 117's `item-117-…png`. (That pair is a deliberate share, not a duplicate: 117
+and 118 are two real, separately-owned tile sets.) It returned **three** before
+the Here to Slay repair; 862 and 863 were the other two. **So the signal is
+sharp — one false positive in 504, and it named both real duplicates.** ⚠️ It
+only sees covers this repo REHOSTED; a hotlinked `cf.geekdo-images.com` URL
+carries no item id and this query cannot see a duplicate among those.
+
+**Three checks before an INSERT from a component list, in cost order:**
+
+1. **Search the family by its SUBJECT, not its full title** — `SELECT id, name
+   FROM item WHERE root_game_id = <root>` and read the list. Twenty-odd rows is
+   nothing, and it is the only check that catches a rename.
+2. **Ask what the campaign called it.** The Kickstarter/BackerKit/Gamefound name
+   is in `item.source_url` on the rows that came from one, and the retail name
+   is what BGG stores. *KS Exclusive Monster Expansion Pack* and *Monsters
+   Expansion* are one box; nothing but a person or a retailer's listing joins
+   those two strings.
+3. **Look at the covers, per the query above.**
+
+⚠️ **And prefer CARRYING the id onto the existing row over inserting a new one.**
+That is what the repair did — 294 and 295 kept their Kickstarter provenance,
+their copy notes and their cover objects, and simply gained the `bgg_id`,
+`publisher` and `year_published` the BGG rows had. 🔴 **`idx_item_bgg` is UNIQUE
+on `item(bgg_id) WHERE bgg_id IS NOT NULL`**, so a duplicate can never be
+repaired by setting the id first: the loser has to be deleted before the keeper
+can take it.
 
 ---
 
