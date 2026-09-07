@@ -107,8 +107,24 @@ jobs:
       - name: Apply D1 migrations (remote)
         run: npm run db:migrate
 
-      # Runs the full npm lifecycle: predeploy (sync-estate-auth + check-clean)
-      # → build → wrangler deploy for @bgc/worker.
+      # Runs the full npm lifecycle for @bgc/worker:
+      #   predeploy  → sync-estate-{auth,search,theme} → check-clean →
+      #                deploy-guard → npm run typecheck → npm test
+      #   deploy     → build → wrangler deploy
+      #   postdeploy → deploy-done (appends the docs/deploys.log line)
+      #
+      # ⚠️ The typecheck and the test suite ARE in there, and this comment used
+      # to say only "sync-estate-auth + check-clean". The 2026-08 audit read
+      # exactly that and filed finding 13 — "deploy ships straight to the live
+      # custom domain but never type-checks and never runs the test suite" —
+      # which was true when it was written on 2026-08-23 and stopped being true
+      # on 2026-08-24 (`6eb2a51`, which put both into `predeploy`). Nobody
+      # updated the comment, so the finding outlived the defect by two weeks.
+      # That is this repo's loudest audit theme, reproduced in the file that
+      # caused it.
+      #
+      # 🔴 There is still no dev lane: this deploys to the live custom domain,
+      # and those guards are the whole safety net.
       - name: Deploy
         run: npm run deploy
 
