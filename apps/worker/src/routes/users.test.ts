@@ -178,14 +178,22 @@ describe('the four refusals are four different answers', () => {
   });
 
   /**
-   * ⚠️ FAILING ON PURPOSE — the bare-code defect, left visible rather than
-   * fixed here. `middleware/auth.ts:64` answers `{ error: 'unauthenticated' }`
+   * ✅ WAS `it.todo` AND FAILING ON PURPOSE UNTIL 2026-09-06 — KI-6, the
+   * bare-code defect. `middleware/auth.ts` answered `{ error: 'unauthenticated' }`
    * with no sentence at all, while `middleware/estate.ts`'s two refusals each
-   * carry a worded `detail` (pinned by `lib/estate-refusals.test.ts`). The
+   * carried a worded `detail` (pinned by `lib/estate-refusals.test.ts`). The
    * estate rule is that a person never sees a bare status OR a bare code: say
-   * what happened, what it needs, and how to get it. See KNOWN_ISSUES KI-6.
+   * what happened, what it needs, and how to get it.
+   *
+   * ⚠️ The words are NOT written in this repo. KI-6 said the defect was an
+   * estate-wide SHAPE — `library_catalog` had the identical line and
+   * catalog-platform's index Worker a third — so the sentence is composed by
+   * `estateSignInRefusal()` in the canonical module and materialised into
+   * `src/estate-auth/` by `scripts/sync-estate-auth.mjs`. That module's own
+   * suite pins the composition; what THIS test pins is that this Worker's 401
+   * carries all three clauses and still answers the frozen code.
    */
-  it.todo('🔴 BUG (KI-6): the 401 body carries no worded detail — a bare code on the wire', async () => {
+  it('KI-6 (closed): the 401 body is WORDED — what happened, what it needs, how to get it', async () => {
     const app = new Hono<AppBindings>();
     app.use('/api/*', requireAuth());
     app.route('/api', userRoutes);
@@ -194,8 +202,16 @@ describe('the four refusals are four different answers', () => {
       {},
       envWith(stubDb(), { FIREBASE_PROJECT_ID: 'audiobook-catalog' }),
     );
-    const body = (await res.json()) as { detail?: string };
+    const body = (await res.json()) as { error?: string; detail?: string };
+    // ⚠️ The CODE is frozen — estate-probes and the apex's search box both
+    // branch on it. Adding words must never move it.
+    assert.equal(body.error, 'unauthenticated');
     assert.match(body.detail ?? '', /sign in/i);
+    assert.match(body.detail ?? '', /board-game catalog/i, 'names the surface refused');
+    assert.match(body.detail ?? '', /estate account/i, 'what it needs');
+    assert.match(body.detail ?? '', /https:\/\/heygabi\.ai/, 'how to get it');
+    // and never again the bare body this replaced
+    assert.notEqual(JSON.stringify(body), '{"error":"unauthenticated"}');
   });
 
   it('MISCONFIGURED → 500, and it is never worded as a permission problem', async () => {

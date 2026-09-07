@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { can, type Capability } from '@bgc/core';
 import { upsertUserOnLogin } from '@bgc/db';
-import { resolveIdentity, type Identity } from '../estate-auth/index.js';
+import { estateSignInRefusal, resolveIdentity, type Identity } from '../estate-auth/index.js';
 import { estateGate } from './estate.js';
 import { parseOwnerEmails, type AppBindings } from '../env.js';
 
@@ -60,8 +60,18 @@ export function requireAuth(): MiddlewareHandler<AppBindings> {
       return c.json({ error: 'misconfigured', detail: (err as Error).message }, 500);
     }
 
+    // KI-6, closed 2026-09-06. This answered the bare 27-byte
+    // `{"error":"unauthenticated"}` — no sentence, no route back — which is the
+    // bare status the estate's standing rule forbids. ⚠️ The `error` CODE is
+    // untouched: `tools/estate-probes`' board suite asserts it and the apex's
+    // `assets/estate-search.js` branches on the same string, so this is purely
+    // ADDITIVE. The WORDS come from the canonical module rather than being
+    // written here, because KI-6 said in as many words that this is an
+    // estate-wide shape — `library_catalog` had the identical line and the
+    // index Worker a third — and six hand-written sentences for one refusal is
+    // the drift a shared module exists to prevent.
     if (!identity) {
-      return c.json({ error: 'unauthenticated' }, 401);
+      return c.json(estateSignInRefusal('the board-game catalog'), 401);
     }
 
     // Local authorization first, untouched — including the OWNER_EMAILS
