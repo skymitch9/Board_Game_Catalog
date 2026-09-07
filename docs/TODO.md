@@ -4,88 +4,33 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-✅ **Newest first, 2026-09-06 (agent W9-KI7): KI-7 IS FIXED AND DEPLOYED, and
-its section has moved WHOLE to [`DONE.md`](DONE.md).** The conductor called it,
-the guard was ported from `library_catalog` into `@bgc/db`'s `setUserRole` keyed
-on the target's current role, both route-level copies are gone, the two `.todo`
-tests are live, and it shipped as `c0e55a0` → worker version `e4519a77…`. The
-number KI-7 was written UNMEASURED to demand was read from production D1 and
-written into its entry: **1 `admin`, 2 `owner`, 1 `member`.**
-**This repo has no open privilege bug.**
+**Last updated: 2026-09-06** (agent `W13-GAMES`). ⚠️ **This paragraph is the
+only status line in this file.** What is open, in full:
 
-~~🔴 **Newest first, 2026-09-05 (evening, agent W9-BOARD-ROUTES):** the repo's
-first route tests landed (16 files, +387 cases, 348 → 735 — see
-[`DONE.md`](DONE.md)) and **found a live privilege bug**. It is the first `##`
-section below: **KI-7, an `admin` can demote the last `owner`.** It was
-deliberately not fixed — a role-bearing change is the conductor's call — and the
-fix already exists in `library_catalog`. Nothing was deployed on that pass.~~
-(The route tests themselves are unchanged and still in `DONE.md`; only the bug
-they found has moved.)
+| Open | Who |
+|---|---|
+| 🔴 The **billing shadow flip** — the three-file change is written out in its own section below, to the keystroke | 🧑 **owner only**: it edits `apps/worker/wrangler.toml`, which agents are refused |
+| 🧑 One eyeball of `/api/export.json` as a contributor — confirm no `email` field | owner |
+| 🧑 Three owner reviews on his phone — the three `☐ owner review` headings below: the scan target, the second-instance machinery, the family score | owner |
+| 🧑 Three rows still open in [*What still wants a person*](#what-still-wants-a-person) — the accessory-implies-the-game sweep, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). Counted 2026-09-06; the other rows in that table are settled records | owner |
+| ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
+| 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
 
-**Last updated:** 2026-09-05 (afternoon) — **a full docs audit re-measured
-every `##` section in this file against git, the code and live D1**, and the
-headline is that **this file was telling the truth in its bodies and lying in
-its headings**. Two `##` sections carried `☐` over bodies that read BUILT →
-DEPLOYED → live-proved; a third said `☐ phase 9` over a body saying phase 9 had
-moved to `DONE.md`. Both are fixed, and each carries a dated
-`⚠️ Corrected 2026-09-05` line saying what was measured. **Four rows of *What
-still wants a person* turned out to have already happened** — the component
-backfill, the Excursion Tiles edge, the three orphaned rows and the Excursion
-Tiles year — all struck with the live number that settled them. One stale
-`file:line` in the audit section would have sent a fixer to a file that no
-longer holds the code. **Nothing was built and nothing was deployed on this
-pass; only claims changed.** The audit also **surfaced one owner decision that
-had never reached this file** — the family-rating question he raised on
-2026-08-05, which had lived in `info/design-decisions.md` for a month while half
-of the section around it was quietly built.
+**No owner DECISION is outstanding.** ✅ The 2026-08 code audit is closed:
+all 24 rows triaged, 20 fixed or already fixed, 3 recorded, 1 skipped —
+[`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md) has the
+table and the story. ✅ KI-7, this repo's one privilege bug, is fixed and
+deployed. Tests **348 → 860**.
 
-⚠️ **Superseded the same evening, 2026-09-05 (agent W2-GAMES).** The line below
-read *"two audit findings"* and *"the billing soak, which needs the owner to
-write a deny rule before anything can be measured"*. **Both are now wrong, in
-opposite directions:** the two audit findings — and the export exposure beside
-them — were BUILT and moved to [`DONE.md`](DONE.md) (`751980b`, `7f75804`,
-`6394cca`), and the owner had **already written the deny rule** on 2026-09-02;
-the billing section's "no row for `games`" claim was stale and is corrected in
-place. What is open now: ❓ **one owner decision** (the family score); ~~🔴 **ONE
-DEPLOY** — `DEPLOY_HOLDER=<you> npm run deploy`, which ships all three audit
-fixes, refused to the session that made them~~ (⚠️ Corrected 2026-09-05 14:40
-Phoenix: **deployed**, version `7fb197b3` — it ran in PowerShell where Git Bash
-was refused; only the contributor eyeball of `/api/export.json` remains);
-🔴 **the billing shadow flip,
-also an OWNER STEP** — refused on `apps/worker/wrangler.toml`, with the exact
-three-file change written out in that section; three person-errands in *What
-still wants a person*; and three owner reviews on his phone.
-
-🔴 **Two of those are permission refusals, not judgement calls.** Agent
-W2-GAMES was denied every edit to `apps/worker/wrangler.toml` and denied
-`npm run deploy`, stopped rather than working around either, and left both
-written out to the keystroke.
-
-✅ **Superseded again the same evening, 2026-09-05 (agent W5-FAMILY).** The
-line above says *"What is open now: ❓ **one owner decision** (the family
-score)"*. **The owner answered it at 16:14 Phoenix — (a), the base-weighted
-mean — and it is built (`aef62e8`) and deployed.** The section that asked the
-question has moved WHOLE to [`DONE.md`](DONE.md); what is left in this file is
-an owner review, two reversible defaults he did not rule on, and one thing
-deliberately not built. **No owner decision is outstanding here now.** The
-billing shadow flip is still an owner step and is untouched — `wrangler.toml`
-and `BILLING_POLICY` were off-limits to that agent too, and it did not go near
-them.
-
-~~**What is genuinely open, in full:** ❓ one owner decision (the family score),
-the billing soak (which needs the owner to write a deny rule before anything can
-be measured), two audit findings, three person-errands in *What still wants a
-person*, and two owner reviews on his phone.~~ Before that:
-2026-09-05 — phase 9 landed (the games provisioner + the
-`BILLING_SITE` lift) and both items moved WHOLE to [`DONE.md`](DONE.md); the
-one owner question it left (the naming split) was answered the same morning:
-(a), as built. Before that:
-2026-09-02 — billing phase 3 landed INERT; the soak that
-flips it is the item directly below. The two 2026-08-13 **"BUILT, NOT
-DEPLOYED"** items left for [`DONE.md`](DONE.md) the same day: both were
-verified **already live** in `2e598a9e` (they rode the 2026-09-02 deploys) and
-neither needed a deploy of its own. ⚠️ The estate-auth one is at **`enforce`**,
-not shadow, and stays there — the reasoning is in its `DONE.md` entry.
+⚠️ **This header used to be FIVE stacked paragraphs, each announcing that the
+one above it was wrong**, with the third asserting states the fourth and fifth
+corrected. A reader who stopped at the first plausible line got a stale answer,
+which is exactly what a `TODO.md` must not do. They are kept whole and verbatim
+at
+[`archive/TODO-header.superseded-2026-09-06.md`](archive/TODO-header.superseded-2026-09-06.md)
+— the *why* behind a withdrawn claim is the only reason to keep one. 🔴 **The
+rule going forward: this paragraph is EDITED, never appended to.** A second
+status paragraph is the bug, not the fix.
 
 ---
 
@@ -1023,10 +968,24 @@ by a signed-in read.
 ~~🔴 The deploy was REFUSED by the permission system and none of the three is
 live.~~ ⚠️ Corrected 2026-09-05 14:40 Phoenix: ran, see above.
 
-⚠️ **The other 21 findings were never checkboxes and are still open** — they
+~~⚠️ **The other 21 findings were never checkboxes and are still open** — they
 live in [`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md),
 which now carries a dated ✅ FIXED line on rows 1, 2 and 4. 🔴 **Finding 5 is
 the same class of defect as the one just fixed** — `COVER_BATCH = 20` budgets
 only its fetches and ignores 22 D1 calls, ~62 against the same 50-subrequest
 ceiling — and it is untouched. It was out of this item's scope, not judged
-harmless.
+harmless.~~
+
+✅ **CLOSED 2026-09-06 (agent `W13-GAMES`) — all 24 rows triaged, and the
+whole story is in
+[`info/audit-2026-08-findings.md`](info/audit-2026-08-findings.md).** Finding 5
+was fixed first (`59ce7d4`) as the same class as finding 1, and fixing it found
+a worse half the audit had not seen: `routes/covers.ts` capped `?limit` at
+`COVER_BATCH * 2`, i.e. it would accept a run costing twice what one invocation
+can pay for. Of the remaining 20: **12 fixed**, **2 already fixed by unrelated
+work weeks earlier** (6, 13 — the rows outlived their defects because the
+comments describing the behaviour were never updated), **2 half fixed with the
+rest recorded** (17, 20), **1 recorded as KI-9** (14 — blocked on the owner's
+`wrangler.toml`) and **1 skipped** (15 — a `.dev.vars.example` reword this agent
+may not open the file to make). Tests **348 → 860**. Three new
+`KNOWN_ISSUES` entries: **KI-8**, **KI-9**, **KI-10**.
