@@ -174,19 +174,10 @@ const wantsHumanCall = (t: EnrichedTitle): boolean =>
   (t.candidates?.length ?? 0) > 0 &&
   (isDoubtful(t) || !!t.needsConfirmation || t.resolvedName == null);
 
-/**
- * An unconfirmed row from before suggestions were kept.
- *
- * Rows enriched by the old code carry a match and no candidate list, so there
- * is nothing to offer — and the owner has six real jobs sitting at review in
- * exactly that state. Pressing "Look up again" re-asks and stores the list, so
- * the way out is one click; without saying so, the screen would simply look
- * like it lacked the feature on the rows that need it most.
- */
-const needsRelookupToAccept = (t: EnrichedTitle): boolean =>
-  !t.acceptedMatch &&
-  (t.candidates?.length ?? 0) === 0 &&
-  (isDoubtful(t) || !!t.needsConfirmation);
+// `needsRelookupToAccept` lived here until 2026-09-07. It existed only to
+// render a grey note explaining a migration artefact ("looked up before
+// suggestions were kept") — cut by the owner's fewer-grey-paragraphs order
+// (audit item 123). "Look up again" is on the row regardless.
 
 /**
  * Why this row wants nothing from you — in the words that make it read as
@@ -379,14 +370,11 @@ export function ScanJobsPage({ me, add }: { me: MeResponse; add?: AddMode | null
       <header className="page-head">
         <div>
           <h1>Add games</h1>
-          {/* Trimmed 2026-08-17 (owner's estate-wide order). The tabs below
-              name themselves, so listing them here was saying it twice. The
-              nothing-disappears promise stays: it is what makes it safe to stop
-              halfway, and somebody who does not know it will not stop. */}
-          <p className="subtitle">
-            Anything read off a code or a photo waits in the queue until you have dealt
-            with it — nothing disappears because you only got through half.
-          </p>
+          {/* Trimmed again 2026-09-07 (audit item 117, the owner's
+              fewer-grey-paragraphs order). The nothing-disappears promise is
+              what makes it safe to stop halfway, so it stays — but as the one
+              short clause, not a sentence about queues. */}
+          <p className="subtitle">Nothing is added until you review it.</p>
         </div>
         <Link to="/" className="btn btn-quiet">Collection</Link>
       </header>
@@ -547,9 +535,6 @@ function PhotoUploader({
         />
         <span className="upload-area__label">
           {uploading ? 'Uploading...' : 'Tap to take photos or select from gallery'}
-        </span>
-        <span className="muted small">
-          Multiple photos welcome. Each becomes a separate job in the queue.
         </span>
       </label>
       {count > 0 && (
@@ -820,7 +805,6 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
   // path below so "Select all" cannot quietly add a game the catalog may
   // already hold — or file one it does not.
   const isQuestion = (i: number): boolean => !!(fresh[i] && ownershipQuestion(fresh[i]!));
-  const outstanding = fresh.filter((_, i) => !isSettled(i));
   const resolvedElsewhere = fresh.filter((t) => settledOwnership(t)).length;
   const questionCount = fresh.filter((t) => ownershipQuestion(t)).length;
 
@@ -1141,10 +1125,6 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
       {adoptions.length > 0 && (
         <section className="card">
           <h3>Reunited with what was waiting</h3>
-          <p className="muted small">
-            These were catalogued before the game they belong to, and have just been
-            filed under it.
-          </p>
           <ul className="child-list">
             {adoptions.map((a) => (
               <li key={a.id}>
@@ -1186,11 +1166,6 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
             >
               {selected.size > 0 ? 'Clear all' : 'Select all'}
             </button>
-            {outstanding.length === 0 && (
-              <span className="muted small">
-                Everything on this photo is dealt with. It stays here until you delete it.
-              </span>
-            )}
           </div>
 
           <ul className="candidate-list shelf-classify">
@@ -1402,14 +1377,6 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
                           ))}
                         </ul>
                       </div>
-                    )}
-
-                    {!result && !dismissed && !settled && !question && needsRelookupToAccept(t) && (
-                      <span className="muted small">
-                        This one was looked up before suggestions were kept. Press
-                        &ldquo;Look up again&rdquo; and you can accept a match rather than
-                        retyping it.
-                      </span>
                     )}
 
                     {/*

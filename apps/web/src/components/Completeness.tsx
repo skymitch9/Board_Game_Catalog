@@ -70,18 +70,13 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
 
       {data.state === 'not_on_bgg' && (
         <p className="muted">
-          <strong>No data.</strong> This is not matched to BoardGameGeek, so there is
-          nothing to compare against — which is not the same as owning everything.
+          Not matched to BGG — nothing to compare against.
           {canEdit && ' Add a BoardGameGeek ID on the edit screen and this can answer.'}
         </p>
       )}
 
       {data.state === 'never_checked' && (
-        <p className="muted">
-          <strong>Not checked yet.</strong> BoardGameGeek has not been asked what exists
-          for this game. The weekly sweep will pick it up
-          {canEdit ? ', or check it now.' : '.'}
-        </p>
+        <p className="muted">Not checked yet.</p>
       )}
 
       {data.state === 'not_found' && (
@@ -113,23 +108,17 @@ export function Completeness({ item, canEdit }: { item: ItemDetail; canEdit: boo
               different facts, and Terraria is the second one: both its official
               expansions are promo packs, so both sections are empty while the
               disclosure below holds two rows. Saying "lists nothing official"
-              there would be a plain untruth about data on the same screen. */}
-          {data.expansions.total === 0 && data.accessories.total === 0 && (
-            <p className="muted">
-              {data.collectibles.total + data.nonEnglish.total > 0 ? (
-                <>
-                  Everything BoardGameGeek lists as official for this game is set aside
-                  below — a promo, a collectible or an edition in another language. Nothing
-                  to chase.
-                </>
-              ) : (
-                <>
-                  BoardGameGeek lists nothing official for this game — no expansions, no
-                  accessories. Nothing to chase.
-                </>
-              )}
-            </p>
-          )}
+              there would be a plain untruth about data on the same screen — so
+              the second case says nothing at all now (audit item 126, cut
+              2026-09-07: the set-aside section carries its own heading). */}
+          {data.expansions.total === 0 &&
+            data.accessories.total === 0 &&
+            data.collectibles.total + data.nonEnglish.total === 0 && (
+              <p className="muted">
+                BoardGameGeek lists nothing official for this game — no expansions, no
+                accessories. Nothing to chase.
+              </p>
+            )}
 
           {/* First of the three, because it is the only one whose contents are
               *counted* above — a claim the owner made rather than a category

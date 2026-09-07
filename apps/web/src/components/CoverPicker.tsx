@@ -89,6 +89,10 @@ export function CoverPicker({
 
   const canLookUp = bggId != null && !printingsFetched;
 
+  /** More than one to choose between, or a single one the form is not using yet. */
+  const hasSomethingToPick =
+    candidates.length > 1 || (candidates.length === 1 && candidates[0]!.url !== value);
+
   return (
     <section className="cover-picker">
       <div className="cover-picker__head">
@@ -110,14 +114,14 @@ export function CoverPicker({
 
       {candidates.length === 0 && <p className="muted small">{emptyReason}</p>}
 
-      {candidates.length === 1 && (
-        <p className="muted small">
-          One cover is known for this game, so there is nothing to pick between.{' '}
-          {canLookUp ? 'Looking up its printings may find more.' : ''}
-        </p>
-      )}
-
-      {candidates.length > 0 && (
+      {/* Audit items 130 and 131 (owner's fewer-grey-paragraphs order,
+          2026-09-07). The "pick one, then Save" paragraph is gone — the Save
+          button is visible — and so is the "only one cover is known" one:
+          instead of explaining that there is nothing to pick, the grid simply
+          is not rendered. The one candidate that IS worth rendering alone is
+          a cover the form does not already hold, because that one is still a
+          choice. */}
+      {hasSomethingToPick && (
         <ul className="cover-grid">
           {candidates.map((c) => (
             <CoverCard
@@ -130,13 +134,6 @@ export function CoverPicker({
             />
           ))}
         </ul>
-      )}
-
-      {candidates.length > 1 && (
-        <p className="muted small">
-          Pick one, then Save changes below. Nothing is lost either way &mdash; every
-          printing stays recorded.
-        </p>
       )}
     </section>
   );

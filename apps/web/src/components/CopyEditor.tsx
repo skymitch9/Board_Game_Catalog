@@ -245,8 +245,7 @@ export function CopyForm({
           </Field>
 
           <p className="muted small">
-            The copy stays in the catalog and stops counting as held. This save is
-            recorded in the game&rsquo;s history, which nothing can edit or delete.
+            Stops counting as held. Recorded permanently in history.
           </p>
         </fieldset>
       )}

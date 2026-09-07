@@ -385,9 +385,6 @@ export function BarcodeQueue({
               <Link to={`/scan-jobs/${job.id}`} className="btn btn-primary">
                 Review {queued > 0 ? `${queued} scanned game${queued === 1 ? '' : 's'}` : 'this batch'}
               </Link>
-              <span className="muted small">
-                Nothing is added to the collection until you review it.
-              </span>
             </div>
           )}
         </>

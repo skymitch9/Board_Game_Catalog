@@ -98,10 +98,7 @@ export function SignIn({ reason }: { reason: 'unauthenticated' | 'misconfigured'
         <span>{busy ? 'Signing in…' : 'Sign in with Google'}</span>
       </button>
       {error && <p className="error-text">{error}</p>}
-      <p className="note">
-        First time here? Signing in doesn&apos;t let you in by itself — it puts you in the queue,
-        and an owner approves you.
-      </p>
+      <p className="note">Signing in puts you in the queue; an owner approves you.</p>
     </div>
   );
 }
