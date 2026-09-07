@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { api, describeError, type EnrichedTitle, type ScanJob } from '../api';
 import { fileToImageSource } from '../lib/camera';
 import { decodeStill, preloadDecoder, startScanLoop } from '../lib/scanner';
+import { replaceByCode } from '../lib/scan-rows';
 import { CameraStage } from './CameraStage';
 import { Badge, ErrorBox } from './ui';
 import { Link } from '../router';
@@ -211,7 +212,12 @@ export function BarcodeQueue({
     (code: string) => {
       if (acceptedRef.current.has(code)) return;
       acceptedRef.current.add(code);
-      setRows((prev) => [{ code, state: 'pending' }, ...prev]);
+      // ⚠️ REPLACE, never prepend. The only way to reach `accept` twice with
+      // one code is a retry after a failure, and the failed row KEPT that code
+      // — so a plain prepend gave two `<li>` the same React key, and left the
+      // stale `error` row sitting above the new answer, contradicting it. See
+      // `lib/scan-rows.ts`. 2026-08 audit, finding 16.
+      setRows((prev) => replaceByCode(prev, { code, state: 'pending' }));
       chainRef.current = chainRef.current.then(() => submit(code));
     },
     [submit],
