@@ -107,7 +107,21 @@ function firstResults(parsed: unknown): unknown[] {
   return arr[0].results;
 }
 
-function loadCatalog(): { items: Item[]; aliases: ItemAliasRef[] } {
+/**
+ * ⚠️ `scans` is in this signature because the body returns it and `main`
+ * destructures it. It was missing until 2026-09-06 — an ordinary type error,
+ * which escaped only because `scripts/` is not a workspace, has no
+ * `tsconfig.json`, and runs under `tsx`, which strips types rather than
+ * checking them; the root `typecheck` is `--workspaces --if-present`, so
+ * nothing in this directory has ever been type-checked. 2026-08 audit, finding
+ * 22. Zero runtime impact — and the signature is the only description of this
+ * function a reader gets, so a wrong one is worse than none.
+ */
+function loadCatalog(): {
+  items: Item[];
+  aliases: ItemAliasRef[];
+  scans: { jobId: number; titles: string[] }[];
+} {
   const argv = process.argv.slice(2);
   const arg = (flag: string): string | null => {
     const i = argv.indexOf(flag);

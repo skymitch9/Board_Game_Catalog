@@ -362,3 +362,131 @@ existed used to be refused, with a sentence about owners that had nothing to do
 with them (the old guard keyed on `userId === actor.id` and never looked at the
 actor's role). It is now allowed. Pinned by
 `packages/db/test/set-user-role-last-owner.test.ts`.
+
+---
+
+## KI-8 · Nothing in `scripts/` is ever type-checked — `ACCEPTED`
+
+**Symptom.** `scripts/` is not an npm workspace and has no `tsconfig.json`, and
+the root `typecheck` is `tsc --noEmit --workspaces --if-present`. So the
+`.ts` files in that directory are checked by nobody: `tsx` runs them by
+stripping types, which is not the same thing as agreeing with them.
+
+Measured 2026-09-06 (2026-08 audit, finding 22): running
+`tsc --noEmit --strict` by hand on `scripts/measure-matcher.ts` reported **2**
+errors — `loadCatalog`'s return type omitted `scans` while the body returned it
+(TS2353) and `main()` destructured it (TS2339). Both are fixed; what is not
+fixed is that nothing would have caught them, and nothing will catch the next
+one.
+
+**Why tolerated.** ⚠️ **The consequence is bounded in a way the app's own code
+is not.** These are operator tools run by hand, one at a time, by somebody
+watching the output — `measure-matcher`, `push-secrets`, the estate syncs, the
+provisioner. A type error surfaces as a script that fails in front of the person
+who ran it, not as a silent wrong answer in production, and none of them is in
+the deploy path except the three `sync-estate-*.mjs` files, which are `.mjs` and
+have no types to check. Adding a `scripts/tsconfig.json` is not free either: the
+directory mixes `.ts` and `.mjs`, several files import from workspaces by
+package name, and a half-configured tsconfig that reports 200 phantom errors is
+worse than none, because it teaches everybody to ignore it.
+
+**What would change it.** ⚠️ **The number to watch is how many `scripts/*.ts`
+files are run UNATTENDED** — by a cron, a hook, CI, or another script. Measured
+2026-09-06: **0**. Every one is a person at a terminal. The day a `.ts` script
+joins a scheduled job or the deploy chain, its failure stops being visible to
+anyone and this entry stops being tolerable. The other trigger is size: at
+**2** `.ts` files in `scripts/` today, a tsconfig is ceremony; the argument
+changes well before ten.
+
+---
+
+## KI-9 · The dead Cloudflare Access vars are still declared — `BLOCKED` (owner's file)
+
+**Symptom.** `apps/worker/wrangler.toml:243-244` still sets
+`CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD`, and `src/env.ts:54-56` still
+declares both fields `@deprecated`. Nothing reads either one — measured
+2026-09-06, a repo-wide grep returns the two declarations, one test's
+do-not-restate list, and nothing else. 2026-08 audit, finding 14.
+
+🔢 **The precondition their own comment names has been met for four weeks.**
+`wrangler.toml:234-237` says they *"stay ONLY until the Access application is
+deleted… delete these two lines and the matching fields in src/env.ts
+together, once it is gone"* — and line 126 of the same file records that
+**Access was deleted 2026-08-10**. The instruction has been live since; nobody
+has run it.
+
+**Why tolerated.** ⚠️ **Not a judgement call: `apps/worker/wrangler.toml` is
+the owner's file and agents are refused edits to it** — the billing vars live
+in the same file and the owner flips those himself. So this is `BLOCKED`, not
+`ACCEPTED`: nobody decided the vars should stay, they simply cannot be removed
+from here. The runtime cost is zero — two unread strings — and the values are
+not secrets (an Access team domain and two public audience ids, already
+committed in a public repo).
+
+⚠️ **It is NOT a one-line deletion, which is worth knowing before starting.**
+Three files move together: `wrangler.toml` (the two lines), `src/env.ts` (the
+two fields — leaving those behind is not a type error, leaving the vars without
+the fields is), and `apps/worker/src/lib/instance-template.test.ts:124`, which
+asserts `CF_ACCESS_AUD` is **still present** in the live config precisely so
+that the second-instance template's "do not copy these" rule cannot quietly
+become a claim that the cutover finished. That assertion has to be deleted in
+the same commit, along with `MUST_NOT_RESTATE` and the template prose that
+names them.
+
+**What would change it.** ⚠️ **One owner commit; the exact shape is the
+paragraph above.** The number to watch is **0** — the count of code sites
+reading either var. It has been 0 since 2026-08-10, and the day it is not,
+deleting them stops being safe rather than merely overdue.
+
+✅ **Finding 6, which used to belong in this entry, is NOT open.** The audit
+read a ⚠️ block calling `ESTATE_CHECK` *"deliberately 'off'… inert until the
+owner flips it"* three lines above `ESTATE_CHECK = "enforce"`. Re-read
+2026-09-06: **corrected on 2026-08-26 by `93fad25`**, three days after the
+audit verified the row. The block now opens *"⚠️ ESTATE_CHECK IS 'enforce' —
+see the value two lines below"* and describes the live 403/503 behaviour. It is
+recorded here rather than nowhere because that is the second finding in this
+audit (with 13) whose defect was fixed within days and whose ROW stayed open
+for two weeks.
+
+---
+
+## KI-10 · The app ships no CSP, and its own comment says otherwise — `WATCHING`
+
+**Symptom.** `apps/web/public/_headers` sets `Cache-Control` and nothing else.
+Measured 2026-09-06, repo-wide: **0** CSP directives anywhere in this
+repository. `App.tsx` nonetheless carried a comment instructing a future
+editor not to delete *"the CSP entries"* while `SHOW_ESTATE_SEARCH` is false —
+entries which have never existed. 2026-08 audit, finding 17.
+
+✅ **The comment half is fixed** (2026-09-06): it now says plainly that there
+is no CSP, so nobody re-enables `EstateSearch` trusting an allow-list that is
+not there. The missing CSP itself is what this entry holds.
+
+**Why tolerated.** A CSP added blind is the kind of change that white-screens a
+site on a Sunday, and this app has no dev lane — `npm run deploy` goes to the
+live custom domain. Writing one honestly means enumerating what the page
+actually loads: Firebase auth, the estate SSO origin, the materialised
+`<estate-search>` component, the estate theme CSS and fonts, `gamecovers.
+heygabi.ai`, and every image CDN a hotlinked cover can come from
+(`cf.geekdo-images.com`, `ksr-ugc.imgix.net`, Gamefound). ⚠️ **`img-src` is the
+hard one**: covers are hotlinks to hosts nobody here controls, and a list that
+is wrong shows a page of broken pictures rather than an error anybody can read.
+
+✅ **The edge was CHECKED, 2026-09-06** — the one fact the audit listed as not
+verified, and the one that decides how much this matters. `curl -sS -D -
+https://boardgames.heygabi.ai/` returned **200** with **no
+`content-security-policy` header**, and no `x-frame-options` or
+`x-content-type-options` either. So nothing is applied outside the repo: this
+entry is about a missing *header*, not merely a missing comment. Full header
+set on that read: `Content-Type`, `Cache-Control: no-cache`, `CF-Cache-Status`,
+`Nel`, `Report-To`, `Server`, `CF-RAY`, `alt-svc`.
+
+**What would change it.** ⚠️ **The trigger is `SHOW_ESTATE_SEARCH` becoming
+true**, or any other cross-origin surface landing in this app — that is the
+moment the allow-list the old comment imagined has to be real. Until then the
+exposure is bounded by what the app is: one origin, a Firebase session, no user
+-supplied HTML anywhere, and `editCatalog` required to write anything at all.
+⚠️ **The cheap first step is NOT a CSP** — it is `x-content-type-options:
+nosniff` and `x-frame-options: DENY` in `_headers`, which cost two lines, cannot
+white-screen the site, and are the two this read found missing. A CSP after
+that, `img-src` last.

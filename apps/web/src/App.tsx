@@ -264,10 +264,21 @@ function SignedInApp() {
 
           ⚠️ HIDDEN on owner order 2026-08-17 ("Cool but not needed currently.
           Don't delete tho just hide it. Might want later"): rendered false
-          via the constant below its imports, component + sync script + the
-          _headers index.heygabi.ai allowances all kept intact so re-enabling
-          is flipping one constant. Do NOT delete EstateSearch.tsx,
-          sync-estate-search.mjs, or the CSP entries while this is false. */}
+          via the constant below its imports, component + sync script kept
+          intact so re-enabling is flipping one constant. Do NOT delete
+          EstateSearch.tsx or sync-estate-search.mjs while this is false.
+
+          🔴 CORRECTED 2026-09-06 (2026-08 audit, finding 17). This block used
+          to name "the _headers index.heygabi.ai allowances" and "the CSP
+          entries" among the things not to delete. THERE ARE NONE, and never
+          were: `_headers` holds Cache-Control rules and nothing else, a
+          repo-wide grep for CSP directives returns zero, and a live read of
+          https://boardgames.heygabi.ai/ the same day found no
+          content-security-policy at the edge either (nor x-frame-options, nor
+          x-content-type-options). So flipping this constant back to true does
+          NOT land on a prepared allow-list — it lands on an app with no CSP at
+          all, which is a decision still to be made rather than one already
+          made. KNOWN_ISSUES KI-10 holds it. */}
       {SHOW_ESTATE_SEARCH && <EstateSearch />}
       {/* Above the page rather than inside one: a dead cover is a fact about
           the catalog, not about whichever screen happens to be open. */}
