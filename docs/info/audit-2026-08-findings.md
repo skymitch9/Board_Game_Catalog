@@ -5,11 +5,11 @@
 > every row below was adversarially verified against the code at that commit.
 > Severities are the **post-verification** values; where the reviewer's severity
 > was adjusted by the refuter, the original is shown in parentheses.
-> ⚠️ **Re-measured 2026-09-05 for rows 1, 2 and 4 ONLY** — those three were
-> fixed that day and their status column says so with the commit. **The other
-> 21 rows were NOT re-read against today's code** and still carry 2026-08-23;
-> row 2's experience says that matters, because its `file:line` had already
-> moved by then.
+> ✅ **Re-measured 2026-09-06: EVERY row.** Rows 1, 2 and 4 were fixed on
+> 2026-09-05; the remaining 21 were re-read against the code on 2026-09-06 and
+> each carries a dated verdict. The tally is below. ⚠️ Row 2's experience — a
+> `file:line` that had already moved — turned out to apply to rows 14 and 23
+> as well, and both are corrected in place with a strikethrough.
 >
 > Part of the estate-wide audit — scope and harness in
 > `catalog-platform/docs/info/estate-audit-2026-08.md`. **No code was changed
@@ -22,11 +22,31 @@
 > its fetches — and fixing it turned up a **worse** half the audit had not seen:
 > `routes/covers.ts` capped `?limit` at `COVER_BATCH * 2`.
 >
-> ⏳ **The other 20 rows are being triaged in this file's order** (agent
-> W13-GAMES, 2026-09-06). Each gets a dated verdict in its Status column as it
-> is reached — FIXED, RECORDED as a `KNOWN_ISSUES.md` entry, or SKIPPED with
-> the reason. A row with no such verdict has NOT been re-read against today's
-> code and still carries 2026-08-23.
+> ✅ **ALL 24 ROWS ARE NOW TRIAGED — every one re-read against today's code on
+> 2026-09-06** (agent W13-GAMES). Each carries a dated verdict in its Status
+> column. The tally:
+>
+> | Verdict | Rows | Count |
+> |---|---|---|
+> | ✅ **Fixed** (3 on 2026-09-05, 12 on 2026-09-06) | 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 16, 18, 19, 21, 22, 23, 24 | **18** |
+> | ✅ **Already fixed** by unrelated work — the row outlived the defect | 6 (`93fad25`, 2026-08-26), 13 (`6eb2a51`, 2026-08-24) | **2** |
+> | ⚖️ **Half fixed**, the rest recorded | 17 (→ KI-10), 20 (guard done, streaming not) | **2** |
+> | 📋 **Recorded** as a `KNOWN_ISSUES` entry | 14 (→ KI-9, BLOCKED on the owner's `wrangler.toml`) | **1** |
+> | ⏭️ **Skipped**, with the reason | 15 (`.dev.vars.example` — agent may not open it) | **1** |
+>
+> 🔴 **Two rows had been fixed for weeks and nobody knew** — 6 and 13, both
+> corrected within three days of the audit verifying them, both left standing
+> because the *comment* describing the behaviour was never updated with the
+> behaviour. That is this file's own "loudest theme" happening to this file.
+> **Re-read a row against the code before acting on it**; three rows' `file:line`
+> had also moved (2, 14, 23).
+>
+> 🔢 **Tests: 348 → 860.** Every fix on 2026-09-06 landed with a test that fails
+> without it, except where the row says otherwise in words.
+>
+> ➕ Three new `KNOWN_ISSUES` entries came out of this pass: **KI-8** (nothing in
+> `scripts/` is type-checked), **KI-9** (the dead Access vars), **KI-10** (no CSP,
+> now measured at the edge as well as in the repo).
 >
 > ⚠️ **Read `../KNOWN_ISSUES.md` and `gotchas.md` before "fixing" any row** —
 > none of these are accepted defects, but the two files hold the context that
@@ -38,17 +58,29 @@
   adjusted to medium in verification) · **13 medium** · **11 low**.
 - **2 findings were refuted** in verification and are not listed here.
 - **12 units reviewed**; 1 (`migrations`) came back clean.
-- ~~No finding is covered by an existing test~~, and none is waived in
-  `KNOWN_ISSUES.md`. ⚠️ **Corrected 2026-09-05:** true when written, false now
-  — rows **1, 2 and 4** each gained a test with their fix, and each of those
-  tests would have caught the original defect. The other **21 are still
-  untested**, which is the number that matters here.
+- ~~No finding is covered by an existing test~~, and ~~none is waived in
+  `KNOWN_ISSUES.md`~~. ⚠️ **Corrected 2026-09-05:** true when written, false
+  now — rows 1, 2 and 4 each gained a test with their fix. ⚠️ **Corrected
+  again 2026-09-06:** **17 rows now have a test**, and the suite went **348 →
+  860**. Every 2026-09-06 fix landed with a case that fails without it, except
+  where the row says in words what could not be exercised. And rows **14** and
+  **17** now DO have `KNOWN_ISSUES` entries (KI-9, KI-10), which the second
+  half of that sentence used to deny.
 
 The single loudest theme is **stale comments that contradict live behaviour**
 (the estate-check "inert" comment over an `enforce` value; the CSP allowlist a
 comment claims exists in `_headers` but does not; the "Access still in front"
 vars after Access was deleted). None break the running system, but each is a
-trap primed for the next debugger. The one finding with present-tense impact is
+trap primed for the next debugger.
+
+🔴 **And the theme claimed this document.** Re-reading every row on 2026-09-06
+found **two findings whose defect had been fixed within three days of the audit
+and whose row stayed open for two weeks** — 6 (`93fad25`) and 13 (`6eb2a51`) —
+each because the comment describing the behaviour was never updated when the
+behaviour changed, so the next reader was told the old story. A third, 17, was
+half a stale comment about a CSP that never existed. **Re-read a row against
+the code before acting on it**: three more had `file:line` references that had
+moved (2, 14, 23). The one finding with present-tense impact is
 the **`/api/export.json` email leak** to any contributor-role user — ✅ **closed
 2026-09-05 (`6394cca`): emails are `manageUsers` (admin and owner) only, and
 the ratings query is an explicit allow-list rather than `ui.*`.**
@@ -71,7 +103,7 @@ the ratings query is an explicit allow-list rather than `ui.*`.**
 | 12 | ✅ **FIXED 2026-09-06** — med | web-pages | `apps/web/src/pages/ScanJobsPage.tsx:738` | `ScanJobReviewPage` parses `job.enriched` with an unguarded `JSON.parse` during render, so a non-null malformed blob crashes the whole review page (white screen, no error boundary) — while the same component's `outstandingOf`/`progressOf` and the sibling history page all guard the identical parse. | `:738` `JSON.parse(job.enriched)` with only a null-check; `outstandingOf` (71-76), `progressOf` (104-110), `ScanHistoryPage` (49-63) all wrap it in try/catch. No error boundary anywhere in `apps/web/src`. | Wrap in try/catch returning a fallback, matching the other three parse sites. ✅ **Better than matching them — all four now share ONE parser**, `apps/web/src/lib/enriched.ts`, so the review page and the history page cannot disagree about what a damaged blob means. ⚠️ The try/catch alone would NOT have been enough: `JSON.parse('"hello"')` and `JSON.parse('null')` both succeed and then throw at `.filter`, in the same render, so the parser array-checks as well. `null` and `[]` stay distinguishable (damaged record vs a job that found nothing), and the review page renders a worded card naming which — not an outage, not empty, one damaged record — with a way back to the queue. 7 cases in `apps/web/test/enriched.test.ts`. | none |
 | 13 | ✅ **ALREADY FIXED — `6eb2a51`, 2026-08-24** (re-measured 2026-09-06) — med | ci-and-root | `.github/workflows/deploy.yml:112` | Deploy ships straight to the live custom domain (no dev lane) but never type-checks and never runs the test suite before deploying, so a type error or a failing auth test reaches production undetected. | Steps: `npm ci` → `db:migrate` → `npm run deploy`; `deploy` = `build && wrangler deploy`; `vite build`/`wrangler deploy` do not type-check. Root `typecheck` and `test` (8 files incl. `role-grant`, `capabilities`) are never invoked. | Add `typecheck` + `test` steps to the workflow before deploy. ✅ **They were added the DAY AFTER this row was verified** — `6eb2a51` (2026-08-24) put `npm run typecheck && npm test` into `predeploy`, and the workflow's `npm run deploy` runs the whole npm lifecycle, so CI has type-checked and tested on every deploy since. 🔴 **The finding outlived the defect by two weeks because the workflow's own comment still described the lifecycle as `sync-estate-auth + check-clean`** — the exact stale-comment failure this audit calls its loudest theme, in the file that caused the finding. The comment now spells out all three lifecycle stages and carries this history. No behaviour changed. | none |
 | 14 | 📋 **RECORDED as KI-9, 2026-09-06** — low | worker-core | ~~`apps/worker/wrangler.toml:162`~~ → **`:243-244`** | Deprecated `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` vars (and their env.ts fields) remain with a "Access is still in front… delete once it is gone" comment, while the same file (124-128) states Access was deleted 2026-08-10 — contradictory, and the deprecation note's own instruction means they should already be removed. | wrangler.toml 162-166 vs 124-128; env.ts:45-56 repeats the stale framing; grep shows no consuming code, only the declarations. | Delete the two vars and their `env.ts` fields together. 📋 **Recorded rather than fixed: `apps/worker/wrangler.toml` is the owner's file and agents are refused edits to it** (the billing vars share it), so this is `BLOCKED`, not accepted. Re-measured 2026-09-06: still present at `:243-244`, still read by no code. ⚠️ **And it is a THREE-file change, not two** — `apps/worker/src/lib/instance-template.test.ts:124` asserts `CF_ACCESS_AUD` is still present, deliberately, so the second-instance template's do-not-copy rule cannot silently become a claim that the cutover finished. That assertion and `MUST_NOT_RESTATE` go in the same commit. | KI-9 |
-| 15 | low | worker-core | `apps/worker/.dev.vars.example:8` | Comment says `ENVIRONMENT` "must not be 'production', or DEV_EMAIL is ignored", but the guard is `=== 'development'` (verify.ts:95) — so `dev`/`local` silently drop the bypass. The justification also cites Cloudflare Access, deleted 2026-08-10. | `.dev.vars.example:7-8` vs `verify.ts:88-95`; the example ships the correct value (line 9) so verbatim copies work and it fails safe. | Reword to "must be exactly 'development'"; drop the stale Access rationale. | none |
+| 15 | ⏭️ **SKIPPED 2026-09-06 — THE ONE ROW LEFT OPEN** — low | worker-core | `apps/worker/.dev.vars.example:8` | Comment says `ENVIRONMENT` "must not be 'production', or DEV_EMAIL is ignored", but the guard is `=== 'development'` (verify.ts:95) — so `dev`/`local` silently drop the bypass. The justification also cites Cloudflare Access, deleted 2026-08-10. | `.dev.vars.example:7-8` vs `verify.ts:88-95`; the example ships the correct value (line 9) so verbatim copies work and it fails safe. | Reword to "must be exactly 'development'"; drop the stale Access rationale. ⏭️ **Not done, and the reason is about the agent rather than the fix.** `W13-GAMES` works under a standing rule never to open `.dev.vars`/`.env*` files, and `.dev.vars.example` is one by name. ✅ **Everything about it that CAN be checked from outside was, 2026-09-06, and the finding holds:** the guard is `env.ENVIRONMENT === 'development'` at `estate-auth/verify.ts:95`, so `dev` and `local` do silently drop the bypass. ⚠️ **It fails safe** — the example ships the correct value on the next line, so a verbatim copy works, and the file is local-only anyway (untracked; see row 23). 🧑 **A person's one-line reword**, and worth pairing with row 23's decision about committing the templates. Note `env.ts:171` already words it correctly (*"Ignored unless ENVIRONMENT is exactly…"*), so the sentence to copy already exists. | none |
 | 16 | ✅ **FIXED 2026-09-06** — low | web-components | `apps/web/src/components/BarcodeQueue.tsx:336` | Retrying a barcode after a failed lookup leaves the old `error` row in place while a new row with the same `key={r.code}` is prepended — two `<li>` share one React key (duplicate-key reconciliation, duplicated row). | `submit` catch (197-201) flips row to `error` keeping its code, then `acceptedRef.delete(code)` (204); rescan prepends a second pending row (214). Success map keys on `state==='pending'` so a later retry does not clean it up. | Reuse/replace the existing error row on retry, or drop it from `rows` when re-accepting the same code. ✅ **The second, as `replaceByCode` in `apps/web/src/lib/scan-rows.ts`** — `accept` now replaces rather than prepends, so the list holds one row per barcode by construction and `key={r.code}` is sound. ⚠️ The audit named the duplicate key; the **worse half is the stale row**, since the success handler matches on `state === 'pending'` and so left the old `error` row above the new answer, contradicting it until the page was left. 6 cases in `apps/web/test/scan-rows.test.ts`, including that the surviving row is the new one and carries no leftover failure detail. | none |
 | 17 | ⚖️ **HALF FIXED + RECORDED as KI-10, 2026-09-06** — low | web-core-and-lib | `apps/web/src/App.tsx:270` (was med) | App ships with **no CSP** while an in-code comment asserts CSP/allowlist entries exist in `_headers` — they do not; a future editor re-enabling `EstateSearch` would trust a non-existent allowlist. | `App.tsx:268-270` claims "_headers index.heygabi.ai allowances… CSP entries"; `_headers` has only Cache-Control; repo-wide grep for CSP directives = 0. Edge-applied CSP outside the repo NOT verified. | Either add a real CSP (with the estate SSO `connect-src` allowances) or correct the comment to say none exists. ⚖️ **The comment is corrected; the CSP is not written, and is now KI-10.** ✅ **And the row's own "NOT verified" is closed:** an edge read on 2026-09-06 — `curl -sS -D - https://boardgames.heygabi.ai/` — returned 200 with **no `content-security-policy`**, and no `x-frame-options` or `x-content-type-options` either. Nothing is applied outside the repo, so this is a missing header and not just a missing comment. 🔴 A CSP was deliberately NOT written blind: this app has no dev lane (`npm run deploy` goes to the live domain) and `img-src` has to cover every CDN a hotlinked cover can come from — a wrong list is a page of broken pictures. KI-10 names the cheap first step instead (`nosniff` + `DENY`, two lines, cannot white-screen). | KI-10 |
 | 18 | ✅ **FIXED 2026-09-06** — low | pkg-core | `packages/core/src/schemas.ts:101` | No write/PATCH schema uses `.strict()`; zod's default strip mode silently discards unknown keys, so a mistyped field on a PATCH is ignored (200 returned) instead of rejected — the intended change tied to the typo is lost. | Repo-wide grep for `.strict()` in `packages/` is empty; `refine(len>0)` only catches the all-unknown case; handler (catalog.ts:284) returns 200 on parse. | Add `.strict()` to the PATCH/write schemas. ✅ **All five: `createItemSchema`, `updateItemSchema`, `createCopySchema`, `updateCopySchema`, `createRelationSchema`.** ⚠️ **This is the one change in this pass that could break a live flow**, since it turns a request that used to succeed into a 400 and this app has no dev lane — so it was checked rather than assumed: every `api.createItem`/`api.updateItem` call site was read (all are typed `CreateItemInput`/`UpdateItemInput`, and `detailsToInput` returns a `Pick<>` of them), the route tests that POST and PATCH real payloads all pass, and `npm run build` is clean. ⚠️ `updateCopySchema`'s `.strict()` sits AFTER its `.extend({disposalDetails})` — that field is a ride-along written into `copy_event` rather than a column, and a `.strict()` in the wrong place would have refused it. 6 cases in `packages/core/test/one-definition.test.ts`, including the dangerous shape the `refine(len>0)` never caught: a typo **alongside** a real field, where half the edit lands and the response is still 200. | none |
