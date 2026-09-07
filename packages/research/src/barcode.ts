@@ -1,5 +1,12 @@
 import type { BarcodeCandidate, Confidence, ItemKind } from '@bgc/core';
-import { RESEARCH_MODEL, createClient, parseStructured, usageOf, type Usage } from './client.js';
+import {
+  RESEARCH_MODEL,
+  assertSearchBudgetLeft,
+  createClient,
+  parseStructured,
+  usageOf,
+  type Usage,
+} from './client.js';
 
 /**
  * Identify a board game product from a barcode — the last and most expensive
@@ -116,6 +123,18 @@ export async function identifyBarcode(
       },
     ],
   } as Parameters<typeof client.messages.create>[0]);
+
+  // A server-tool turn can stop at the search loop's iteration cap rather than
+  // because the model is done — and when it does there is no final text block,
+  // so `parseStructured` throws "Claude returned no text to parse." That is a
+  // sentence about the parser, handed to somebody who scanned a barcode and
+  // waited two minutes for it. The same guard is in `runTier` (research.ts:222)
+  // and `enrichItem` (enrich.ts:241); this rung is the one that never got it.
+  // 2026-08 audit, finding 20.
+  assertSearchBudgetLeft(
+    message as { stop_reason?: string | null },
+    'This lookup used its whole search budget without finding the barcode. Run it again, or type the game name instead — a name search is faster and does not need the model.',
+  );
 
   const parsed = parseStructured<{ candidates: RawCandidate[] }>(
     message as Parameters<typeof parseStructured>[0],

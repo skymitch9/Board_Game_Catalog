@@ -24,6 +24,7 @@ import { fillableFieldsFor, type FillField, type ItemKind } from '@bgc/core';
 import {
   RESEARCH_MODEL,
   ResearchError,
+  assertSearchBudgetLeft,
   createClient,
   parseStructured,
   usageOf,
@@ -238,12 +239,10 @@ Leave anything you cannot confirm as null.`,
     throw err;
   });
 
-  if (message.stop_reason === 'pause_turn') {
-    throw new ResearchError(
-      'The lookup used its whole search budget without finishing. Try again.',
-      502,
-    );
-  }
+  assertSearchBudgetLeft(
+    message,
+    'The lookup used its whole search budget without finishing. Try again.',
+  );
 
   return { fields: parseStructured<EnrichedFields>(message), usage: usageOf(message) };
 }

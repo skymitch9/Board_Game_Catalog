@@ -14,6 +14,7 @@
 import {
   RESEARCH_MODEL,
   ResearchError,
+  assertSearchBudgetLeft,
   createClient,
   parseStructured,
   usageOf,
@@ -219,12 +220,10 @@ export async function runTier(
   // A server-tool turn can stop at the search loop's iteration cap rather than
   // because the model is done. Treated as a real outcome, not a crash: the
   // caller can re-run the tier, and half a findings list is not worth keeping.
-  if (message.stop_reason === 'pause_turn') {
-    throw new ResearchError(
-      'This tier used its whole search budget without finishing. Re-run it, or narrow the game name.',
-      502,
-    );
-  }
+  assertSearchBudgetLeft(
+    message,
+    'This tier used its whole search budget without finishing. Re-run it, or narrow the game name.',
+  );
 
   const payload = parseStructured<FindingsPayload>(message);
 

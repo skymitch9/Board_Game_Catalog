@@ -51,6 +51,37 @@ export function usageOf(message: {
 }
 
 /**
+ * Refuse a turn that stopped at the search loop's iteration cap.
+ *
+ * 🔴 **`pause_turn` produces no final text block**, so the very next thing —
+ * `parseStructured` — throws *"Claude returned no text to parse."* That is a
+ * sentence about a parser, reaching somebody who asked a question and waited up
+ * to two minutes for the answer. It is also wrong: nothing is malformed, the
+ * model simply ran out of searches.
+ *
+ * ⚠️ **One implementation, because the missing copy IS the finding.** `runTier`
+ * and `enrichItem` each guarded this and `identifyBarcode` did not — so the
+ * most expensive rung in the ladder, two minutes and a web-search fee, was the
+ * one that answered with a parser error. 2026-08 audit, finding 20. A fourth
+ * call site now cannot get the sentinel string wrong; it can only forget to
+ * call this, which is a visible omission rather than an invisible one.
+ *
+ * `refusal` is per-surface on purpose: "re-run this tier" and "type the game
+ * name instead" are different advice, and advice that does not fit the screen
+ * it appears on is noise.
+ */
+export function assertSearchBudgetLeft(
+  message: { stop_reason?: string | null },
+  refusal: string,
+): void {
+  if (message.stop_reason === 'pause_turn') {
+    // 502, not 500: an upstream limit was reached, nothing here is broken, and
+    // the same request may well succeed on a second try.
+    throw new ResearchError(refusal, 502);
+  }
+}
+
+/**
  * Pull the JSON payload out of a structured-outputs response.
  *
  * Checks stop_reason first: a refusal or a truncation both produce content that
