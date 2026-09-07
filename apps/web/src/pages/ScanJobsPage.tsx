@@ -14,6 +14,7 @@ import { useAsync, useInterval } from '../hooks';
 import { fileToPhoto } from '../lib/camera';
 import { formatDateTime } from '../lib/dates';
 import { resolveBatchParent } from '../lib/batch-parents';
+import { parseEnriched, parseRawTitles } from '../lib/enriched';
 import { BarcodeQueue } from '../components/BarcodeQueue';
 import { QuickAdd } from '../components/QuickAdd';
 import { KIND_LABEL } from '../components/ItemTree';
@@ -68,13 +69,9 @@ const ownershipQuestion = (t: EnrichedTitle): TitleOwnership | null =>
  * the server's `countOutstanding`.
  */
 function outstandingOf(job: ScanJob): number | null {
-  if (!job.enriched) return null;
-  try {
-    const titles = JSON.parse(job.enriched) as EnrichedTitle[];
-    return titles.filter((t) => !settledOwnership(t) && !t.addedItemId && !t.dismissed).length;
-  } catch {
-    return null;
-  }
+  const titles = parseEnriched(job.enriched);
+  if (!titles) return null;
+  return titles.filter((t) => !settledOwnership(t) && !t.addedItemId && !t.dismissed).length;
 }
 
 /**
@@ -101,14 +98,9 @@ const IN_FLIGHT: ReadonlySet<ScanJob['status']> = new Set([
  * read.
  */
 function progressOf(job: ScanJob): { done: number; total: number } | null {
-  if (!job.rawTitles) return null;
-  try {
-    const total = (JSON.parse(job.rawTitles) as unknown[]).length;
-    const done = job.enriched ? (JSON.parse(job.enriched) as unknown[]).length : 0;
-    return { done, total };
-  } catch {
-    return null;
-  }
+  const raw = parseRawTitles(job.rawTitles);
+  if (!raw) return null;
+  return { done: parseEnriched(job.enriched)?.length ?? 0, total: raw.length };
 }
 
 /** More titles to look up. */
@@ -736,7 +728,41 @@ export function ScanJobReviewPage({ id, me }: { id: number; me: MeResponse }) {
     );
   }
 
-  const titles: EnrichedTitle[] = JSON.parse(job.enriched);
+  /*
+    🔴 A damaged record loses this JOB, never the page.
+
+    This parse was unguarded until 2026-09-06 and it runs during render, so a
+    malformed `enriched` blob threw straight out of the component — and with no
+    error boundary anywhere in `apps/web/src` that is a white screen with
+    nothing on it and no way back. Its own siblings `outstandingOf` and
+    `progressOf`, and the whole history page, guard the identical parse; this
+    one, the only one that renders a whole page, did not. 2026-08 audit,
+    finding 12.
+
+    ⚠️ And it says WHICH kind of wrong this is. "We cannot read this job's
+    titles" is not "this job found nothing", and it is not an outage either —
+    the page loaded, the queue works, this one record is damaged.
+  */
+  const titles = parseEnriched(job.enriched);
+  if (!titles) {
+    return (
+      <div className="card">
+        <h2>Job #{job.id}</h2>
+        <Badge tone={STATUS_TONE[job.status]}>{STATUS_LABEL[job.status]}</Badge>
+        <p>
+          This job&rsquo;s list of titles could not be read — the record is damaged, so there is
+          nothing here to review. Nothing else is affected: the queue and every other job are
+          fine, and anything already added to the catalog from this photo stayed added.
+        </p>
+        <p className="muted">
+          Photograph the shelf again to get a fresh reading of it. If it keeps happening on new
+          jobs that is worth reporting, because it means the reader is writing something this page
+          cannot read.
+        </p>
+        <p><Link to="/scan-jobs">Back to queue</Link></p>
+      </div>
+    );
+  }
 
   // The original index travels with each row: it is the address the server
   // stores outcomes against, and `fresh` is a filtered view whose positions

@@ -2,6 +2,7 @@ import { scanRowName, type MeResponse } from '@bgc/core';
 import { api, type EnrichedTitle, type ScanJob } from '../api';
 import { useAsync } from '../hooks';
 import { formatDateTime } from '../lib/dates';
+import { parseEnriched } from '../lib/enriched';
 import { Badge, EmptyState, ErrorBox, Pager, Spinner } from '../components/ui';
 import { Link, navigate } from '../router';
 import { MODE_LABEL, STATUS_LABEL, STATUS_TONE } from './ScanJobsPage';
@@ -49,14 +50,9 @@ function TitleFate({ t }: { t: EnrichedTitle }) {
 function HistoryJob({ job }: { job: ScanJob }) {
   // A malformed blob loses this job's title list, not the page. One bad row
   // out of two hundred should not take the record down with it.
-  let titles: EnrichedTitle[] | null = null;
-  if (job.enriched) {
-    try {
-      titles = JSON.parse(job.enriched) as EnrichedTitle[];
-    } catch {
-      titles = null;
-    }
-  }
+  // Through the shared parser — one implementation, so the review page and
+  // this one cannot disagree about what a damaged blob means.
+  const titles = parseEnriched(job.enriched);
 
   const added = titles?.filter((t) => t.addedItemId).length ?? 0;
   const dismissed = titles?.filter((t) => !t.addedItemId && t.dismissed).length ?? 0;
