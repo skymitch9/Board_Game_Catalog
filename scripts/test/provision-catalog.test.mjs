@@ -1007,9 +1007,12 @@ describe('--dry against an accepted games fixture prints the WHOLE plan', () => 
     assert.match(text, /INSERT INTO estate_catalog/);
     // push_source is the wire word, id is the estate word — the games repo's
     // whole trap, and the registry must not disagree with the wire.
+    // ⚠️ `api_host` and `service` joined this row on 2026-09-07 (estate
+    // migration 0022) and are asserted IN PLACE rather than appended, so a
+    // future column added in the wrong slot fails here too.
     assert.match(
       text,
-      /VALUES \('games2', 'games2', 'games', 'The Quarry Game Shelf', 'Example Person', 'physical', 0, 'quarry\.heygabi\.ai', 100, 7,/,
+      /VALUES \('games2', 'games2', 'games', 'The Quarry Game Shelf', 'Example Person', 'physical', 0, 'quarry\.heygabi\.ai', 'quarry\.heygabi\.ai', 'board-game-catalog-quarry', 100, 7,/,
     );
     assert.match(text, /ON CONFLICT\(id\) DO NOTHING/);
   });
@@ -1021,9 +1024,33 @@ describe('--dry against an accepted games fixture prints the WHOLE plan', () => 
  * byte offset in a 900-line dry run.
  * ------------------------------------------------------------------------ */
 
-describe('registryInsertSql — the catalog registry row (0020)', () => {
+describe('registryInsertSql — the catalog registry row (0020 + 0022)', () => {
   const n = names();
   const sql = registryInsertSql(n, row(), { now: new Date('2026-09-06T12:00:00.000Z') });
+
+  it('🔴 writes api_host AND the DEPLOYED Worker name — what heygabi.ai/status plans its rows from', () => {
+    // Estate migration 0022 (2026-09-07). Without these two a provisioned
+    // catalog gets a SITE row on /status and NO Workers row and NO
+    // Deployed-versions row at all — silently, because a NULL api_host means
+    // "this catalog runs no estate API of its own".
+    assert.match(
+      sql,
+      /INSERT INTO estate_catalog \(id, push_source, kind, label, owner_name, holding, shared, host, api_host, service, sort_order, request_id, created_at\)/,
+    );
+    assert.ok(sql.includes(`'${n.host}', '${n.host}', '${n.workerName}'`), sql);
+  });
+
+  it('🔴 THREE different names in one row, and none of them is another', () => {
+    // This repo's standing vocabulary trap, now with a third word in it: the
+    // ESTATE id, the INDEX push source, and the DEPLOYED Worker. Confusing any
+    // two writes a registry row that disagrees with the wire or points
+    // /status's version row at the wrong deploy.
+    const main = registryInsertSql({ ...n, estateApp: 'games' }, row(), { now: new Date(0) });
+    assert.match(main, /VALUES \('games', 'game', 'games',/);
+    assert.ok(main.includes(`'${n.workerName}'`));
+    assert.notEqual(n.workerName, 'games');
+    assert.notEqual(n.workerName, 'game');
+  });
 
   it('the id is the ESTATE word and push_source is the WIRE word', () => {
     // For a second games instance they happen to be equal; for the MAIN one

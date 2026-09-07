@@ -1461,6 +1461,31 @@ export function runbookSection(names, platformDir, which) {
  *
  * ⚠️ A REGISTRY ROW IS NOT A GRANT. It publishes a name and an owner; the
  * `vis_<id>` column is still its own migration and its own code change.
+ *
+ * ✅ **`api_host` AND `service` SINCE 2026-09-07** (estate migration 0022,
+ * `catalog-platform/apps/auth-worker/migrations/0022_estate_catalog_api.sql`).
+ * They are what lets `heygabi.ai/status` plan its **Workers** and **Deployed
+ * versions** rows from the directory, so a catalog provisioned by this script
+ * arrives with a health row and a version row rather than needing two more
+ * hand-written literals on the apex.
+ *
+ * 🔴 **`service` IS THE ONE FIELD ONLY THIS SCRIPT KNOWS.** The auth Worker
+ * cannot derive it (it is a line in THIS repo's `wrangler.toml`) and the
+ * deployed Worker cannot report it — measured 2026-09-07 on the library side,
+ * `padhard.heygabi.ai` answers `service: "library-catalog"`, the CODE's name,
+ * while the deploy is `library-catalog-friend`. A Worker cannot tell you which
+ * deploy it is.
+ *
+ * ⚠️ AND THAT MAKES A **THIRD** NAME IN THIS ONE FUNCTION, which is this repo's
+ * standing trap in a new costume: `names.estateApp` is the VISIBILITY id
+ * (`games`), `pushSource` is the INDEX vocabulary (`game`), and
+ * `names.workerName` is the DEPLOY (`board-game-catalog-…`). All three differ
+ * here and confusing any two writes a registry row that disagrees with the wire.
+ *
+ * ⚠️ `api_host` EQUALS `host` HERE BY CONSTRUCTION and that is not a guess: the
+ * runbook this script drives creates a Worker and routes that very hostname at
+ * it. The registry's two NULLs are the shared digital pools, which predate the
+ * request queue and were never provisioned by anything.
  */
 export function registryInsertSql(names, row = {}, { now = new Date() } = {}) {
   // ⚠️ NULL is a real answer and not a bug: `requester_display_name` is a
@@ -1472,7 +1497,7 @@ export function registryInsertSql(names, row = {}, { now = new Date() } = {}) {
   const pushSource = names.estateApp === 'games' ? 'game' : names.estateApp;
   return (
     'INSERT INTO estate_catalog (id, push_source, kind, label, owner_name, holding, shared, host, ' +
-    'sort_order, request_id, created_at) VALUES (' +
+    'api_host, service, sort_order, request_id, created_at) VALUES (' +
     [
       sqlLit(names.estateApp),
       sqlLit(pushSource),
@@ -1482,6 +1507,10 @@ export function registryInsertSql(names, row = {}, { now = new Date() } = {}) {
       sqlLit('physical'),
       '0',
       sqlLit(names.host),
+      // api_host — the same hostname, because this run is what routes it.
+      sqlLit(names.host),
+      // service — the DEPLOYED Worker name, from this repo's own wrangler.toml.
+      sqlLit(names.workerName),
       '100',
       String(names.requestId),
       sqlLit(now.toISOString()),
@@ -2260,13 +2289,23 @@ async function main() {
     try {
       estateSql(registrySql, ctx);
       const named = estateSql(
-        `SELECT id, push_source, label, owner_name FROM estate_catalog WHERE id = ${sqlLit(names.estateApp)}`,
+        'SELECT id, push_source, label, owner_name, api_host, service FROM estate_catalog WHERE id = ' +
+          `${sqlLit(names.estateApp)}`,
         ctx,
       )[0];
       if (named) {
         console.log(
           `  registry row     id=${named.id} push_source=${named.push_source} label=${JSON.stringify(named.label)} ` +
             `owner=${named.owner_name === null ? 'NULL (unattributed — honest, see the runbook)' : JSON.stringify(named.owner_name)}`,
+        );
+        // ⚠️ PRINTED BECAUSE heygabi.ai/status READS THEM. These two decide
+        // whether the new catalog gets a Workers row and a Deployed-versions
+        // row at all — a NULL api_host means no rows, silently. Read BACK from
+        // the directory rather than echoed from what we sent, so this line is
+        // its answer and not our claim.
+        console.log(
+          `  registry API     api_host=${named.api_host === null ? 'NULL (no estate API of its own — NO /status Workers row)' : named.api_host} ` +
+            `service=${named.service === null ? 'NULL (⚠️ the Deployed-versions row will say "name not recorded")' : named.service}`,
         );
       } else {
         console.log('  ⚠️ registry row  the INSERT reported no error and the row is not there — read the output above.');
