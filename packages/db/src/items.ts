@@ -1296,6 +1296,33 @@ export async function updateItem(
   const existing = await getItem(db, id);
   if (!existing) return null;
 
+  /*
+    The same UNIQUE index `createItem` guards, guarded on the way IN rather than
+    left to the write.
+
+    `idx_item_bgg` is UNIQUE where `bgg_id IS NOT NULL`, and `bgg_id` is
+    editable — correcting a scan's wrong match is one of the commonest reasons
+    to edit an item at all. Without this, pointing it at an id the catalog
+    already holds threw a raw `D1_ERROR: UNIQUE constraint failed`, which the
+    route cannot map (it knows only `ItemError`) and so surfaced as a generic
+    500 with a database string in it. `createItem` has answered the identical
+    collision with a friendly 409 since it was written; the two paths simply
+    never got the same treatment. 2026-08 audit, finding 7.
+
+    ⚠️ Only when the id is actually CHANGING, and never against itself. A patch
+    that re-sends the item's own `bgg_id` — which every "save the whole form"
+    screen does — would otherwise find its own row and refuse.
+  */
+  if (input.bggId != null && input.bggId !== existing.bggId) {
+    const clash = await db
+      .prepare('SELECT id, name FROM item WHERE bgg_id = ? AND id != ?')
+      .bind(input.bggId, id)
+      .first<{ id: number; name: string }>();
+    if (clash) {
+      throw new ItemError(`"${clash.name}" is already in the collection.`, 409);
+    }
+  }
+
   const sets: string[] = [];
   const params: unknown[] = [];
 
