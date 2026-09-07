@@ -4,15 +4,16 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-**Last updated: 2026-09-06** (agent `W13-GAMES`). ⚠️ **This paragraph is the
-only status line in this file.** What is open, in full:
+**Last updated: 2026-09-06** (agent `W14-DOCS`; previously `W13-GAMES` the same
+day). ⚠️ **This paragraph is the only status line in this file.** What is open,
+in full:
 
 | Open | Who |
 |---|---|
 | 🔴 The **billing shadow flip** — the three-file change is written out in its own section below, to the keystroke | 🧑 **owner only**: it edits `apps/worker/wrangler.toml`, which agents are refused |
 | 🧑 One eyeball of `/api/export.json` as a contributor — confirm no `email` field | owner |
 | 🧑 Three owner reviews on his phone — the three `☐ owner review` headings below: the scan target, the second-instance machinery, the family score | owner |
-| 🧑 Three rows still open in [*What still wants a person*](#what-still-wants-a-person) — the accessory-implies-the-game sweep, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). Counted 2026-09-06; the other rows in that table are settled records | owner |
+| 🧑 Three rows still open in [*What still wants a person*](#-what-still-wants-a-person--three-open-rows-for-the-owner-and-a-settled-record-beside-them) — the accessory-implies-the-game sweep, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). Counted 2026-09-06; the other rows in that table are settled records. ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file** | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
 | 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
 
@@ -31,6 +32,46 @@ at
 — the *why* behind a withdrawn claim is the only reason to keep one. 🔴 **The
 rule going forward: this paragraph is EDITED, never appended to.** A second
 status paragraph is the bug, not the fix.
+
+---
+
+## ☐ 🧑 What still wants a person — THREE open rows for the owner, and a settled record beside them
+
+> ⚠️ **Moved here whole 2026-09-06 (W14-DOCS), and retitled.** This table sat
+> as a `###` sub-section INSIDE
+> [*📓 Notes from the 2026-08-09 session — a RECORD, not a queue*](#-notes-from-the-2026-08-09-session--a-record-not-a-queue),
+> under a container heading that tells a reader outright there is no work in
+> it — while holding three live owner errands. The container's body did say so,
+> in its fourth line; **a heading that has to be corrected by its own body is
+> the bug this tree's `read the BODY, never the heading` rule works around,
+> not a reason to leave it.** Nothing in the table was edited by the move: the
+> three open rows, the four struck-through corrections and the three `✅`
+> settled rows are all as they were on 2026-09-05.
+>
+> ⚠️ **NOT re-measured on 2026-09-06** — the three open rows carry their
+> **2026-09-05** live-D1 reading, and no D1 was read for this move. Nothing in
+> [`DONE.md`](DONE.md) or `git log` closes any of the three.
+
+🔬 **Re-measured against live D1 on 2026-09-05** (docs audit; read-only
+`wrangler d1 execute --remote`, no writes). **Four of these rows had already
+happened and the table did not know it** — they are struck through below with
+the number that settled each. What is genuinely left is **three** rows: the
+accessory-implies-the-game sweep, the HELLDIVERS rename (waiting on a pledge)
+and counting the Dice Throne playmats on a shelf. The three `✅` rows were
+already correct and are untouched.
+
+| | |
+|---|---|
+| ~~⏳ **`game_component` is filling — finish it**~~ ✅ **FINISHED — the cron did it unattended** | ⚠️ **Corrected 2026-09-05:** measured live — **1,462 components**, **142 of 143 eligible games checked**, **0** components still awaiting the second pass (`details_at IS NULL AND stale_at IS NULL`), last `component_check` written **2026-08-30 05:42 UTC** — i.e. the Sunday 05:41 UTC cron is alive and did exactly what this row said it would. The completeness page has had something to show for weeks. ~~Original: "Was 0 all day; the owner started the backfill 2026-08-08 and it is at **1,217 components / 100 games checked**. Roughly 7 more runs of `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, or the Sunday 05:41 UTC cron does the rest unattended. **Until it finishes, the completeness page reads 'Not checked yet' and the collapsible sections built today are invisible** — they are not broken, they have nothing to show"~~ |
+| **Accessory implies the game — a sweep worth doing** | Proved on Here to Slay: six accessories (Warriors & Druids ×3, Berserkers & Necromancers ×3) existed with no expansion row behind them, and both expansions were real. Now added as items **858** and **859**. You own **221 accessories against 186 expansions**, so this almost certainly holds on other lines. Banner Quest is the control case — accessory *and* expansion both present |
+| ✅ **The BGG audit is CLOSED** | All 806 rows audited and resolved. **`bgg_id` coverage went 197 → 232.** Every remaining row without one has a *recorded reason*, not a gap. The map is `scratchpad/bgg-audit-2026-08-08.tsv`; the decision sheet `scratchpad/bgg-audit-review.md` is **spent** — its "nothing has been applied" line is historical. Both are safe to delete once you trust the result |
+| ✅ **All five SUSPECT rows resolved** | 114 Deadpool (id is right; see [`archive/dice-throne-shape.md`](archive/dice-throne-shape.md) — the box owns the id; ⚠️ **corrected 2026-09-05**, this link read `dice-throne-shape.md` and pointed at `docs/dice-throne-shape.md`, which has not existed since the 2026-08-21 restructure) · 496 Yeti or Not (id is the game, our name says which version) · 801 Go Fish (the `Traditional` marker) · 56 and 68 (publisher-spelling noise). **Do not re-open these** |
+| ✅ **`copy.edition_id` stays null — settled, not a gap** | The owner, 2026-08-08: *"that'll probably be null forever, it's a hard thing to find and I don't super care to track it down."* 1,063 edition rows exist with 768 BGG version ids, so the catalog knows which printings **exist** and deliberately does not record which one is on the shelf. **Do not re-flag this as missing data.** Consequences, all fine: the cover picker is unaffected (it sets `thumbnail_url`, not `edition_id`), and it independently kills the "grab the closest edition" half of any BoardGameGeek sync — you cannot match a printing you never recorded. Under 1% of BGG users populate that field either |
+| ~~Excursion Tiles (117, 118)~~ ✅ **the edge EXISTS** | ⚠️ **Corrected 2026-09-05:** measured live — the `same_family` edge between 117 and 118 is present (**1** row matching either direction). ~~Original: "share a `series` but have **no `same_family` edge**, so the group card forms while neither item's page mentions the other. One row: `INSERT INTO item_relation (from_item_id,to_item_id,relation) VALUES (117,118,'same_family');`"~~ **Do not run that INSERT** — it would duplicate the edge |
+| ~~⚠️ Three orphaned non-base rows sitting as their own roots~~ ✅ **all three are nested** | ⚠️ **Corrected 2026-09-05:** measured live — `SELECT id,parent_item_id FROM item WHERE id IN (823,842,830)` returns **823 → 790**, **842 → 840**, **830 → 91**: exactly the three parents this row asked for, and **0** of them is a root. ~~Original: "823 Dark Moon: Shadow Corporation (`expansion`, wants nesting under 790), 842 Tiny Epic Dungeons Adventures: The Phantom Voyage (`expansion`, under 840), 830 Scales of Fate Metal Upgrade Kit (`accessory`, under 91)"~~ |
+| HELLDIVERS 2: Mystery Expansions (item 414) | rename from the box when the pledge ships; deliberately a placeholder. ⚠️ **Still true 2026-09-05** — the live row still reads `HELLDIVERS 2: Mystery Expansions`. Waiting on a pledge, not on anyone here |
+| Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md`. ⚠️ **Still open 2026-09-05** — no instrument reaches a shelf; this one is genuinely a person's errand |
+| ~~⚠️ Excursion Tiles 1 (117) says **2024**~~ ✅ **it says 2025** | ⚠️ **Corrected 2026-09-05:** measured live — `year_published` for item 117 is **2025**, the value this row argued for. Somebody applied it. ~~Original: "its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree"~~ (the campaign facts are kept because they are the evidence for the value that is now stored) |
 
 ---
 
@@ -601,11 +642,15 @@ seen the new line**. That is what the review above is for.
 ⚠️ **Corrected 2026-09-05 (docs audit).** The heading was a bare
 `## Notes from the 2026-08-09 session`, which reads exactly like a work item;
 the warning that it is not one was buried in the first line of the body. It is
-now in the heading. **The one sub-section that DOES hold live work is
-[*What still wants a person*](#what-still-wants-a-person)** — four of its rows
-were measured today and are finished; the rest is history. Also moved out on
-this pass: *Splitting a shelf photograph into pieces* (a measured, parked idea,
-not work in flight) now lives whole at
+now in the heading. ~~**The one sub-section that DOES hold live work is
+*What still wants a person*** — four of its rows were measured today and are
+finished; the rest is history.~~ ✅ **RESOLVED 2026-09-06 (W14-DOCS): that
+sub-section was MOVED OUT WHOLE** and is now the top-level
+[*☐ 🧑 What still wants a person*](#-what-still-wants-a-person--three-open-rows-for-the-owner-and-a-settled-record-beside-them)
+at the head of this file, with the open items. **So this container now holds no
+live work at all**, which is what its heading has claimed since 2026-09-05.
+Also moved out on an earlier pass: *Splitting a shelf photograph into pieces* (a
+measured, parked idea, not work in flight) now lives whole at
 [`info/future-plans.md`](info/future-plans.md).
 
 ⚠️ **This heading is a CONTAINER, not a work item.** The `###` sections below
@@ -889,29 +934,6 @@ is recorded in the section for each.
 | Items **858, 859** | Here to Slay: Warriors & Druids / Berserkers & Necromancers expansions, added `owned` — implied by accessories already held |
 | Item **277 deleted, merged into 833** | *Casting Shadows: Expansion Pack* was the campaign name for what retailed as **The Ice Storm Expansion**. Confirmed from the Kickstarter reward tier ("Kickstarter Exclusive Edition + Expansion" → "Casting Shadows Expansion Pack"), and a copy note from 08-06 had already recorded the same conclusion. The pledge provenance moved onto copy 808; Casting Shadows now has exactly two expansions, both linked |
 | **`bgg_id` 197 → 232** | 35 audited matches applied in two batches — 23 exact, then 12 near-matches after the owner checked each against its BoardGameGeek page |
-
-### What still wants a person
-
-🔬 **Re-measured against live D1 on 2026-09-05** (docs audit; read-only
-`wrangler d1 execute --remote`, no writes). **Four of these rows had already
-happened and the table did not know it** — they are struck through below with
-the number that settled each. What is genuinely left is **three** rows: the
-accessory-implies-the-game sweep, the HELLDIVERS rename (waiting on a pledge)
-and counting the Dice Throne playmats on a shelf. The three `✅` rows were
-already correct and are untouched.
-
-| | |
-|---|---|
-| ~~⏳ **`game_component` is filling — finish it**~~ ✅ **FINISHED — the cron did it unattended** | ⚠️ **Corrected 2026-09-05:** measured live — **1,462 components**, **142 of 143 eligible games checked**, **0** components still awaiting the second pass (`details_at IS NULL AND stale_at IS NULL`), last `component_check` written **2026-08-30 05:42 UTC** — i.e. the Sunday 05:41 UTC cron is alive and did exactly what this row said it would. The completeness page has had something to show for weeks. ~~Original: "Was 0 all day; the owner started the backfill 2026-08-08 and it is at **1,217 components / 100 games checked**. Roughly 7 more runs of `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, or the Sunday 05:41 UTC cron does the rest unattended. **Until it finishes, the completeness page reads 'Not checked yet' and the collapsible sections built today are invisible** — they are not broken, they have nothing to show"~~ |
-| **Accessory implies the game — a sweep worth doing** | Proved on Here to Slay: six accessories (Warriors & Druids ×3, Berserkers & Necromancers ×3) existed with no expansion row behind them, and both expansions were real. Now added as items **858** and **859**. You own **221 accessories against 186 expansions**, so this almost certainly holds on other lines. Banner Quest is the control case — accessory *and* expansion both present |
-| ✅ **The BGG audit is CLOSED** | All 806 rows audited and resolved. **`bgg_id` coverage went 197 → 232.** Every remaining row without one has a *recorded reason*, not a gap. The map is `scratchpad/bgg-audit-2026-08-08.tsv`; the decision sheet `scratchpad/bgg-audit-review.md` is **spent** — its "nothing has been applied" line is historical. Both are safe to delete once you trust the result |
-| ✅ **All five SUSPECT rows resolved** | 114 Deadpool (id is right; see [`archive/dice-throne-shape.md`](archive/dice-throne-shape.md) — the box owns the id; ⚠️ **corrected 2026-09-05**, this link read `dice-throne-shape.md` and pointed at `docs/dice-throne-shape.md`, which has not existed since the 2026-08-21 restructure) · 496 Yeti or Not (id is the game, our name says which version) · 801 Go Fish (the `Traditional` marker) · 56 and 68 (publisher-spelling noise). **Do not re-open these** |
-| ✅ **`copy.edition_id` stays null — settled, not a gap** | The owner, 2026-08-08: *"that'll probably be null forever, it's a hard thing to find and I don't super care to track it down."* 1,063 edition rows exist with 768 BGG version ids, so the catalog knows which printings **exist** and deliberately does not record which one is on the shelf. **Do not re-flag this as missing data.** Consequences, all fine: the cover picker is unaffected (it sets `thumbnail_url`, not `edition_id`), and it independently kills the "grab the closest edition" half of any BoardGameGeek sync — you cannot match a printing you never recorded. Under 1% of BGG users populate that field either |
-| ~~Excursion Tiles (117, 118)~~ ✅ **the edge EXISTS** | ⚠️ **Corrected 2026-09-05:** measured live — the `same_family` edge between 117 and 118 is present (**1** row matching either direction). ~~Original: "share a `series` but have **no `same_family` edge**, so the group card forms while neither item's page mentions the other. One row: `INSERT INTO item_relation (from_item_id,to_item_id,relation) VALUES (117,118,'same_family');`"~~ **Do not run that INSERT** — it would duplicate the edge |
-| ~~⚠️ Three orphaned non-base rows sitting as their own roots~~ ✅ **all three are nested** | ⚠️ **Corrected 2026-09-05:** measured live — `SELECT id,parent_item_id FROM item WHERE id IN (823,842,830)` returns **823 → 790**, **842 → 840**, **830 → 91**: exactly the three parents this row asked for, and **0** of them is a root. ~~Original: "823 Dark Moon: Shadow Corporation (`expansion`, wants nesting under 790), 842 Tiny Epic Dungeons Adventures: The Phantom Voyage (`expansion`, under 840), 830 Scales of Fate Metal Upgrade Kit (`accessory`, under 91)"~~ |
-| HELLDIVERS 2: Mystery Expansions (item 414) | rename from the box when the pledge ships; deliberately a placeholder. ⚠️ **Still true 2026-09-05** — the live row still reads `HELLDIVERS 2: Mystery Expansions`. Waiting on a pledge, not on anyone here |
-| Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md`. ⚠️ **Still open 2026-09-05** — no instrument reaches a shelf; this one is genuinely a person's errand |
-| ~~⚠️ Excursion Tiles 1 (117) says **2024**~~ ✅ **it says 2025** | ⚠️ **Corrected 2026-09-05:** measured live — `year_published` for item 117 is **2025**, the value this row argued for. Somebody applied it. ~~Original: "its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree"~~ (the campaign facts are kept because they are the evidence for the value that is now stored) |
 
 ### Login is now Google SSO — and the email PIN was deliberately kept
 
