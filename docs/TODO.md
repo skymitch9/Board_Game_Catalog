@@ -998,6 +998,18 @@ status code: the bundle `/assets/index-BB8CpqDk.js` is 200 and
 **byte-identical to the local build**, and carries today's strings
 (finding 19's *"a link must start with https://"*, finding 12's *"record is
 damaged"*). `/api/health` 200, `database:"up"`, `estate.mode:"enforce"`.
+🔬 **Finding 5 was measured on the LIVE CRON** — the one fix here whose point
+a unit test can only model. `wrangler tail` across the `*/30` tick at
+**04:30:45Z**, version `393a9b4f`:
+`cover check {"checked":23,"ok":23,"dead":0,"errors":0,"unchecked":0}`, with
+the invocation reporting `outcome: "ok"`, `exceptions: []`, `truncated:
+false`. **23** is the derived cap doing what the arithmetic says (it was 20),
+and 🔴 **the summary line existing at all is the proof that matters** — it is
+written after the probes, after the batched write and after the count, so the
+invocation reached its end rather than being terminated mid-run. That
+termination was the silent failure the finding was about, and it leaves
+nothing in a log to find.
+
 ⚠️ **Everything behind auth is unverified live** — no agent session holds a
 Firebase ID token.
 
