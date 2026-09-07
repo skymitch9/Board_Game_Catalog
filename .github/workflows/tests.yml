@@ -1,0 +1,116 @@
+name: Tests
+
+# ⚠️ THE NON-DEPLOYING TEST LANE. `deploy.yml` is **manual-dispatch-only** by
+# the owner's decision (its own header, and catalog-platform docs/TODO.md §1 —
+# do NOT add push triggers or schedules there), and this Worker has no dev lane:
+# a deploy goes straight to the live custom domain. So before this file there
+# was no way to get CI feedback on this repo without shipping a live deploy.
+#
+# Why it exists (added 2026-09-07): the estate testing audit
+# (catalog-platform/docs/archive/2026-09-07-testing-audit.md §4.3) measured that
+# this repo's last CI run of ANY kind was `32071175391` on 2026-08-17 — three
+# weeks in which every green tick came from a developer's own machine. Both
+# sibling repos already had this lane (`catalog-platform`'s tests.yml since
+# 2026-09-05, `audiobook_catalog`'s tests/js-tests/lint), which is what made it
+# a gap rather than a policy. This file is that workflow, adapted.
+#
+# ⚠️ NO SECRETS BELONG HERE, and none are needed. The suite is hermetic — no
+# Cloudflare token, no D1, no network. The `catalog-platform` checkout below
+# looks like it would need the `CATALOG_PLATFORM_TOKEN` PAT that `deploy.yml`
+# guards on; it does not, because **skymitch9/catalog-platform is PUBLIC**
+# (measured 2026-09-07: `gh repo view skymitch9/catalog-platform --json
+# visibility` → `PUBLIC`; deploy.yml's comment still says PRIVATE, verified
+# 2026-08-14, and that is now stale). The default GITHUB_TOKEN reads a public
+# repo, so `actions/checkout` needs no `token:` here. If that repo is ever made
+# private again this workflow starts failing at the checkout step — the fix is
+# a read-only PAT, and the failure is loud, which is the right way round.
+#
+# ⚠️ WHY THE SIBLING CHECKOUT IS NOT OPTIONAL. `pretest` runs
+# `sync-estate-auth.mjs`, which materialises catalog-platform's canonical
+# estate-auth module into `apps/worker/src/estate-auth/` — gitignored on
+# purpose, because two copies of an auth file provably drift
+# (estate-auth-design.md §1.1). That script FAILS the build when the platform
+# repo is missing, by design, and the suite would fail anyway: `middleware/
+# auth.ts` and `middleware/estate.ts` import the materialised module, so the
+# route and gate-wiring tests cannot even load without it. Unlike
+# catalog-platform's own tests.yml — whose sibling dependency skips loudly with
+# exit 0 — there is nothing to skip here.
+#
+# ⚠️ The WHOLE suite, never a per-target subset: `packages/` is shared by the
+# Worker and the web app, and a subset gate is exactly how a shared change
+# ships untested. `typecheck` runs too, because that is the pair `predeploy`
+# runs (`… && npm run typecheck && npm test`) and this lane exists to exercise
+# that same gate away from a live deploy.
+#
+# Expect KI-8 to stay true here: nothing under `scripts/` is type-checked
+# (docs/KNOWN_ISSUES.md — ACCEPTED). Its `scripts/test/*.test.mjs` cases DO run.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Lets deploy.yml reuse this exact job as its gate if it ever wants to,
+  # instead of duplicating the steps. Nothing calls it today (see
+  # docs/access/ci-tests.md §3 for why deploy.yml was left alone).
+  workflow_call:
+
+permissions:
+  contents: read
+
+# A newer push supersedes an older one; a PR's runs do not fight each other.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      # Explicit rather than relying on the ../catalog-platform sibling lookup,
+      # so a layout change fails with platform-repo.mjs's loud message instead
+      # of a confusing missing-module error. Same var deploy.yml sets.
+      CATALOG_PLATFORM_DIR: ${{ github.workspace }}/catalog-platform
+    defaults:
+      run:
+        working-directory: Board_Game_Catalog
+
+    steps:
+      # ---- Side-by-side checkouts: this repo + the platform repo ----
+      - name: Checkout Board_Game_Catalog
+        uses: actions/checkout@v5
+        with:
+          path: Board_Game_Catalog
+
+      # No `token:` — catalog-platform is public (see the header). Read-only.
+      - name: Checkout catalog-platform (build-time dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: skymitch9/catalog-platform
+          path: catalog-platform
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Same version deploy.yml uses; engines says >=20, 22 is the LTS.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Board_Game_Catalog/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # pretypecheck → sync-estate-{auth,search,theme}, then tsc --noEmit in
+      # every workspace. Runs first for the same reason predeploy runs it first:
+      # a type error is a cheaper failure to read than a test failure caused by
+      # one.
+      - name: Typecheck (all workspaces)
+        run: npm run typecheck
+
+      # pretest re-runs the same three sync scripts, then
+      # `tsx --test` over packages/**, apps/** and scripts/**.
+      - name: Run the full suite (root npm test)
+        run: npm test
+
+      - name: Summary
+        run: echo "::notice::Suite green at ${GITHUB_SHA} — typecheck and the full tsx suite, no deploy."
