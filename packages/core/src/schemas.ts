@@ -551,6 +551,46 @@ export interface ItemNode extends Item {
    * where it belongs.
    */
   matchedChildren?: MatchedChild[];
+  /**
+   * The family this line belongs to, when it belongs to one.
+   *
+   * Set only on a ROOT, and only by the list path — the same place
+   * `matchedChildren` is set, and for a related reason: it is a fact about
+   * where this tree sits among the others, not a column on the item.
+   *
+   * ⚠️ **Absent is the normal case**, and a row without it renders exactly as
+   * it always did. Membership is decided by the one rule in
+   * `packages/db/src/items.ts` (`ROOT_GROUP_CTE`) that `GroupCard` already
+   * folds on — including *"a grouping of one line is not a grouping"*, so a
+   * series only this box carries produces no family here either.
+   */
+  family?: ItemFamilyRef;
+}
+
+/**
+ * The family a row belongs to, as a row can afford to state it.
+ *
+ * A pointer, not a second summary: it names the group and says how big it is,
+ * and the numbers are the same two `CollectionGroup` reports. Anything more —
+ * the covers, the copy counts, the member names — is what opening the group
+ * itself is for, and `key` is the link that does that.
+ *
+ * ⚠️ **`lines` and `items` count the WHOLE family, not the filtered page.**
+ * `CollectionGroup`'s counts are reapplied through the query's filters, because
+ * a folded card stands in for what matched. This one is a fact about the
+ * catalog, stated on a row that is already showing, and its link clears the
+ * search — so counting only the matches would print a number the destination
+ * then contradicts.
+ */
+export interface ItemFamilyRef {
+  /** `series:Dice Throne` — the same key `CollectionGroup` uses, and the link. */
+  key: string;
+  axis: GroupAxis;
+  name: string;
+  /** Top-level lines in the family — 11, for Dice Throne. */
+  lines: number;
+  /** Rows across those lines' trees — 147, for Dice Throne. */
+  items: number;
 }
 
 /**

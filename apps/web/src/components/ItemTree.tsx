@@ -7,7 +7,8 @@ import {
   type Copy,
   type ItemNode,
 } from '@bgc/core';
-import { Link } from '../router';
+import { familyToShow } from '../lib/row-family';
+import { Link, groupPath } from '../router';
 import { Badge, Cover, DigitalTag, ParentLabel } from './ui';
 
 /**
@@ -197,10 +198,11 @@ function ChildRow({ node, depth }: { node: ItemNode; depth: number }) {
   );
 }
 
-export function ItemCard({ node }: { node: ItemNode }) {
+export function ItemCard({ node, activeGroup }: { node: ItemNode; activeGroup?: string }) {
   const stats = summarizeTree(node);
   const own = copySummary(node.copies);
   const brood = describeChildren(node);
+  const family = familyToShow(node, activeGroup);
 
   const [open, setOpen] = useState(
     () => openGroups.get(node.id) ?? brood.count <= AUTO_EXPAND_UP_TO,
@@ -234,11 +236,19 @@ export function ItemCard({ node }: { node: ItemNode }) {
         </span>
         <span className="item-badges">
           {/* Which ruleset this needs, for the things that do not carry their
-              own. Absent on every board game, which is most of the catalog. */}
-          {node.gameSystem && <Badge tone="lent">{node.gameSystem}</Badge>}
+              own. Absent on every board game, which is most of the catalog.
+
+              Dropped when the family chip below already names it: the chip is
+              the same word with the size of the family and a way into it, so
+              printing both is one fact wearing two badges. */}
+          {node.gameSystem && family?.name !== node.gameSystem && (
+            <Badge tone="lent">{node.gameSystem}</Badge>
+          )}
           {/* The line this box belongs to. Not a place in the tree — the tree
               is unchanged and this box is still its own root. */}
-          {node.series && <Badge tone="kind">{node.series}</Badge>}
+          {node.series && family?.name !== node.series && (
+            <Badge tone="kind">{node.series}</Badge>
+          )}
           {allDigital(node.copies) && <DigitalTag />}
           {/* An expansion sitting at the top level is not a game — it is one
               waiting for its game. Saying so is the difference between a
@@ -269,6 +279,31 @@ export function ItemCard({ node }: { node: ItemNode }) {
           {own.tone === null && <Badge tone="neutral">not catalogued</Badge>}
         </span>
       </Link>
+
+      {/* The family this box is one of, and the way into the rest of it.
+
+          Outside the head rather than among the badges beside the name, and
+          that is structural rather than aesthetic: the head is itself a link to
+          this game, and an anchor inside an anchor is not a link a browser or a
+          screen reader can offer twice. It wears the badge the series used to
+          wear, so the row gains a destination and no new furniture.
+
+          The whole row of eleven is one press away — the same destination
+          "Show these on their own" reaches from the group card, which is why
+          this is a filter and not a scroll. */}
+      {family && (
+        <p className="row-family">
+          <Link
+            to={groupPath(family.key)}
+            className={`badge badge-${family.axis === 'series' ? 'kind' : 'lent'} row-family__chip`}
+            ariaLabel={`Show the ${family.lines} lines of ${family.name}`}
+          >
+            {/* Two by construction — a grouping of one line is not a grouping
+                — but counted the way every other line on this page counts. */}
+            {family.name} · {family.lines} {family.lines === 1 ? 'line' : 'lines'}
+          </Link>
+        </p>
+      )}
 
       {/* Why this group is in the results at all. Searching "seafarers" and
           being handed "Catan" is correct — that is where Seafarers is filed —

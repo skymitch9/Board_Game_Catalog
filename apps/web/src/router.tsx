@@ -123,6 +123,32 @@ export function collectionPath(f: CollectionFilters): string {
   return qs ? `/?${qs}` : '/';
 }
 
+/**
+ * The collection opened on one family — where a row's family chip goes.
+ *
+ * Through `collectionPath` rather than a hand-written `/?group=…`, so the
+ * parameter name and its escaping keep the one definition they already have:
+ * `series:D&D 5e (2014)` carries an ampersand, and a template string would
+ * hand the router a value it then parses as a second parameter.
+ *
+ * Every other filter is left at its default deliberately — the chip is
+ * "show me this family", not "narrow what I am already looking at". A search
+ * term carried across would open the family already filtered to the word that
+ * happened to find one of its boxes.
+ */
+export function groupPath(key: string): string {
+  return collectionPath({
+    q: '',
+    status: '',
+    kind: '',
+    uncatalogued: false,
+    duplicates: false,
+    group: key,
+    collapse: true,
+    page: 1,
+  });
+}
+
 function parse(pathname: string, search: string): Route {
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
 
@@ -216,17 +242,26 @@ export function Link({
   children,
   className,
   style,
+  ariaLabel,
 }: {
   to: string;
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  /**
+   * A fuller sentence for a link whose visible text is a chip.
+   *
+   * Only where the two genuinely differ — a label repeating the text is one
+   * more string to keep in step and nothing extra to hear.
+   */
+  ariaLabel?: string;
 }) {
   return (
     <a
       href={to}
       className={className}
       style={style}
+      aria-label={ariaLabel}
       onClick={(e) => {
         // Let modified clicks (new tab, download) behave natively.
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;

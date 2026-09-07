@@ -387,7 +387,10 @@ export function CollectionPage({ me, filters }: { me: MeResponse; filters: Colle
                   onOpen={() => openGroup(entry.key)}
                 />
               ) : (
-                <ItemCard key={entry.key} node={entry.tree} />
+                // `group` rather than `chosen`: the card compares against the
+                // family key the URL carries (`series:Dice Throne`), which is
+                // the same string its chip links to.
+                <ItemCard key={entry.key} node={entry.tree} activeGroup={group} />
               ),
             )}
           </div>

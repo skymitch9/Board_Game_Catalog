@@ -7,6 +7,7 @@ import type {
   GroupAxis,
   Item,
   ItemDetail,
+  ItemFamilyRef,
   ItemNode,
   ItemPage,
   ItemQuery,
@@ -294,6 +295,73 @@ root_group AS (
 ) `;
 
 /**
+ * The family a listed row belongs to — the SAME membership rule, one query later.
+ *
+ * ⚠️ **`ROOT_GROUP_CTE` above is the only definition of "these lines belong
+ * together", and this reuses it rather than restating it.** A second rule here
+ * would drift the first time one of them learned something the other did not,
+ * and the row would then claim a family the group card refuses to fold — which
+ * is the disagreement a reader cannot resolve without reading the SQL.
+ *
+ * It therefore inherits every part of the rule, including the one that is easy
+ * to forget: **a grouping of one line is not a grouping**. A series only this
+ * box carries never reaches `root_group`, so the row gets no family and renders
+ * exactly as it did before this existed.
+ *
+ * `lines` and `items` count the whole family and are NOT filtered by the query,
+ * unlike `summariseGroups` — see `ItemFamilyRef`. Both are computed here rather
+ * than per row, so a page of 25 costs one read whatever it holds.
+ */
+const ROW_FAMILY_SQL = `${ROOT_GROUP_CTE}, family_lines AS (
+  SELECT axis, val, COUNT(*) AS lines FROM root_group GROUP BY axis, val
+),
+family_rows AS (
+  SELECT m.axis, m.val, COUNT(*) AS items
+    FROM root_group m
+    JOIN item x ON x.root_game_id = m.root_id
+   GROUP BY m.axis, m.val
+)
+SELECT g.root_id, g.axis, g.val, l.lines, COALESCE(r.items, 0) AS items
+  FROM root_group g
+  JOIN family_lines l ON l.axis = g.axis AND l.val = g.val
+  LEFT JOIN family_rows r ON r.axis = g.axis AND r.val = g.val`;
+
+/**
+ * The family of each of these roots, for the rows about to be rendered.
+ *
+ * Exported for its own test (`packages/db/test/row-family.test.ts`), which runs
+ * this SQL against a real SQLite with every migration applied — the rule it has
+ * to pin is a claim about which lines fold together, and that is not a claim
+ * worth trusting to a reading of the query.
+ *
+ * A root with no series and no system anywhere in its tree simply has no entry
+ * in the map, which is how the caller says "no family" without a null.
+ */
+export async function familiesForRoots(
+  db: D1Database,
+  rootIds: number[],
+): Promise<Map<number, ItemFamilyRef>> {
+  if (rootIds.length === 0) return new Map();
+  const holes = rootIds.map(() => '?').join(',');
+  const { results } = await db
+    .prepare(`${ROW_FAMILY_SQL} WHERE g.root_id IN (${holes})`)
+    .bind(...rootIds)
+    .all<{ root_id: number; axis: string; val: string; lines: number; items: number }>();
+
+  const families = new Map<number, ItemFamilyRef>();
+  for (const row of results) {
+    families.set(row.root_id, {
+      key: `${row.axis}:${row.val}`,
+      axis: row.axis as GroupAxis,
+      name: row.val,
+      lines: row.lines,
+      items: row.items,
+    });
+  }
+  return families;
+}
+
+/**
  * The identity of one entry on the collection page, as SQL.
  *
  * `root:42` for an ordinary game, `series:Dice Throne` or `system:D&D 5e (2014)`
@@ -528,12 +596,28 @@ export async function listItemTrees(db: D1Database, query: ItemQuery): Promise<I
   const rootKeys = keys.filter((k) => k.startsWith('root:'));
   const groupKeys = keys.filter((k) => !k.startsWith('root:'));
 
-  const [trees, groups] = await Promise.all([
-    fetchTrees(db, query, rootKeys.map((k) => Number(k.slice(5)))),
+  const rootIds = rootKeys.map((k) => Number(k.slice(5)));
+
+  const [trees, groups, families] = await Promise.all([
+    fetchTrees(db, query, rootIds),
     groupKeys.length > 0 ? summariseGroups(db, query, groupKeys) : Promise.resolve(new Map()),
+    // Skipped entirely on a grouped page, and that is not only an economy: a
+    // root still standing as its own tree there is one `root_group` never
+    // matched, so the answer would be empty anyway. The read exists for the
+    // pages where folding is off — a search, or a group already opened.
+    grouped
+      ? Promise.resolve(new Map<number, ItemFamilyRef>())
+      : familiesForRoots(db, rootIds),
   ]);
 
   const treeById = new Map(trees.map((t) => [t.id, t]));
+  // On the tree the page renders, not on a copy: `fetchTrees` returns the roots
+  // themselves, and the badge is a fact about the root rather than about any
+  // row under it.
+  for (const tree of trees) {
+    const family = families.get(tree.id);
+    if (family) tree.family = family;
+  }
 
   // Rebuilt in the order the keys came back, so groups sit among the trees
   // where their members were rather than being bolted on at either end.

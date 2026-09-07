@@ -770,6 +770,27 @@ textarea { resize: vertical; }
   .children-toggle__caret { transition: none; }
 }
 
+/*
+  The family a row is one of, and the way into the rest of it.
+
+  A strip of its own under the head rather than a badge beside the name,
+  because the head is itself a link to this game and an anchor cannot hold a
+  second one. It borrows `.badge` outright — the same ink border, the same
+  caption face, the same colours the inert series badge wore before it — so the
+  row gains a destination and no new furniture.
+
+  The focus ring is stated here: the chip sits on the card's own background
+  rather than inside a full-width control, so it wants a ring drawn outside its
+  border rather than the inset one `.children-toggle` uses.
+*/
+.row-family {
+  margin: 0; padding: 0.35rem 1rem;
+  border-top: 1px solid var(--line);
+}
+.row-family__chip { text-decoration: none; }
+.row-family__chip:hover { text-decoration: none; filter: brightness(1.06); }
+.row-family__chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* Why a group is in the results when the base game is not what you searched. */
 .match-why {
   margin: 0; padding: 0.35rem 1rem;
