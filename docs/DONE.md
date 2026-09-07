@@ -1,7 +1,10 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-07** — the fewer-grey-paragraphs pass (agent
+> Last updated: **2026-09-07** — the fewer-grey-paragraphs pass, part two
+> (agent W17-ES-GREY): the SHARED `<estate-search>` component, deployed as
+> `79360f3a`, no commit in this repo because the copy is a synced artifact.
+> Earlier the same day, part one (agent
 > W15-GREY): 41 audit items applied across `apps/web/src`, deployed as
 > `70dca408`. Before that, 2026-09-06: KI-7 closed (agent W9-KI7), the
 > last-owner
@@ -19,6 +22,61 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ DEPLOYED 2026-09-07 (agent W17-ES-GREY) — fewer grey paragraphs, part two: the SHARED `<estate-search>` component
+
+> **Tracked in `catalog-platform/docs/TODO.md`** while it was in flight — that
+> repo owns the canonical file, so the item lived there rather than being
+> duplicated into four work logs. The cross-site tally is
+> `bookbuddy/library_catalog/docs/TODO.md`'s grey-paragraph section.
+
+**Why it was a separate pass.** The four-site audit
+(`bookbuddy/library_catalog/docs/archive/2026-09-07-grey-paragraph-audit.md`,
+NOT VERIFIED section) deliberately EXCLUDED `estate-search.js` to avoid
+quadruple-counting it: **one change there lands on all four sites at once.**
+
+🔴 **NOTHING WAS COMMITTED IN THIS REPO, and that is correct.**
+`apps/web/public/estate/estate-search.js` is a **gitignored build artifact**
+that `scripts/sync-estate-search.mjs` rewrites on
+`pretypecheck`/`pretest`/`prebuild`/`predeploy` from
+`catalog-platform/sites/heygabi-home/public/assets/estate-search.js`. A local
+edit here is silently overwritten by the next build. The canonical edit is
+**`catalog-platform` `09d3d9a`**; this deploy is **`676bcc02`** — W15-GREY's own
+commit — carrying the newly synced copy.
+
+**What changed in the component**
+
+| | |
+|---|---|
+| **CUT** | `DEFAULT_HINT` is now empty. It was the same sentence as audit items **101/178**, which each consumer page had already been made to suppress with `hint=""` — while the DEFAULT went on shipping to any site that took the defaults. |
+| **CUT** | The hint element hides on empty **TEXT**, not on an explicit `hint=""`. That fallback-when-absent behaviour is the only reason the consumers needed the attribute. |
+| **CUT** | The three search-result group headings lose their em-dashed how-it-was-built tails. `_renderUniverse` already used the bare nouns, so the two renderers now agree. |
+| **CUT** | The empty-result status loses the clause naming which fields are searched. |
+| **CUT** | The universe sign-in invitation loses its leading why-clause. |
+| **SHORTENED** | `_caveatLine` keeps the load-bearing fact — a hit is presence in a catalog, **not** ownership — and drops the how-to sentence. It was a **fifth** copy of item **187**, whose single home is the apex `/series` footer. |
+| **SHORTENED** | The registry-outage caveat becomes one sentence; both facts survive, including the phrase `predeploy.checks.json` pins on the live host. |
+| **KEPT** | Every error and refusal message, every state word, button label and tooltip. Nobody sees a bare status. |
+
+**Deploy.** `79360f3a-3057-42ea-ae3b-0f501b9af26d`, holder `W17-ES-GREY`,
+rollback **`70dca408-e0ef-4d2b-9ac1-ff51d0c01f1d`** (W15-GREY's site pass). The
+full `predeploy` chain ran — check-clean, deploy-guard, typecheck, `npm test`,
+all green. No migration: this is copy only. Line in
+[`deploys.log`](deploys.log).
+
+**MEASURED LIVE**, cache-busted, `https://boardgames.heygabi.ai/estate/estate-search.js`
+**200**: the cut hint sentence **0**, `owned-versus-wanted` **0**,
+`same work, any format` **0**, `couple more letters` **0**,
+`spans every shelf` **0**; the shortened caveat **1**,
+`not a permissions problem` **1**. Below its own 5-line GENERATED banner the
+served file is **byte-identical** to the apex's copy.
+
+⚠️ **NOT VERIFIED: nobody has looked at a rendered page.** No agent session has
+a browser, so whether any layout leaned on a removed clause for spacing is
+unmeasured — the same limit the four site passes recorded.
+🔗 Owner: <https://boardgames.heygabi.ai/> — the estate search box, and any
+result list under it.
 
 ---
 

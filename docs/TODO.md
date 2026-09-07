@@ -12,6 +12,7 @@ in full:
 |---|---|
 | 🔴 The **billing shadow flip** — the three-file change is written out in its own section below, to the keystroke | 🧑 **owner only**: it edits `apps/worker/wrangler.toml`, which agents are refused |
 | 🧑 One eyeball of `/api/export.json` as a contributor — confirm no `email` field | owner |
+| 🧑 **One eyeball of the estate search box** at <https://boardgames.heygabi.ai/> — the shared `<estate-search>` component lost its default hint line and four other explainers on 2026-09-07 (agent W17-ES-GREY, deploy `79360f3a`; the whole entry is in [`DONE.md`](DONE.md)). ⚠️ **Nothing rendered was measured** — no agent session has a browser, so a layout leaning on a removed line for spacing would not have been caught. Type two letters and look at the box, then at a result list | owner |
 | 🧑 Three owner reviews on his phone — the three `☐ owner review` headings below: the scan target, the second-instance machinery, the family score | owner |
 | 🧑 Three rows still open in ***What still wants a person***, the first section below — the accessory-implies-the-game sweep, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). Counted 2026-09-06; the other rows in that table are settled records. ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file** | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
