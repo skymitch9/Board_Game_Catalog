@@ -787,6 +787,17 @@ export interface CoverCheckRun {
   errors: number;
   /** Cover URLs still never probed, after this run. */
   unchecked: number;
+  /**
+   * Set only when a caller asked for more URLs than one Worker invocation can
+   * pay for, and got the ceiling instead.
+   *
+   * ⚠️ It exists because the alternative is silence. Exceeding the subrequest
+   * budget TERMINATES the invocation rather than throwing — no exception, no
+   * log line — so a run that was quietly truncated looks exactly like a run
+   * that found nothing. That was the 2026-08 audit's finding 5, and finding 1
+   * before it in the details sweep. Absent on every normal run.
+   */
+  capped?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -62,14 +62,17 @@ export interface CoverProbeResult {
 }
 
 /**
- * Record one probe.
+ * The one statement that records a probe — prepared, not run.
+ *
+ * Split out so a caller can choose between running one and `batch()`ing many
+ * without two copies of this SQL drifting apart.
  *
  * The failure counter is maintained in SQL rather than read-modify-written in
  * JS, so two runs overlapping cannot both read 1 and both write 2.
  */
-export async function recordCoverCheck(db: D1Database, r: CoverProbeResult): Promise<void> {
+function coverCheckStatement(db: D1Database, r: CoverProbeResult): D1PreparedStatement {
   const ok = r.outcome === 'ok' ? 1 : 0;
-  await db
+  return db
     .prepare(
       `INSERT INTO cover_check
               (url, last_checked_at, status_code, ok, outcome, consecutive_failures, last_error)
@@ -84,8 +87,38 @@ export async function recordCoverCheck(db: D1Database, r: CoverProbeResult): Pro
                                           ELSE cover_check.consecutive_failures + 1 END,
               last_error           = ?5`,
     )
-    .bind(r.url, r.statusCode, ok, r.outcome, r.error)
-    .run();
+    .bind(r.url, r.statusCode, ok, r.outcome, r.error);
+}
+
+/** Record one probe. */
+export async function recordCoverCheck(db: D1Database, r: CoverProbeResult): Promise<void> {
+  await coverCheckStatement(db, r).run();
+}
+
+/**
+ * Record a whole run's probes in **one** D1 call.
+ *
+ * 🔴 This is a SUBREQUEST fix, not a speed one. A Worker gets 50 subrequests
+ * per invocation on the free plan and every D1 statement spends one; a cover
+ * run that wrote its verdicts in a loop spent one per URL, which on top of the
+ * probes themselves put the worst case at ~62 against that ceiling (the
+ * 2026-08 audit's finding 5). ⚠️ **Going over TERMINATES the invocation rather
+ * than throwing**, so the tail of a run — the writes, i.e. the entire point of
+ * having probed anything — vanished with nothing logged.
+ *
+ * `db.batch()` sends all of them as a single call, so the write side of a run
+ * costs **1** whatever the batch size is. That is what lets
+ * `apps/worker/src/lib/cover-check.ts` derive its `COVER_BATCH` from the fetch
+ * budget alone.
+ *
+ * The statements share one implicit transaction, which is also what we want:
+ * a run's verdicts are one fact about one moment.
+ *
+ * An empty array is a no-op — `batch([])` is not worth finding out about.
+ */
+export async function recordCoverChecks(db: D1Database, rs: CoverProbeResult[]): Promise<void> {
+  if (rs.length === 0) return;
+  await db.batch(rs.map((r) => coverCheckStatement(db, r)));
 }
 
 /** Cover URLs that have never been probed. The run summary's "still to go". */

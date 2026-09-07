@@ -129,14 +129,25 @@ describe('🔴 running a check is a WRITE — editCatalog, on top of the blanket
 });
 
 describe('the limit is CAPPED, not merely defaulted', () => {
-  it(`?limit above ${COVER_BATCH * 2} is refused rather than clamped`, async () => {
+  it(`?limit above ${COVER_BATCH} is refused rather than clamped`, async () => {
     const db = stubDb();
-    const res = await call('owner', 'POST', `/api/covers/check?limit=${COVER_BATCH * 2 + 1}`, envWith(db));
+    const res = await call('owner', 'POST', `/api/covers/check?limit=${COVER_BATCH + 1}`, envWith(db));
     assert.equal(res.status, 400);
-    const body = (await res.json()) as { error?: string; detail?: unknown };
+    const body = (await res.json()) as { error?: string; detail?: unknown; issues?: unknown };
     assert.equal(body.error, 'bad_request');
-    assert.ok(Array.isArray(body.detail));
+    assert.ok(Array.isArray(body.issues));
     assert.deepEqual(db._sql, [], 'the subrequest ceiling does not care that the request was deliberate');
+  });
+
+  it('🔴 the refusal is a SENTENCE, not a zod dump — what happened, what it needs', async () => {
+    // The estate rule: a person never sees a bare status or a raw error body.
+    // This route's 400 used to be `detail: [ …zod issues… ]` and nothing else.
+    const res = await call('owner', 'POST', `/api/covers/check?limit=${COVER_BATCH + 1}`);
+    const body = (await res.json()) as { detail?: string };
+    assert.equal(typeof body.detail, 'string');
+    assert.match(body.detail ?? '', new RegExp(`\\b1 and ${COVER_BATCH}\\b`), 'names the range');
+    assert.match(body.detail ?? '', /subrequest budget/i, 'says WHY there is a ceiling');
+    assert.match(body.detail ?? '', /run it twice/i, 'says how to get what you wanted');
   });
 
   it('?limit=0 is refused too — a check of nothing is a mistake, not a no-op', async () => {
@@ -144,9 +155,24 @@ describe('the limit is CAPPED, not merely defaulted', () => {
     assert.equal(res.status, 400);
   });
 
-  it(`?limit exactly at the cap (${COVER_BATCH * 2}) is allowed`, async () => {
-    const res = await call('owner', 'POST', `/api/covers/check?limit=${COVER_BATCH * 2}`);
+  it(`?limit exactly at the cap (${COVER_BATCH}) is allowed`, async () => {
+    const res = await call('owner', 'POST', `/api/covers/check?limit=${COVER_BATCH}`);
     assert.equal(res.status, 200);
+  });
+
+  it('🔴 the ROUTE cap is the invocation budget, not a multiple of it', async () => {
+    // Finding 5's worse half: the schema allowed `COVER_BATCH * 2`, i.e. a run
+    // costing twice what one invocation can pay for — and a forced run is the
+    // one somebody is watching. The assertion is the arithmetic, so it survives
+    // whoever edits the numbers.
+    const { SUBREQUEST_CAP, SUBREQUESTS_PER_URL, SUBREQUEST_RESERVE } =
+      await import('../lib/cover-check.js');
+    const worstCase = COVER_BATCH * SUBREQUESTS_PER_URL + SUBREQUEST_RESERVE;
+    assert.ok(
+      worstCase <= SUBREQUEST_CAP,
+      `the largest run this route will accept costs ${worstCase} subrequests against a ` +
+        `ceiling of ${SUBREQUEST_CAP}; over it the invocation is terminated mid-run`,
+    );
   });
 
   it('a non-numeric limit is refused rather than coerced to the default', async () => {

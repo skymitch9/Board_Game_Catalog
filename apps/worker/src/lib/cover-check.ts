@@ -1,7 +1,7 @@
 import {
   countUncheckedCovers,
   listCoverUrlsToCheck,
-  recordCoverCheck,
+  recordCoverChecks,
   type CoverProbeResult,
 } from '@bgc/db';
 import type { CoverCheckRun, CoverOutcome } from '@bgc/core';
@@ -21,16 +21,62 @@ import type { CoverCheckRun, CoverOutcome } from '@bgc/core';
  */
 
 /**
- * URLs probed per invocation.
+ * A Worker gets 50 subrequests per invocation on the free plan, and **every D1
+ * call counts alongside every fetch**. ⚠️ Exceeding it TERMINATES the
+ * invocation rather than throwing — no exception, no `catch`, no log line —
+ * which is why this number is written down rather than assumed.
  *
- * A Worker gets a bounded number of subrequests per invocation (50 on the free
- * plan), and a URL can cost two when HEAD is refused and the ranged GET has to
- * run. Twenty keeps the worst case at forty and leaves headroom for the D1
- * calls. The catalog is covered by rotation, not by one big run.
+ * The same constant, for the same reason, is in `lib/details-sweep.ts`.
  */
-export const COVER_BATCH = 20;
+export const SUBREQUEST_CAP = 50;
 
-/** Long enough for a slow CDN, short enough that 20 of them fit in a run. */
+/**
+ * What one URL costs: a HEAD, plus a ranged GET when the host refuses HEAD
+ * (403/405/501). See `probe()` — the second call is the whole reason this is 2
+ * and not 1, and it is not rare: imgix-style resizers do it routinely.
+ */
+export const SUBREQUESTS_PER_URL = 2;
+
+/**
+ * What a run spends **outside** the probe loop, counted call by call
+ * (2026-08 audit finding 5, re-counted against the code 2026-09-06):
+ *
+ * | Step | Subrequests |
+ * |---|---|
+ * | `listCoverUrlsToCheck` | 1 |
+ * | `recordCoverChecks` — one `db.batch()` for the whole run | 1 |
+ * | `countUncheckedCovers` | 1 |
+ * | slack | 1 |
+ * | **total** | **4** |
+ *
+ * 🔴 **The middle row is the fix.** Until 2026-09-06 the verdicts were written
+ * in a loop — one D1 subrequest per URL — so this "reserve" was not a constant
+ * at all, it grew with the batch size: 1 + 20 + 1 = 22, and the old comment
+ * over `COVER_BATCH` budgeted only the fetches and called it "headroom for the
+ * D1 calls". Worst case was 40 + 22 = 62 against a ceiling of 50. Latent only
+ * because `cf.geekdo-images.com` answers HEAD 2xx, which kept the real cost
+ * near 42.
+ *
+ * ⚠️ The route's own `coverHealth()` read is deliberately NOT in here: it runs
+ * after `runCoverCheck` returns but inside the same invocation, and it is what
+ * the slack row is for.
+ */
+export const SUBREQUEST_RESERVE = 4;
+
+/**
+ * URLs probed per invocation — **derived, not chosen**.
+ *
+ * floor((50 − 4) / 2) = **23**. The catalog is covered by rotation, not by one
+ * big run, so this is a per-tick slice rather than a target.
+ *
+ * ⚠️ **If you want more URLs per tick, this number is not the lever.** It is
+ * `SUBREQUESTS_PER_URL` (drop the ranged-GET fallback, and lose the hosts that
+ * refuse HEAD) or a second cron so the URLs do not share an invocation.
+ * Raising it by hand is a lie you would have to write down here.
+ */
+export const COVER_BATCH = Math.floor((SUBREQUEST_CAP - SUBREQUEST_RESERVE) / SUBREQUESTS_PER_URL);
+
+/** Long enough for a slow CDN, short enough that a full batch fits in a run. */
 const TIMEOUT_MS = 8000;
 
 /** How many probes run at once. Politeness, and it keeps the run under a minute. */
@@ -146,15 +192,20 @@ async function pool<T, R>(items: T[], limit: number, worker: (item: T) => Promis
  * scheduled one works.
  */
 export async function runCoverCheck(db: D1Database, limit = COVER_BATCH): Promise<CoverCheckRun> {
-  const urls = await listCoverUrlsToCheck(db, limit);
+  // ⚠️ The parameter is a convenience for a smaller slice and for tests; it is
+  // NOT a way past the subrequest ceiling. A caller asking for more than one
+  // invocation can pay for gets the ceiling and a line saying so, because the
+  // alternative is an invocation terminated mid-run with nothing written
+  // anywhere — the audit's finding 5, and the reason `capped` exists.
+  const capped = Math.min(limit, COVER_BATCH);
+
+  const urls = await listCoverUrlsToCheck(db, capped);
   const results = await pool(urls, CONCURRENCY, probe);
 
-  // Written after all the fetching rather than interleaved: D1 writes are cheap
-  // and sequential here, and a batch of them is not worth racing against the
-  // probes it describes.
-  for (const result of results) {
-    await recordCoverCheck(db, result);
-  }
+  // Written after all the fetching rather than interleaved, and in ONE `batch`
+  // rather than a loop: the loop spent a subrequest per URL, which is what put
+  // this run over the ceiling. See `recordCoverChecks`.
+  await recordCoverChecks(db, results);
 
   return {
     checked: results.length,
@@ -162,5 +213,8 @@ export async function runCoverCheck(db: D1Database, limit = COVER_BATCH): Promis
     dead: results.filter((r) => r.outcome === 'dead').length,
     errors: results.filter((r) => r.outcome === 'error').length,
     unchecked: await countUncheckedCovers(db),
+    ...(capped < limit
+      ? { capped: `limit ${limit} capped to ${capped} by the subrequest budget` }
+      : {}),
   };
 }
