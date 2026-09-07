@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import { CAPABILITY_MATRIX } from './capabilities.js';
-import { ROLES, type Role } from './constants.js';
+import { ROLES, SOURCE_TIERS, type Role, type SourceTier } from './constants.js';
 
 export * from './constants.js';
 export * from './details.js';
@@ -46,17 +46,22 @@ export function capabilitiesFor(role: Role): Capability[] {
   return (Object.keys(CAPABILITY_MATRIX) as Capability[]).filter((c) => can(role, c));
 }
 
-export function tierRank(tier: import('./constants.js').SourceTier): number {
-  return (
-    ['official', 'crowdfunding', 'retail', 'community'] as readonly string[]
-  ).indexOf(tier);
+/**
+ * Where a source sits in the research priority order. Lower wins.
+ *
+ * ⚠️ **`SOURCE_TIERS` is the one definition, and this reads it.** It used to
+ * rebuild the same order as an inline array literal cast to `readonly string[]`
+ * — and the cast was the dangerous half, because it stripped the type safety
+ * that would otherwise have caught a renamed tier. Reorder the constant and
+ * `outranks()` would have gone on resolving field conflicts by the old
+ * priority, with no error anywhere. 2026-08 audit, finding 10.
+ */
+export function tierRank(tier: SourceTier): number {
+  return SOURCE_TIERS.indexOf(tier);
 }
 
 /** True when `a` should beat `b` on a conflicting claim about the same field. */
-export function outranks(
-  a: import('./constants.js').SourceTier,
-  b: import('./constants.js').SourceTier,
-): boolean {
+export function outranks(a: SourceTier, b: SourceTier): boolean {
   return tierRank(a) < tierRank(b);
 }
 

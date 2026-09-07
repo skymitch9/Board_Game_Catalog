@@ -10,6 +10,7 @@ import {
   DISPOSALS,
   DISPOSED_STATUS,
   ITEM_KINDS,
+  OWNED_COPY_STATUSES,
   RATING_MAX,
   RATING_MIN,
   RATING_STEP,
@@ -902,10 +903,22 @@ export interface RelatedItemRef {
   outgoing: boolean;
 }
 
-/** How many of this item we hold, counting quantities across all its copies. */
+/**
+ * How many of this item we hold, counting quantities across all its copies.
+ *
+ * ⚠️ **"Held" is `OWNED_COPY_STATUSES`, and only that.** This used to write the
+ * rule out by hand as `status === 'owned' || status === 'lent'`, which gave the
+ * one rule two definitions — and the constant's own header warns that adding a
+ * held-like status "in eight places… any miss is silent". The miss here was the
+ * expensive kind: every SQL consumer counts through `statusList(
+ * OWNED_COPY_STATUSES)`, so a new status would have been counted by the
+ * database and NOT by the collapsed base-game card, and the two numbers would
+ * simply have disagreed on screen with nothing failing. 2026-08 audit,
+ * finding 9.
+ */
 export function ownedCount(copies: Copy[]): number {
   return copies
-    .filter((c) => c.status === 'owned' || c.status === 'lent')
+    .filter((c) => OWNED_COPY_STATUSES.includes(c.status))
     .reduce((sum, c) => sum + (c.quantity || 1), 0);
 }
 
