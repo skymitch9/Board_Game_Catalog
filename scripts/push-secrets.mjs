@@ -70,6 +70,7 @@ import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { classifyWranglerExit } from './lib/wrangler-exit.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEV_VARS = join(root, 'apps', 'worker', '.dev.vars');
@@ -369,21 +370,52 @@ if (process.argv.includes('--dry')) {
 // command line, a process listing, or shell history.
 const WRANGLER = join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 
+// ⚠️ PIPED, not inherited, so this process can READ what wrangler said — which
+// is the gotcha's own advice ("read the output, not the exit code") and what
+// `classifyWranglerExit` needs. Every chunk is written straight through, so a
+// person watching sees exactly what they saw before; the buffer is a copy.
+// ⚠️ Secrets still never appear here: they go up over stdin, and wrangler's
+// output names keys, not values.
 const child = spawn(
   process.execPath,
   [WRANGLER, 'secret', 'bulk', '--config', CONFIG, ...(instance ? ['--env', instance] : [])],
-  { stdio: ['pipe', 'inherit', 'inherit'] },
+  { stdio: ['pipe', 'pipe', 'pipe'] },
 );
+
+let transcript = '';
+for (const [stream, out] of [
+  [child.stdout, process.stdout],
+  [child.stderr, process.stderr],
+]) {
+  stream.on('data', (chunk) => {
+    transcript += chunk.toString();
+    out.write(chunk);
+  });
+}
 
 child.stdin.end(JSON.stringify(payload));
 child.on('exit', (code) => {
-  // wrangler on Windows sometimes prints success then exits non-zero (a libuv
-  // teardown quirk), so report rather than trusting the code blindly.
+  /*
+    🔴 This used to be `process.exit(0)` unconditionally — including in the
+    branch that had just printed "wrangler exited N".
+
+    The exit(0) was a deliberate mitigation for the Windows quirk where wrangler
+    prints a clean success and then exits non-zero on a libuv teardown. But it
+    forgave EVERY non-zero exit, so a genuine failure — bad credentials, a
+    Worker that does not exist, a rejected payload — was reported to any `&&`
+    chain or CI as a successful secret push. Silently, and in the direction that
+    costs a day: you believe production has been rotated. 2026-08 audit,
+    finding 21.
+
+    `classifyWranglerExit` keeps the two apart by reading the OUTPUT, which is
+    what the gotcha said to do all along.
+  */
+  const verdict = classifyWranglerExit({ code, output: transcript });
   console.log(
-    code === 0
-      ? `\nPushed ${names.length} secret${names.length === 1 ? '' : 's'}.`
-      : `\nwrangler exited ${code} — read the output above before assuming it failed.`,
+    verdict.ok
+      ? `\nPushed ${names.length} secret${names.length === 1 ? '' : 's'}. (${verdict.reason})`
+      : `\nPUSH FAILED — ${verdict.reason}`,
   );
-  process.exit(0);
+  process.exit(verdict.exitCode);
 });
 }
