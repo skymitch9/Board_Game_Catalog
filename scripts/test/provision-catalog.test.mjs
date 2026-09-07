@@ -921,8 +921,86 @@ describe('--dry against an accepted games fixture prints the WHOLE plan', () => 
     assert.match(text, /WHAT THE REGISTRY ROW \(step 12\) ALREADY DOES/);
     assert.match(text, /api\/catalogs/);
     assert.match(text, /10 minutes/);
-    assert.match(text, /admin's CATALOGS array stays hand-kept/);
+    // ⚠️ UPDATED 2026-09-06. This asserted /admin's CATALOGS array "stays
+    // hand-kept", which stopped being true the hour it became GENERATED from
+    // packages/estate-auth/src/visibility.ts. The assertion going red is the
+    // guard working: a runbook telling somebody to hand-edit a generated file
+    // sends them to a change the next `npm test` rejects. What must NOT change
+    // is the POSTURE — still not a registry consumer — and that is what is
+    // asserted now.
+    assert.match(text, /admin's CATALOGS is NOT a registry consumer/);
+    assert.match(text, /GENERATED from the same/);
     assert.match(text, /will not GRADE this catalog's index freshness/);
+  });
+
+  /* ────────────────────────────────────────────────────────────────────────
+   * ⚠️ THE APEX OPERATOR SURFACES — /admin and /status, added 2026-09-06.
+   *
+   * catalog-platform's docs/TODO.md carried this as an open item in as many
+   * words: "the provisioners do NOT print the /admin and /status host-row
+   * edits a new instance needs". These run against the REAL `--dry` output,
+   * so they pin what somebody standing at the checkpoint actually reads.
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  it('🔴 the apex section is printed, and it CLOSES the runbook', () => {
+    assert.match(text, /THE APEX OPERATOR SURFACES — \/admin and \/status/);
+    const at = text.indexOf('THE APEX OPERATOR SURFACES');
+    // ⚠️ Ordering is asserted against the RUNBOOK's own landmarks, not against
+    // the whole stdout: --dry prints a summary after the runbook that names the
+    // pauses again, so "nothing mentions PAUSE #1 afterwards" would be checking
+    // the wrong thing. Every checklist section must come BEFORE the apex one,
+    // because this is the half people forget and it earns the last word.
+    for (const earlier of [
+      'PAUSE #1',
+      'PAUSE #2',
+      'THE ESTATE INDEX',
+      'AFTERWARDS',
+      'WHAT THE REGISTRY ROW',
+    ]) {
+      const where = text.indexOf(earlier);
+      assert.ok(where >= 0 && where < at, `${earlier} must come before the apex section`);
+    }
+  });
+
+  it('✅ the /admin half reflects 2026-09-06: GENERATED, not hand-edited', () => {
+    assert.match(text, /node scripts\/gen-admin-catalogs\.mjs/);
+    assert.match(text, /NO LONGER A HAND EDIT/);
+    // The stale instruction must not come back: hand-editing the generated
+    // file now fails the platform repo's own npm test.
+    assert.ok(
+      !/admin\.js\s*—\s*CATALOGS\b/.test(text),
+      'must not tell anyone to hand-edit admin.js CATALOGS again',
+    );
+    // The FALLBACK label is still a real hand edit, and is keyed by CATALOG ID.
+    assert.match(text, /CATALOG_LABELS/);
+    assert.match(text, /OVERWRITES these from GET \/api\/catalogs/);
+  });
+
+  it('🔴 /status: the ROW is free, the PROBE is a CSP change that can never be automatic', () => {
+    assert.match(text, /SITES SECTION NEEDS NO EDIT/);
+    assert.match(text, /Content-Security-Policy/);
+    assert.match(text, /before a byte of the page runs/);
+    // The incident that makes it worth reading rather than skimming.
+    assert.match(text, /FALSE RED ROW/);
+    // Access-increasing, and therefore the owner's rather than this script's.
+    assert.match(text, /ACCESS-INCREASING/);
+    assert.match(text, /rather than this script's/);
+    // Two rules, because of the trailing-slash 308 (line-wrapped in the output).
+    assert.match(text, /trailing-slash\s+308/);
+  });
+
+  it('names PROBEABLE_ORIGINS and the test that pins it against _headers', () => {
+    assert.match(text, /PROBEABLE_ORIGINS/);
+    assert.match(text, /status-host-rows\.test\.mjs/);
+    assert.match(text, /https:\/\/quarry\.heygabi\.ai/);
+  });
+
+  it('🧑 says the Workers/Deployed-versions rows are BLOCKED on two registry fields', () => {
+    // Not "someone should do this": the reason it is still hand-written is a
+    // measurement, and the runbook carries it so nobody re-derives it.
+    assert.match(text, /status\.js/);
+    assert.match(text, /api_host and service/);
+    assert.match(text, /do NOT/);
   });
 
   it('🔴 step 12 prints the estate_catalog INSERT — a live catalog with no NAME is the failure', () => {

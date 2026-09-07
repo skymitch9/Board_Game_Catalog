@@ -885,6 +885,219 @@ export function deploysLogHasInstance(log, instance) {
 }
 
 /**
+ * 🔴 THE APEX SURFACES A NEW INSTANCE STILL NEEDS BY HAND — `/admin` and
+ * `/status` — printed as the LAST thing the runbook says.
+ *
+ * ⚠️ WHY IT IS ITS OWN SECTION. `catalog-platform`'s `docs/TODO.md` carried
+ * this as an open item in as many words: *"the provisioners do **not** print
+ * the `/admin` and `/status` host-row edits a new instance needs"*. Everything
+ * else in this runbook is about making the catalog WORK; this section is about
+ * the estate's two operator surfaces being able to SEE it, which is the half
+ * that gets discovered weeks later by somebody wondering why a shelf they
+ * provisioned has no row.
+ *
+ * ⚠️ IT READS THE LIVE APEX FILES RATHER THAN QUOTING A TEMPLATE, and that is
+ * deliberate: the lines it prints are the CURRENT contents of `_headers` and
+ * `host-rows.js`, plus the one entry to add. A hard-coded "paste this list" is
+ * how somebody silently REVOKES an origin another session added since — the
+ * same trap this runbook already records for `READ_ORIGINS`. If a file cannot
+ * be read it says so and names the path; it never invents the list.
+ *
+ * ⚠️ AND THE `/admin` HALF CHANGED ON 2026-09-06, which is partly why this
+ * exists: the old advice went stale within hours. `/admin`'s `CATALOGS` used to
+ * be a hand-kept array in `admin.js`; it is now GENERATED from
+ * `packages/estate-auth/src/visibility.ts` by `scripts/gen-admin-catalogs.mjs`.
+ * The edit is no longer "add it to admin.js" — it is edit (e) plus one command,
+ * and a hand edit to the generated file now FAILS `npm test`.
+ */
+export function apexSurfaceEdits(names, platformDir) {
+  const dir = String(platformDir).replace(/\\/g, '/');
+  const origin = `https://${names.host}`;
+
+  /** Read a file under the platform repo, or null — never throws. */
+  const slurp = (rel) => {
+    try {
+      const p = join(String(platformDir), ...rel.split('/'));
+      return existsSync(p) ? readFileSync(p, 'utf8') : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const headersRel = 'sites/heygabi-home/public/_headers';
+  const headersSrc = slurp(headersRel);
+  /**
+   * The `connect-src` of the `/status` rules ONLY — not every CSP in the file.
+   *
+   * ⚠️ `_headers` held ELEVEN `connect-src` lines when this was written, and
+   * printing all of them at somebody standing at a checkpoint is worse than
+   * printing none: they cannot tell which two are theirs. A `_headers` rule is
+   * a path line at column 0 followed by indented header lines, so the blocks
+   * are walked and only `/status` and `/status/` are kept — the two the
+   * trailing-slash 308 makes separate.
+   */
+  const statusConnect = [];
+  if (headersSrc) {
+    let path = null;
+    for (const raw of headersSrc.split(/\r?\n/)) {
+      if (/^\s*#/.test(raw) || raw.trim() === '') continue;
+      if (!/^\s/.test(raw)) {
+        path = raw.trim();
+        continue;
+      }
+      if (!/^\/status\/?$/.test(String(path))) continue;
+      const m = raw.match(/connect-src([^;]*)/);
+      if (m) statusConnect.push({ path, origins: m[1].trim().split(/\s+/).filter(Boolean) });
+    }
+  }
+
+  const hostRowsRel = 'sites/heygabi-home/public/status/lib/host-rows.js';
+  const hostRowsSrc = slurp(hostRowsRel);
+  const probeMatch = hostRowsSrc && hostRowsSrc.match(/export const PROBEABLE_ORIGINS = \[([\s\S]*?)\];/);
+  const probeOrigins = probeMatch ? [...probeMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : null;
+
+  const label = String(names.displayName ?? names.estateApp).replace(/'/g, "\\'");
+
+  const out = [
+    ``,
+    `🔴 THE APEX OPERATOR SURFACES — /admin and /status  (catalog-platform)`,
+    ``,
+    `    ⚠️ NONE of this is done by the registry row and none of it is done by`,
+    `    this script. It is the difference between the catalog WORKING and the`,
+    `    estate's two operator surfaces being able to SEE it.`,
+    ``,
+    `  -- /admin — the PERMISSIONS vocabulary -------------------------------`,
+    ``,
+    `    ✅ SINCE 2026-09-06 THIS IS NO LONGER A HAND EDIT. /admin's CATALOGS is`,
+    `       GENERATED from the canonical visibility.ts you already edit in the`,
+    `       visibility-vocabulary step above. After that step, run ONE command`,
+    `       and commit BOTH files:`,
+    ``,
+    `         cd ${dir}`,
+    `         node scripts/gen-admin-catalogs.mjs`,
+    ``,
+    `       ⚠️ Do NOT hand-edit sites/heygabi-home/public/admin/catalogs.generated.js.`,
+    `       scripts/test/admin-catalogs-generated-parity.test.mjs regenerates it`,
+    `       and diffs, so a hand edit fails npm test — which runs before every`,
+    `       deploy of that site. FORGETTING the command fails the same test, which`,
+    `       is the point: '${names.estateApp}' cannot silently become a catalog nobody can grant.`,
+    ``,
+    `    🧑 STILL BY HAND — the FALLBACK label, and only the fallback:`,
+    ``,
+    `         ${dir}/sites/heygabi-home/public/admin/admin.js — CATALOG_LABELS`,
+    `         +  ${names.estateApp}: '${label}',`,
+    ``,
+    `       The page OVERWRITES these from GET /api/catalogs before the first`,
+    `       render, so this is what shows only when the directory is unreachable.`,
+    `       A missing entry renders the raw id — honest, not broken. Names may`,
+    `       come from the registry; a permissions vocabulary may not.`,
+    ``,
+    `  -- /status — the ROW is free, the PROBE is not ------------------------`,
+    ``,
+    `    ✅ THE SITES SECTION NEEDS NO EDIT (since 2026-09-06): one row per`,
+    `       catalog, built from the registry in its own order, so '${names.estateApp}' gets its`,
+    `       Sites row the moment step 12's registry row exists.`,
+    ``,
+    `    🔴 BUT IT RENDERS GREY AND UNPROBED until ${origin} is named in`,
+    `       that page's own Content-Security-Policy — and THAT can never be`,
+    `       learned at runtime. A CSP is a response header chosen by the CDN`,
+    `       before a byte of the page runs; a registry fetch happens after.`,
+    ``,
+    `       ⚠️ This exact gap cost a FALSE RED ROW on 2026-09-06: ebooks.heygabi.ai`,
+    `       arrived in the row set, its probe was refused by the CSP, and the row`,
+    `       read "DOWN — Did not answer within 8s" about a site answering 200 — a`,
+    `       permission failure wearing an outage's clothes. The page says "Not`,
+    `       checked" now, which is honest and still not a probe.`,
+    ``,
+    `    ❓ OWNER, ACCESS-INCREASING — a security-header change, so it is his`,
+    `       call rather than this script's. TWO lines, because the trailing-slash`,
+    `       308 makes /status and /status/ separate rules:`,
+    ``,
+    `         ${dir}/${headersRel}`,
+  ];
+
+  if (statusConnect.length > 0) {
+    out.push(
+      ``,
+      `         The /status connect-src AS IT STANDS RIGHT NOW — read off the`,
+      `         file just now, never a template, because pasting a remembered`,
+      `         list is how somebody REVOKES an origin added since:`,
+      ``,
+    );
+    for (const rule of statusConnect) {
+      out.push(`           ${rule.path}  (${rule.origins.length} origins)`);
+      for (const o of rule.origins) out.push(`             ${o}`);
+      out.push(`           + ${origin}`, ``);
+    }
+    if (statusConnect.length < 2) {
+      out.push(
+        `         ⚠️ Only ${statusConnect.length} of the two /status rules was found. Check the`,
+        `         other one by hand — the trailing-slash 308 means a rule that`,
+        `         covers /status does NOT cover /status/.`,
+        ``,
+      );
+    }
+  } else {
+    out.push(
+      ``,
+      `         ⚠️ COULD NOT READ the /status rules in that file, so this script`,
+      `         will not guess them. Open it and append ${origin}`,
+      `         to the connect-src of BOTH the /status and /status/ rules.`,
+    );
+  }
+
+  out.push(
+    ``,
+    `    🔴 AND THE PAGE'S OWN COPY MOVES WITH IT — mechanically checked:`,
+    ``,
+    `         ${dir}/${hostRowsRel} — PROBEABLE_ORIGINS`,
+    `         +  '${origin}',`,
+    ``,
+  );
+
+  if (probeOrigins) {
+    out.push(
+      `         It currently holds ${probeOrigins.length} origin(s):`,
+      ...probeOrigins.map((o) => `           '${o}',`),
+      ``,
+      `         ⚠️ scripts/test/status-host-rows.test.mjs PARSES _headers and fails`,
+      `         if these two disagree — so they cannot drift, and editing ONE of`,
+      `         them alone turns the suite red. Move both, in one commit.`,
+    );
+  } else {
+    out.push(
+      `         ⚠️ COULD NOT READ that file — add the origin by hand.`,
+      `         scripts/test/status-host-rows.test.mjs parses _headers and fails`,
+      `         if the two lists disagree, so both move in one commit.`,
+    );
+  }
+
+  out.push(
+    ``,
+    `    🧑 THE WORKERS AND DEPLOYED-VERSIONS ROWS ARE STILL HAND-WRITTEN, and`,
+    `       they are BLOCKED ON TWO REGISTRY FIELDS rather than on effort:`,
+    ``,
+    `         ${dir}/sites/heygabi-home/public/status/status.js`,
+    ``,
+    `       "Does this catalog's host serve an estate API" is not derivable from`,
+    `       anything the registry carries today (measured 2026-09-06: two of the`,
+    `       five hosts answer HTML, not the estate envelope), and a Worker cannot`,
+    `       say which DEPLOY it is — padhard reports service "library-catalog",`,
+    `       the code's name, not "library-catalog-friend". The two fields that`,
+    `       would close it are api_host and service. Until they exist, add`,
+    `       '${names.estateApp}' to those two row sets by hand or leave it out — but do NOT`,
+    `       derive it from holding, which is the vocabulary conflation`,
+    `       catalog-registry.md §5 warns about and would be right today only by`,
+    `       coincidence.`,
+    ``,
+    `    📎 One home for all of this: ${dir}/docs/info/catalog-registry.md §10,`,
+    `       and host-rows.js's own header, which is where the next session reads.`,
+  );
+
+  return out;
+}
+
+/**
  * The numbered manual runbook — printed by `--dry`, and at each pause.
  *
  * ⚠️ THIS IS THE CHECKLIST, AND ITS COMPLETENESS IS THE WHOLE POINT.
@@ -1186,9 +1399,13 @@ export function manualRunbook(names, { platformDir = '<catalog-platform>' } = {}
     `      ⚠️ Allow up to 10 minutes: the index Worker memoises the registry for`,
     `      that long and two isolates may disagree inside the window. Fine for a`,
     `      name; it is why nothing about a PERMISSION is fed from there.`,
-    `      ⚠️ /admin's CATALOGS array stays hand-kept ON PURPOSE — it decides which`,
-    `      permission controls render, and an access surface must not fail closed`,
-    `      on a cache miss. It is edit (f2) above, not a registry consumer.`,
+    `      ⚠️ /admin's CATALOGS is NOT a registry consumer and must never become`,
+    `      one — it decides which permission controls render, and an access`,
+    `      surface must not fail closed on a cache miss. ⚠️ CORRECTED 2026-09-06:`,
+    `      it is no longer "hand-kept" either. It is GENERATED from the same`,
+    `      visibility.ts as edit (f2), by scripts/gen-admin-catalogs.mjs — see the`,
+    `      apex section at the end of this runbook for the one command.`,
+    ...apexSurfaceEdits(names, platformDir),
   ];
 }
 
