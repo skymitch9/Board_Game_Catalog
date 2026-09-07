@@ -139,3 +139,92 @@ describe('finding 7 — editing bgg_id onto a taken id is a 409, not a raw D1 er
     assert.equal(updated?.bggId, null);
   });
 });
+
+describe('finding 8 — a base game cannot be edited INTO another tree', () => {
+  /** A base game with an expansion filed under it. */
+  async function baseWithExpansion(db: D1Database) {
+    const base = await addBase(db, 'Root');
+    const exp = await createItem(db, {
+      kind: 'expansion',
+      name: 'Root: The Riverfolk Expansion',
+      parentItemId: base.id,
+    } as never);
+    return { base, exp };
+  }
+
+  it('🔴 PATCH {kind:"base"} ALONE is refused while the item still has a parent', async () => {
+    // The finding itself. The guard used to sit inside `if (parentItemId !==
+    // undefined)`, so a patch that mentioned only `kind` never reached it:
+    // `newRoot` stayed null, `retargetSubtreeRoot` never ran, and the row
+    // became a base game filed under another game's tree.
+    const db = d1(migratedDb());
+    const { exp } = await baseWithExpansion(db);
+
+    await assert.rejects(
+      () => updateItem(db, exp.id, { kind: 'base' } as never),
+      (err: unknown) => {
+        assert.ok(err instanceof ItemError, `expected ItemError, got ${String(err)}`);
+        assert.equal(err.status, 400);
+        // ⚠️ The words have to fit the case. The original message says "say
+        // what it becomes in the same change", which is advice for the OTHER
+        // direction and reads as nonsense to somebody who only changed `kind`.
+        assert.match(err.message, /detach it in the same change/);
+        return true;
+      },
+    );
+  });
+
+  it('and the refused patch changes NOTHING — the row keeps its kind and its parent', async () => {
+    const db = d1(migratedDb());
+    const { base, exp } = await baseWithExpansion(db);
+
+    await updateItem(db, exp.id, { kind: 'base' } as never).catch(() => undefined);
+
+    const after = await getItem(db, exp.id);
+    assert.equal(after?.kind, 'expansion');
+    assert.equal(after?.parentItemId, base.id);
+    assert.equal(after?.rootGameId, base.id, 'and it is still rooted where it was');
+  });
+
+  it('the same change WITH the detach is allowed, and re-roots the item on itself', async () => {
+    // The way through, and the sentence the refusal points at.
+    const db = d1(migratedDb());
+    const { exp } = await baseWithExpansion(db);
+
+    const updated = await updateItem(db, exp.id, {
+      kind: 'base',
+      parentItemId: null,
+    } as never);
+
+    assert.equal(updated?.kind, 'base');
+    assert.equal(updated?.parentItemId, null);
+    assert.equal(updated?.rootGameId, exp.id, 'a base game roots itself, or it disappears');
+  });
+
+  it('setting a parent on something that is ALREADY base is still refused, with the original words', async () => {
+    // The direction that always worked. Kept so the fix cannot quietly swap
+    // which case gets which sentence.
+    const db = d1(migratedDb());
+    const a = await addBase(db, 'Wingspan');
+    const b = await addBase(db, 'Everdell');
+
+    await assert.rejects(
+      () => updateItem(db, b.id, { parentItemId: a.id } as never),
+      (err: unknown) => {
+        assert.ok(err instanceof ItemError);
+        assert.match(err.message, /say what it becomes/);
+        return true;
+      },
+    );
+  });
+
+  it('a patch that touches neither kind nor parent is unaffected', async () => {
+    const db = d1(migratedDb());
+    const { exp } = await baseWithExpansion(db);
+
+    const updated = await updateItem(db, exp.id, { yearPublished: 2018 } as never);
+
+    assert.equal(updated?.yearPublished, 2018);
+    assert.equal(updated?.kind, 'expansion');
+  });
+});

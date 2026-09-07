@@ -1350,20 +1350,38 @@ export async function updateItem(
   */
   let newRoot: number | null = null;
 
-  if (input.parentItemId !== undefined) {
-    // The kind and the place in the tree have to be decided together. A base
-    // game is the top of its own tree by definition, so one with a parent is a
-    // contradiction the reader has no way to render — and `createItem` has
-    // always refused it. `RetagPage` and the related-games section both send
-    // the two fields in one patch, which is the shape this asks for.
-    const kind = 'kind' in input ? input.kind : existing.kind;
-    if (kind === 'base' && input.parentItemId != null) {
-      throw new ItemError(
-        'a base game sits at the top of its own tree — say what it becomes (expansion, accessory, promo or upgrade) in the same change',
-        400,
-      );
-    }
+  /*
+    The kind and the place in the tree have to be decided together. A base game
+    is the top of its own tree by definition, so one with a parent is a
+    contradiction the reader has no way to render — and `createItem` has always
+    refused it.
 
+    🔴 **Checked against the item's state AFTER the patch, not against the
+    patch.** Until 2026-09-06 this lived inside the `parentItemId !== undefined`
+    block below, so it fired only when the patch set a parent. `PATCH
+    {kind:'base'}` alone, onto an item that still had one, sailed through:
+    `newRoot` stayed null, `retargetSubtreeRoot` never ran, and the result was a
+    base game filed under another game's tree — mis-rooted, and invisible to
+    every listing that selects by root. `updateItemSchema` cannot catch it
+    either; it is a partial patch, so it lacks the create schema's refine.
+    2026-08 audit, finding 8.
+
+    `RetagPage` and the related-games section both send the two fields in one
+    patch, which is the shape the first message asks for.
+  */
+  const kindAfter = 'kind' in input ? input.kind : existing.kind;
+  const parentAfter =
+    input.parentItemId !== undefined ? input.parentItemId : existing.parentItemId;
+  if (kindAfter === 'base' && parentAfter != null) {
+    throw new ItemError(
+      input.parentItemId != null
+        ? 'a base game sits at the top of its own tree — say what it becomes (expansion, accessory, promo or upgrade) in the same change'
+        : 'a base game sits at the top of its own tree, and this one is filed under another game — detach it in the same change',
+      400,
+    );
+  }
+
+  if (input.parentItemId !== undefined) {
     if (input.parentItemId === id) throw new ItemError('an item cannot be its own parent', 400);
     if (input.parentItemId == null) {
       // Detached: it roots itself, exactly as a base game or a fresh orphan
