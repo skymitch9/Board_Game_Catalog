@@ -7,6 +7,26 @@
 
 ## Gotchas found the hard way
 
+- 🔴 **"BoardGameGeek is down" — no, its XML API answers `401` to an agent
+  session, and always will.** Measured 2026-09-07:
+  `https://boardgamegeek.com/xmlapi2/search?query=…` returns **401
+  Unauthorized**, body *"Unauthorized. See
+  https://boardgamegeek.com/using_the_xml_api"* — to WebFetch **and** to `curl`
+  with a browser UA, so it is not the usual WAF block.
+  `packages/bgg/src/client.ts:71` sends `Authorization: Bearer ${token}` from
+  `BGG_API_TOKEN`, and agents may not open `.dev.vars*`. ⚠️ **Do not conclude
+  BGG is unreachable and stop**: two instruments need no token — the
+  **`game_component`** table (BGG's own expansion/accessory list per checked
+  game, with `component_check.checked_at` saying how stale it is), and the
+  publisher's or retailer's own pages. That is how all six rows of the accessory
+  shortlist were settled; the story is in [`../DONE.md`](../DONE.md).
+- **Kickstarter and Loot Tavern answer `403` to the default agent UA** and
+  `200` to `-A "Mozilla/5.0 (Windows NT 10.0; …) Chrome/…"`. Worth pairing with
+  the 401 above: the two look identical from a failed fetch and have completely
+  different fixes. ⚠️ And a Kickstarter's reward/add-on list is **not** in the
+  page's visible text — it is in an embedded JSON blob (`"item":{"id":…,
+  "name":"…"}`, `"title_for_backing_tier"`), so a text-stripped read reports
+  "no add-ons" for a campaign that has 38 of them.
 - **`packages/core` has a load-bearing import order.** `constants.ts` is a leaf,
   `schemas.ts` imports it, `index.ts` re-exports both. **Nothing under `src/` may
   import from `index.ts`.** Breaking this reintroduces a circular import that

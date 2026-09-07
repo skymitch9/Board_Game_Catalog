@@ -4,9 +4,9 @@ Work that is agreed but not built/deployed. Finished work lives in
 [`DONE.md`](DONE.md); stable reference lives in [`access/`](access/README.md)
 and [`info/`](info/README.md).
 
-**Last updated: 2026-09-07** (agent `W18-ACC`; previously `W14-DOCS` and
-`W13-GAMES`). ⚠️ **This paragraph is the only status line in this file.** What
-is open, in full:
+**Last updated: 2026-09-07** (agent `W19-ACC-FIX`; previously `W18-ACC`,
+`W14-DOCS` and `W13-GAMES`). ⚠️ **This paragraph is the only status line in this
+file.** What is open, in full:
 
 | Open | Who |
 |---|---|
@@ -14,7 +14,7 @@ is open, in full:
 | 🧑 One eyeball of `/api/export.json` as a contributor — confirm no `email` field | owner |
 | 🧑 **One eyeball of the estate search box** at <https://boardgames.heygabi.ai/> — the shared `<estate-search>` component lost its default hint line and four other explainers on 2026-09-07 (agent W17-ES-GREY, deploy `79360f3a`; the whole entry is in [`DONE.md`](DONE.md)). ⚠️ **Nothing rendered was measured** — no agent session has a browser, so a layout leaning on a removed line for spacing would not have been caught. Type two letters and look at the box, then at a result list | owner |
 | 🧑 Three owner reviews on his phone — the three `☐ owner review` headings below: the scan target, the second-instance machinery, the family score | owner |
-| 🧑 Three rows still open in ***What still wants a person***, the first section below — the accessory-implies-the-game sweep, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). Counted 2026-09-06; the other rows in that table are settled records. ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file**. ✅ **The accessory sweep is now BUILT, RUN and MEASURED (2026-09-07)** and has shrunk to one owner errand: **six** implied products to look at, in the sub-section under that table. It stays open because deciding which rows to change is his | owner |
+| 🧑 Three rows still open in ***What still wants a person***, the first section below — the two Here to Slay **duplicate expansion pairs**, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file**. ✅ **The accessory-implies-the-game sweep CLOSED 2026-09-07** — all six shortlisted products verified false positives, zero D1 writes, moved whole to [`DONE.md`](DONE.md). It left the duplicate-pairs row in its place, which is a shelf call: 295/863 and 294/862 each look like one product held twice | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
 | 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
 
@@ -53,12 +53,15 @@ status paragraph is the bug, not the fix.
 > **2026-09-05** live-D1 reading, and no D1 was read for that move. Nothing in
 > [`DONE.md`](DONE.md) or `git log` closes any of the three.
 >
-> ✅ **One of the three WAS re-measured on 2026-09-07** (agent `W18-ACC`,
-> read-only `wrangler d1 execute --remote`): the accessory-implies-the-game
-> sweep, whose row and new sub-section below carry that day's numbers. ⚠️ **The
-> other two — the HELLDIVERS rename and the Dice Throne playmat count — still
-> carry 2026-09-05 and were not re-read**; neither has an instrument here
-> anyway (one waits on a pledge, one on a shelf).
+> ✅ **One of the three is now CLOSED, 2026-09-07** (agent `W19-ACC-FIX`, after
+> `W18-ACC` measured it earlier the same day): the accessory-implies-the-game
+> sweep. All six of its shortlisted products were verified **false positives**,
+> **nothing was written to D1**, and the row plus its sub-section moved whole
+> into [`DONE.md`](DONE.md). ⚠️ **It left ONE new row behind** — the two
+> duplicate Here to Slay expansion pairs, which is a shelf call. ⚠️ **The other
+> two — the HELLDIVERS rename and the Dice Throne playmat count — still carry
+> 2026-09-05 and were not re-read**; neither has an instrument here anyway (one
+> waits on a pledge, one on a shelf).
 
 🔬 **Re-measured against live D1 on 2026-09-05** (docs audit; read-only
 `wrangler d1 execute --remote`, no writes). **Four of these rows had already
@@ -71,7 +74,8 @@ already correct and are untouched.
 | | |
 |---|---|
 | ~~⏳ **`game_component` is filling — finish it**~~ ✅ **FINISHED — the cron did it unattended** | ⚠️ **Corrected 2026-09-05:** measured live — **1,462 components**, **142 of 143 eligible games checked**, **0** components still awaiting the second pass (`details_at IS NULL AND stale_at IS NULL`), last `component_check` written **2026-08-30 05:42 UTC** — i.e. the Sunday 05:41 UTC cron is alive and did exactly what this row said it would. The completeness page has had something to show for weeks. ~~Original: "Was 0 all day; the owner started the backfill 2026-08-08 and it is at **1,217 components / 100 games checked**. Roughly 7 more runs of `await (await fetch('/api/components/backfill',{method:'POST'})).json()` from a signed-in console, or the Sunday 05:41 UTC cron does the rest unattended. **Until it finishes, the completeness page reads 'Not checked yet' and the collapsible sections built today are invisible** — they are not broken, they have nothing to show"~~ |
-| 🧑 **Accessory implies the game — the sweep is BUILT and MEASURED; WHICH ROWS TO CHANGE is the owner's** | ✅ **Ran read-only against production D1, 2026-09-07** (agent `W18-ACC`): `scripts/accessory-implies-game.mjs`, the rule in `scripts/lib/implied-product.mjs`, 26 tests in `scripts/test/implied-product.test.mjs`, and the full 667-row table at [`archive/accessory-implies-game-2026-09-07.csv`](archive/accessory-implies-game-2026-09-07.csv). 🔴 **The script has no write mode and cannot be given one** — `--commit` exits 2. **The numbers and the shortlist are in the sub-section directly below this table.** ⚠️ **Corrected 2026-09-07:** this row said ~~"You own **221 accessories against 186 expansions**"~~ — measured today it is **361 accessories against 257 expansions** (838 items; 667 non-base). That pair was a 2026-08 reading and had drifted by 140 rows. **Original finding, unchanged, and still the proof:** Here to Slay — six accessories (Warriors & Druids ×3, Berserkers & Necromancers ×3) existed with no expansion row behind them, and both expansions were real. Now items **858** and **859**. Banner Quest is the control case — accessory *and* expansion both present, and the sweep reports it PRESENT |
+| ~~🧑 **Accessory implies the game — WHICH ROWS TO CHANGE is the owner's**~~ ✅ **CLOSED 2026-09-07 — all six were FALSE POSITIVES** | The owner called it (*"Dry run verify then fix"*), the dry run checked all six against sources outside this repo, and **not one was a missing box**: four name a product that does not exist, two name one already held under another name. **Zero writes to D1.** The fix landed in the rule instead — a `SETTLED` status (`MISSING` **175 → 162**), commit `530c11b`. This row and the whole sub-section moved WHOLE into [`DONE.md`](DONE.md), which also carries the ⚠️ *BGG's XML API answers **401** to an agent session* gotcha |
+| 🧑 **TWO duplicate pairs under Here to Slay — one product held twice, twice over** | **295** *KS Exclusive Dragon Sorcerers Expansion Pack* vs **863** *Dragon Sorcerer Expansion* (`bgg_id` 308525), **and** **294** *KS Exclusive Monster Expansion Pack* vs **862** *Monsters Expansion* (308526). 🔴 **Each BGG row points at the KS row's own cover file**, so the 2026-08-08 session that made 861/862/863 had the KS row in hand. All four carry an `owned` copy, so the catalogue says both expansions are owned twice. **Deliberately not touched — which row survives is a shelf call.** Full evidence table in [`DONE.md`](DONE.md). Review: [295](https://boardgames.heygabi.ai/items/295) · [863](https://boardgames.heygabi.ai/items/863) · [294](https://boardgames.heygabi.ai/items/294) · [862](https://boardgames.heygabi.ai/items/862) |
 | ✅ **The BGG audit is CLOSED** | All 806 rows audited and resolved. **`bgg_id` coverage went 197 → 232.** Every remaining row without one has a *recorded reason*, not a gap. The map is `scratchpad/bgg-audit-2026-08-08.tsv`; the decision sheet `scratchpad/bgg-audit-review.md` is **spent** — its "nothing has been applied" line is historical. Both are safe to delete once you trust the result |
 | ✅ **All five SUSPECT rows resolved** | 114 Deadpool (id is right; see [`archive/dice-throne-shape.md`](archive/dice-throne-shape.md) — the box owns the id; ⚠️ **corrected 2026-09-05**, this link read `dice-throne-shape.md` and pointed at `docs/dice-throne-shape.md`, which has not existed since the 2026-08-21 restructure) · 496 Yeti or Not (id is the game, our name says which version) · 801 Go Fish (the `Traditional` marker) · 56 and 68 (publisher-spelling noise). **Do not re-open these** |
 | ✅ **`copy.edition_id` stays null — settled, not a gap** | The owner, 2026-08-08: *"that'll probably be null forever, it's a hard thing to find and I don't super care to track it down."* 1,063 edition rows exist with 768 BGG version ids, so the catalog knows which printings **exist** and deliberately does not record which one is on the shelf. **Do not re-flag this as missing data.** Consequences, all fine: the cover picker is unaffected (it sets `thumbnail_url`, not `edition_id`), and it independently kills the "grab the closest edition" half of any BoardGameGeek sync — you cannot match a printing you never recorded. Under 1% of BGG users populate that field either |
@@ -80,69 +84,6 @@ already correct and are untouched.
 | HELLDIVERS 2: Mystery Expansions (item 414) | rename from the box when the pledge ships; deliberately a placeholder. ⚠️ **Still true 2026-09-05** — the live row still reads `HELLDIVERS 2: Mystery Expansions`. Waiting on a pledge, not on anyone here |
 | Dice Throne playmats | count them on the shelf — see `scratchpad/dice-throne-playmats.md`. ⚠️ **Still open 2026-09-05** — no instrument reaches a shelf; this one is genuinely a person's errand |
 | ~~⚠️ Excursion Tiles 1 (117) says **2024**~~ ✅ **it says 2025** | ⚠️ **Corrected 2026-09-05:** measured live — `year_published` for item 117 is **2025**, the value this row argued for. Somebody applied it. ~~Original: "its campaign actually ran **2025-08-06 to 2025-08-27** (543 backers, $24,488), delivering Oct 2025. 2024 has no evidence behind it. **Left alone deliberately** — the owner has settled both these years by hand; it is a one-line `UPDATE item SET year_published = 2025 WHERE id = 117` if they agree"~~ (the campaign facts are kept because they are the evidence for the value that is now stored) |
-
-### 🧑 The accessory sweep, measured — 2026-09-07, and what it wants from the owner
-
-**The rule, in one paragraph.** Strip the base game's name off the front of an
-accessory's title word by word, then strip a vocabulary of *packaging* words
-off both ends — product formats (`playmat`, `sleeves`, `tray`), materials
-(`neoprene`, `acrylic`, `walnut`) and marketing (`ks`, `exclusive`, `deluxe`).
-What survives is the **subject**, and the subject names a product. *Here to
-Slay: Warriors & Druids Play Mat Set* leaves `warriors & druids`; *Here to Slay:
-KS Exclusive Central Play Mat* leaves nothing, which correctly means it implies
-its base game and no more. The subject is `PRESENT` if a **base game or an
-expansion** under the same root (or a root joined by a `same_family` edge) has
-those words in its name. 🔴 **An accessory never answers for another accessory
-— that is the whole Here to Slay bug.** Full rule, and every reason behind it:
-`scripts/lib/implied-product.mjs`.
-
-**667 non-base rows swept** — 361 accessory, 257 expansion, 48 promo, 1 upgrade.
-
-| Question | `PRESENT` | `MISSING` | `AMBIGUOUS` |
-|---|---|---|---|
-| **1 · the implied BASE GAME** (by `root_game_id`) | **644** | **0** | **23** |
-| **2 · the implied PRODUCT** (read out of the row's name) | **93** | **175** | **4** |
-
-⚠️ **Question 1 finds nothing, and that is itself the answer.** Every non-base
-row already reaches a base game that is in the collection — **zero** orphans,
-`pending_parent_name` empty on all 838 rows. The 23 `AMBIGUOUS` are rows whose
-root is not a game at all, and 19 of those are the **Pangea gaming table** and
-its parts. The one worth a look is **Aeon's End: Return to Gravehold** (304),
-nested under **Aeon's End: Outcasts** — an expansion under an expansion.
-
-🔢 **Question 2 is where the sweep lives**, and its 175 `MISSING` fall into
-**168 distinct implied products**. ⚠️ **175 is an UPPER BOUND on real gaps, not
-a measurement of them** — the packaging vocabulary is a measured word list, so
-any word nobody has written down yet survives into a subject and invents a
-product. The `subject_rows` column is the confidence: a subject that appears on
-*several different kinds of thing* is a product name, and one that appears once
-is usually a description the vocabulary failed to strip. **Measured: of the 168,
-only 6 are named by two or more accessories** — and the count-1 tail is visibly
-noise (`beer`, `town`, `claw`, `quest`).
-
-**So the shortlist is those six, which is the whole owner errand.** Sorted by
-how many accessories name the subject:
-
-| Naming it | The implied product | The accessories that name it (all HELD) |
-|---|---|---|
-| **3** | 🔴 **Deep Rock Galactic — "Rivals"** | [*Rivals Neoprene Mat*](https://boardgames.heygabi.ai/items/168) · [*Rivals Card Sleeves*](https://boardgames.heygabi.ai/items/171) · [*Rivals Exclusive Gift Box*](https://boardgames.heygabi.ai/items/494). ⚠️ The collection holds ***Rival Incursion*** (item 90, expansion) and *Rival Incursion Acrylic Tokens* (170) — **singular**. Either these three belong to it under a plural name, or a separate *Rivals* product exists. **This is the Here-to-Slay shape exactly** |
-| **2** | 🔴 **Ryoko's Guide to the Yokai Realms — "Yokai Dawn"** | [*Yokai Dawn Dice Mini Set*](https://boardgames.heygabi.ai/items/516) · [*Yokai Dawn Resin Dice Set*](https://boardgames.heygabi.ai/items/517). **Nothing in the collection names Yokai Dawn** — no near miss at all, which makes this the cleanest candidate of the six |
-| **2** | **Here to Slay — "Dragon Class"** | [*Dragon Class Dice*](https://boardgames.heygabi.ai/items/460) · [*Dragon Class Meeple Set*](https://boardgames.heygabi.ai/items/462). Probably belong to ***Dragon Sorcerer Expansion*** (863) or ***KS Exclusive Dragon Sorcerers Expansion Pack*** (295). ⚠️ **And those two look like one product held twice** — worth an eyeball while you are here |
-| **2** | **Ark Nova — "3Dition"** | [*3Dition: Premium Metal Coins*](https://boardgames.heygabi.ai/items/409) · [*3Dition: Premium Custom Sleeves*](https://boardgames.heygabi.ai/items/412), plus six more `3Dition` accessories (405–411). Reads as a third-party **upgrade brand**, not an expansion — likely nothing to add, worth one glance to settle it |
-| **2** | **Fractured Sky — "Black Magic"** | [*Black Magic Custom Organizer*](https://boardgames.heygabi.ai/items/251) · [*Black Magic Custom Trays*](https://boardgames.heygabi.ai/items/252). Black Magic Craft is an **insert maker**. A false positive, recorded so nobody re-reports it |
-| **2** | **Dice Throne — "Minimalist (Flaming Die)"** | [*Card Sleeves - Minimalist*](https://boardgames.heygabi.ai/items/561) · [*Playmat - Minimalist*](https://boardgames.heygabi.ai/items/568). A sleeve **art style**, not a product. A false positive |
-
-🔗 **What to do with it:** open the six rows above, decide which imply a box you
-own but have not recorded, and add those the way 858 and 859 were added. The
-other 162 implied products are in the CSV, sorted, if you ever want to read the
-tail.
-
-⚠️ **NOT verified.** Nothing was written and nothing was rendered — no browser,
-no signed-in session, no page load. The sweep's own claims about what these
-products *are* (a Rivals expansion, Yokai Dawn) are **read off names in the
-collection, not off BoardGameGeek** — no external lookup was made, and no
-`bgg_id` was consulted beyond carrying it into the CSV. Re-running the script
-re-reads production D1 and overwrites that day's CSV; it never writes to D1.
 
 ---
 

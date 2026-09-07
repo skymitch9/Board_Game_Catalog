@@ -1,7 +1,13 @@
 # Board_Game_Catalog — Known Issues, Waivers & Exceptions
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last verified: **2026-09-06** for KI-8, KI-9 and KI-10 — the three added that
+> Last verified: **2026-09-07** for **KI-11 only** — measured as it was written
+> (6 of 6 high-confidence sweep rows false positives; 175 → 162 `MISSING`; 0
+> unsettled subjects named by two or more accessories). ⚠️ **Nothing else in
+> this file was re-checked on 2026-09-07**; KI-2, KI-3, KI-4, KI-5, KI-8, KI-9
+> and KI-10 all carry the dates below.
+>
+> Before that — **2026-09-06** for KI-8, KI-9 and KI-10 — the three added that
 > day, each measured as it was written: **0** unattended `scripts/*.ts`, **0**
 > code sites reading the Access vars (and their deletion measured as a
 > **three**-file change, not the two the audit said), and a live edge read of
@@ -53,7 +59,16 @@
 > | **KI-9** | The dead Cloudflare Access vars are still declared | `BLOCKED` — the owner's `wrangler.toml` | code sites reading either var — **0** since 2026-08-10 |
 > | **KI-10** | The app ships no CSP, and its own comment used to claim one | `WATCHING` | `SHOW_ESTATE_SEARCH` turning true |
 >
-> **Seven live entries stand: KI-2, KI-3, KI-4, KI-5, KI-8, KI-9, KI-10.**
+> ~~**Seven live entries stand: KI-2, KI-3, KI-4, KI-5, KI-8, KI-9, KI-10.**~~
+>
+> ➕ **KI-11 ADDED 2026-09-07 (agent `W19-ACC-FIX`)** — the accessory sweep's
+> `MISSING` count is an upper bound, and it is here rather than nowhere because
+> the pass that measured it found **6 of 6** high-confidence rows were false
+> positives. It is the first entry in this file whose "what would change it"
+> number is currently **0 by construction** rather than by luck.
+>
+> **Eight live entries stand: KI-2, KI-3, KI-4, KI-5, KI-8, KI-9, KI-10,
+> KI-11.**
 >
 > **This file exists to stop the same non-bug being re-reported every month.**
 > It holds things that ARE wrong, or look wrong, and are deliberately tolerated.
@@ -469,6 +484,50 @@ see the value two lines below"* and describes the live 403/503 behaviour. It is
 recorded here rather than nowhere because that is the second finding in this
 audit (with 13) whose defect was fixed within days and whose ROW stayed open
 for two weeks.
+
+---
+
+## KI-11 · The accessory sweep's `MISSING` count is an UPPER BOUND, and its whole ≥2 head was noise — `ACCEPTED`
+
+**Symptom.** `scripts/accessory-implies-game.mjs` reports **162** implied
+products the collection does not hold. That number is not a measurement of real
+gaps. Step 2 of the rule strips a *measured word list* (`PACKAGING`), so any
+word nobody has written down yet survives into the subject and invents a
+product — `beer`, `town`, `claw`, `quest` are all in today's tail.
+
+🔢 **Measured 2026-09-07 (agent `W19-ACC-FIX`), and this is the number that
+matters: of the six subjects named by TWO OR MORE accessories — the entire
+high-confidence head of the report, and the only part a person was ever asked
+to read — SIX of six were false positives.** Four named a product that does not
+exist (a dice colourway, a sleeve art style, an insert maker, a third-party
+upgrade line); two named a product already held under a different name. The
+full evidence is in [`DONE.md`](DONE.md).
+
+⚠️ **So `subject_rows`, the report's own confidence column, did not
+discriminate at all on this run.** Three accessories agreeing on a word proves
+a NAME repeats in the collection's own vocabulary; it says nothing about
+whether a PRODUCT exists.
+
+**Why tolerated.** The failure direction is safe by construction: the script
+has **no write mode and cannot be given one** (`--commit` exits 2), so an
+over-proposed row costs a person one lookup and nothing else. The alternative —
+tightening the vocabulary until the tail is clean — trades a visible false
+positive for an invisible false negative, and a missed expansion is the failure
+this sweep exists to catch. The six that were checked are now recorded in
+`VERIFIED_NOT_MISSING` and report `SETTLED` rather than coming back every run,
+with their evidence attached; that mechanism is the containment.
+
+**What would change it.** ⚠️ **The number to watch is how many subjects are
+named by two or more accessories and are NOT already settled — today that is
+0.** The report currently has no high-confidence head at all, which is why it
+wants nobody's attention. The day that count rises above 0, somebody looks at
+those rows the way these six were looked at. The other trigger is a `SETTLED`
+entry turning out to be wrong: each carries its source and the date it was
+checked precisely so it can be re-argued rather than trusted forever.
+
+⚠️ **Not a candidate for change: the 162 itself.** It was 175 before the six
+were settled and it will drift with the catalogue. A big `MISSING` count is
+this report working as designed, not evidence against it.
 
 ---
 

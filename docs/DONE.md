@@ -1,7 +1,10 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-07** — the fewer-grey-paragraphs pass, part two
+> Last updated: **2026-09-07** — the accessory shortlist closed (agent
+> `W19-ACC-FIX`, commit `530c11b`): all six verified FALSE POSITIVES, **zero**
+> writes to D1, the sweep taught a `SETTLED` status instead. Earlier the same
+> day, the fewer-grey-paragraphs pass, part two
 > (agent W17-ES-GREY): the SHARED `<estate-search>` component, deployed as
 > `79360f3a`, no commit in this repo because the copy is a synced artifact.
 > Earlier the same day, part one (agent
@@ -22,6 +25,216 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ✅ VERIFIED + CLOSED 2026-09-07 (agent `W19-ACC-FIX`) — the accessory shortlist: all six were FALSE POSITIVES, and nothing was written to D1
+
+The owner's call on the six-row shortlist, verbatim: ***"Dry run verify then
+fix"***. The dry run ran; the fix it justified turned out to be a change to the
+**rule**, not to the data.
+
+🔴 **The headline, because it inverts what the section below predicted: every
+one of the six is a false positive. Four name a product that does not exist,
+and two name a product the collection already holds under a different name.**
+No expansion row was added, nothing was re-parented, no `bgg_id` was set —
+**zero writes to production D1**, and the reversal SQL for this entry is
+therefore empty.
+
+### What was checked, and with what
+
+⚠️ **The BGG XML API is NOT reachable from an agent session.**
+`https://boardgamegeek.com/xmlapi2/search?…` answers **401 Unauthorized** to
+both WebFetch and `curl` — `packages/bgg/src/client.ts:71` sends
+`Authorization: Bearer ${token}` from `BGG_API_TOKEN`, and agents may not open
+`.dev.vars*`. So BGG was consulted through the two instruments that need no
+token, and any future session should start there rather than rediscovering the
+401:
+
+1. **`game_component`** — BGG's own expansion/accessory list per checked game,
+   already stored. `component_check` says items **53, 92, 105, 107 and 428**
+   were all checked `ok` on **2026-08-30 05:42 UTC**. Authoritative for five of
+   the six.
+2. **Publisher / retailer / Kickstarter pages over `curl` with a browser UA** —
+   the default agent UA gets a **403** WAF block from both Kickstarter and Loot
+   Tavern, and a browser UA gets a 200.
+
+Item **511 Ryoko's Guide to the Yokai Realms has `bgg_id = NULL`** and no
+`component_check` row — it is a D&D 5e tome, not a board game — so it was
+settled from the publisher's own shop instead.
+
+### The six, one line each
+
+| # | Subject | Verdict | The evidence |
+|---|---|---|---|
+| 1 | **`105::rivals`** — 168, 171, 494 | **HELD** as *Rival Incursion* (**90**) | Three lists, none containing a "Rivals" product: BGG's 21 components for item 105 (only *Rival Incursion* 450336); **MOOD Publishing's own store**, 26 products, which spells it **"Rivals Incursion expansion"** — the plural is the publisher's; and the Kickstarter, titled *"Rival Incursion **and** Horrors of Hoxxes"*, whose **38 add-ons / 34 pledge tiers** list *New Neoprene Mat*, *Classic Neoprene Mat*, *Card Sleeves 250 Standard and 100 Half Size* and **no gift box at all**. "Rivals" is the campaign wave; **both** its expansions are held — **90** and **809** |
+| 2 | **`511::yokai dawn`** — 516, 517 | **NOT A PRODUCT** | `loottavern.com/product/yokai-dawn-resin-dice` (HTTP 200): *"a beautiful, resin, soft edge dice set of an opalescent sunrise"*, **SKU `LTP-RG1-DiceBlueOrng`**, categories **Dice / Physical / Ryoko´s Guide**. A **colourway**. The section below called this "the cleanest candidate of the six"; it is the emptiest |
+| 3 | **`107::dragon class`** — 460, 462 | **HELD** as the *Dragon Sorcerer Expansion* (**863** and **295**) | BGG lists *Dragon Class Meeple Set* (**369124**, accessory, 2020 — already on our 462) beside *Dragon Sorcerer Expansion* (**308525**, expansion, 2020), and the publisher's own copy says those meeples *"represent the **Sorcerer class**"*. Same shape as *6-Class Meeple Set* (369123) for the base game's six classes. BGG lists **no** "Dragon Class Dice", so **460 keeps `bgg_id = NULL`** |
+| 4 | **`428::3dition`** — 409, 412 | **NOT AN EXPANSION** | `game_component` holds *Ark Nova: 3Dition* (**450126**), typed `expansion` by BGG but **`official = 0`** under this repo's publisher-id rule — the Kekpop Spiele case [`info/completeness.md`](info/completeness.md) already names. Rows **405–412 ARE** the line; there is no ninth box. `bgg_id` stays NULL on all eight: 450126 is one umbrella row against eight of ours |
+| 5 | **`53::magic`** — 251, 252 | **NOT A PRODUCT** | Item 53's component list (checked ok 2026-08-30) holds nothing named Black Magic, and a component-wide `%Black Magic%` search returns **0** rows. Black Magic Craft is an insert maker. ⚠️ The subject is **`magic`**, not `black magic` — `black` is a colour in `PACKAGING` |
+| 6 | **`92::minimalist flaming`** — 561, 568 | **NOT A PRODUCT** | `game_component` holds *Dice Throne: Minimalist Premium Sleeves* (**476488**) linked from **nine** Dice Throne items — an **art style**. Our catalogue holds **19** Dice Throne sleeve rows, one per hero art (`- Wolverine`, `- Storm`, `- Pale Lady`…). ⚠️ The subject is **`minimalist flaming`**, not `minimalist` |
+
+### 🔴 Why NOTHING was re-parented, against the brief's own first branch
+
+Rows 1 and 3 both looked like re-parents going in. Both were declined, on two
+measurements and one rule:
+
+- **The collection is flat, deliberately and everywhere.** All **16** Deep Rock
+  Galactic accessories hang off base game **105** — including **169**
+  (*Horrors of Hoxxes Acrylic Tokens*) and **170** (*Rival Incursion Acrylic
+  Tokens*), which name an expansion outright. All **27** Here to Slay rows hang
+  off **107**, including **505–510**, the very accessories whose inference
+  created 858 and 859 — they were not nested under them then either. Nesting
+  three of sixteen, or two of twenty-seven, would create the inconsistency
+  rather than remove it.
+- ⚠️ **It would not have changed a single status.** Question 2 matches
+  **NAMES**, not parents. A re-parent is invisible to the sweep, so "re-parent
+  to fix the report" was never going to work — worth knowing before anyone
+  tries it again.
+- **The target row for row 3 is ambiguous by construction** (863 vs 295, below),
+  and the brief's own rule is to re-parent only where the target is unambiguous.
+
+### The fix that WAS justified — `SETTLED`, a new status
+
+`scripts/lib/implied-product.mjs` gains **`VERIFIED_NOT_MISSING`**, keyed
+`<rootId>::<subject>`, each entry carrying the **verdict**, the **evidence** and
+the **date it was checked**. A row that would report `MISSING` and whose key is
+in the registry reports **`SETTLED`** instead, with the reason in `matched_by`
+and therefore in the CSV.
+
+⚠️ **Deliberately NOT done by adding words to `PACKAGING`**, which was the
+obvious cheap route. A stripped word is invisible: the row vanishes and the
+reason vanishes with it. A `SETTLED` row still prints, still carries its source,
+and can be re-argued. ⚠️ **And `SETTLED` is not `PRESENT`** — four of the six
+name no product at all, so calling them present would claim a match the
+collection does not contain. It is consulted **only where nothing matched**, so
+it can never mask a live `PRESENT` or `AMBIGUOUS` verdict; a test pins that.
+
+| | Before | After |
+|---|---|---|
+| Question 2 `MISSING` | **175** | **162** |
+| `SETTLED` | — | **13** |
+| Distinct implied products in the head | **168** | **162** |
+
+Commit **`530c11b`**. Tests **897 pass / 0 fail** (`npm test`). **No deploy** —
+nothing in `scripts/` ships, and `apps/worker` and `apps/web` are untouched.
+
+### ⚠️ NOT VERIFIED
+
+- **Nothing was seen rendered.** `curl` against
+  `https://boardgames.heygabi.ai/items/{90,105,107,295,863}` returned **200** on
+  all five, and all five bodies are the **identical 3,009-byte SPA shell**
+  (`<div id="root"></div>`) — so routing is proved and *content* is not. The app
+  renders client-side behind a Firebase session no agent holds.
+- **BGG was never queried directly** (the 401 above). Rows 1 and 3's BGG facts
+  come from `game_component`, i.e. a BGG sweep taken **2026-08-30**, not today.
+- **561 → `bgg_id` 476488 was NOT set**, though it is the only "Minimalist" row
+  on either side. BGG's row has no year and ours carries an art qualifier
+  (*Flaming Die*); with no way to open the BGG page it stays a strong guess, and
+  DONE.md's own rule is that a wrong id is harder to notice than a missing one.
+
+### 🧑 LEFT FOR THE OWNER — TWO duplicate pairs under Here to Slay, not one
+
+Untouched by instruction, and the second pair is new: the same shape as the one
+the section below flagged.
+
+| KS row — created **2026-08-05 21:36:26** | BGG row — created **2026-08-08 22:53–22:55** | cover file |
+|---|---|---|
+| **295** *KS Exclusive Dragon Sorcerers Expansion Pack* · `bgg_id` **NULL** · publisher NULL · Kickstarter `source_url` | **863** *Dragon Sorcerer Expansion* · `bgg_id` **308525** · Unstable Games · 2020 | **both** `item-295-06b2fc38c468a3be.jpg` |
+| **294** *KS Exclusive Monster Expansion Pack* · `bgg_id` **NULL** | **862** *Monsters Expansion* · `bgg_id` **308526** · Unstable Games · 2020 | **both** `item-294-3f228606bc1c578c.jpg` |
+
+🔴 **Each BGG row points at the KS row's own cover file.** The session that
+created 861/862/863 on 2026-08-08 copied the image across, so it had the KS row
+in hand when it made the second one. Each of the four carries an `owned` copy,
+so the catalogue currently says the owner owns both expansions **twice**. The
+web corroborates that they are one product: *"The **Kickstarter Exclusive** Here
+to Slay Dragon Sorcerer expansion pack was available during the 2020 Here to
+Slay campaign."* **Which row survives a merge is a shelf call, not a data call**
+— it stays in [`TODO.md`](TODO.md).
+
+Review links: <https://boardgames.heygabi.ai/items/295> ·
+<https://boardgames.heygabi.ai/items/863> ·
+<https://boardgames.heygabi.ai/items/294> ·
+<https://boardgames.heygabi.ai/items/862>
+
+---
+
+**What follows is the TODO row and the whole sub-section as they stood, moved
+here verbatim.** They are the prediction this entry tested; the six-row table is
+kept because it is the evidence for what was checked, and its ⚠️ closing
+paragraph is the warning that turned out to be right.
+
+> | 🧑 **Accessory implies the game — the sweep is BUILT and MEASURED; WHICH ROWS TO CHANGE is the owner's** | ✅ **Ran read-only against production D1, 2026-09-07** (agent `W18-ACC`): `scripts/accessory-implies-game.mjs`, the rule in `scripts/lib/implied-product.mjs`, 26 tests in `scripts/test/implied-product.test.mjs`, and the full 667-row table at [`archive/accessory-implies-game-2026-09-07.csv`](archive/accessory-implies-game-2026-09-07.csv). 🔴 **The script has no write mode and cannot be given one** — `--commit` exits 2. **The numbers and the shortlist are in the sub-section directly below this table.** ⚠️ **Corrected 2026-09-07:** this row said ~~"You own **221 accessories against 186 expansions**"~~ — measured today it is **361 accessories against 257 expansions** (838 items; 667 non-base). That pair was a 2026-08 reading and had drifted by 140 rows. **Original finding, unchanged, and still the proof:** Here to Slay — six accessories (Warriors & Druids ×3, Berserkers & Necromancers ×3) existed with no expansion row behind them, and both expansions were real. Now items **858** and **859**. Banner Quest is the control case — accessory *and* expansion both present, and the sweep reports it PRESENT |
+
+### 🧑 The accessory sweep, measured — 2026-09-07, and what it wants from the owner
+
+**The rule, in one paragraph.** Strip the base game's name off the front of an
+accessory's title word by word, then strip a vocabulary of *packaging* words
+off both ends — product formats (`playmat`, `sleeves`, `tray`), materials
+(`neoprene`, `acrylic`, `walnut`) and marketing (`ks`, `exclusive`, `deluxe`).
+What survives is the **subject**, and the subject names a product. *Here to
+Slay: Warriors & Druids Play Mat Set* leaves `warriors & druids`; *Here to Slay:
+KS Exclusive Central Play Mat* leaves nothing, which correctly means it implies
+its base game and no more. The subject is `PRESENT` if a **base game or an
+expansion** under the same root (or a root joined by a `same_family` edge) has
+those words in its name. 🔴 **An accessory never answers for another accessory
+— that is the whole Here to Slay bug.** Full rule, and every reason behind it:
+`scripts/lib/implied-product.mjs`.
+
+**667 non-base rows swept** — 361 accessory, 257 expansion, 48 promo, 1 upgrade.
+
+| Question | `PRESENT` | `MISSING` | `AMBIGUOUS` |
+|---|---|---|---|
+| **1 · the implied BASE GAME** (by `root_game_id`) | **644** | **0** | **23** |
+| **2 · the implied PRODUCT** (read out of the row's name) | **93** | **175** | **4** |
+
+⚠️ **Question 1 finds nothing, and that is itself the answer.** Every non-base
+row already reaches a base game that is in the collection — **zero** orphans,
+`pending_parent_name` empty on all 838 rows. The 23 `AMBIGUOUS` are rows whose
+root is not a game at all, and 19 of those are the **Pangea gaming table** and
+its parts. The one worth a look is **Aeon's End: Return to Gravehold** (304),
+nested under **Aeon's End: Outcasts** — an expansion under an expansion.
+
+🔢 **Question 2 is where the sweep lives**, and its 175 `MISSING` fall into
+**168 distinct implied products**. ⚠️ **175 is an UPPER BOUND on real gaps, not
+a measurement of them** — the packaging vocabulary is a measured word list, so
+any word nobody has written down yet survives into a subject and invents a
+product. The `subject_rows` column is the confidence: a subject that appears on
+*several different kinds of thing* is a product name, and one that appears once
+is usually a description the vocabulary failed to strip. **Measured: of the 168,
+only 6 are named by two or more accessories** — and the count-1 tail is visibly
+noise (`beer`, `town`, `claw`, `quest`).
+
+**So the shortlist is those six, which is the whole owner errand.** Sorted by
+how many accessories name the subject:
+
+| Naming it | The implied product | The accessories that name it (all HELD) |
+|---|---|---|
+| **3** | 🔴 **Deep Rock Galactic — "Rivals"** | [*Rivals Neoprene Mat*](https://boardgames.heygabi.ai/items/168) · [*Rivals Card Sleeves*](https://boardgames.heygabi.ai/items/171) · [*Rivals Exclusive Gift Box*](https://boardgames.heygabi.ai/items/494). ⚠️ The collection holds ***Rival Incursion*** (item 90, expansion) and *Rival Incursion Acrylic Tokens* (170) — **singular**. Either these three belong to it under a plural name, or a separate *Rivals* product exists. **This is the Here-to-Slay shape exactly** |
+| **2** | 🔴 **Ryoko's Guide to the Yokai Realms — "Yokai Dawn"** | [*Yokai Dawn Dice Mini Set*](https://boardgames.heygabi.ai/items/516) · [*Yokai Dawn Resin Dice Set*](https://boardgames.heygabi.ai/items/517). **Nothing in the collection names Yokai Dawn** — no near miss at all, which makes this the cleanest candidate of the six |
+| **2** | **Here to Slay — "Dragon Class"** | [*Dragon Class Dice*](https://boardgames.heygabi.ai/items/460) · [*Dragon Class Meeple Set*](https://boardgames.heygabi.ai/items/462). Probably belong to ***Dragon Sorcerer Expansion*** (863) or ***KS Exclusive Dragon Sorcerers Expansion Pack*** (295). ⚠️ **And those two look like one product held twice** — worth an eyeball while you are here |
+| **2** | **Ark Nova — "3Dition"** | [*3Dition: Premium Metal Coins*](https://boardgames.heygabi.ai/items/409) · [*3Dition: Premium Custom Sleeves*](https://boardgames.heygabi.ai/items/412), plus six more `3Dition` accessories (405–411). Reads as a third-party **upgrade brand**, not an expansion — likely nothing to add, worth one glance to settle it |
+| **2** | **Fractured Sky — "Black Magic"** | [*Black Magic Custom Organizer*](https://boardgames.heygabi.ai/items/251) · [*Black Magic Custom Trays*](https://boardgames.heygabi.ai/items/252). Black Magic Craft is an **insert maker**. A false positive, recorded so nobody re-reports it |
+| **2** | **Dice Throne — "Minimalist (Flaming Die)"** | [*Card Sleeves - Minimalist*](https://boardgames.heygabi.ai/items/561) · [*Playmat - Minimalist*](https://boardgames.heygabi.ai/items/568). A sleeve **art style**, not a product. A false positive |
+
+🔗 **What to do with it:** open the six rows above, decide which imply a box you
+own but have not recorded, and add those the way 858 and 859 were added. The
+other 162 implied products are in the CSV, sorted, if you ever want to read the
+tail.
+
+⚠️ **NOT verified.** Nothing was written and nothing was rendered — no browser,
+no signed-in session, no page load. The sweep's own claims about what these
+products *are* (a Rivals expansion, Yokai Dawn) are **read off names in the
+collection, not off BoardGameGeek** — no external lookup was made, and no
+`bgg_id` was consulted beyond carrying it into the CSV. Re-running the script
+re-reads production D1 and overwrites that day's CSV; it never writes to D1.
+
+⬆️ **That last paragraph was right, and it is why this entry exists.** Every
+claim the shortlist made about what these products *are* came from names in the
+collection; the moment they were checked against sources outside it, all six
+fell over. **The lesson for the next sweep: a subject named by three accessories
+is evidence that a NAME repeats, not that a PRODUCT exists.** `subject_rows` is
+a confidence column about the collection's own vocabulary and nothing more.
 
 ---
 
