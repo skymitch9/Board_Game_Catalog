@@ -13,7 +13,7 @@ in full:
 | 🔴 The **billing shadow flip** — the three-file change is written out in its own section below, to the keystroke | 🧑 **owner only**: it edits `apps/worker/wrangler.toml`, which agents are refused |
 | 🧑 One eyeball of `/api/export.json` as a contributor — confirm no `email` field | owner |
 | 🧑 Three owner reviews on his phone — the three `☐ owner review` headings below: the scan target, the second-instance machinery, the family score | owner |
-| 🧑 Three rows still open in [*What still wants a person*](#-what-still-wants-a-person--three-open-rows-for-the-owner-and-a-settled-record-beside-them) — the accessory-implies-the-game sweep, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). Counted 2026-09-06; the other rows in that table are settled records. ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file** | owner |
+| 🧑 Three rows still open in ***What still wants a person***, the first section below — the accessory-implies-the-game sweep, the Dice Throne playmat count, and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). Counted 2026-09-06; the other rows in that table are settled records. ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file** | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
 | 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
 
@@ -38,8 +38,8 @@ status paragraph is the bug, not the fix.
 ## ☐ 🧑 What still wants a person — THREE open rows for the owner, and a settled record beside them
 
 > ⚠️ **Moved here whole 2026-09-06 (W14-DOCS), and retitled.** This table sat
-> as a `###` sub-section INSIDE
-> [*📓 Notes from the 2026-08-09 session — a RECORD, not a queue*](#-notes-from-the-2026-08-09-session--a-record-not-a-queue),
+> as a `###` sub-section INSIDE ***📓 Notes from the 2026-08-09 session — a
+> RECORD, not a queue*** (still in this file, further down),
 > under a container heading that tells a reader outright there is no work in
 > it — while holding three live owner errands. The container's body did say so,
 > in its fourth line; **a heading that has to be corrected by its own body is
@@ -646,8 +646,8 @@ now in the heading. ~~**The one sub-section that DOES hold live work is
 *What still wants a person*** — four of its rows were measured today and are
 finished; the rest is history.~~ ✅ **RESOLVED 2026-09-06 (W14-DOCS): that
 sub-section was MOVED OUT WHOLE** and is now the top-level
-[*☐ 🧑 What still wants a person*](#-what-still-wants-a-person--three-open-rows-for-the-owner-and-a-settled-record-beside-them)
-at the head of this file, with the open items. **So this container now holds no
+***☐ 🧑 What still wants a person*** — the FIRST section of this file, with the
+open items. **So this container now holds no
 live work at all**, which is what its heading has claimed since 2026-09-05.
 Also moved out on an earlier pass: *Splitting a shelf photograph into pieces* (a
 measured, parked idea, not work in flight) now lives whole at
