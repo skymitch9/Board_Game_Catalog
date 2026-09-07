@@ -33,7 +33,7 @@ import {
   SOURCE_TIERS,
   type CopyStatus,
 } from '../src/constants.js';
-import { ownedCount } from '../src/schemas.js';
+import { createItemSchema, ownedCount, updateItemSchema } from '../src/schemas.js';
 import { outranks, tierRank } from '../src/index.js';
 
 /** One copy of `status`, with a quantity worth noticing. */
@@ -115,5 +115,82 @@ describe('finding 10 — the research priority order has ONE definition', () => 
         );
       }
     }
+  });
+});
+
+/**
+ * ⚠️ Filed here rather than in a file of its own because it is the same kind of
+ * claim: a rule that must hold at the ONE door every stored URL comes through.
+ */
+describe('finding 19 — a stored URL cannot carry a code-execution scheme', () => {
+  const URL_FIELDS = ['publisherUrl', 'sourceUrl', 'thumbnailUrl'] as const;
+
+  /** A minimal valid create payload with one URL field set. */
+  function withUrl(field: string, value: string) {
+    return { name: 'Catan', kind: 'base', [field]: value };
+  }
+
+  it('🔴 javascript:, data: and vbscript: are REFUSED, on every URL field', () => {
+    // `z.url()` is a FORMAT check: measured against the installed zod, all
+    // three of these parse as valid URLs. `publisherUrl` and `sourceUrl` reach
+    // `buyLinksFor()` and come out as an <a href>.
+    for (const field of URL_FIELDS) {
+      for (const bad of [
+        'javascript:alert(1)',
+        'data:text/html,<script>alert(1)</script>',
+        'vbscript:msgbox(1)',
+        'file:///etc/passwd',
+      ]) {
+        const result = createItemSchema.safeParse(withUrl(field, bad));
+        assert.equal(result.success, false, `${field} accepted ${bad}`);
+      }
+    }
+  });
+
+  it('⚠️ and it REJECTS rather than stripping — the value does not sneak through as null', () => {
+    // A validator that silently drops a bad value is the failure mode this repo
+    // has been bitten by before: the caller gets a 200 and believes the field
+    // was saved.
+    const result = createItemSchema.safeParse(withUrl('publisherUrl', 'javascript:alert(1)'));
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.match(
+        result.error.issues.map((i) => i.message).join(' '),
+        /https:\/\/ or http:\/\//,
+        'and the refusal says what a link must look like',
+      );
+    }
+  });
+
+  it('https and http both still pass — http is allowed deliberately', () => {
+    // Small publishers and long-dead campaign pages are still plain http, and
+    // refusing them would lose real data to buy a warning nobody asked for.
+    for (const field of URL_FIELDS) {
+      for (const good of ['https://boardgamegeek.com/x', 'http://oldpublisher.example/game']) {
+        assert.equal(
+          createItemSchema.safeParse(withUrl(field, good)).success,
+          true,
+          `${field} refused ${good}`,
+        );
+      }
+    }
+  });
+
+  it('the empty string and null still pass — clearing a link is not setting a bad one', () => {
+    assert.equal(createItemSchema.safeParse(withUrl('publisherUrl', '')).success, true);
+    assert.equal(
+      createItemSchema.safeParse({ name: 'Catan', kind: 'base', publisherUrl: null }).success,
+      true,
+    );
+  });
+
+  it('a PATCH is guarded too — updateItemSchema derives from the same fields', () => {
+    // The partial schema is where a bad value would most plausibly arrive: an
+    // edit form sending one field.
+    assert.equal(
+      updateItemSchema.safeParse({ publisherUrl: 'javascript:alert(1)' }).success,
+      false,
+    );
+    assert.equal(updateItemSchema.safeParse({ publisherUrl: 'https://ok.example' }).success, true);
   });
 });

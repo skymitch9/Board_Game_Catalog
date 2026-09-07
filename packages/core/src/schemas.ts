@@ -28,6 +28,53 @@ export const disposalSchema = z.enum(DISPOSALS);
 
 const nullableString = (max: number) => z.string().trim().max(max).nullable().optional();
 
+/**
+ * Schemes a stored URL may have. **`https:` and `http:`, and nothing else.**
+ *
+ * 🔴 `z.url()` is a FORMAT check, not a safety one. Measured against the
+ * installed zod on 2026-08: `javascript:alert(1)`, `data:text/html,…` and
+ * `vbscript:…` all parse as valid URLs. `publisherUrl` and `sourceUrl` flow
+ * into `buyLinksFor()` and out as an `<a href>`, so a `javascript:` value
+ * stored there is a link that runs code when somebody clicks "Publisher".
+ * `thumbnailUrl` becomes an `<img src>`. 2026-08 audit, finding 19.
+ *
+ * ⚠️ **This is defence in depth, and it is worth having anyway.** Writing an
+ * item needs `editCatalog`, and React refuses to render a `javascript:` href —
+ * so the practical exposure today is small. But "React happens to block it" is
+ * a property of a library version, the values are also read by exports, the
+ * cover pipeline and anything future, and a scheme check at the door costs one
+ * line. The rule this repo keeps: validators REJECT, they do not silently
+ * strip.
+ *
+ * `http:` is allowed deliberately. Plenty of small publishers and long-dead
+ * campaign pages are still plain http, and refusing them would lose real data
+ * to buy a warning nobody asked for. The scheme allow-list is about code
+ * execution, not about transport.
+ */
+const SAFE_URL_SCHEMES = ['https:', 'http:'];
+
+function hasSafeScheme(value: string): boolean {
+  try {
+    return SAFE_URL_SCHEMES.includes(new URL(value).protocol);
+  } catch {
+    // Unparseable never reaches here — `.url()` runs first — but a validator
+    // that throws is worse than one that refuses.
+    return false;
+  }
+}
+
+/** A stored, later-rendered URL: valid, bounded, and not a code-execution scheme. */
+const safeUrl = (max: number) =>
+  z
+    .string()
+    .trim()
+    .url()
+    .max(max)
+    .refine(hasSafeScheme, { message: 'a link must start with https:// or http://' })
+    .nullable()
+    .optional()
+    .or(z.literal(''));
+
 // ---------------------------------------------------------------------------
 // Items
 // ---------------------------------------------------------------------------
@@ -52,7 +99,7 @@ const itemFields = z.object({
   pendingParentName: nullableString(200),
   yearPublished: z.number().int().min(1000).max(2200).nullable().optional(),
   publisher: nullableString(200),
-  publisherUrl: z.string().trim().url().max(500).nullable().optional().or(z.literal('')),
+  publisherUrl: safeUrl(500),
   /**
    * The campaign this came from — a Kickstarter or Gamefound project page.
    *
@@ -61,7 +108,7 @@ const itemFields = z.object({
    * two thirds of the catalog the campaign page is the only authoritative
    * record there is, since the box never had a retail listing.
    */
-  sourceUrl: z.string().trim().url().max(500).nullable().optional().or(z.literal('')),
+  sourceUrl: safeUrl(500),
   /**
    * Which ruleset this needs, for the things that do not carry their own.
    *
@@ -88,7 +135,7 @@ const itemFields = z.object({
   maxPlayers: z.number().int().min(1).max(999).nullable().optional(),
   playtimeMin: z.number().int().min(1).max(10000).nullable().optional(),
   weight: z.number().min(0).max(5).nullable().optional(),
-  thumbnailUrl: z.string().trim().url().max(500).nullable().optional().or(z.literal('')),
+  thumbnailUrl: safeUrl(500),
   description: nullableString(5000),
 });
 
