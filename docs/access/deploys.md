@@ -6,6 +6,10 @@
 > `npm run predeploy` against a dirty tree and a clean one. ⚠️ **NOT verified:**
 > the two-concurrent-runs case (one machine, one session — the ancestry refusal
 > was exercised with a hand-written log line, not with a genuine second run).
+> **Last verified 2026-09-22 for gotcha 5 ALONE** (the auto-mode refusal), and
+> only as a record of what a sibling repo measured on 2026-09-21/22 — ⚠️ **no
+> deploy has been attempted from THIS repo since, so the refusal and the fix
+> are both unexercised here.** Nothing else on this page was re-checked.
 
 `npm run deploy` is the only sanctioned way this Worker ships. It is three
 guards, a build, a `wrangler deploy`, and one appended line.
@@ -90,6 +94,18 @@ instead of waving the first one through.
    disagreeing with the database whenever somebody forgets the second half.
 4. **Never kill a deploy mid-flight.** A killed deploy can leave the live Worker
    out of step with the repo, which is the one genuinely expensive state.
+5. ⚠️ **From a Claude Code session in auto mode, `npm run deploy` is refused by
+   the command classifier before step 1 even starts** — measured in
+   `library_catalog` on 2026-09-21, three refusals (twice through Bash, once
+   through PowerShell), each landing *ahead* of `check-clean` and
+   `deploy-guard`, so none of the guards above ever had an opinion. **Nothing
+   in this repo fixes it**: it needs a global allow rule in the operator's
+   `~/.claude/settings.json`, which is in no repo and in no backup. The rule,
+   what it contains and why a rebuilt machine has to re-add it by hand live in
+   `catalog-platform/docs/access/RECOVERY.md` **§11.5** — that is its one home;
+   it is deliberately not restated here. The rule added 2026-09-22 matches this
+   repo's deploy command too, so nothing here had to change. ⚠️ **Unexercised
+   in this repo** — no deploy has been run from it since.
 
 ## Where this came from
 

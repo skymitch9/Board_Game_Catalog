@@ -5,7 +5,14 @@ Work that is agreed but not built/deployed. Finished work lives in
 and [`info/`](info/README.md).
 
 **Last updated: 2026-09-07** (agent `W18-FAM-BADGE`; previously `W20-DEDUPE`, `W19-ACC-FIX`,
-`W18-ACC`, `W14-DOCS` and `W13-GAMES`). ⚠️ **This paragraph is the only status line in this
+`W18-ACC`, `W14-DOCS` and `W13-GAMES`). **Last verified: 2026-09-22** — ⚠️ **for ONE thing
+only:** the estate-wide *"commit, push, test, promote"* sweep of 2026-09-21 reached this repo
+and **found nothing to do** — the tree was clean, nothing was ahead of `origin`, nothing was
+committed and **nothing was deployed**. ⚠️ **No row in the table below was re-checked on that
+date**, and none of the owner errands in it is closed by the sweep. The sweep's one finding
+that touches this repo is documented, not open work: a Claude Code auto-mode session cannot
+run `npm run deploy` without a global allow rule — [`access/deploys.md`](access/deploys.md)
+gotcha 5. ⚠️ **This paragraph is the only status line in this
 file.** What is open, in full:
 
 | Open | Who |
