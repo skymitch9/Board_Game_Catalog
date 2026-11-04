@@ -89,7 +89,7 @@ to `DONE.md` when shipped.
     open, so 27 fetches do not fire on page load.
   - **No Remove and no shop links on on-the-way rows** — a pre-order is money
     paid; the rare cancellation is the item page's copy editor.
-- [ ] deploy + live check + owner review link
+- [ ] deploy + live check + owner review link — ⚠️ 22:1x: `npm run deploy` was REFUSED by the Claude Code auto-mode classifier ("Production Deploy"; `access/deploys.md` gotcha 5), so the owner runs it himself: `! npm run deploy` from this repo (the `!` prefix runs it in the session). Then Claude verifies <https://boardgames.heygabi.ai/wishlist> live and moves this section whole to `DONE.md`.
 
 ## ☐ 🧑 What still wants a person — TWO open rows for the owner, and a settled record beside them
 
