@@ -728,6 +728,14 @@ export interface ItemDetail extends Item {
 export interface WishlistEntry {
   copyId: number;
   itemId: number;
+  /**
+   * Which list the row belongs on. `GET /api/wishlist` answers in two arrays —
+   * `entries` (wanted, the shopping list) and `onTheWay` (preordered, paid for
+   * and waiting for the post) — and this is what the route splits on. Carried
+   * on the row as well so a consumer never has to infer it from which array it
+   * came out of.
+   */
+  status: 'wanted' | 'preordered';
   name: string;
   kind: (typeof ITEM_KINDS)[number];
   /** The game this hangs off, so "Marine Worlds" reads as an Ark Nova expansion. */

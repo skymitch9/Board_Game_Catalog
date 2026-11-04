@@ -239,7 +239,12 @@ export const catalogRoutes = new Hono<AppBindings>()
   })
 
   /**
-   * The shopping list: every copy marked `wanted`, and nothing else.
+   * The shopping list: every copy marked `wanted` in `entries`, and the copies
+   * marked `preordered` in `onTheWay` — two arrays, never one.
+   *
+   * `entries` stays wanted-only because its count is the home screen's wanted
+   * figure and the page exists as a shopping list; pre-orders once drowned it
+   * (see `collectionStats`). `onTheWay` is what the page offers to mark arrived.
    *
    * Not `/items?status=wanted`. That filters game trees, so one wanted
    * expansion drags in its base game and every accessory filed beside it.
@@ -249,7 +254,11 @@ export const catalogRoutes = new Hono<AppBindings>()
    * a second way to change a copy's status is a second thing to keep honest.
    */
   .get('/wishlist', async (c) => {
-    return c.json({ entries: await listWishlist(c.env.DB) });
+    const rows = await listWishlist(c.env.DB);
+    return c.json({
+      entries: rows.filter((r) => r.status === 'wanted'),
+      onTheWay: rows.filter((r) => r.status === 'preordered'),
+    });
   })
 
   /**

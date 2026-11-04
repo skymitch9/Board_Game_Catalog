@@ -438,3 +438,105 @@ describe('items and relations are editCatalog; ratings are `rate`', () => {
     assert.equal(((await res.json()) as { capability?: string }).capability, 'rate');
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/wishlist — the shopping list and what is on the way, kept apart
+// ---------------------------------------------------------------------------
+
+/**
+ * A db whose wishlist query answers with the rows given, and every other read
+ * (the ancestor-cover walk) with nothing. The rows are what D1 would hand back
+ * for `listWishlist`'s SELECT, so this pins the route's split and the row
+ * mapping — NOT the SQL's WHERE clause, beyond asserting it asks for both.
+ */
+function wishlistDb(rows: { id: number; status: string; name: string }[]) {
+  const sqlSeen: string[] = [];
+  const db = {
+    prepare(sql: string) {
+      sqlSeen.push(sql);
+      const stmt = {
+        bind() {
+          return stmt;
+        },
+        async first() {
+          return null;
+        },
+        async all() {
+          if (/AS copy_id/.test(sql) && /FROM copy c/.test(sql)) {
+            return {
+              results: rows.map((r) => ({
+                copy_id: r.id,
+                status: r.status,
+                quantity: 1,
+                notes: null,
+                added_at: '2026-01-01 00:00:00',
+                item_id: 100 + r.id,
+                name: r.name,
+                kind: 'expansion',
+                thumbnail_url: null,
+                publisher: null,
+                year_published: null,
+                min_players: null,
+                max_players: null,
+                bgg_id: null,
+                publisher_url: null,
+                source_url: null,
+                parent_item_id: 7,
+                parent_name: 'Test Game',
+                root_game_id: 7,
+                root_game_name: 'Test Game',
+              })),
+            };
+          }
+          return { results: [] };
+        },
+      };
+      return stmt;
+    },
+    _sql: sqlSeen,
+  };
+  return db as unknown as D1Database & { _sql: string[] };
+}
+
+describe('GET /api/wishlist answers `entries` (wanted) and `onTheWay` (preordered), never mixed', () => {
+  type Body = {
+    entries: { copyId: number; status: string }[];
+    onTheWay: { copyId: number; status: string }[];
+  };
+
+  it('a preordered copy is in `onTheWay` and never in `entries`; a wanted one the reverse', async () => {
+    const db = wishlistDb([
+      { id: 1, status: 'wanted', name: 'Wanted Thing' },
+      { id: 2, status: 'preordered', name: 'Pledged Thing' },
+      { id: 3, status: 'preordered', name: 'Pledged Playmat' },
+    ]);
+    const res = await call(appAs('guest'), 'GET', '/api/wishlist', undefined, envWith(db));
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as Body;
+
+    assert.deepEqual(body.entries.map((e) => e.copyId), [1]);
+    assert.deepEqual(body.onTheWay.map((e) => e.copyId), [2, 3]);
+    assert.ok(body.entries.every((e) => e.status === 'wanted'));
+    assert.ok(body.onTheWay.every((e) => e.status === 'preordered'));
+
+    const query = db._sql.find((s) => /AS copy_id/.test(s)) ?? '';
+    assert.match(query, /c\.status IN \('wanted', 'preordered'\)/);
+  });
+
+  it('both arrays are always present, even when empty', async () => {
+    const res = await call(appAs('guest'), 'GET', '/api/wishlist', undefined, envWith(wishlistDb([])));
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as Body;
+    assert.deepEqual(body.entries, []);
+    assert.deepEqual(body.onTheWay, []);
+  });
+
+  it('only pre-orders: `entries` is empty, so the wanted count cannot include them', async () => {
+    const db = wishlistDb([{ id: 5, status: 'preordered', name: 'Only Pledge' }]);
+    const body = (await (
+      await call(appAs('guest'), 'GET', '/api/wishlist', undefined, envWith(db))
+    ).json()) as Body;
+    assert.equal(body.entries.length, 0);
+    assert.equal(body.onTheWay.length, 1);
+  });
+});

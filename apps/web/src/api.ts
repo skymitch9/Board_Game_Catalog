@@ -185,7 +185,7 @@ export const api = {
    * have something wanted anywhere in them. Both are right; only this one is a
    * shopping list.
    */
-  wishlist: () => req<{ entries: WishlistEntry[] }>('/api/wishlist'),
+  wishlist: () => req<{ entries: WishlistEntry[]; onTheWay: WishlistEntry[] }>('/api/wishlist'),
 
   /**
    * Everything on preorder under one item — the checklist behind "it arrived".

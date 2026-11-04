@@ -1963,7 +1963,17 @@ export async function countItemsNeedingDetails(db: D1Database): Promise<number> 
 }
 
 /**
- * Everything marked `wanted`, one row per copy.
+ * Everything marked `wanted` **or `preordered`**, one row per copy, each row
+ * carrying its `status`. The route splits the two: `entries` (wanted — the
+ * shopping list, and the only thing the home screen's wanted count counts) and
+ * `onTheWay` (preordered — paid for, to be marked arrived). One query rather
+ * than two so both lists share one row shape, one ordering and one cover /
+ * publisher inheritance walk.
+ *
+ * ⚠️ The two must never be merged on the page or in a count: pre-orders once
+ * drowned the wishlist ("262 wanted over 25", see `collectionStats`). Added
+ * 2026-11-03 for the owner ask "pre-orders don't go to the wishlist for
+ * marking as arrived".
  *
  * A separate query rather than an option on `matchingRootsSql`, and the
  * difference is the whole point of the screen. That helper matches whole game
@@ -1973,8 +1983,9 @@ export async function countItemsNeedingDetails(db: D1Database): Promise<number> 
  * so `?status=wanted` on the collection page returns all ten. This returns the
  * two.
  *
- * `preordered` is deliberately not included: it is something already bought and
- * waiting for the post, which is a different question from what to buy next.
+ * `preordered` is a different question from what to buy next — something
+ * already bought and waiting for the post — which is why it comes back tagged
+ * and is split into its own array rather than mixed into the wanted one.
  *
  * The join to the parent is what lets a row read as "Marine Worlds, expansion
  * of Ark Nova" rather than as a game nobody has heard of. The second join, to
@@ -1986,6 +1997,7 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
   const { results } = await db
     .prepare(
       `SELECT c.id            AS copy_id,
+              c.status        AS status,
               c.quantity      AS quantity,
               c.notes         AS notes,
               c.created_at    AS added_at,
@@ -2008,11 +2020,12 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
          JOIN item i ON i.id = c.item_id
          LEFT JOIN item p ON p.id = i.parent_item_id
          LEFT JOIN item g ON g.id = COALESCE(i.root_game_id, i.id)
-        WHERE c.status = 'wanted'
+        WHERE c.status IN ('wanted', 'preordered')
         ORDER BY COALESCE(g.sort_name, g.name, i.sort_name, i.name), i.sort_name, c.id`,
     )
     .all<{
       copy_id: number;
+      status: string;
       quantity: number | null;
       notes: string | null;
       added_at: string;
@@ -2057,6 +2070,7 @@ export async function listWishlist(db: D1Database): Promise<WishlistEntry[]> {
     return {
       copyId: r.copy_id,
       itemId: r.item_id,
+      status: r.status === 'preordered' ? 'preordered' : 'wanted',
       name: r.name,
       kind: r.kind as WishlistEntry['kind'],
       parentItemId: r.parent_item_id,
