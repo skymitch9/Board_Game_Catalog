@@ -54,8 +54,41 @@ per-row *It arrived* and the batch *Arrivals* box; the games `/wishlist` lists
 the item's own page. Investigation and design follow here; results move WHOLE
 to `DONE.md` when shipped.
 
-- [ ] measure: what `/api/wishlist` returns and where `preordered` copies are reachable today
-- [ ] design + build: an **On the way** section on `/wishlist` (not counted as wanted — the "262 wanted over 25" measurement in `items.ts` stays respected)
+- [x] measure: what `/api/wishlist` returns and where `preordered` copies are reachable today.
+  `listWishlist` (`packages/db/src/items.ts`) was `WHERE c.status = 'wanted'`, so
+  `GET /api/wishlist` returned wanted rows only; a pre-order could be marked
+  arrived only on its item's page (`Arrivals.tsx`, fed by
+  `GET /api/items/:id/arrivals`). **Production D1, 2026-11-03 21:5x Phoenix:
+  123 preordered rows (132 units) across 27 root games/pledges, vs 25 wanted
+  rows.** Biggest pledge Cult of the Lamb (13 rows); 12 of the 27 have ≤5 rows.
+- [x] design + build (commits `c9d4437` api, `ce985d0` web — **not deployed**):
+  `GET /api/wishlist` now answers `{ entries, onTheWay }`; `/wishlist` has an
+  **On the way** section above the shop-links legend, header
+  `On the way · N copies across M pledges` (`· U units` only when units ≠ rows),
+  grouped by root game, each open pledge showing the item page's `Arrivals`
+  checklist plus its rows with an *It arrived* button. Gated on `editCatalog`
+  (what the copy PATCH demands of a non-wanted copy); wanted rows keep
+  `manageWishlist`. Tests: route split pinned in `catalog.test.ts`, header text
+  in `apps/web/test/on-the-way.test.ts`; suite 929/929, typecheck clean.
+  ⚠️ **Not exercised in a browser or against a local worker** — tests only.
+  Design decisions:
+  - **The section starts SHUT.** 123 rows open by default would be the page and
+    bury the 25-row shopping list (the WishlistPage header quotes the owner: *"I
+    don't want to scroll 50 Dice Throne playmats…"*). Shut, it costs one row
+    whose header carries the counts. Pledge groups inside it follow the
+    existing `COLLAPSE_ABOVE = 5` rule (so 12 of 27 open on reveal).
+  - **`entries` stays wanted-only.** Its count is the home screen's wanted
+    figure and the page's subtitle; pre-orders once drowned it ("262 wanted
+    over 25", `collectionStats` doc comment). One query feeds both arrays
+    (rows tagged with `status`, split in the route) so they share row shape,
+    ordering and cover/publisher inheritance — `collectionStats` untouched.
+  - **The batch checklist reuses `Arrivals`, not a copy of it.** Its prop
+    loosened from `item: ItemDetail` to `itemId: number` so the wishlist can
+    mount it per pledge without loading item details; one implementation of
+    "everything arrived, untick what didn't". Mounted only when a pledge is
+    open, so 27 fetches do not fire on page load.
+  - **No Remove and no shop links on on-the-way rows** — a pre-order is money
+    paid; the rare cancellation is the item page's copy editor.
 - [ ] deploy + live check + owner review link
 
 ## ☐ 🧑 What still wants a person — TWO open rows for the owner, and a settled record beside them
