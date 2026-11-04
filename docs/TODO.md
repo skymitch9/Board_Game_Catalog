@@ -25,6 +25,7 @@ file.** What is open, in full:
 | 🧑 **TWO** rows still open in ***What still wants a person***, the first section below — the Dice Throne playmat count and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file**. ✅ **Two rows closed on 2026-09-07 and both moved WHOLE to [`DONE.md`](DONE.md):** the accessory-implies-the-game sweep (all six shortlisted products verified false positives, zero D1 writes, agent `W19-ACC-FIX`), and the **two Here to Slay duplicate expansion pairs** it left behind — verified as one product held twice and dropped (agent `W20-DEDUPE`): **294** and **295**, the Kickstarter rows, kept and given the BGG ids; **862** and **863** deleted with their duplicate `owned` copies. Rollback SQL is in the `DONE.md` entry | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
 | 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
+| 🆕 **OWNER ASK 2026-11-03** — pre-orders do not appear on `/wishlist` to be marked arrived, the way the library's wishlist does it — section below | Claude (in progress) |
 
 **No owner DECISION is outstanding.** ✅ The 2026-08 code audit is closed:
 all 24 rows triaged, 20 fixed or already fixed, 3 recorded, 1 skipped —
@@ -43,6 +44,19 @@ rule going forward: this paragraph is EDITED, never appended to.** A second
 status paragraph is the bug, not the fix.
 
 ---
+
+## ☐ OWNER ASK 2026-11-03 Phoenix — "In the board game site the pre orders don't go to wishlist for [marking] as arrived like the books do"
+
+Logged the moment it was said (estate rule). Reading of the ask: the library's
+`/wishlist` has an **On the way** section listing `preordered` copies with a
+per-row *It arrived* and the batch *Arrivals* box; the games `/wishlist` lists
+`wanted` only, and the only place a games pre-order can be marked arrived is
+the item's own page. Investigation and design follow here; results move WHOLE
+to `DONE.md` when shipped.
+
+- [ ] measure: what `/api/wishlist` returns and where `preordered` copies are reachable today
+- [ ] design + build: an **On the way** section on `/wishlist` (not counted as wanted — the "262 wanted over 25" measurement in `items.ts` stays respected)
+- [ ] deploy + live check + owner review link
 
 ## ☐ 🧑 What still wants a person — TWO open rows for the owner, and a settled record beside them
 
