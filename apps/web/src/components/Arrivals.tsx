@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ItemDetail, PreorderArrival } from '@bgc/core';
+import type { PreorderArrival } from '@bgc/core';
 import { api } from '../api';
 import { useAsync } from '../hooks';
 import { KIND_LABEL } from './ItemTree';
@@ -28,13 +28,20 @@ import { DigitalTag, ErrorBox, ParentLabel } from './ui';
  * decides *which* rows to offer and nothing else, which is why a partial failure
  * is recoverable: whatever did not save is still `preordered` and still on the
  * list next time.
+ *
+ * **Mounted in two places, and deliberately the same component in both:** the
+ * item page (that item's subtree) and each open pledge group in the wishlist's
+ * "On the way" section (the root game's subtree). Taking an id rather than an
+ * `ItemDetail` is what lets the wishlist mount it without loading 27 item
+ * details — one checklist, one set of rules about unticking, never two.
  */
 export function Arrivals({
-  item,
+  itemId,
   canEdit,
   onArrived,
 }: {
-  item: ItemDetail;
+  /** The item whose subtree of `preordered` copies to offer. */
+  itemId: number;
   canEdit: boolean;
   /**
    * Reports back to the page, which reloads and outlives this component.
@@ -45,7 +52,7 @@ export function Arrivals({
    */
   onArrived: (note: string) => void;
 }) {
-  const [list, refreshList] = useAsync(() => api.arrivals(item.id), [item.id]);
+  const [list, refreshList] = useAsync(() => api.arrivals(itemId), [itemId]);
   const [open, setOpen] = useState(false);
   /**
    * What has *not* turned up — the inverse of what you would expect, and

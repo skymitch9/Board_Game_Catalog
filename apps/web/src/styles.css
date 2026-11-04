@@ -1941,6 +1941,18 @@ code {
 .wishlist-legend { margin: 0 0 0.75rem; line-height: 1.35; }
 
 /*
+  "On the way" — the wishlist's pre-orders, above the shopping list and shut
+  by default (see the WishlistPage header). Wears --transit on its edge, the
+  colour `preordered` has on every badge, so the shut row reads as a different
+  kind of thing from the wanted groups below it. Its pledge cards sit inside
+  it, so they get the card's padding back; the Arrivals checklist inside an
+  open pledge is a card in a card and only needs its outer margin trimmed.
+*/
+.wishlist-on-the-way { margin-bottom: 0.75rem; border-left: 3px solid var(--transit); }
+.wishlist-on-the-way__body > .item-list { padding: 0 0.6rem 0.6rem; }
+.wishlist-group .arrivals { margin: 0.6rem 0.6rem 0; }
+
+/*
   Adding something you do not have.
 
   Sits above the list rather than at the bottom of it: on a phone the list is

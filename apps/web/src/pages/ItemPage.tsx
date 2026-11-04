@@ -172,7 +172,7 @@ export function ItemPage({
           count on the day the box turns up. It renders nothing at all for the
           items that have nothing on the way, which is nearly all of them. */}
       <Arrivals
-        item={item}
+        itemId={item.id}
         canEdit={canEdit}
         onArrived={(note) => {
           setChangeNote(note);

@@ -14,6 +14,8 @@ import {
   Spinner,
 } from '../components/ui';
 import { WishlistAddForm } from '../components/WishlistAdd';
+import { Arrivals } from '../components/Arrivals';
+import { onTheWayHeading } from '../lib/on-the-way';
 
 /**
  * What we want but do not have, filed under the game it belongs to.
@@ -29,6 +31,25 @@ import { WishlistAddForm } from '../components/WishlistAdd';
  * buy in a game store or at a con"* — the owner. That sentence decides the whole
  * layout: this is a list somebody thumbs through one-handed with a box in the
  * other, not a page anybody sits and reads.
+ *
+ * ## On the way (2026-11-03)
+ *
+ * *"In the board game site the pre-orders don't go to the wishlist for marking
+ * as arrived, like the books do."* — the owner. Pre-orders now sit in their own
+ * **"On the way"** section above the shopping list, fed by the `onTheWay` half
+ * of `GET /api/wishlist`. Three choices, each for a measured reason:
+ *
+ * - **It starts shut.** 123 preordered rows across 27 pledges against 25 wanted
+ *   ones (production, 2026-11-03). Open by default, the section would be the
+ *   page and bury the shopping list this screen exists for — the exact
+ *   complaint quoted above, made five times worse. Shut, it costs one row.
+ * - **`entries` stays wanted-only.** Its count is the home screen's wanted
+ *   figure, and pre-orders once drowned that ("262 wanted over 25", see
+ *   `collectionStats`). The subtitle counts wanted rows and nothing else.
+ * - **The batch checklist is `Arrivals`, the item page's own component**,
+ *   mounted per open pledge, so "everything arrived, untick what didn't" has
+ *   one implementation. Mounted only when its pledge is open, so 27 fetches
+ *   do not fire on page load.
  */
 
 /**
@@ -113,6 +134,16 @@ export function WishlistPage({ me }: { me: MeResponse }) {
   const [choice, setChoice] = useState<Record<number, boolean>>({});
   /** The add form, which is shut until asked for — see `WishlistAdd`. */
   const [adding, setAdding] = useState(false);
+  /** The "On the way" section — shut until asked for. See the file header. */
+  const [onTheWayOpen, setOnTheWayOpen] = useState(false);
+  /**
+   * Open/shut overrides for the pledge groups inside "On the way", by root id.
+   * Separate from `choice` because one root can be in both lists — Ark Nova has
+   * wanted rows *and* preordered upgrades — and opening one must not open both.
+   */
+  const [pledgeChoice, setPledgeChoice] = useState<Record<number, boolean>>({});
+  /** What the error box says failed — buying, removing and arriving differ. */
+  const [errorWhat, setErrorWhat] = useState('Could not mark that as bought');
 
   // The wishlist split (2026-08-16 role redesign): `suggestWishlist`
   // (member+) is "I want this" — the Add door; `manageWishlist`
@@ -120,8 +151,16 @@ export function WishlistPage({ me }: { me: MeResponse }) {
   // the list. See capabilities.ts for the full split.
   const canSuggest = me.capabilities.includes('suggestWishlist');
   const canManage = me.capabilities.includes('manageWishlist');
+  // On-the-way rows are not wanted, so the copy PATCH gates them on
+  // `editCatalog` (see `catalog.ts`), not on `manageWishlist`.
+  const canArrive = me.capabilities.includes('editCatalog');
   const entries = state.state === 'ok' ? state.data.entries : [];
   const groups = useMemo(() => groupByGame(entries), [entries]);
+  // `?? []` so a page served ahead of its worker during a deploy shows the
+  // wishlist as it was rather than crashing.
+  const onTheWay = state.state === 'ok' ? (state.data.onTheWay ?? []) : [];
+  const pledges = useMemo(() => groupByGame(onTheWay), [onTheWay]);
+  const isPledgeOpen = (g: WishlistGroup) => pledgeChoice[g.id] ?? g.rows <= COLLAPSE_ABOVE;
 
   const isOpen = (g: WishlistGroup) => choice[g.id] ?? g.rows <= COLLAPSE_ABOVE;
   const anyShut = groups.some((g) => !isOpen(g));
@@ -132,6 +171,7 @@ export function WishlistPage({ me }: { me: MeResponse }) {
   async function markBought(entry: WishlistEntry) {
     setBusy(entry.copyId);
     setError(null);
+    setErrorWhat('Could not mark that as bought');
     try {
       // The ordinary copy update — the same call the item page's copy editor
       // makes. Nothing about buying a game is special enough to deserve its own
@@ -166,9 +206,32 @@ export function WishlistPage({ me }: { me: MeResponse }) {
   async function removeWanted(entry: WishlistEntry) {
     setBusy(entry.copyId);
     setError(null);
+    setErrorWhat('Could not take that off the wishlist');
     try {
       await api.deleteCopy(entry.copyId);
       setNotice(`“${entry.name}” is off the wishlist.`);
+      refresh();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * One pre-order turned up. The same `{ status: 'owned' }` PATCH as
+   * `markBought` and as every row of the `Arrivals` checklist — no new write
+   * route. There is deliberately no "Remove" beside it: a pre-order is money
+   * already paid, and the rare cancellation belongs in the item page's copy
+   * editor, not one mis-tap from the arrival button.
+   */
+  async function markArrived(entry: WishlistEntry) {
+    setBusy(entry.copyId);
+    setError(null);
+    setErrorWhat('Could not mark that as arrived');
+    try {
+      await api.updateCopy(entry.copyId, { status: 'owned' });
+      setNotice(`“${entry.name}” has arrived and is now owned.`);
       refresh();
     } catch (err) {
       setError(err);
@@ -223,11 +286,103 @@ export function WishlistPage({ me }: { me: MeResponse }) {
       )}
 
       {notice && <p className="lookup-filled">{notice}</p>}
-      {error != null && <ErrorBox error={error} what="Could not mark that as bought" />}
+      {error != null && <ErrorBox error={error} what={errorWhat} />}
 
       {state.state === 'loading' && <Spinner label="Loading the wishlist…" />}
       {state.state === 'error' && (
         <ErrorBox error={state.error} what="Could not load the wishlist" />
+      )}
+
+      {/* Above the shopping list and its legend, and shut until tapped — see
+          the file header for why. Rendered only when something is on the way,
+          and alongside the empty state when nothing is wanted. */}
+      {state.state === 'ok' && onTheWay.length > 0 && (
+        <section className="card wishlist-group wishlist-on-the-way">
+          <button
+            type="button"
+            className="item-head wishlist-group__head"
+            aria-expanded={onTheWayOpen}
+            aria-controls="wishlist-on-the-way"
+            onClick={() => setOnTheWayOpen(!onTheWayOpen)}
+          >
+            <span className="item-head-text">
+              <span className="item-name">{onTheWayHeading(onTheWay)}</span>
+              <span className="item-sub">Paid for and waiting for the post — open to mark arrivals</span>
+            </span>
+            <span className="children-toggle__caret" aria-hidden="true" data-open={onTheWayOpen}>
+              ▸
+            </span>
+          </button>
+
+          <div id="wishlist-on-the-way" className="wishlist-on-the-way__body" hidden={!onTheWayOpen}>
+            {onTheWayOpen && (
+              <div className="item-list">
+                {pledges.map((group) => {
+                  const open = isPledgeOpen(group);
+                  return (
+                    <section className="card wishlist-group" key={group.id}>
+                      <button
+                        type="button"
+                        className="item-head wishlist-group__head"
+                        aria-expanded={open}
+                        aria-controls={`wishlist-pledge-${group.id}`}
+                        onClick={() => setPledgeChoice({ ...pledgeChoice, [group.id]: !open })}
+                      >
+                        <Cover
+                          item={{
+                            thumbnailUrl:
+                              group.entries.find((e) => e.thumbnailUrl)?.thumbnailUrl ?? null,
+                            inheritedCover: group.entries.find((e) => e.inheritedCover)
+                              ?.inheritedCover,
+                          }}
+                        />
+                        <span className="item-head-text">
+                          <span className="item-name">{group.name}</span>
+                          <span className="item-sub">
+                            {group.rows} on the way
+                            {group.units !== group.rows && ` · ${group.units} units`}
+                          </span>
+                        </span>
+                        <span className="children-toggle__caret" aria-hidden="true" data-open={open}>
+                          ▸
+                        </span>
+                      </button>
+
+                      <div id={`wishlist-pledge-${group.id}`} hidden={!open}>
+                        {/* Mounted only while open: each one fetches its
+                            pledge's checklist, and 27 of those on page load
+                            would be 27 requests for a section nobody opened. */}
+                        {open && (
+                          <>
+                            <Arrivals
+                              itemId={group.id}
+                              canEdit={canArrive}
+                              onArrived={(note) => {
+                                setNotice(note);
+                                refresh();
+                              }}
+                            />
+                            <ul className="candidate-list wishlist">
+                              {group.entries.map((entry) => (
+                                <WishlistRow
+                                  key={entry.copyId}
+                                  entry={entry}
+                                  canManage={canArrive}
+                                  busy={busy === entry.copyId}
+                                  onBought={() => void markArrived(entry)}
+                                />
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {state.state === 'ok' && entries.length === 0 && (
@@ -333,6 +488,11 @@ export function WishlistPage({ me }: { me: MeResponse }) {
   );
 }
 
+/**
+ * One row — a wanted one, or (when `entry.status` is `preordered`) one on the
+ * way. The on-the-way form swaps the badge, offers "It arrived" in place of
+ * "Mark as bought", and has no Remove and no shop links: it is already paid for.
+ */
 function WishlistRow({
   entry,
   canManage,
@@ -341,13 +501,19 @@ function WishlistRow({
   onRemoved,
 }: {
   entry: WishlistEntry;
-  /** Curate/remove — `manageWishlist` (contributor+), not `suggestWishlist`. */
+  /**
+   * Whether the row's actions are offered. For a wanted row that is
+   * `manageWishlist` (contributor+), not `suggestWishlist`; for an on-the-way
+   * row it is `editCatalog`, which is what the copy PATCH demands of it.
+   */
   canManage: boolean;
   busy: boolean;
+  /** Bought it (wanted) or it arrived (on the way) — both flip the copy to owned. */
   onBought: () => void;
-  /** Take it off the list — see `removeWanted` for what that does and does not delete. */
-  onRemoved: () => void;
+  /** Take it off the list — see `removeWanted`. Absent for on-the-way rows. */
+  onRemoved?: () => void;
 }) {
+  const onTheWay = entry.status === 'preordered';
   return (
     <li className="candidate">
       {/* 20 of the 25 wanted rows have no cover of their own — a thing nobody
@@ -368,7 +534,11 @@ function WishlistRow({
         </strong>
 
         <span className="candidate__meta">
-          <Badge tone="wanted">wanted</Badge>
+          {onTheWay ? (
+            <Badge tone="preordered">on the way</Badge>
+          ) : (
+            <Badge tone="wanted">wanted</Badge>
+          )}
           {entry.kind !== 'base' && <Badge tone="kind">{KIND_LABEL[entry.kind]}</Badge>}
         </span>
 
@@ -383,7 +553,7 @@ function WishlistRow({
             .join(' · ') || 'No details yet'}
         </span>
 
-        <BuyLinks entry={entry} />
+        {!onTheWay && <BuyLinks entry={entry} />}
 
         {entry.notes && <span className="candidate__note">{entry.notes}</span>}
       </div>
@@ -391,7 +561,7 @@ function WishlistRow({
       {canManage && (
         <span className="wishlist-row__actions">
           <button type="button" className="btn btn-primary" disabled={busy} onClick={onBought}>
-            {busy ? 'Saving…' : 'Mark as bought'}
+            {busy ? 'Saving…' : onTheWay ? 'It arrived' : 'Mark as bought'}
           </button>
           {/*
             Two taps, via `ConfirmButton`, and quiet rather than red beside a
@@ -399,13 +569,15 @@ function WishlistRow({
             moving fast must not read them as one control with two endings.
             "Mark as bought" is recoverable in a tap; this is not.
           */}
-          <ConfirmButton
-            className="btn btn-quiet danger-text"
-            confirmLabel="Really remove?"
-            onConfirm={onRemoved}
-          >
-            Remove
-          </ConfirmButton>
+          {onRemoved && (
+            <ConfirmButton
+              className="btn btn-quiet danger-text"
+              confirmLabel="Really remove?"
+              onConfirm={onRemoved}
+            >
+              Remove
+            </ConfirmButton>
+          )}
         </span>
       )}
     </li>
