@@ -25,7 +25,7 @@ file.** What is open, in full:
 | 🧑 **TWO** rows still open in ***What still wants a person***, the first section below — the Dice Throne playmat count and the HELLDIVERS 2 rename (that last one waits on a pledge, not on anyone here). ⚠️ **That table was a `###` inside the 2026-08-09 RECORD container until 2026-09-06; it is now the first section of this file**. ✅ **Two rows closed on 2026-09-07 and both moved WHOLE to [`DONE.md`](DONE.md):** the accessory-implies-the-game sweep (all six shortlisted products verified false positives, zero D1 writes, agent `W19-ACC-FIX`), and the **two Here to Slay duplicate expansion pairs** it left behind — verified as one product held twice and dropped (agent `W20-DEDUPE`): **294** and **295**, the Kickstarter rows, kept and given the BGG ids; **862** and **863** deleted with their duplicate `owned` copies. Rollback SQL is in the `DONE.md` entry | owner |
 | ⏭️ **Audit finding 15** — a one-line reword in `apps/worker/.dev.vars.example`; agents may not open `.dev.vars*` files | anyone with the file open |
 | 📋 **KI-8, KI-9, KI-10** — three tolerated defects, each with the number that would change it | see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) |
-| 🆕 **OWNER ASK 2026-11-03** — pre-orders do not appear on `/wishlist` to be marked arrived, the way the library's wishlist does it — section below | Claude (in progress) |
+| 🧑 **One eyeball of the "On the way" section** on <https://boardgames.heygabi.ai/wishlist>, shipped 2026-11-04 (`dbc60d49` + hotfix `b17ac0c7`; the whole entry is in [`DONE.md`](DONE.md)). Open the shut *On the way · 123 copies across 27 pledges* row, open a pledge, and press **It arrived** on one that really has — nobody has pressed it on real data. Phone width unmeasured | owner |
 
 **No owner DECISION is outstanding.** ✅ The 2026-08 code audit is closed:
 all 24 rows triaged, 20 fixed or already fixed, 3 recorded, 1 skipped —
@@ -44,52 +44,6 @@ rule going forward: this paragraph is EDITED, never appended to.** A second
 status paragraph is the bug, not the fix.
 
 ---
-
-## ☐ OWNER ASK 2026-11-03 Phoenix — "In the board game site the pre orders don't go to wishlist for [marking] as arrived like the books do"
-
-Logged the moment it was said (estate rule). Reading of the ask: the library's
-`/wishlist` has an **On the way** section listing `preordered` copies with a
-per-row *It arrived* and the batch *Arrivals* box; the games `/wishlist` lists
-`wanted` only, and the only place a games pre-order can be marked arrived is
-the item's own page. Investigation and design follow here; results move WHOLE
-to `DONE.md` when shipped.
-
-- [x] measure: what `/api/wishlist` returns and where `preordered` copies are reachable today.
-  `listWishlist` (`packages/db/src/items.ts`) was `WHERE c.status = 'wanted'`, so
-  `GET /api/wishlist` returned wanted rows only; a pre-order could be marked
-  arrived only on its item's page (`Arrivals.tsx`, fed by
-  `GET /api/items/:id/arrivals`). **Production D1, 2026-11-03 21:5x Phoenix:
-  123 preordered rows (132 units) across 27 root games/pledges, vs 25 wanted
-  rows.** Biggest pledge Cult of the Lamb (13 rows); 12 of the 27 have ≤5 rows.
-- [x] design + build (commits `c9d4437` api, `ce985d0` web — **not deployed**):
-  `GET /api/wishlist` now answers `{ entries, onTheWay }`; `/wishlist` has an
-  **On the way** section above the shop-links legend, header
-  `On the way · N copies across M pledges` (`· U units` only when units ≠ rows),
-  grouped by root game, each open pledge showing the item page's `Arrivals`
-  checklist plus its rows with an *It arrived* button. Gated on `editCatalog`
-  (what the copy PATCH demands of a non-wanted copy); wanted rows keep
-  `manageWishlist`. Tests: route split pinned in `catalog.test.ts`, header text
-  in `apps/web/test/on-the-way.test.ts`; suite 929/929, typecheck clean.
-  ⚠️ **Not exercised in a browser or against a local worker** — tests only.
-  Design decisions:
-  - **The section starts SHUT.** 123 rows open by default would be the page and
-    bury the 25-row shopping list (the WishlistPage header quotes the owner: *"I
-    don't want to scroll 50 Dice Throne playmats…"*). Shut, it costs one row
-    whose header carries the counts. Pledge groups inside it follow the
-    existing `COLLAPSE_ABOVE = 5` rule (so 12 of 27 open on reveal).
-  - **`entries` stays wanted-only.** Its count is the home screen's wanted
-    figure and the page's subtitle; pre-orders once drowned it ("262 wanted
-    over 25", `collectionStats` doc comment). One query feeds both arrays
-    (rows tagged with `status`, split in the route) so they share row shape,
-    ordering and cover/publisher inheritance — `collectionStats` untouched.
-  - **The batch checklist reuses `Arrivals`, not a copy of it.** Its prop
-    loosened from `item: ItemDetail` to `itemId: number` so the wishlist can
-    mount it per pledge without loading item details; one implementation of
-    "everything arrived, untick what didn't". Mounted only when a pledge is
-    open, so 27 fetches do not fire on page load.
-  - **No Remove and no shop links on on-the-way rows** — a pre-order is money
-    paid; the rare cancellation is the item page's copy editor.
-- [ ] deploy + live check + owner review link — ⚠️ 22:1x: `npm run deploy` was REFUSED by the Claude Code auto-mode classifier ("Production Deploy"; `access/deploys.md` gotcha 5), so the owner runs it himself: `! npm run deploy` from this repo (the `!` prefix runs it in the session). Then Claude verifies <https://boardgames.heygabi.ai/wishlist> live and moves this section whole to `DONE.md`.
 
 ## ☐ 🧑 What still wants a person — TWO open rows for the owner, and a settled record beside them
 

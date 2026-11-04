@@ -1,7 +1,11 @@
 # DONE — Board Game Catalog (dated archive)
 
 > **Audience:** Claude/Kiro sessions and the owner. **Status:** TRACKED.
-> Last updated: **2026-09-07** — the estate testing audit's two board findings,
+> Last updated: **2026-11-04** — pre-orders on the wishlist as a shut-by-default
+> **On the way** section with the Arrivals checklist per pledge (owner ask
+> 2026-11-03; deploy `dbc60d49`, which broke the page on D1's 100-bind ceiling,
+> and hotfix `b17ac0c7` four minutes later, verified live). Before that,
+> 2026-09-07 — the estate testing audit's two board findings,
 > §4.1 and §4.3 (commits `8cbb041`, `31c77db`): the public projection's
 > allow-list is pinned by a test that was **proved red**, and this repo has a CI
 > test lane again after three weeks without one — first run `34157231459`,
@@ -38,6 +42,84 @@
 > - Active/open work → [`TODO.md`](TODO.md)
 > - Durable reference → [`info/`](info/README.md)
 > - Known issues → [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
+
+---
+
+## ☑ SHIPPED 2026-11-04 (`dbc60d49`, hotfix `b17ac0c7`) — OWNER ASK 2026-11-03 Phoenix — "In the board game site the pre orders don't go to wishlist for [marking] as arrived like the books do"
+
+Logged the moment it was said (estate rule). Reading of the ask: the library's
+`/wishlist` has an **On the way** section listing `preordered` copies with a
+per-row *It arrived* and the batch *Arrivals* box; the games `/wishlist` lists
+`wanted` only, and the only place a games pre-order can be marked arrived is
+the item's own page. Investigation and design follow here; results move WHOLE
+to `DONE.md` when shipped.
+
+- [x] measure: what `/api/wishlist` returns and where `preordered` copies are reachable today.
+  `listWishlist` (`packages/db/src/items.ts`) was `WHERE c.status = 'wanted'`, so
+  `GET /api/wishlist` returned wanted rows only; a pre-order could be marked
+  arrived only on its item's page (`Arrivals.tsx`, fed by
+  `GET /api/items/:id/arrivals`). **Production D1, 2026-11-03 21:5x Phoenix:
+  123 preordered rows (132 units) across 27 root games/pledges, vs 25 wanted
+  rows.** Biggest pledge Cult of the Lamb (13 rows); 12 of the 27 have ≤5 rows.
+- [x] design + build (commits `c9d4437` api, `ce985d0` web — **not deployed**):
+  `GET /api/wishlist` now answers `{ entries, onTheWay }`; `/wishlist` has an
+  **On the way** section above the shop-links legend, header
+  `On the way · N copies across M pledges` (`· U units` only when units ≠ rows),
+  grouped by root game, each open pledge showing the item page's `Arrivals`
+  checklist plus its rows with an *It arrived* button. Gated on `editCatalog`
+  (what the copy PATCH demands of a non-wanted copy); wanted rows keep
+  `manageWishlist`. Tests: route split pinned in `catalog.test.ts`, header text
+  in `apps/web/test/on-the-way.test.ts`; suite 929/929, typecheck clean.
+  ⚠️ **Not exercised in a browser or against a local worker** — tests only.
+  Design decisions:
+  - **The section starts SHUT.** 123 rows open by default would be the page and
+    bury the 25-row shopping list (the WishlistPage header quotes the owner: *"I
+    don't want to scroll 50 Dice Throne playmats…"*). Shut, it costs one row
+    whose header carries the counts. Pledge groups inside it follow the
+    existing `COLLAPSE_ABOVE = 5` rule (so 12 of 27 open on reveal).
+  - **`entries` stays wanted-only.** Its count is the home screen's wanted
+    figure and the page's subtitle; pre-orders once drowned it ("262 wanted
+    over 25", `collectionStats` doc comment). One query feeds both arrays
+    (rows tagged with `status`, split in the route) so they share row shape,
+    ordering and cover/publisher inheritance — `collectionStats` untouched.
+  - **The batch checklist reuses `Arrivals`, not a copy of it.** Its prop
+    loosened from `item: ItemDetail` to `itemId: number` so the wishlist can
+    mount it per pledge without loading item details; one implementation of
+    "everything arrived, untick what didn't". Mounted only when a pledge is
+    open, so 27 fetches do not fire on page load.
+  - **No Remove and no shop links on on-the-way rows** — a pre-order is money
+    paid; the rare cancellation is the item page's copy editor.
+- [x] deploy + live check + owner review link — ⚠️ 22:1x: `npm run deploy` was REFUSED by the Claude Code auto-mode classifier ("Production Deploy"; `access/deploys.md` gotcha 5), so the owner runs it himself: `! npm run deploy` from this repo (the `!` prefix runs it in the session). Then Claude verifies <https://boardgames.heygabi.ai/wishlist> live and moves this section whole to `DONE.md`.
+  **2026-11-04 11:1x–11:2x Phoenix, how it actually went:** the owner's own
+  `! npm run deploy` ran in the bookbuddy root (no `package.json`, ENOENT);
+  he then said *"Run the deploy for me, I gave you permission"* and Claude ran
+  it from this repo — the classifier did not refuse this time. Deployed
+  `218a3ac` as **`dbc60d49`** at 18:19 UTC, 929/929.
+  🔴 **It broke the wishlist page.** Measured live in Chrome 11:2x: `/wishlist`
+  read *"Could not load the wishlist"*, `GET /api/wishlist` → 500
+  `D1_ERROR: too many SQL variables at offset 306`. `ancestorCoversFor` bound
+  every coverless row's id into one `IN (...)` — fine at 25 wanted rows, 148
+  ids + the depth with the pre-orders, over D1's **100-variable** ceiling. The
+  suite runs on `node:sqlite` (ceiling 999), so 929 green tests could not see
+  it — the same trap `packages/db/src/import.ts` already records.
+  **Hotfix `2b2caad`, deployed as `b17ac0c7`** four minutes after the break was
+  measured: ids deduped and read in chunks of `ANCESTOR_IDS_PER_READ = 99`;
+  new `packages/db/test/wishlist-bind-ceiling.test.ts` drives `listWishlist`
+  through a D1 shim that REFUSES >100 binds with 150 coverless rows — proven
+  red against the previous `items.ts` with the exact live error, green now;
+  **929 → 932 / 0 fail**. Both `deploys.log` lines carry the story.
+  **Live proof 11:26 Phoenix, Chrome, signed in as the owner:** API 200 →
+  `entries` 29 (wanted), `onTheWay` 123 rows / 27 pledges, 36 with a borrowed
+  cover; page renders *29 games wanted*, the *On the way · 123 copies across 27
+  pledges · 132 units* disclosure SHUT on load; opened, one card per pledge
+  (Altera 10 / Ark Nova 9 / Cult of the Lamb 14 collapsed, the 1-row pledges
+  open with their *ON PREORDER 1* checklist and an *It arrived* button per
+  row). ⚠️ **NOT verified:** nobody pressed *It arrived* (real data — the
+  owner's action, listed in the Open table); phone width. Review:
+  <https://boardgames.heygabi.ai/wishlist>.
+  **Gotcha worth keeping:** a wishlist-sized `IN (...)` is a D1 bind-ceiling
+  bug waiting for the list to grow; any `ids.map(() => '?')` in this repo
+  chunks at 100 or it is wrong.
 
 ---
 

@@ -104,8 +104,16 @@ instead of waving the first one through.
    what it contains and why a rebuilt machine has to re-add it by hand live in
    `catalog-platform/docs/access/RECOVERY.md` **§11.5** — that is its one home;
    it is deliberately not restated here. The rule added 2026-09-22 matches this
-   repo's deploy command too, so nothing here had to change. ⚠️ **Unexercised
-   in this repo** — no deploy has been run from it since.
+   repo's deploy command too, so nothing here had to change. **Exercised in
+   this repo 2026-11-03/04, both ways:** refused once (2026-11-03 22:1x
+   Phoenix, "Production Deploy", from a bookbuddy-rooted session) and then
+   ALLOWED twice the next morning (`dbc60d49` 11:19, `b17ac0c7` 11:23) after
+   the owner wrote *"Run the deploy for me, I gave you permission"* in chat —
+   the classifier reads the conversation, so an explicit permission in the
+   owner's own words is the thing that turns it. Run it through PowerShell with
+   `Set-Location` to this repo first: a session rooted in `bookbuddy` has no
+   `package.json` and npm fails ENOENT before anything deploys (owner hit this
+   with `! npm run deploy` on 2026-11-04).
 
 ## Where this came from
 
