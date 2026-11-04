@@ -946,6 +946,13 @@ interface WishlistLender extends CoverLender {
 }
 
 /**
+ * D1 refuses a statement with more than 100 bound variables (the same ceiling
+ * `import.ts` and `components.ts` chunk against). `ancestorCoversFor` binds
+ * its ids plus one depth, so 99 ids per read is the most that fits.
+ */
+export const ANCESTOR_IDS_PER_READ = 99;
+
+/**
  * The ancestors of several items at once, nearest first, for lending covers.
  *
  * One read for a whole screen, rather than one per blank row. Used by the
@@ -968,40 +975,53 @@ async function ancestorCoversFor(
   ids: number[],
 ): Promise<Map<number, WishlistLender[]>> {
   const byItem = new Map<number, WishlistLender[]>();
-  if (ids.length === 0) return byItem;
-  const holes = ids.map(() => '?').join(',');
+  // Deduplicated — two copies of one item are one chain — and CHUNKED under
+  // D1's bind ceiling. ⚠️ Measured live 2026-11-04 11:2x Phoenix, the deploy
+  // that put pre-orders on the wishlist (dbc60d49): 148 rows, nearly all
+  // coverless, bound 148 ids + the depth into ONE statement and the whole
+  // wishlist answered `D1_ERROR: too many SQL variables` — a page that had
+  // worked at 25 wanted rows. The suite runs on real SQLite, whose ceiling is
+  // 999, so no test could see it; the same trap `packages/db/src/import.ts`
+  // records. One hole is kept back for `MAX_ANCESTOR_DEPTH`.
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return byItem;
 
-  const { results } = await db
-    .prepare(
-      `WITH RECURSIVE chain(of_id, cur, depth) AS (
-         SELECT id, parent_item_id, 1 FROM item WHERE id IN (${holes})
-         UNION ALL
-         SELECT c.of_id, p.parent_item_id, c.depth + 1
-           FROM chain c JOIN item p ON p.id = c.cur
-          WHERE c.depth < ?
-       )
-       SELECT c.of_id, i.id, i.name, i.thumbnail_url, i.publisher_url, c.depth
-         FROM chain c JOIN item i ON i.id = c.cur
-        ORDER BY c.of_id, c.depth`,
-    )
-    .bind(...ids, MAX_ANCESTOR_DEPTH)
-    .all<{
-      of_id: number;
-      id: number;
-      name: string;
-      thumbnail_url: string | null;
-      publisher_url: string | null;
-    }>();
+  for (let i = 0; i < unique.length; i += ANCESTOR_IDS_PER_READ) {
+    const chunk = unique.slice(i, i + ANCESTOR_IDS_PER_READ);
+    const holes = chunk.map(() => '?').join(',');
 
-  for (const row of results) {
-    const list = byItem.get(row.of_id) ?? [];
-    list.push({
-      id: row.id,
-      name: row.name,
-      thumbnailUrl: row.thumbnail_url,
-      publisherUrl: row.publisher_url,
-    });
-    byItem.set(row.of_id, list);
+    const { results } = await db
+      .prepare(
+        `WITH RECURSIVE chain(of_id, cur, depth) AS (
+           SELECT id, parent_item_id, 1 FROM item WHERE id IN (${holes})
+           UNION ALL
+           SELECT c.of_id, p.parent_item_id, c.depth + 1
+             FROM chain c JOIN item p ON p.id = c.cur
+            WHERE c.depth < ?
+         )
+         SELECT c.of_id, i.id, i.name, i.thumbnail_url, i.publisher_url, c.depth
+           FROM chain c JOIN item i ON i.id = c.cur
+          ORDER BY c.of_id, c.depth`,
+      )
+      .bind(...chunk, MAX_ANCESTOR_DEPTH)
+      .all<{
+        of_id: number;
+        id: number;
+        name: string;
+        thumbnail_url: string | null;
+        publisher_url: string | null;
+      }>();
+
+    for (const row of results) {
+      const list = byItem.get(row.of_id) ?? [];
+      list.push({
+        id: row.id,
+        name: row.name,
+        thumbnailUrl: row.thumbnail_url,
+        publisherUrl: row.publisher_url,
+      });
+      byItem.set(row.of_id, list);
+    }
   }
   return byItem;
 }
